@@ -11,7 +11,6 @@ import { useCompositionInput } from '@/renderer/hooks/chat/useCompositionInput';
 import { Input } from '@arco-design/web-react';
 import React from 'react';
 import styles from '../index.module.css';
-import GuidWorkspaceFootnote from './GuidWorkspaceFootnote';
 
 type GuidInputCardProps = {
   // Input state
@@ -37,11 +36,6 @@ type GuidInputCardProps = {
 
   // Action row
   actionRow: React.ReactNode;
-
-  // Workspace
-  workspaceDir: string;
-  onSelectWorkspace: (dir: string) => void;
-  onClearWorkspace: () => void;
 };
 
 const GuidInputCard: React.FC<GuidInputCardProps> = ({
@@ -61,9 +55,6 @@ const GuidInputCard: React.FC<GuidInputCardProps> = ({
   files,
   onRemoveFile,
   actionRow,
-  workspaceDir,
-  onSelectWorkspace,
-  onClearWorkspace,
 }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
@@ -96,9 +87,7 @@ const GuidInputCard: React.FC<GuidInputCardProps> = ({
               borderColor: 'rgb(var(--primary-3))',
               borderWidth: '1px',
             }
-          : {
-              boxShadow: isInputActive ? activeShadow : 'none',
-            }),
+          : {}),
       }}
       {...dragHandlers}
     >
@@ -136,11 +125,6 @@ const GuidInputCard: React.FC<GuidInputCardProps> = ({
         <UploadProgressBar source='sendbox' />
         {actionRow}
       </div>
-      <GuidWorkspaceFootnote
-        workspaceDir={workspaceDir}
-        onSelectWorkspace={onSelectWorkspace}
-        onClearWorkspace={onClearWorkspace}
-      />
     </div>
   );
 };

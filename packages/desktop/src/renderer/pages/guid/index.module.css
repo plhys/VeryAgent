@@ -27,7 +27,7 @@
 .guidInputCardWrap {
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg-2);
+  background: transparent;
 }
 
 .guidInputInner {
@@ -140,7 +140,7 @@
 
 .workspaceEmptyBtn:hover {
   color: var(--color-text-2);
-  background: var(--color-fill-3);
+  background: transparent;
 }
 
 /* 选中态：和空状态同色系，不做颜色跳变 */

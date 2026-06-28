@@ -197,33 +197,8 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
 
           <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleBrowseWorkspace}>
             <PlusIcon />
-            <span>{t('team.create.chooseDifferentFolder')}</span>
+            <span className='text-12.5px'>{t('team.create.chooseDifferentFolder')}</span>
           </div>
-
-          <>
-            <div className={styles.wsDropdownSep} />
-            <div
-              className={`${styles.wsDropdownItem} ${workspaceDir ? styles.wsDropdownItemMuted : styles.wsDropdownItemMutedDisabled}`}
-              onClick={() => {
-                if (workspaceDir) onClearWorkspace();
-                closeDropdown();
-              }}
-            >
-              <svg
-                width='13'
-                height='13'
-                fill='none'
-                stroke='currentColor'
-                strokeWidth='1.8'
-                viewBox='0 0 24 24'
-                style={{ flexShrink: 0 }}
-              >
-                <path d='M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z' />
-                <line x1='2' y1='2' x2='22' y2='22' strokeWidth='1.5' />
-              </svg>
-              <span>{t('guid.workspace.noProject')}</span>
-            </div>
-          </>
         </div>,
         document.body
       )

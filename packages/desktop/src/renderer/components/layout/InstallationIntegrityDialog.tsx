@@ -249,8 +249,8 @@ export function showInstallationIntegrityModal(
     title: getInstallationIntegrityTitle(t, diagnosticsKind),
     content: <InstallationIntegrityContent description={description} />,
     footer: <InstallationIntegrityFooter diagnostics={diagnostics} diagnosticsKind={diagnosticsKind} />,
-    closable: false,
-    maskClosable: false,
+    closable: true,
+    maskClosable: true,
   });
 }
 

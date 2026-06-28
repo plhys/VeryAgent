@@ -5,7 +5,8 @@
  */
 
 import type { IConversationArtifact } from '@/common/adapter/ipcBridge';
-import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
+import type { IMessageAcpToolCall, IMessageThinking, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
+import type { ToolMessage } from '@/common/chat/normalizeToolCall';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
 import { iconColors } from '@/renderer/styles/colors';
@@ -38,6 +39,7 @@ import MessageTips from './components/MessageTips';
 import MessageToolCall from './components/MessageToolCall';
 import MessageToolGroup from './components/MessageToolGroup';
 import MessageToolGroupSummary from './components/MessageToolGroupSummary';
+import MessageTaskTurn from './components/MessageTaskTurn';
 import MessageCronTrigger from './components/MessageCronTrigger';
 import MessageSkillSuggest from './components/MessageSkillSuggest';
 import MessageText from './components/MessageText';
@@ -56,6 +58,13 @@ type IMessageVO =
       messages: Array<IMessageToolGroup | IMessageAcpToolCall | IMessageToolCall>;
       sourceMessageIds: string[];
       created_at: number;
+    }
+  | {
+      type: 'task_turn';
+      id: string;
+      steps: Array<{ kind: 'thinking'; thinking: IMessageThinking } | { kind: 'tools'; messages: ToolMessage[] } | { kind: 'text'; text: string }>;
+      sourceMessageIds: string[];
+      created_at: number;
     };
 type IArtifactVO = { type: 'artifact'; id: string; artifact: IConversationArtifact; created_at: number };
 type IProcessedItem = IMessageVO | IArtifactVO;
@@ -70,6 +79,9 @@ const getProcessedItemSourceMessageIds = (item: IProcessedItem): string[] => {
     return [item.id];
   }
   if ('type' in item && item.type === 'tool_summary') {
+    return item.sourceMessageIds;
+  }
+  if ('type' in item && item.type === 'task_turn') {
     return item.sourceMessageIds;
   }
   if ('type' in item && item.type === 'file_summary') {
@@ -91,7 +103,7 @@ const getProcessedItemAnchorId = (item: IProcessedItem): string => {
 };
 
 const getProcessedItemCreatedAt = (item: IProcessedItem): number => {
-  if ('type' in item && ['file_summary', 'tool_summary', 'artifact'].includes(item.type)) {
+  if ('type' in item && ['file_summary', 'tool_summary', 'task_turn', 'artifact'].includes(item.type)) {
     return item.created_at;
   }
   return item.created_at ?? 0;
@@ -306,6 +318,11 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       // Skip hidden and available_commands messages
       if (message.hidden) continue;
       if (message.type === 'available_commands') continue;
+      {
+        const raw = (message as any).content;
+        const text = typeof raw === 'string' ? raw : raw?.content;
+        if (typeof text === 'string' && text.startsWith('Microcompact')) continue;
+      }
       if (message.type === 'tool_group') {
         if (message.content.length === 1) {
           const writeFileResults = message.content
@@ -356,7 +373,58 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         created_at: artifact.created_at,
       }));
 
-    return [...result, ...visibleArtifacts].toSorted(
+    const mergedResult: Array<IMessageVO> = [];
+    for (let i = 0; i < result.length; i++) {
+      const item = result[i];
+      const isThinking = 'type' in item && item.type === 'thinking';
+      const isToolSummary = 'type' in item && item.type === 'tool_summary';
+
+      if (isThinking || isToolSummary) {
+        const steps: Array<
+          | { kind: 'thinking'; thinking: IMessageThinking }
+          | { kind: 'tools'; messages: ToolMessage[] }
+        > = [];
+        const sourceIds: string[] = [];
+        let firstCreatedAt = 0;
+        let taskId = '';
+
+        while (i < result.length) {
+          const cur = result[i];
+          if ('type' in cur && cur.type === 'thinking') {
+            const th = cur as IMessageThinking;
+            steps.push({ kind: 'thinking', thinking: th });
+            sourceIds.push(th.id);
+            if (!firstCreatedAt) firstCreatedAt = th.created_at ?? 0;
+            if (!taskId) taskId = th.id;
+            i++;
+          } else if ('type' in cur && cur.type === 'tool_summary') {
+            const ts = cur as Extract<IMessageVO, { type: 'tool_summary' }>;
+            steps.push({ kind: 'tools', messages: ts.messages as ToolMessage[] });
+            sourceIds.push(...ts.sourceMessageIds);
+            if (!firstCreatedAt) firstCreatedAt = ts.created_at;
+            if (!taskId) taskId = ts.id;
+            i++;
+          } else {
+            break;
+          }
+        }
+        i--;
+
+        if (steps.length > 0) {
+          mergedResult.push({
+            type: 'task_turn',
+            id: `task-turn-${taskId}`,
+            steps,
+            sourceMessageIds: sourceIds,
+            created_at: firstCreatedAt,
+          });
+        }
+      } else {
+        mergedResult.push(item);
+      }
+    }
+
+    return [...mergedResult, ...visibleArtifacts].toSorted(
       (a, b) => getProcessedItemCreatedAt(a) - getProcessedItemCreatedAt(b)
     );
   }, [artifacts, list]);
@@ -381,7 +449,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     for (const item of processedList) {
       if (
         'type' in item &&
-        (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'artifact')
+        (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'task_turn' || item.type === 'artifact')
       ) {
         continue;
       }
@@ -507,6 +575,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         if (
           (item as { type?: string }).type === 'file_summary' ||
           (item as { type?: string }).type === 'tool_summary' ||
+          (item as { type?: string }).type === 'task_turn' ||
           (item as { type?: string }).type === 'artifact'
         ) {
           return false;
@@ -585,16 +654,19 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         </div>
       );
     }
-    if ('type' in item && ['file_summary', 'tool_summary'].includes(item.type)) {
+    if ('type' in item && ['file_summary', 'tool_summary', 'task_turn'].includes(item.type)) {
       return (
         <div
           key={item.id}
           id={`message-${getProcessedItemAnchorId(item)}`}
-          className={`${MESSAGE_ROW_WIDTH_CLASS} min-w-0 message-item px-8px m-t-10px ${item.type}`}
+          className={`${MESSAGE_ROW_WIDTH_CLASS} min-w-0 message-item px-8px m-t-4px ${item.type}`}
           style={highlighted ? highlightStyle : undefined}
         >
           {item.type === 'file_summary' && <MessageFileChanges diffsChanges={item.diffs} />}
           {item.type === 'tool_summary' && <MessageToolGroupSummary messages={item.messages}></MessageToolGroupSummary>}
+          {item.type === 'task_turn' && (
+            <MessageTaskTurn steps={item.steps}></MessageTaskTurn>
+          )}
         </div>
       );
     }

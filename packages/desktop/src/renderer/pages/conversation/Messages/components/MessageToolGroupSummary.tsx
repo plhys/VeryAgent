@@ -12,6 +12,41 @@ import LocalImageView from '@/renderer/components/media/LocalImageView';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import './MessageToolGroupSummary.css';
 
+const toolNameMap: Record<string, string> = {
+  Read: '读取文件',
+  Write: '写入文件',
+  Edit: '编辑文件',
+  Glob: '搜索文件',
+  Grep: '内容搜索',
+  Bash: '执行命令',
+  Exec: '执行命令',
+  Search: '搜索',
+  WebSearch: '网络搜索',
+  WebFetch: '获取网页',
+  Task: '子任务',
+  WriteFile: '写入文件',
+  ReadFile: '读取文件',
+  SearchCodebase: '搜索代码',
+  RunCommand: '运行命令',
+  LS: '列出目录',
+  DeleteFile: '删除文件',
+  AskUserQuestion: '询问用户',
+  TodoWrite: '任务列表',
+  grep: '内容搜索',
+  glob: '搜索文件',
+  read: '读取文件',
+  write: '写入文件',
+  edit: '编辑文件',
+  execute: '执行命令',
+  search: '搜索',
+  bash: '执行命令',
+  exec: '执行命令',
+};
+
+const translateToolName = (name: string): string => {
+  return toolNameMap[name] || name;
+};
+
 const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   switch (status) {
     case 'completed':
@@ -28,7 +63,7 @@ const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   }
 };
 
-const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
+export const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [fullItem, setFullItem] = useState<NormalizedToolCall | null>(null);
@@ -87,7 +122,7 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
           }
           onClick={hasDetail ? toggleExpanded : undefined}
         >
-          <span className='font-medium text-13px'>{displayItem.name}</span>
+          <span className='font-medium text-13px'>{translateToolName(displayItem.name)}</span>
           {displayItem.description && displayItem.description !== displayItem.name && (
             <span className='m-l-4px opacity-80 text-13px'>{displayItem.description}</span>
           )}
@@ -156,7 +191,7 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
         <span className='tool-group-summary__icon'>
           {hasRunning ? <Spin size={12} /> : <Checklist theme='outline' size='14' />}
         </span>
-        <span className='tool-group-summary__label'>View Steps {tools.length > 0 ? `· ${tools.length}` : ''}</span>
+        <span className='tool-group-summary__label'>工具调用 {tools.length > 0 ? `· ${tools.length}` : ''}</span>
         <span className={`tool-group-summary__arrow${showMore ? ' tool-group-summary__arrow--open' : ''}`}>
           <Right theme='outline' size='12' />
         </span>

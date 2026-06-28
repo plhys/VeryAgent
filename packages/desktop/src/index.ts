@@ -473,13 +473,21 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   }
 
   // Load the renderer: dev server URL in development, built HTML file in production
-  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'] || 'http://localhost:5173';
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
 
   if (!app.isPackaged && rendererUrl) {
     console.log(`[VeryAgent] Loading renderer URL: ${rendererUrl}`);
     mainWindow.loadURL(rendererUrl).catch((error) => {
       console.error('[VeryAgent] loadURL failed, falling back to file:', error.message || error);
+      mainWindow.loadFile(fallbackFile).catch((e2) => {
+        console.error('[VeryAgent] loadFile fallback also failed:', e2.message || e2);
+      });
+    });
+  } else if (rendererUrl) {
+    console.log(`[VeryAgent] Loading renderer URL (dev fallback): ${rendererUrl}`);
+    mainWindow.loadURL(rendererUrl).catch((error) => {
+      console.error('[VeryAgent] loadURL fallback failed:', error.message || error);
       mainWindow.loadFile(fallbackFile).catch((e2) => {
         console.error('[VeryAgent] loadFile fallback also failed:', e2.message || e2);
       });

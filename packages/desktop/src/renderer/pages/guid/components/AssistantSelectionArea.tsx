@@ -37,16 +37,16 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
     [assistants]
   );
   const visibleAssistants = useMemo(() => {
-    if (enabledAssistants.length <= 4 || !selectedId) {
-      return enabledAssistants.slice(0, 4);
+    if (enabledAssistants.length <= 2 || !selectedId) {
+      return enabledAssistants.slice(0, 2);
     }
 
     const selectedIndex = enabledAssistants.findIndex((assistant) => assistant.id === selectedId);
-    if (selectedIndex < 0 || selectedIndex < 4) {
-      return enabledAssistants.slice(0, 4);
+    if (selectedIndex < 0 || selectedIndex < 2) {
+      return enabledAssistants.slice(0, 2);
     }
 
-    return [...enabledAssistants.slice(0, 3), enabledAssistants[selectedIndex]];
+    return [...enabledAssistants.slice(0, 1), enabledAssistants[selectedIndex]];
   }, [enabledAssistants, selectedId]);
   const hasOverflow = enabledAssistants.length > visibleAssistants.length;
   const overflowAssistants = useMemo(() => {
@@ -57,7 +57,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
     const query = search.trim().toLowerCase();
     if (!query) return overflowAssistants;
     return overflowAssistants.filter((assistant) => {
-      const label = assistant.name_i18n?.[localeKey] || assistant.name;
+      const label = (assistant.name_i18n?.[localeKey] || assistant.name).replace('Aion CLI', 'VeryAgent');
       return label.toLowerCase().includes(query);
     });
   }, [localeKey, overflowAssistants, search]);
@@ -67,7 +67,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
   const renderAssistantPill = (assistant: Assistant, testId: string) => {
     const avatar = resolveAssistantAvatar(assistant.avatar);
     const isSelected = selectedId === assistant.id;
-    const label = assistant.name_i18n?.[localeKey] || assistant.name;
+    const label = (assistant.name_i18n?.[localeKey] || assistant.name).replace('Aion CLI', 'VeryAgent');
 
     return (
       <Button
@@ -125,11 +125,9 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
   );
 
   return (
-    <div className='mt-18px mb-16px w-full'>
-      <div className='flex w-full justify-center'>
-        <div
-          className='inline-flex max-w-full items-center rounded-999px px-6px py-6px'
-          style={{ background: 'var(--color-guid-agent-bar, var(--aou-2))' }}
+    <div>
+      <div className='flex justify-end'>
+        <div className='inline-flex max-w-full items-center px-6px py-6px'
         >
           <div className='flex min-w-0 max-w-full items-center gap-6px'>
             {visibleAssistants.map((assistant) => renderAssistantPill(assistant, `preset-pill-${assistant.id}`))}

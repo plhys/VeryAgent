@@ -1,0 +1,142 @@
+.task-turn {
+  margin: 8px 0;
+}
+
+.task-turn__header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--aou-6);
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+}
+
+.task-turn__header:hover {
+  color: var(--aou-7);
+}
+
+.task-turn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--aou-5);
+}
+
+.task-turn__header:hover .task-turn__icon {
+  color: var(--aou-6);
+}
+
+.task-turn__arrow {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--aou-4);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-turn__arrow--rotated {
+  transform: rotate(90deg);
+}
+
+.task-turn__label {
+  white-space: nowrap;
+}
+
+.task-turn__body {
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-turn__body-inner {
+  margin-top: 8px;
+  margin-left: 20px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--aou-1) 50%, #fff);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-theme='dark'] .task-turn__body-inner {
+  background: var(--aou-1);
+}
+
+.task-turn__step-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #d9d9da;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  padding: 2px 0;
+}
+
+.task-turn__step-header:hover {
+  color: #acacac;
+}
+
+.task-turn__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: #d9d9da;
+}
+
+.task-turn__step-arrow {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: #d9d9da;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.task-turn__step-header:hover .task-turn__step-icon,
+.task-turn__step-header:hover .task-turn__step-arrow {
+  color: #acacac;
+}
+
+[data-theme='dark'] .task-turn__step-header {
+  color: #666666;
+}
+
+[data-theme='dark'] .task-turn__step-header:hover {
+  color: #acacac;
+}
+
+[data-theme='dark'] .task-turn__step-icon,
+[data-theme='dark'] .task-turn__step-arrow {
+  color: #666666;
+}
+
+[data-theme='dark'] .task-turn__step-header:hover .task-turn__step-icon,
+[data-theme='dark'] .task-turn__step-header:hover .task-turn__step-arrow {
+  color: #acacac;
+}
+
+.task-turn__step-label {
+  white-space: nowrap;
+}
+
+.task-turn__step-content {
+  color: #86909c;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 6px 0 2px 19px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.task-turn__step-tools {
+  padding: 6px 0 2px 19px;
+}

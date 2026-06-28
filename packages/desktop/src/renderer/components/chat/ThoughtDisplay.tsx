@@ -95,7 +95,7 @@ const ThoughtDisplay: React.FC<ThoughtDisplayProps> = ({
   if (running && !thought?.subject) {
     return (
       <div
-        className='relative z-1 mb--20px pb-30px px-10px py-10px rd-t-20px text-14px lh-20px text-t-primary flex items-center gap-8px'
+        className='relative z-1 mb--20px px-10px pt-0 pb-18px rd-t-20px text-14px lh-20px text-t-primary flex items-center gap-8px'
         style={containerStyle}
       >
         <Spin size={14} />
