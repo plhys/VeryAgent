@@ -13,18 +13,16 @@
 - [x] 运行验证：VeryAgent 成功启动，数据目录与 AionUi 完全隔离
 - [x] VeryAgentCore Rust 代码全部改名（21 个 crate，aionui → veryagent）
 - [x] VeryAgentCore GitHub 仓库：plhys/AionCore → plhys/VeryAgentCore
-
-## ⏳ 进行中
-
-- [ ] VeryAgentCore 编译 — 本地网络下载 Rust 组件慢，GitHub Actions 也失败了
-- [ ] 最新代码未推送 — 本地有未推送的 commit
+- [x] VeryAgentCore 编译成功（修复 aionui.rs → veryagent.rs 重命名遗漏）
+- [x] VeryAgent Desktop 开发模式启动成功
+- [x] 添加 VERYAGENT_DEV_USERDATA_DIR 环境变量，数据目录可在工作区内
+- [x] 更新 binaryResolver.ts 支持 veryagent-core / aioncore 双名查找
+- [x] 更新 prepare-aioncore.js 指向 plhys/VeryAgentCore
+- [x] 复制 veryagent-core.exe 到 resources/bundled-aioncore/
+- [x] 代码推送到 GitHub
 
 ## 📋 待做
 
-- [ ] 重启 VeryAgent 看新窗口标题效果
-- [ ] 推送到 GitHub
-- [ ] VeryAgentCore 编译完成后替换 exe 到 VeryAgent 的 resources/
-- [ ] 更新 VeryAgent 的 prepare-aioncore.js 指向 plhys/VeryAgentCore
 - [ ] 重写 README.md
 - [ ] 替换 resources/ 里的旧图片（6 个 AionUi 图片）
 - [ ] 合并 feature/dev-setup 到 main 分支

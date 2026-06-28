@@ -2,6 +2,34 @@
   <img src="./resources/aionui-banner-1.png" alt="AionUi - Cowork with AI Agents" width="100%">
 </p>
 
+---
+
+## 项目日志
+
+> 本项目从 [AionUi](https://github.com/iOfficeAI/AionUi) 品牌重塑而来，后端从 [AionCore](https://github.com/iOfficeAI/AionCore) 更名为 VeryAgentCore。
+
+### 2026-06-28
+
+- 修复 VeryAgentCore 编译错误：`aionui.rs` → `veryagent.rs`（重组时遗漏的模块文件）
+- VeryAgentCore release 编译成功，产物 `veryagent-core.exe`（69.39 MB）
+- 添加 `VERYAGENT_DEV_USERDATA_DIR` 环境变量，支持在项目工作区内运行 Electron Desktop
+- 更新 `binaryResolver.ts` 支持 `veryagent-core` / `aioncore` 双名查找
+- 更新 `prepare-aioncore.js` 指向新仓库 `plhys/VeryAgentCore`
+- 复制 `veryagent-core.exe` 到 `resources/bundled-aioncore/win32-x64/`
+- 代码推送到 GitHub
+
+### 2026-06-26（品牌重塑）
+
+- 核心身份改名：appId、productName、executableName、数据目录
+- 所有 package.json 改名：`@aionui` → `@veryagent`
+- 源码全面替换：522 个文件（日志前缀、版权头、导入路径）
+- UI 界面更新：HTML 标题、meta 标签、i18n 翻译（102 个文件）
+- CI/CD 工作流更新：构建产物名、安装路径、AI 审查提示词
+- GitHub 仓库迁移：`plhys/AionUi` → `plhys/VeryAgent`、`plhys/AionCore` → `plhys/VeryAgentCore`
+- VeryAgentCore Rust 代码全部改名（21 个 crate，`aionui` → `veryagent`）
+
+---
+
 <p align="center">
   <img src="https://img.shields.io/github/v/release/iOfficeAI/AionUi?style=flat-square&color=32CD32" alt="Version">
   &nbsp;
