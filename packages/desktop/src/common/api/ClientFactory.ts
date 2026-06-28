@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 AionUi (aionui.com)
+ * Copyright 2025 VeryAgent (very.im)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,8 +76,8 @@ export class ClientFactory {
           baseURL: base_url,
           timeout: options.timeout,
           defaultHeaders: {
-            'HTTP-Referer': 'https://aionui.com',
-            'X-Title': 'AionUi',
+            'HTTP-Referer': 'https://very.im',
+            'X-Title': 'VeryAgent',
           },
           ...(options.baseConfig as OpenAIClientConfig),
         };
@@ -127,8 +127,8 @@ export class ClientFactory {
           baseURL: base_url,
           timeout: options.timeout,
           defaultHeaders: {
-            'HTTP-Referer': 'https://aionui.com',
-            'X-Title': 'AionUi',
+            'HTTP-Referer': 'https://very.im',
+            'X-Title': 'VeryAgent',
           },
           ...(options.baseConfig as OpenAIClientConfig),
         };

@@ -1,13 +1,13 @@
 /**
  * @license
- * Copyright 2025 AionUi (aionui.com)
+ * Copyright 2025 VeryAgent (very.im)
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import { CdnGenericProvider } from './cdnGenericProvider';
 import type { CdnGenericProviderConfiguration } from './cdnGenericProvider';
 
-export const CDN_UPDATE_BASE_URL = 'https://static.aionui.com/releases';
+export const CDN_UPDATE_BASE_URL = 'https://static.veryagent.com/releases';
 
 export type CdnFeedOptions = CdnGenericProviderConfiguration & {
   updateProvider: typeof CdnGenericProvider;

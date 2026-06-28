@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 AionUi (aionui.com)
+ * Copyright 2025 VeryAgent (very.im)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -146,7 +146,7 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
           style={quickActionStyle(hoveredQuickAction === 'repo')}
           onMouseEnter={() => setHoveredQuickAction('repo')}
           onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={() => onOpenLink('https://github.com/iOfficeAI/AionUi')}
+          onClick={() => onOpenLink('https://github.com/iOfficeAI/VeryAgent')}
         >
           <svg
             className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[#FE9900] transition-colors duration-300'

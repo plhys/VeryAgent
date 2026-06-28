@@ -1,5 +1,5 @@
-import { startWebHost, startStaticServer } from '@aionui/web-host';
-import type { WebHostHandle, StaticServerHandle } from '@aionui/web-host';
+import { startWebHost, startStaticServer } from '@veryagent/web-host';
+import type { WebHostHandle, StaticServerHandle } from '@veryagent/web-host';
 import { setTimeout as delay } from 'node:timers/promises';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -182,7 +182,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
     currentHandle = handle;
 
     console.log('');
-    console.log('AionUi WebUI (frontend only) is ready');
+    console.log('VeryAgent WebUI (frontend only) is ready');
     console.log(`  Local  : ${handle.localUrl}`);
     if (handle.networkUrl) console.log(`  Network: ${handle.networkUrl}`);
     if (autoOpenBrowser) {
@@ -222,7 +222,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
     currentHandle = handle;
 
     console.log('');
-    console.log('AionUi WebUI is ready');
+    console.log('VeryAgent WebUI is ready');
     console.log(`  Local  : ${handle.localUrl}`);
     if (handle.networkUrl) console.log(`  Network: ${handle.networkUrl}`);
 

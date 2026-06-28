@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2025 AionUi (aionui.com)
+ * Copyright 2025 VeryAgent (very.im)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -123,7 +123,7 @@ const Layout: React.FC<{
   }, [navigate]);
   const location = useLocation();
   const { t } = useTranslation();
-  // The "AionUi" wordmark acts as Home / Back-to-Chat, but only from settings routes.
+  // The "VeryAgent" wordmark acts as Home / Back-to-Chat, but only from settings routes.
   // In non-settings routes the user is already "home", so it is a no-op (and not actionable).
   const isSettingsRoute = location.pathname.startsWith('/settings');
   // Only wired to the wordmark in the isSettingsRoute branch below, so the
@@ -393,11 +393,11 @@ const Layout: React.FC<{
                         }
                       }}
                     >
-                      AionUi
+                      VeryAgent
                     </div>
                   </Tooltip>
                 ) : (
-                  <div className='text-16px text-t-primary collapsed-hidden font-semibold'>AionUi</div>
+                  <div className='text-16px text-t-primary collapsed-hidden font-semibold'>VeryAgent</div>
                 )}
                 {isMobile && !collapsed && (
                   <button

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2026 AionUi (aionui.com)
+ * Copyright 2025 VeryAgent (very.im)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,7 +67,7 @@ const reduceNotificationState = (
   event: Parameters<typeof updateNotificationReducer>[1]
 ): UpdateNotificationState => updateNotificationReducer(current, event).state;
 
-const RELEASES_PAGE_URL = 'https://github.com/iOfficeAI/AionUi/releases';
+const RELEASES_PAGE_URL = 'https://github.com/iOfficeAI/VeryAgent/releases';
 
 export const useUpdateNotificationController = () => {
   const { t } = useTranslation();

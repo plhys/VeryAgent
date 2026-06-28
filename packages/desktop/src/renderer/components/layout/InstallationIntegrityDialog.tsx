@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type FeedbackEventTags, submitFeedbackReport } from '@/renderer/services/feedback/submitFeedbackReport';
 
-const AIONUI_DOWNLOAD_URL = 'https://www.aionui.com/';
+const AIONUI_DOWNLOAD_URL = 'https://www.very.im/';
 const INSTALLATION_INTEGRITY_REPORT_FLUSH_TIMEOUT_MS = 2000;
 
 type InstallationIntegrityDialogKind = 'incomplete_installation' | 'data_migration' | 'local_data_repair';
