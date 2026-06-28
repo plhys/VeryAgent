@@ -231,7 +231,19 @@ function verifyBundledAioncoreResources({ resourcesDir, electronPlatformName, ta
   const checked = [];
   const missing = [];
 
-  requireRelativePath(baseDir, runtimeKey, [backendBinaryName(electronPlatformName)], checked, missing);
+  const binaryNames = backendBinaryName(electronPlatformName);
+  let found = false;
+  for (const name of binaryNames) {
+    if (isFile(path.join(baseDir, name))) {
+      checked.push(bundledPath(runtimeKey, name));
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    checked.push(bundledPath(runtimeKey, binaryNames[0]));
+    missing.push(bundledPath(runtimeKey, binaryNames[0]));
+  }
   verifyBundleManifest(baseDir, runtimeKey, electronPlatformName, targetArch, checked, missing);
   requireRelativeDirectory(baseDir, runtimeKey, ['managed-resources'], checked, missing);
   requireManagedNode(baseDir, runtimeKey, electronPlatformName, checked, missing);

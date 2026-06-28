@@ -18,8 +18,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const GITHUB_OWNER = 'iOfficeAI';
-const GITHUB_REPO = 'AionCore';
+const GITHUB_OWNER = 'plhys';
+const GITHUB_REPO = 'VeryAgentCore';
 
 const ACTIONS_ARTIFACT_TARGETS = {
   'darwin-arm64': {

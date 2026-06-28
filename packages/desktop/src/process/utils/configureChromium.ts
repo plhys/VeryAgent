@@ -20,10 +20,12 @@ import { applyGpuRecoveryFlags } from './gpuRecovery';
 if (!app.isPackaged) {
   const devAppName = getDevAppName();
   app.setName(devAppName);
-  // In Electron 28+, setName alone no longer updates userData path on macOS.
-  // Explicitly override userData to the dev directory.
-  const appSupportDir = path.dirname(app.getPath('userData'));
-  app.setPath('userData', path.join(appSupportDir, devAppName));
+  if (process.env.VERYAGENT_DEV_USERDATA_DIR) {
+    app.setPath('userData', process.env.VERYAGENT_DEV_USERDATA_DIR);
+  } else {
+    const appSupportDir = path.dirname(app.getPath('userData'));
+    app.setPath('userData', path.join(appSupportDir, devAppName));
+  }
 }
 
 // app.disableHardwareAcceleration() must run before app is ready.

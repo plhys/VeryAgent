@@ -2,15 +2,16 @@
  * Resolve the aioncore binary path.
  *
  * Search order:
- *  1. Bundled with app (production)
- *  2. System PATH
+ *  1. VeryAgentCore binary name (new branding)
+ *  2. Legacy aioncore binary name
+ *  3. System PATH
  */
 
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
-const BINARY_NAME = 'aioncore';
+const BINARY_NAMES = ['veryagent-core', 'aioncore'];
 const MAX_DIR_ENTRIES = 20;
 const MAX_LOOKUP_TEXT_LENGTH = 1000;
 
@@ -38,8 +39,9 @@ class BackendBinaryResolveError extends Error {
   }
 }
 
-function getBinaryName(): string {
-  return process.platform === 'win32' ? `${BINARY_NAME}.exe` : BINARY_NAME;
+function getBinaryNames(): string[] {
+  const suffix = process.platform === 'win32' ? '.exe' : '';
+  return BINARY_NAMES.map((name) => `${name}${suffix}`);
 }
 
 function getRuntimeKey(): string {
@@ -66,25 +68,28 @@ function trimLookupText(text: string): string {
  */
 export function resolveBinaryPath(): string {
   const runtimeKey = getRuntimeKey();
-  const binaryName = getBinaryName();
+  const binaryNames = getBinaryNames();
   const diagnostics: BackendBinaryResolveDiagnostics = {
     runtimeKey,
-    binaryName,
-    pathLookupCommand: process.platform === 'win32' ? `where ${BINARY_NAME}` : `which ${BINARY_NAME}`,
+    binaryName: binaryNames[0],
+    pathLookupCommand: process.platform === 'win32' ? `where ${BINARY_NAMES[0]}` : `which ${BINARY_NAMES[0]}`,
   };
 
-  // Allow overriding via env var (e.g. for dev mode)
   const envOverride = process.env.AIONUI_BACKEND_BIN;
   if (envOverride && existsSync(envOverride)) return envOverride;
 
-  const bundled = bundledPath(runtimeKey, binaryName, diagnostics);
-  if (bundled) return bundled;
+  for (const binaryName of binaryNames) {
+    const bundled = bundledPath(runtimeKey, binaryName, diagnostics);
+    if (bundled) return bundled;
+  }
 
-  const fromPath = resolveFromSystemPATH(diagnostics);
-  if (fromPath) return fromPath;
+  for (const binaryName of binaryNames) {
+    const fromPath = resolveFromSystemPATH(binaryName, diagnostics);
+    if (fromPath) return fromPath;
+  }
 
   throw new BackendBinaryResolveError(
-    `Cannot find "${BINARY_NAME}" binary. Checked bundled location and system PATH.`,
+    `Cannot find binary (${binaryNames.join(', ')}). Checked bundled location and system PATH.`,
     diagnostics
   );
 }
@@ -118,9 +123,11 @@ function bundledPath(
 /**
  * Try to find the binary on the system PATH.
  */
-function resolveFromSystemPATH(diagnostics: BackendBinaryResolveDiagnostics): string | null {
+function resolveFromSystemPATH(binaryName: string, diagnostics: BackendBinaryResolveDiagnostics): string | null {
   try {
-    const result = execSync(diagnostics.pathLookupCommand, { encoding: 'utf-8', timeout: 5000 }).trim();
+    const lookupCmd = process.platform === 'win32' ? `where ${binaryName}` : `which ${binaryName}`;
+    diagnostics.pathLookupCommand = lookupCmd;
+    const result = execSync(lookupCmd, { encoding: 'utf-8', timeout: 5000 }).trim();
     diagnostics.pathLookupResult = trimLookupText(result);
     const firstMatch = result.split(/\r?\n/).find((line) => line.trim());
     if (firstMatch && existsSync(firstMatch.trim())) return firstMatch.trim();

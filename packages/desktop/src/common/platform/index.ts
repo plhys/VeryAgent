@@ -42,7 +42,11 @@ export function getPlatformServices(): IPlatformServices {
         if (!app.isPackaged) {
           const devAppName = getDevAppName();
           app.setName(devAppName);
-          app.setPath('userData', path.join(path.dirname(app.getPath('userData')), devAppName));
+          if (process.env.VERYAGENT_DEV_USERDATA_DIR) {
+            app.setPath('userData', process.env.VERYAGENT_DEV_USERDATA_DIR);
+          } else {
+            app.setPath('userData', path.join(path.dirname(app.getPath('userData')), devAppName));
+          }
         }
         // Typed as IPlatformPaths so tsc enforces completeness: any new method
         // added to the interface will cause a compile error here if omitted below.
