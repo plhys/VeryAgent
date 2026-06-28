@@ -12,10 +12,10 @@
     "clearWorkspace": "Ordner entfernen",
     "openFolder": "Ordner öffnen",
     "none": "Keiner",
-    "quickActionsTitle": "Was kann AionUi?",
+    "quickActionsTitle": "Was kann VeryAgent?",
     "quickActionFeedback": "Feedback oder Vorschläge?",
-    "quickActionStar": "Gefällt dir AionUi? Gib uns einen Stern!",
-    "skillsMarket": "AionUi Skills-Markt",
+    "quickActionStar": "Gefällt dir VeryAgent? Gib uns einen Stern!",
+    "skillsMarket": "VeryAgent Skills-Markt",
     "skillsMarketDesc": "Community-Skills auf Abruf suchen und aktivieren. Einmal konfigurieren, für alle Agenten verfügbar.",
     "skillsMarketDetails": "Mehr anzeigen >>"
   },
@@ -119,7 +119,7 @@
       "send_feedback": "Sende Feedback mit Protokollen, damit das Team das Problem untersuchen kann."
     },
     "ownership": {
-      "aionui": "App",
+      "veryagent": "App",
       "user_agent": "Agent",
       "user_llm_provider": "Modellanbieter",
       "unknown_upstream": "Upstream"

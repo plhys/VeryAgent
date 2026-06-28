@@ -264,8 +264,8 @@ const WebviewHost: React.FC<WebviewHostProps> = ({
           .executeJavaScript(
             `
           (function() {
-            if (window.__aionuiZoomInjected) return true;
-            window.__aionuiZoomInjected = true;
+            if (window.__veryagentZoomInjected) return true;
+            window.__veryagentZoomInjected = true;
             window.addEventListener('wheel', function(e) {
               if (!(e.ctrlKey || e.metaKey)) return;
               e.preventDefault();

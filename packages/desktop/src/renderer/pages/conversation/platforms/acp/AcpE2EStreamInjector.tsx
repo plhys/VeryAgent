@@ -9,7 +9,7 @@ import { useAddOrUpdateMessage } from '@/renderer/pages/conversation/Messages/ho
 import React, { useEffect } from 'react';
 
 const STREAM_TICK_MS = 35;
-const ENABLED_CONVERSATION_KEY = 'aionui:e2e-message-stream-conversation-id';
+const ENABLED_CONVERSATION_KEY = 'veryagent:e2e-message-stream-conversation-id';
 
 type RunScenarioOptions = {
   historyPairs?: number;

@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { mutate as swrMutate } from 'swr';
 
 /** Backend manifest id of the built-in VeryAgent Butler assistant. */
-const BUTLER_ASSISTANT_ID = 'aionui-assistant';
+const BUTLER_ASSISTANT_ID = 'veryagent-assistant';
 
 export type TalkToButlerArgs = {
   /** Prompt pre-filled into the home chat input. */

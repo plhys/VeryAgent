@@ -22,7 +22,7 @@ import { setUpdateReadyState } from './updateReadyState';
 
 type AvailableOutcome = Extract<CheckUpdateOutcome, { kind: 'available' }>;
 
-export const UPDATE_AVAILABLE_EVENT = 'aionui-update-available';
+export const UPDATE_AVAILABLE_EVENT = 'veryagent-update-available';
 
 declare const __APP_VERSION__: string;
 
@@ -222,7 +222,7 @@ export const useUpdateNotificationController = () => {
       const source = (evt as CustomEvent<{ source?: UpdateNotificationOpenSource }>).detail?.source ?? 'about';
       openUpdateNotification(source, true);
     };
-    window.addEventListener('aionui-open-update-modal', handleWindowOpen);
+    window.addEventListener('veryagent-open-update-modal', handleWindowOpen);
 
     // The About button runs its own check and only reveals the card when an
     // update is actually available, handing over the already-fetched outcome.
@@ -236,7 +236,7 @@ export const useUpdateNotificationController = () => {
 
     return () => {
       removeOpenListener();
-      window.removeEventListener('aionui-open-update-modal', handleWindowOpen);
+      window.removeEventListener('veryagent-open-update-modal', handleWindowOpen);
       window.removeEventListener(UPDATE_AVAILABLE_EVENT, handleAvailable);
     };
   }, [openUpdateNotification, presentAvailableOutcome]);

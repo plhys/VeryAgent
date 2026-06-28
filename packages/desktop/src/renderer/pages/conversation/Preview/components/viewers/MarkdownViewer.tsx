@@ -240,7 +240,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
         ) : (
           // 预览模式：Streamdown 原生渲染 / Preview mode: native Streamdown
           <div
-            className='aionui-markdown'
+            className='veryagent-markdown'
             style={{
               wordWrap: 'break-word',
               overflowWrap: 'break-word',

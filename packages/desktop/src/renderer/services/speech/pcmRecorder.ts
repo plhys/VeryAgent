@@ -112,7 +112,7 @@ export type PcmRecorderHandle = {
   stop: () => Promise<{ pcm: Uint8Array; sampleRate: number }>;
 };
 
-const PROCESSOR_NAME = 'aionui-pcm-capture';
+const PROCESSOR_NAME = 'veryagent-pcm-capture';
 
 /**
  * Inline AudioWorklet processor source, loaded via a Blob URL so no bundler
