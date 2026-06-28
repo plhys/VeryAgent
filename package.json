@@ -1,12 +1,12 @@
 {
-  "name": "AionUi",
+  "name": "VeryAgent",
   "version": "2.1.25",
-  "description": "Transform your command-line AI agent into a modern, efficient AI Chat interface.",
+  "description": "A free, open-source Cowork platform with AI Agents — built-in agent, zero setup, multi-agent, remote access, cross-platform.",
   "keywords": [],
   "license": "Apache-2.0",
   "author": {
-    "name": "AionUi",
-    "email": "service@aionui.com"
+    "name": "VeryAgent",
+    "email": "hi@very.im"
   },
   "workspaces": [
     "packages/*"
@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "electron-vite dev --config packages/desktop/electron.vite.config.ts",
     "start": "electron-vite dev --config packages/desktop/electron.vite.config.ts",
-    "start:multi": "cross-env AIONUI_MULTI_INSTANCE=1 electron-vite dev --config packages/desktop/electron.vite.config.ts",
+    "start:multi": "cross-env VERYAGENT_MULTI_INSTANCE=1 electron-vite dev --config packages/desktop/electron.vite.config.ts",
     "cli": "electron-vite dev --config packages/desktop/electron.vite.config.ts",
     "webui": "tsx scripts/webui.ts",
     "webui:remote": "tsx scripts/webui.ts --remote",
@@ -70,7 +70,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",
-    "@aionui/web-host": "workspace:*",
+    "@veryagent/web-host": "workspace:*",
     "@anthropic-ai/sdk": "^0.71.2",
     "@arco-design/web-react": "^2.66.1",
     "@aws-sdk/client-bedrock": "^3.987.0",
@@ -270,5 +270,5 @@
   "patchedDependencies": {
     "7zip-bin@5.2.0": "patches/7zip-bin@5.2.0.patch"
   },
-  "productName": "AionUi"
+  "productName": "VeryAgent"
 }

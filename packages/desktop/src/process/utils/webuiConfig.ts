@@ -130,7 +130,7 @@ export const saveUserWebUIConfig = async (config: WebUIUserConfig): Promise<void
 //   production -> 25808, dev -> 25809, multi-instance dev -> 25810
 const DEFAULT_WEBUI_PORT = (() => {
   if (process.env.NODE_ENV === 'production') return 25808;
-  if (process.env.AIONUI_MULTI_INSTANCE === '1') return 25810;
+  if (process.env.VERYAGENT_MULTI_INSTANCE === '1') return 25810;
   return 25809;
 })();
 

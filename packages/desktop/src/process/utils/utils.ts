@@ -93,24 +93,24 @@ const ensureCliSafeSymlink = (targetPath: string, symlinkName: string): string =
  * Get data path, using CLI-safe symlink on macOS.
  * Release builds use ~/.aionui; dev builds use ~/.aionui-dev.
  * 获取数据目录路径，macOS 上使用符号链接。
- * Release 使用 ~/.aionui，Dev 模式使用 ~/.aionui-dev。
+ * Release 使用 ~/.veryagent，Dev 模式使用 ~/.veryagent-dev。
  */
 export const getDataPath = (): string => {
   const rootPath = getElectronPathOrFallback('userData');
-  const dataPath = path.join(rootPath, 'aionui');
-  return ensureCliSafeSymlink(dataPath, getEnvAwareName('.aionui'));
+  const dataPath = path.join(rootPath, 'veryagent');
+  return ensureCliSafeSymlink(dataPath, getEnvAwareName('.veryagent'));
 };
 
 /**
  * Get config path, using CLI-safe symlink on macOS.
- * Release builds use ~/.aionui-config; dev builds use ~/.aionui-config-dev.
+ * Release builds use ~/.veryagent-config; dev builds use ~/.veryagent-config-dev.
  * 获取配置目录路径，macOS 上使用符号链接。
- * Release 使用 ~/.aionui-config，Dev 模式使用 ~/.aionui-config-dev。
+ * Release 使用 ~/.veryagent-config，Dev 模式使用 ~/.veryagent-config-dev。
  */
 export const getConfigPath = (): string => {
   const rootPath = getElectronPathOrFallback('userData');
   const configPath = path.join(rootPath, 'config');
-  return ensureCliSafeSymlink(configPath, getEnvAwareName('.aionui-config'));
+  return ensureCliSafeSymlink(configPath, getEnvAwareName('.veryagent-config'));
 };
 
 /**
