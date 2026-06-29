@@ -217,3 +217,5 @@ graphify-out/
 .graphify_python
 
 .snow/
+.zcode-reference/node_modules/
+.zcode-reference/out/
