@@ -181,29 +181,7 @@ const ChatLayout: React.FC<{
       )}
     >
       <FlexFullContainer className='h-full min-w-0' containerClassName='flex items-center'>
-        <ChatTitleEditor
-          editingTitle={editingTitle}
-          titleDraft={titleDraft}
-          setTitleDraft={setTitleDraft}
-          setEditingTitle={setEditingTitle}
-          renameLoading={renameLoading}
-          canRenameTitle={canRenameTitle}
-          submitTitleRename={submitTitleRename}
-          titleAreaMaxWidth={titleAreaMaxWidth}
-          title={props.title}
-          conversation_id={conversation_id}
-          leading={
-            props.headerLeading ??
-            ((backend || presetAssistant) && (
-              <AgentLogoIcon
-                backend={backend}
-                agent_name={display_name}
-                agentLogo={presetAssistant?.logo}
-                agentLogoIsEmoji={presetAssistant?.isEmoji}
-              />
-            ))
-          }
-        />
+        {/* ChatTitleEditor moved to Titlebar — see Titlebar/index.tsx */}
       </FlexFullContainer>
       <div className='flex items-center gap-12px shrink-0'>
         {props.headerExtra}

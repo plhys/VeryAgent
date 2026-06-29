@@ -13,6 +13,8 @@ import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEv
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useNavigationHistory } from '@/renderer/hooks/context/NavigationHistoryContext';
 import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
+import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
+import { useTitleRename } from '@/renderer/pages/conversation/hooks/useTitleRename';
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import './titlebar.css';
 
@@ -113,6 +115,34 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const { openFeedback } = useFeedback();
   const location = useLocation();
   const navigate = useNavigate();
+  const isConversationRoute = location.pathname.startsWith('/conversation/');
+  const conversationId = isConversationRoute ? location.pathname.split('/')[2] : undefined;
+
+  // Conversation title + minimap for the titlebar center
+  const [conversationTitle, setConversationTitle] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!conversationId) {
+      setConversationTitle(undefined);
+      return;
+    }
+    let cancelled = false;
+    void ipcBridge.conversation.get
+      .invoke({ id: conversationId })
+      .then((conv) => {
+        if (cancelled) return;
+        setConversationTitle(conv?.name);
+      })
+      .catch(() => {
+        if (cancelled) return;
+      });
+    return () => { cancelled = true; };
+  }, [conversationId]);
+
+  const titleRename = useTitleRename({
+    title: conversationTitle ?? '',
+    conversation_id: conversationId,
+  });
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -366,6 +396,21 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
         aria-label={layout?.isMobile ? mobileCenterTitle : appTitle}
         title={layout?.isMobile ? mobileCenterTitle : appTitle}
       >
+        {/* Desktop: show conversation title + minimap in the center */}
+        {!layout?.isMobile && isConversationRoute && conversationId && (
+          <ChatTitleEditor
+            editingTitle={titleRename.editingTitle}
+            titleDraft={titleRename.titleDraft}
+            setTitleDraft={titleRename.setTitleDraft}
+            setEditingTitle={titleRename.setEditingTitle}
+            renameLoading={titleRename.renameLoading}
+            canRenameTitle={titleRename.canRenameTitle}
+            submitTitleRename={titleRename.submitTitleRename}
+            titleAreaMaxWidth={480}
+            title={conversationTitle || ''}
+            conversation_id={conversationId}
+          />
+        )}
         {layout?.isMobile &&
           (() => {
             const conversationMatch = location.pathname.match(/^\/conversation\/([^/]+)/);
