@@ -867,7 +867,7 @@ pub async fn clone_repository(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &data_dir).await
@@ -1178,7 +1178,7 @@ pub async fn git_pull(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_pull_core(&path, credentials.as_ref(), &db, &data_dir).await
@@ -1254,7 +1254,7 @@ pub async fn git_fetch(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_fetch_core(&path, credentials.as_ref(), &db, &data_dir).await
@@ -1417,7 +1417,7 @@ pub async fn git_push(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     let emitter = EventEmitter::Tauri(app.clone());
@@ -2422,7 +2422,7 @@ pub async fn git_fetch_remote(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &data_dir).await
@@ -2620,7 +2620,7 @@ pub async fn git_delete_remote_branch(
         AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
     })?;
     // Resolve through the effective data dir so a custom
-    // `CODEG_DATA_DIR` reaches the git credential helper invoked by
+    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
     // this subprocess.
     let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
     git_delete_remote_branch_core(
@@ -2933,7 +2933,7 @@ fn atomic_write_text(path: &Path, bytes: &[u8]) -> Result<(), AppCommandError> {
     }
 
     let temp_path = parent.join(format!(
-        ".codeg-edit-{}.{}.tmp",
+        ".veryagent-edit-{}.{}.tmp",
         std::process::id(),
         uuid::Uuid::new_v4().simple()
     ));
@@ -4506,17 +4506,17 @@ mod tests {
     #[tokio::test]
     async fn add_folder_to_history_core_derives_name_from_path() {
         let db = fresh_in_memory_db().await;
-        let entry = add_folder_to_history_core(&db, "/tmp/codeg-test-project".into())
+        let entry = add_folder_to_history_core(&db, "/tmp/veryagent-test-project".into())
             .await
             .expect("add folder");
-        assert_eq!(entry.name, "codeg-test-project");
-        assert_eq!(entry.path, "/tmp/codeg-test-project");
+        assert_eq!(entry.name, "veryagent-test-project");
+        assert_eq!(entry.path, "/tmp/veryagent-test-project");
     }
 
     #[tokio::test]
     async fn add_folder_to_history_core_upserts_on_duplicate_path() {
         let db = fresh_in_memory_db().await;
-        let path = "/tmp/codeg-dup-test".to_string();
+        let path = "/tmp/veryagent-dup-test".to_string();
         let first = add_folder_to_history_core(&db, path.clone())
             .await
             .expect("add 1st");
@@ -4536,7 +4536,7 @@ mod tests {
     #[tokio::test]
     async fn remove_folder_from_history_core_soft_deletes() {
         let db = fresh_in_memory_db().await;
-        let path = "/tmp/codeg-remove-test".to_string();
+        let path = "/tmp/veryagent-remove-test".to_string();
         add_folder_to_history_core(&db, path.clone())
             .await
             .expect("add");
@@ -4568,12 +4568,12 @@ mod tests {
     #[tokio::test]
     async fn open_worktree_folder_core_records_parent_as_root() {
         let db = fresh_in_memory_db().await;
-        let root = open_folder_core(&db, "/tmp/codeg-wt-root".into())
+        let root = open_folder_core(&db, "/tmp/veryagent-wt-root".into())
             .await
             .expect("open root");
         assert_eq!(root.parent_id, None, "root folder has no parent");
 
-        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-a".into(), root.id)
+        let wt = open_worktree_folder_core(&db, "/tmp/veryagent-wt-a".into(), root.id)
             .await
             .expect("open worktree");
         assert_eq!(
@@ -4586,15 +4586,15 @@ mod tests {
     #[tokio::test]
     async fn open_worktree_folder_core_flattens_nested_worktrees() {
         let db = fresh_in_memory_db().await;
-        let root = open_folder_core(&db, "/tmp/codeg-wt-flat-root".into())
+        let root = open_folder_core(&db, "/tmp/veryagent-wt-flat-root".into())
             .await
             .expect("open root");
-        let child = open_worktree_folder_core(&db, "/tmp/codeg-wt-flat-1".into(), root.id)
+        let child = open_worktree_folder_core(&db, "/tmp/veryagent-wt-flat-1".into(), root.id)
             .await
             .expect("open child worktree");
         // A worktree created *from* the child must still point at the root, not
         // the intermediate child.
-        let grandchild = open_worktree_folder_core(&db, "/tmp/codeg-wt-flat-2".into(), child.id)
+        let grandchild = open_worktree_folder_core(&db, "/tmp/veryagent-wt-flat-2".into(), child.id)
             .await
             .expect("open grandchild worktree");
         assert_eq!(child.parent_id, Some(root.id));
@@ -4608,7 +4608,7 @@ mod tests {
     #[tokio::test]
     async fn open_worktree_folder_core_unknown_source_is_root() {
         let db = fresh_in_memory_db().await;
-        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-orphan".into(), 0)
+        let wt = open_worktree_folder_core(&db, "/tmp/veryagent-wt-orphan".into(), 0)
             .await
             .expect("open worktree with no source");
         assert_eq!(
@@ -4673,15 +4673,15 @@ branch refs/heads/main";
     #[tokio::test]
     async fn open_folder_core_preserves_existing_worktree_parent() {
         let db = fresh_in_memory_db().await;
-        let root = open_folder_core(&db, "/tmp/codeg-wt-preserve-root".into())
+        let root = open_folder_core(&db, "/tmp/veryagent-wt-preserve-root".into())
             .await
             .expect("open root");
-        let wt = open_worktree_folder_core(&db, "/tmp/codeg-wt-preserve".into(), root.id)
+        let wt = open_worktree_folder_core(&db, "/tmp/veryagent-wt-preserve".into(), root.id)
             .await
             .expect("open worktree");
         assert_eq!(wt.parent_id, Some(root.id));
         // A plain reopen of the same path must not clear the recorded parent.
-        let reopened = open_folder_core(&db, "/tmp/codeg-wt-preserve".into())
+        let reopened = open_folder_core(&db, "/tmp/veryagent-wt-preserve".into())
             .await
             .expect("reopen plain");
         assert_eq!(
@@ -4694,10 +4694,10 @@ branch refs/heads/main";
     #[tokio::test]
     async fn open_worktree_folder_core_unknown_source_demotes_existing_to_root() {
         let db = fresh_in_memory_db().await;
-        let root = open_folder_core(&db, "/tmp/codeg-wt-demote-root".into())
+        let root = open_folder_core(&db, "/tmp/veryagent-wt-demote-root".into())
             .await
             .expect("open root");
-        let path = "/tmp/codeg-wt-demote".to_string();
+        let path = "/tmp/veryagent-wt-demote".to_string();
         let wt = open_worktree_folder_core(&db, path.clone(), root.id)
             .await
             .expect("open worktree");
@@ -4716,7 +4716,7 @@ branch refs/heads/main";
     #[tokio::test]
     async fn update_folder_color_core_roundtrips() {
         let db = fresh_in_memory_db().await;
-        let entry = add_folder_to_history_core(&db, "/tmp/codeg-color-test".into())
+        let entry = add_folder_to_history_core(&db, "/tmp/veryagent-color-test".into())
             .await
             .expect("add");
         let updated = update_folder_color_core(&db, entry.id, "#ff8800".into())
@@ -4730,7 +4730,7 @@ branch refs/heads/main";
     #[tokio::test]
     async fn update_folder_default_agent_core_set_then_clear() {
         let db = fresh_in_memory_db().await;
-        let entry = add_folder_to_history_core(&db, "/tmp/codeg-agent-test".into())
+        let entry = add_folder_to_history_core(&db, "/tmp/veryagent-agent-test".into())
             .await
             .expect("add");
         let set = update_folder_default_agent_core(&db, entry.id, Some(AgentType::ClaudeCode))

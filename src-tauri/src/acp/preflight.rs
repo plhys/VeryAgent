@@ -319,7 +319,7 @@ async fn check_uv_environment(
 
     // Fallback: the agent's own CLI is already installed on PATH (e.g. a user
     // who ran the official installer has `hermes` available). The agent is
-    // launchable as-is, but installing uv unlocks codeg's managed install /
+    // launchable as-is, but installing uv unlocks veryagent's managed install /
     // upgrade flow, so offer it as a non-blocking action.
     if let Some((cmd, _)) = system_cmd {
         if crate::commands::acp::resolve_command_on_path(cmd).is_some() {

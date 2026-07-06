@@ -1,4 +1,4 @@
-//! Main-process side of the `codeg-mcp` round-trip: accept UDS / named-pipe
+//! Main-process side of the `veryagent-mcp` round-trip: accept UDS / named-pipe
 //! connections from companion processes, validate the per-launch token,
 //! resolve the parent's current conversation, and hand off to the broker.
 //!
@@ -93,7 +93,7 @@ pub struct DelegationListener {
     pub questions: Arc<dyn SessionQuestionAccess>,
     /// Resolves a referenced session for the `get_session_info` tool. Unlike the
     /// other arms this is NOT parent-scoped — it looks any non-deleted session up
-    /// by its codeg conversation id (still token-gated against an invalid caller).
+    /// by its veryagent conversation id (still token-gated against an invalid caller).
     pub session_info: Arc<dyn SessionInfoAccess>,
 }
 
@@ -424,12 +424,12 @@ impl DelegationListener {
     /// token yields a `found:false` outcome (the LLM can't usefully distinguish it
     /// from a deleted session, and we don't leak which).
     ///
-    /// SCOPE (deliberate, user-confirmed): the lookup is by codeg conversation id
+    /// SCOPE (deliberate, user-confirmed): the lookup is by veryagent conversation id
     /// and is intentionally NOT scoped to the caller's parent connection or to the
     /// session ids actually referenced in the prompt — any non-deleted session
-    /// resolves. This is sound in codeg's single-tenant trust model: there is no
+    /// resolves. This is sound in veryagent's single-tenant trust model: there is no
     /// per-user isolation anywhere (desktop is one local user; server mode shares
-    /// one `CODEG_TOKEN` + one data dir across an operator's devices), the user can
+    /// one `VERYAGENT_TOKEN` + one data dir across an operator's devices), the user can
     /// already open every session in the UI, and the agent already has full
     /// filesystem access to every agent's raw session files via its own tools — so
     /// reading session metadata by id is strictly less capability than the agent
@@ -645,20 +645,20 @@ fn parse_agent_type(raw: &str) -> Option<AgentType> {
 }
 
 /// Default socket path for the running process, scoped to PID so multiple
-/// codeg instances on the same machine don't collide.
+/// veryagent instances on the same machine don't collide.
 ///
 /// Unix: a `.sock` file inside `temp_dir`.
-/// Windows: a named pipe address `\\.\pipe\codeg-delegation-<pid>`. Windows
+/// Windows: a named pipe address `\\.\pipe\veryagent-delegation-<pid>`. Windows
 /// named pipes live in their own kernel namespace and ignore `temp_dir`; the
 /// argument is kept for signature parity across platforms.
 #[cfg(unix)]
 pub fn default_socket_path(temp_dir: &Path) -> PathBuf {
-    temp_dir.join(format!("codeg-delegation-{}.sock", std::process::id()))
+    temp_dir.join(format!("veryagent-delegation-{}.sock", std::process::id()))
 }
 
 #[cfg(windows)]
 pub fn default_socket_path(_temp_dir: &Path) -> PathBuf {
-    PathBuf::from(format!(r"\\.\pipe\codeg-delegation-{}", std::process::id()))
+    PathBuf::from(format!(r"\\.\pipe\veryagent-delegation-{}", std::process::id()))
 }
 
 #[cfg(test)]

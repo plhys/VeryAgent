@@ -896,10 +896,10 @@ mod tests {
             .expect("system time ok")
             .as_nanos();
         let base: PathBuf = env::temp_dir().join(format!("codeg-gemini-test-{nanos}"));
-        let chats_dir = base.join("tmp").join("codeg").join("chats");
+        let chats_dir = base.join("tmp").join("veryagent").join("chats");
         fs::create_dir_all(&chats_dir).expect("create chat dir");
         fs::write(
-            base.join("tmp").join("codeg").join(".project_root"),
+            base.join("tmp").join("veryagent").join(".project_root"),
             "/Users/test/workspace/demo",
         )
         .expect("write project root");
@@ -973,10 +973,10 @@ mod tests {
             .expect("system time ok")
             .as_nanos();
         let base: PathBuf = env::temp_dir().join(format!("codeg-gemini-topic-{nanos}"));
-        let chats_dir = base.join("tmp").join("codeg").join("chats");
+        let chats_dir = base.join("tmp").join("veryagent").join("chats");
         fs::create_dir_all(&chats_dir).expect("create chat dir");
         fs::write(
-            base.join("tmp").join("codeg").join(".project_root"),
+            base.join("tmp").join("veryagent").join(".project_root"),
             "/Users/test/workspace/demo",
         )
         .expect("write project root");
@@ -1015,10 +1015,10 @@ mod tests {
             .expect("system time ok")
             .as_nanos();
         let base: PathBuf = env::temp_dir().join(format!("codeg-gemini-ctx-{nanos}"));
-        let chats_dir = base.join("tmp").join("codeg").join("chats");
+        let chats_dir = base.join("tmp").join("veryagent").join("chats");
         fs::create_dir_all(&chats_dir).expect("create chat dir");
         fs::write(
-            base.join("tmp").join("codeg").join(".project_root"),
+            base.join("tmp").join("veryagent").join(".project_root"),
             "/Users/test/workspace/demo",
         )
         .expect("write project root");
@@ -1124,7 +1124,7 @@ mod tests {
             .expect("system time ok")
             .as_nanos();
         let base: PathBuf = env::temp_dir().join(format!("codeg-gemini-completed-{nanos}"));
-        let chats_dir = base.join("tmp").join("codeg").join("chats");
+        let chats_dir = base.join("tmp").join("veryagent").join("chats");
         fs::create_dir_all(&chats_dir).expect("create chat dir");
 
         let file_path = chats_dir.join("session-completed.json");

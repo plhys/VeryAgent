@@ -199,7 +199,7 @@ pub(crate) fn resolve_command_on_path(cmd: &str) -> Option<PathBuf> {
 
 /// Resolve the `uvx` (uv tool runner) executable used to launch Python ACP
 /// agents (e.g. Hermes). Checks PATH first (respecting a user's own `uv`),
-/// then codeg's managed uv cache, then the common install locations the
+/// then veryagent's managed uv cache, then the common install locations the
 /// official `uv` installer / cargo use (`~/.local/bin`, `~/.cargo/bin`).
 pub(crate) fn resolve_uvx_command() -> Option<PathBuf> {
     if let Some(path) = resolve_command_on_path("uvx") {
@@ -220,7 +220,7 @@ pub(crate) fn resolve_uvx_command() -> Option<PathBuf> {
 }
 
 /// Whether a `Uvx` agent can actually be launched on this machine right now:
-/// the `uvx` runner is resolvable (codeg auto-provisions it on install, so this
+/// the `uvx` runner is resolvable (veryagent auto-provisions it on install, so this
 /// holds post-prepare), or the agent's own CLI is on PATH (system fallback).
 /// The connect gate (`verify_agent_installed`) and the Settings status/list
 /// paths all use this so they agree on readiness. Note: the prepared-version
@@ -482,7 +482,7 @@ pub(crate) async fn verify_agent_installed(agent_type: AgentType) -> Result<(), 
             Ok(())
         }
         registry::AgentDistribution::Uvx { system_cmd, .. } => {
-            // Launchable when uvx is resolvable (codeg auto-provisions it on
+            // Launchable when uvx is resolvable (veryagent auto-provisions it on
             // install, so this holds post-prepare) or the agent's own CLI is on
             // PATH. Kept consistent with the Settings status/list paths via the
             // shared helper, so connect and the UI never disagree on readiness.
@@ -502,7 +502,7 @@ pub(crate) async fn verify_agent_installed(agent_type: AgentType) -> Result<(), 
 /// `npm list -g <package_name> --json` and parsing the JSON output.
 ///
 /// Checks both the system global prefix and the user-local prefix
-/// (`~/.codeg/npm-global/`) so packages installed via the EACCES fallback are
+/// (`~/.veryagent/npm-global/`) so packages installed via the EACCES fallback are
 /// found as well.
 async fn detect_npm_global_version(package_name: &str) -> Option<String> {
     let npm_path = which::which("npm").ok()?;
@@ -751,7 +751,7 @@ async fn install_npm_global_package_streaming(
     Ok(())
 }
 
-/// Fallback: install an npm package into a user-local prefix (`~/.codeg/npm-global/`)
+/// Fallback: install an npm package into a user-local prefix (`~/.veryagent/npm-global/`)
 /// when the system global prefix is not writable (EACCES).
 async fn install_npm_to_user_prefix_streaming(
     package: &str,
@@ -900,7 +900,7 @@ async fn uninstall_npm_global_package(package: &str) -> Result<(), AcpError> {
     Ok(())
 }
 
-/// Uninstall an npm package from the user-local prefix (`~/.codeg/npm-global/`).
+/// Uninstall an npm package from the user-local prefix (`~/.veryagent/npm-global/`).
 async fn uninstall_npm_from_user_prefix(package_name: &str) -> Result<(), AcpError> {
     let prefix = match crate::process::user_npm_prefix() {
         Some(p) if p.exists() => p,
@@ -1015,11 +1015,11 @@ fn codex_auth_json_path() -> PathBuf {
 
 /// OpenCode reads config from `$XDG_CONFIG_HOME/opencode` (falling back to
 /// `~/.config/opencode`) and credentials from `$XDG_DATA_HOME/opencode`
-/// (falling back to `~/.local/share/opencode`) on every platform. codeg must
+/// (falling back to `~/.local/share/opencode`) on every platform. veryagent must
 /// write where OpenCode reads, so these reuse the same XDG resolution as
 /// `opencode_plugins` (config) and `parsers::opencode` (data) — otherwise a
 /// user with XDG dirs set would get credentials written where OpenCode never
-/// looks, and codeg's own plugin/connect paths would diverge.
+/// looks, and veryagent's own plugin/connect paths would diverge.
 fn opencode_config_dir() -> PathBuf {
     crate::acp::opencode_plugins::xdg_config_home()
         .unwrap_or_else(|| home_dir_or_default().join(".config"))
@@ -1521,7 +1521,7 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-        .unwrap_or_else(|| "codeg".to_string());
+        .unwrap_or_else(|| "veryagent".to_string());
     table.insert(
         "model_provider".to_string(),
         toml::Value::String(provider_name.clone()),
@@ -1553,8 +1553,8 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
             provider_table.remove("base_url");
         }
     }
-    if provider_name == "codeg" {
-        provider_table.insert("name".to_string(), toml::Value::String("codeg".to_string()));
+    if provider_name == "veryagent" {
+        provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
         provider_table.insert(
             "wire_api".to_string(),
             toml::Value::String("responses".to_string()),
@@ -1700,35 +1700,35 @@ fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
 // required`. The only advertised ACP auth method is a terminal device-code login
 // (`kimi acp --login`), which requires a Kimi *subscription* account.
 //
-// To support plain API-key users, codeg therefore manages BOTH halves:
-//   1. `config.toml` — a codeg-managed `[providers."codeg"]` + `[models."codeg-managed"]`
+// To support plain API-key users, veryagent therefore manages BOTH halves:
+//   1. `config.toml` — a veryagent-managed `[providers."veryagent"]` + `[models."veryagent-managed"]`
 //      + `default_model` block that ROUTES INFERENCE to the user's API key
 //      (any of the six native interface types: kimi / openai / openai_responses /
 //      anthropic / google-genai / vertexai).
-//   2. `credentials/kimi-code.json` — a synthetic gate token codeg seeds so the
+//   2. `credentials/kimi-code.json` — a synthetic gate token veryagent seeds so the
 //      ACP session opens. It is purely local: because `default_model` points at
 //      the API-key provider, the managed/OAuth endpoint is never called and this
 //      token is never transmitted. It carries a `_codeg_synthetic` marker so we
 //      only ever remove OUR token, never a real login the user performed.
 //
-// The codeg-managed block is keyed by the fixed names `codeg` / `codeg-managed`
+// The veryagent-managed block is keyed by the fixed names `codeg` / `veryagent-managed`
 // so it is recognizable and removable without disturbing any provider/model the
 // user added by hand. The raw config.toml editor is the comment/format escape
 // hatch. A stale `KIMI_MODEL_*` env override would silently win over config.toml,
 // so every save also clears it.
 // ---------------------------------------------------------------------------
 
-const KIMI_MANAGED_PROVIDER: &str = "codeg";
-const KIMI_MANAGED_MODEL_ALIAS: &str = "codeg-managed";
+const KIMI_MANAGED_PROVIDER: &str = "veryagent";
+const KIMI_MANAGED_MODEL_ALIAS: &str = "veryagent-managed";
 const KIMI_MODEL_API_KEY_ENV: &str = "KIMI_MODEL_API_KEY";
 const KIMI_MODEL_BASE_URL_ENV: &str = "KIMI_MODEL_BASE_URL";
 const KIMI_MODEL_NAME_ENV: &str = "KIMI_MODEL_NAME";
 /// Sentinel `access_token` value (and `_codeg_synthetic` marker) identifying the
-/// gate token codeg seeds, so we never clobber a real OAuth login.
-const KIMI_SYNTHETIC_TOKEN_ACCESS: &str = "codeg-local-gate";
+/// gate token veryagent seeds, so we never clobber a real OAuth login.
+const KIMI_SYNTHETIC_TOKEN_ACCESS: &str = "veryagent-local-gate";
 /// Fallback context window for the managed model. Kimi's config schema **requires**
 /// `[models.<alias>].max_context_size` to be a positive integer — omitting it makes
-/// kimi discard the whole model block ("Ignored invalid config … models.codeg-managed"),
+/// kimi discard the whole model block ("Ignored invalid config … models.veryagent-managed"),
 /// which leaves `default_model` dangling and every prompt ends with no reply. So we
 /// always write one, defaulting to the kimi-k2 256K window when the user leaves it blank.
 const KIMI_DEFAULT_MAX_CONTEXT_SIZE: i64 = 262_144;
@@ -1767,21 +1767,21 @@ fn kimi_provider_key_env_var(interface_type: &str) -> Option<&'static str> {
     }
 }
 
-/// The resolved codeg-managed provider/model block to write into config.toml.
+/// The resolved veryagent-managed provider/model block to write into config.toml.
 struct KimiManagedSpec {
     interface_type: String,
     base_url: Option<String>,
     /// Direct `api_key` field (when the user picks "direct key" auth).
     api_key: Option<String>,
-    /// `[providers.codeg.env]` sub-table entries — the env-sub-table API key, or
+    /// `[providers.veryagent.env]` sub-table entries — the env-sub-table API key, or
     /// Vertex's `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION`.
     env: BTreeMap<String, String>,
     model: String,
     max_context_size: Option<i64>,
 }
 
-/// Upsert (`Some`) or remove (`None`) the codeg-managed `[providers.codeg]` +
-/// `[models.codeg-managed]` block in a parsed config.toml document, preserving
+/// Upsert (`Some`) or remove (`None`) the veryagent-managed `[providers.veryagent]` +
+/// `[models.veryagent-managed]` block in a parsed config.toml document, preserving
 /// every other section the user authored. Removal also resets `default_model`
 /// only when it points at our managed alias.
 fn apply_kimi_managed_block(
@@ -1893,7 +1893,7 @@ fn apply_kimi_managed_block(
 }
 
 /// Read-modify-write `config.toml`, upserting (`Some`) or clearing (`None`) the
-/// codeg-managed block. A clear on a non-existent file is a no-op (never creates
+/// veryagent-managed block. A clear on a non-existent file is a no-op (never creates
 /// an empty file). Reuses the existing `toml` crate: data in other sections is
 /// preserved; comments/formatting are not (the raw editor covers that).
 fn mutate_kimi_config_toml(spec: Option<&KimiManagedSpec>) -> Result<(), AcpError> {
@@ -1933,12 +1933,12 @@ fn read_kimi_token() -> Option<serde_json::Value> {
     read_kimi_token_at(&kimi_code_credentials_token_path())
 }
 
-/// Whether a token document is codeg's synthetic gate token (vs a real OAuth
+/// Whether a token document is veryagent's synthetic gate token (vs a real OAuth
 /// login the user performed via `kimi login`). Matches either the sentinel
 /// `access_token` or the explicit `_codeg_synthetic` marker.
 fn kimi_token_is_synthetic(token: &serde_json::Value) -> bool {
     token
-        .get("_codeg_synthetic")
+        .get("_veryagent_synthetic")
         .and_then(serde_json::Value::as_bool)
         == Some(true)
         || token.get("access_token").and_then(serde_json::Value::as_str)
@@ -1960,14 +1960,14 @@ fn kimi_credential_present() -> bool {
     read_kimi_token().map(|t| kimi_token_has_access(&t)).unwrap_or(false)
 }
 
-/// Whether the present credential is codeg's synthetic gate token.
+/// Whether the present credential is veryagent's synthetic gate token.
 fn kimi_credential_is_synthetic() -> bool {
     read_kimi_token()
         .map(|t| kimi_token_is_synthetic(&t))
         .unwrap_or(false)
 }
 
-/// Seed codeg's synthetic gate token at `path` so `kimi acp` treats the session
+/// Seed veryagent's synthetic gate token at `path` so `kimi acp` treats the session
 /// as authenticated. No-op (preserves) when a REAL OAuth login token is already
 /// present — that already satisfies the gate and must never be clobbered.
 fn seed_kimi_synthetic_credential_at(path: &Path) -> Result<(), AcpError> {
@@ -1983,7 +1983,7 @@ fn seed_kimi_synthetic_credential_at(path: &Path) -> Result<(), AcpError> {
         "expires_in": 9_999_999i64,
         "scope": "",
         "token_type": "Bearer",
-        "_codeg_synthetic": true,
+        "_veryagent_synthetic": true,
     });
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| {
@@ -2001,7 +2001,7 @@ fn seed_kimi_synthetic_credential() -> Result<(), AcpError> {
     seed_kimi_synthetic_credential_at(&kimi_code_credentials_token_path())
 }
 
-/// Remove the gate token at `path` ONLY when it is codeg's synthetic one —
+/// Remove the gate token at `path` ONLY when it is veryagent's synthetic one —
 /// leaving any real OAuth login the user performed untouched.
 fn remove_kimi_synthetic_credential_if_ours_at(path: &Path) -> Result<(), AcpError> {
     match read_kimi_token_at(path) {
@@ -2015,7 +2015,7 @@ fn remove_kimi_synthetic_credential_if_ours() -> Result<(), AcpError> {
     remove_kimi_synthetic_credential_if_ours_at(&kimi_code_credentials_token_path())
 }
 
-/// Project the codeg-managed config.toml block into a flat JSON object for the
+/// Project the veryagent-managed config.toml block into a flat JSON object for the
 /// settings panel, plus the raw file text for the advanced editor. Uses keys
 /// (`baseUrl` / `key` / `modelId`, never `apiBaseUrl` / `apiKey` / `model` /
 /// `env`) that do NOT match `AgentRuntimeConfig`, so `build_runtime_env_from_setting`
@@ -2130,7 +2130,7 @@ fn load_kimi_code_config_json() -> Option<String> {
         }
     };
     // Surface the gate-credential state so the panel can show whether `kimi acp`
-    // is currently authenticated and whether that came from codeg's synthetic
+    // is currently authenticated and whether that came from veryagent's synthetic
     // token or a real OAuth login.
     merged.insert(
         "credentialPresent".to_string(),
@@ -2147,7 +2147,7 @@ fn load_kimi_code_config_json() -> Option<String> {
 }
 
 /// Structured Kimi Code config update from the settings UI. `mode` is one of:
-/// `apikey` — write the codeg-managed `config.toml` provider/model block AND seed
+/// `apikey` — write the veryagent-managed `config.toml` provider/model block AND seed
 /// the synthetic gate token, so the API key actually authenticates `kimi acp`;
 /// `login` — clear the managed block + remove our synthetic token so a real OAuth
 /// login governs; `raw` — write a verbatim config.toml then seed the gate token.
@@ -2252,7 +2252,7 @@ fn build_kimi_managed_spec(update: &KimiCodeConfigUpdate) -> Result<KimiManagedS
 /// Clear any `KIMI_MODEL_*` env override from the DB `env_json`, preserving every
 /// other env key and the agent's enabled/provider state. `kimi acp` reads that
 /// env family BEFORE config.toml, so a stale entry would silently override the
-/// codeg-managed provider; every save clears it to keep config.toml authoritative.
+/// veryagent-managed provider; every save clears it to keep config.toml authoritative.
 /// Ensures the settings row exists first. No-op fast path when nothing to clear.
 async fn clear_kimi_model_env(db: &AppDatabase) -> Result<(), AcpError> {
     let default = agent_setting_service::AgentDefaultInput {
@@ -2441,7 +2441,7 @@ pub(crate) async fn acp_fetch_kimi_models_core(
 // model selection from `~/.pi/agent/settings.json` (`defaultProvider`,
 // `defaultModel`, `defaultThinkingLevel` — plain strings) and its API keys from
 // `~/.pi/agent/auth.json` (`{ "<provider>": { "type": "api_key", "key": ... } }`).
-// codeg manages both NATIVE files directly (merge-writes that preserve every
+// veryagent manages both NATIVE files directly (merge-writes that preserve every
 // other key), mirroring how it manages Codex's `auth.json`/`config.toml`. The
 // agent dir honors `PI_CODING_AGENT_DIR` so a custom pi install can be targeted.
 // ---------------------------------------------------------------------------
@@ -2474,7 +2474,7 @@ fn pi_models_json_path() -> PathBuf {
 /// Like [`pi_agent_dir`], but resolves `PI_CODING_AGENT_DIR` from a per-agent
 /// `runtime_env` map first (the BYO-pi override path) before falling back to the
 /// process env / `~/.pi/agent`. Launch-time trust seeding only has the per-agent
-/// env (the override never lands in codeg's own process env), so it must consult
+/// env (the override never lands in veryagent's own process env), so it must consult
 /// `runtime_env` to target the same agent dir pi-acp will spawn pi against.
 fn pi_agent_dir_for_env(runtime_env: &BTreeMap<String, String>) -> PathBuf {
     match runtime_env
@@ -2491,12 +2491,12 @@ fn pi_agent_dir_for_env(runtime_env: &BTreeMap<String, String>) -> PathBuf {
 /// Absent or any value other than `"0"` ⇒ enabled (default on); `"0"` disables.
 pub(crate) const PI_TRUST_WORKSPACE_ENV: &str = "PI_ACP_TRUST_WORKSPACE";
 
-/// Seed pi's `trust.json` so the workspace codeg is launching pi into is trusted.
+/// Seed pi's `trust.json` so the workspace veryagent is launching pi into is trusted.
 ///
 /// pi stores trust as a flat `{ "<canonical-dir>": true|false|null }` map and the
 /// nearest-ancestor entry decides whether it loads a project's local `.pi/*`
 /// config and `.agents/skills`. This gates ONLY config/skill loading, never tool
-/// execution — codeg has already authorized full execution in `cwd` by connecting
+/// execution — veryagent has already authorized full execution in `cwd` by connecting
 /// an agent there, so trusting the same folder for config loading is consistent
 /// and removes a redundant, mid-connection trust prompt.
 ///
@@ -2529,7 +2529,7 @@ pub(crate) fn seed_pi_workspace_trust(cwd: &Path, runtime_env: &BTreeMap<String,
 
     // Read pi's file strictly: a missing file is fine (we create one), but a file
     // that exists yet doesn't parse to a JSON object must NOT be overwritten —
-    // that would destroy decisions codeg can't see.
+    // that would destroy decisions veryagent can't see.
     let mut obj = match fs::read_to_string(&path) {
         Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
             Ok(serde_json::Value::Object(map)) => map,
@@ -2576,7 +2576,7 @@ pub(crate) struct PiConfigUpdate {
 
 /// Read a JSON file into an owned object map, returning an empty map when the
 /// file is absent, unreadable, or does not parse to a JSON object. Pi's native
-/// files are small and codeg-owned; corruption shouldn't abort a save (we
+/// files are small and veryagent-owned; corruption shouldn't abort a save (we
 /// re-author the managed keys and preserve whatever else parses).
 fn read_json_object_or_empty(path: &Path) -> serde_json::Map<String, serde_json::Value> {
     fs::read_to_string(path)
@@ -2936,7 +2936,7 @@ fn probe_pi_version(resolved: &Path) -> Option<String> {
 //
 // Hermes self-manages credentials in `~/.hermes/.env` (secrets) and general
 // settings in `~/.hermes/config.yaml` (the `model:` section), reading them with
-// its own runtime resolver. codeg manages those two files directly — mirroring
+// its own runtime resolver. veryagent manages those two files directly — mirroring
 // how it manages Codex's `auth.json` + `config.toml` — rather than injecting
 // process env. The provider choice drives the linkage: it selects which `.env`
 // var holds the API key and which `model.provider` / `model.base_url` go into
@@ -2964,14 +2964,14 @@ struct HermesProvider {
     key_env_var: &'static str,
     needs_base_url: bool,
     /// The `.env` variable Hermes reads for a user-supplied endpoint URL. When
-    /// set (only `openai-api` today), codeg mirrors the structured base URL into
+    /// set (only `openai-api` today), veryagent mirrors the structured base URL into
     /// both this var and config.yaml `model.base_url`, because Hermes' own
     /// resolution paths disagree on which one wins — keeping them in sync makes
     /// the saved endpoint authoritative under either path.
     base_url_env_var: &'static str,
 }
 
-/// Curated subset of Hermes providers codeg edits via structured fields, keyed
+/// Curated subset of Hermes providers veryagent edits via structured fields, keyed
 /// by the canonical `model.provider` id and `.env` key var from Hermes'
 /// `hermes_cli/auth.py` PROVIDER_REGISTRY (the single source of truth its own
 /// setup uses). The long tail and any exotic credential layout go through the
@@ -3679,7 +3679,7 @@ pub(crate) struct HermesConfigUpdate {
 fn hermes_skip_chmod() -> bool {
     // Match Hermes' Python truthiness (`os.environ.get(...)` — an empty value is
     // falsy): only a NON-EMPTY opt-out enables skip, so a blank `HERMES_SKIP_CHMOD=`
-    // does not (and codeg still performs the 0644→0600 repair Hermes would).
+    // does not (and veryagent still performs the 0644→0600 repair Hermes would).
     let truthy = |key: &str| std::env::var(key).map(|v| !v.is_empty()).unwrap_or(false);
     if truthy("HERMES_CONTAINER")
         || truthy("HERMES_SKIP_CHMOD")
@@ -3708,7 +3708,7 @@ fn parse_hermes_home_mode(raw: Option<&str>) -> u32 {
 }
 
 /// Create the Hermes home directory if needed. On Unix, tighten it to
-/// `HERMES_HOME_MODE` (or `0700`) **only when codeg just created it** and Hermes
+/// `HERMES_HOME_MODE` (or `0700`) **only when veryagent just created it** and Hermes
 /// itself would chmod (not a container/managed deployment). An existing
 /// `HERMES_HOME` is left untouched — it may be a NixOS-managed `0750`, a
 /// UID-mapped Docker volume, or otherwise deliberately group-accessible, and
@@ -3733,7 +3733,7 @@ pub(crate) fn ensure_hermes_home_secure(home: &Path) -> Result<(), AcpError> {
 /// A brand-new secret — a path whose resolved target does not exist yet, whether
 /// `path` itself is absent or a symlink to a missing target — is created
 /// owner-only (`0600` on Unix) so it is never world-readable under the process
-/// umask, the one real exposure for a first-time codeg-driven setup. An EXISTING
+/// umask, the one real exposure for a first-time veryagent-driven setup. An EXISTING
 /// target is written through in place, which preserves everything that identifies
 /// it: its inode, mode, owner/group, POSIX ACL and xattrs, and any symlink (a
 /// dotfile-manager or secret-manager `~/.hermes/.env` keeps pointing at its real
@@ -3780,7 +3780,7 @@ pub(crate) fn write_hermes_secret_file(
     {
         use std::os::unix::fs::PermissionsExt;
         // Repair an accidentally WORLD-accessible secret (e.g. a `0644` left by an
-        // older codeg build or by the pre-fix dangling-symlink path) back to
+        // older veryagent build or by the pre-fix dangling-symlink path) back to
         // owner-only `0600`: a world-readable API key is a leak, and tightening it
         // to `0640` would still expose it to a broad group like `staff`. A file
         // with no "other" bits — including a deliberately group-shared managed
@@ -3886,7 +3886,7 @@ fn plan_hermes_write(
         // `custom` provider IS handled (its key/endpoint live inline in
         // config.yaml — see `hermes_inlines_api_key`), but unknown ids (the
         // legacy `openai` pseudo-provider, user-defined `custom:` slugs, or
-        // anything outside the table) have no credential layout codeg can map —
+        // anything outside the table) have no credential layout veryagent can map —
         // reject them and steer the user to the raw config.yaml editor, which
         // stays the escape hatch.
         let meta = hermes_provider(provider).ok_or_else(|| {
@@ -3997,7 +3997,7 @@ fn base_url_eq(a: &str, b: &str) -> bool {
 /// var, so auxiliary tasks (title generation, compression, …) silently fall
 /// back to the provider's registry-default host and 401 against the wrong
 /// endpoint. The settings panel already mirrors both on save; this covers
-/// configs authored outside codeg.
+/// configs authored outside veryagent.
 ///
 /// Scope is the single ACTIVE provider's own base-URL var, never another
 /// provider's. Returns `Some((env_var, value))` to write — `value` is the
@@ -4057,7 +4057,7 @@ fn plan_hermes_base_url_reconcile(
 /// used VERBATIM (`Path(val)` — Hermes does NOT expand `~`); a blank value falls
 /// back to the default `~/.hermes` (it does NOT re-inherit the parent). With no
 /// override the child inherits the parent env, so defer to `hermes_home_dir()`
-/// (codeg's existing resolution, shared with the settings panel).
+/// (veryagent's existing resolution, shared with the settings panel).
 fn hermes_home_for_launch(runtime_env: &BTreeMap<String, String>) -> PathBuf {
     match runtime_env.get("HERMES_HOME") {
         Some(raw) => {
@@ -4342,7 +4342,7 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
         }),
         // pi auto-loads skills from `~/.pi/agent/skills` and the shared
         // `~/.agents/skills` store (both global), plus project-local
-        // `.pi/skills` / `.agents/skills` once the workspace is trusted (codeg
+        // `.pi/skills` / `.agents/skills` once the workspace is trusted (veryagent
         // seeds that trust on connect). `~/.pi/agent/skills` additionally
         // accepts standalone `.md` files, so this mirrors Codex's spec shape.
         // The pi-native dir comes first so toggling pi links into its own dir
@@ -4551,7 +4551,7 @@ fn skill_content_path(layout: AgentSkillLayout, skill_path: &Path) -> PathBuf {
 /// recursively and files are unlinked. This prevents `remove_dir_all` from
 /// accidentally wiping the contents of a symlink target — which is critical
 /// for the Experts feature where agent skill dirs may contain symlinks into
-/// the central `~/.codeg/skills/` store.
+/// the central `~/.veryagent/skills/` store.
 pub(crate) fn remove_skill_entry(path: &Path) -> std::io::Result<()> {
     let meta = fs::symlink_metadata(path)?;
     let file_type = meta.file_type();
@@ -4970,7 +4970,7 @@ fn cascade_update_agent_config(
         }
         AgentType::Hermes => {
             // Hermes self-manages credentials in ~/.hermes/.env via
-            // `hermes model` / `hermes setup`; codeg writes no provider creds.
+            // `hermes model` / `hermes setup`; veryagent writes no provider creds.
         }
         AgentType::Codex => {
             let auth_path = codex_auth_json_path();
@@ -5010,7 +5010,7 @@ fn cascade_update_agent_config(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(str::to_string)
-                .unwrap_or_else(|| "codeg".to_string());
+                .unwrap_or_else(|| "veryagent".to_string());
             table.insert(
                 "model_provider".to_string(),
                 toml::Value::String(provider_name.clone()),
@@ -5042,8 +5042,8 @@ fn cascade_update_agent_config(
                     toml::Value::String(api_url.to_string()),
                 );
             }
-            if provider_name == "codeg" {
-                provider_table.insert("name".to_string(), toml::Value::String("codeg".to_string()));
+            if provider_name == "veryagent" {
+                provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
                 provider_table.insert(
                     "wire_api".to_string(),
                     toml::Value::String("responses".to_string()),
@@ -5411,7 +5411,7 @@ pub async fn acp_connect(
     app_handle: tauri::AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<String, AcpError> {
-    // Resolve through the effective data dir so a custom `CODEG_DATA_DIR`
+    // Resolve through the effective data dir so a custom `VERYAGENT_DATA_DIR`
     // reaches the credential helper script the agent's git subprocess
     // will execute. `acp_connect` may be called before the app data dir
     // exists on disk (first launch); fall back to a sentinel that the
@@ -5496,7 +5496,7 @@ pub async fn acp_set_config_option(
 /// read whatever `SessionConfigOptions` / `SessionModes` the agent advertises,
 /// and tear it down. The returned snapshot drives the delegation-settings UI
 /// so the user picks from the exact option set the agent will accept when
-/// codeg-mcp later spawns a subagent.
+/// veryagent-mcp later spawns a subagent.
 ///
 /// Does NOT touch the chat-side `selectorsCache`, `localStorage` preferences,
 /// or any active connection state — see `ConnectionManager::probe_agent_options`
@@ -6794,7 +6794,7 @@ pub async fn acp_download_agent_binary(
     acp_download_agent_binary_core(agent_type, version, task_id, &emitter).await
 }
 
-/// Provision ONLY the uv toolchain (uvx) into codeg's cache — independent of
+/// Provision ONLY the uv toolchain (uvx) into veryagent's cache — independent of
 /// installing any `Uvx` agent's package. Streams progress over the shared
 /// agent-install event stream so the Settings page shows a live log. Backs the
 /// uv preflight check's "Install uv" fix. After this succeeds,
@@ -8026,11 +8026,11 @@ mod tests {
         // endpoint is unchanged. codex-acp 1.0.1 reads `model_provider` from
         // config.toml directly, so it is no longer pinned into the launch env
         // where the fingerprint previously caught it incidentally.
-        let codeg = r#"
+        let veryagent = r#"
 model = "gpt-5-codex"
-model_provider = "codeg"
+model_provider = "veryagent"
 
-[model_providers.codeg]
+[model_providers.veryagent]
 base_url = "https://gateway.example/v1"
 wire_api = "responses"
 
@@ -8039,7 +8039,7 @@ base_url = "https://gateway.example/v1"
 wire_api = "chat"
 "#;
         let other = codeg.replace(
-            "model_provider = \"codeg\"",
+            "model_provider = \"veryagent\"",
             "model_provider = \"other\"",
         );
 
@@ -8048,7 +8048,7 @@ wire_api = "chat"
 
         assert_eq!(
             p_codeg.get("modelProvider").and_then(|v| v.as_str()),
-            Some("codeg")
+            Some("veryagent")
         );
         assert_eq!(
             p_other.get("modelProvider").and_then(|v| v.as_str()),
@@ -8084,7 +8084,7 @@ wire_api = "chat"
     }
 
     fn unique_test_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("codeg-acp-{name}-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("veryagent-acp-{name}-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).expect("create test directory");
         dir
     }
@@ -9385,7 +9385,7 @@ wire_api = "chat"
             home_dir_or_default().join(".hermes")
         );
 
-        // No override → the child inherits the parent env (codeg's resolution).
+        // No override → the child inherits the parent env (veryagent's resolution).
         assert_eq!(hermes_home_for_launch(&BTreeMap::new()), hermes_home_dir());
     }
 
@@ -9813,7 +9813,7 @@ wire_api = "chat"
         // leading double-quoted string makes PowerShell parse the line as a
         // string expression and fail with "Unexpected token" instead of running
         // uvx; an unquoted bare path runs in both cmd and PowerShell.
-        let path = r"C:\Users\Administrator\AppData\Local\app.codeg\acp-binaries\uv-tool\windows-x86_64\uvx.exe";
+        let path = r"C:\Users\Administrator\AppData\Local\app.veryagent\acp-binaries\uv-tool\windows-x86_64\uvx.exe";
         assert_eq!(shell_quote_arg_for(path, true), path);
         // On POSIX the backslash is the escape char, so it still forces quoting.
         assert_eq!(shell_quote_arg_for(path, false), format!("'{path}'"));
@@ -9964,14 +9964,14 @@ wire_api = "chat"
     fn kimi_managed_block_clear_preserves_user_sections() {
         let mut doc: toml::Value = r#"
 default_model = "mine"
-[providers.codeg]
+[providers.veryagent]
 type = "openai"
 api_key = "sk"
 [providers.mine]
 type = "openai"
 api_key = "sk-user"
-[models.codeg-managed]
-provider = "codeg"
+[models.veryagent-managed]
+provider = "veryagent"
 model = "x"
 [models.mine]
 provider = "mine"
@@ -9997,11 +9997,11 @@ model = "gpt"
     #[test]
     fn kimi_managed_block_clear_resets_our_default_and_empties() {
         let mut doc: toml::Value = r#"
-default_model = "codeg-managed"
-[providers.codeg]
+default_model = "veryagent-managed"
+[providers.veryagent]
 type = "kimi"
-[models.codeg-managed]
-provider = "codeg"
+[models.veryagent-managed]
+provider = "veryagent"
 model = "kimi-for-coding"
 "#
         .parse()
@@ -10090,13 +10090,13 @@ model = "kimi-for-coding"
         // config.toml values back into the KIMI_MODEL_* runtime env, defeating the
         // single-source-of-truth between env override and config.toml.
         let value: toml::Value = r#"
-default_model = "codeg-managed"
-[providers.codeg]
+default_model = "veryagent-managed"
+[providers.veryagent]
 type = "anthropic"
 base_url = "https://api.anthropic.com"
 api_key = "sk-ant"
-[models.codeg-managed]
-provider = "codeg"
+[models.veryagent-managed]
+provider = "veryagent"
 model = "claude-opus-4-7"
 max_context_size = 200000
 "#
@@ -10140,12 +10140,12 @@ max_context_size = 200000
     #[test]
     fn kimi_project_managed_config_env_subtable_surfaces_as_env_auth() {
         let value: toml::Value = r#"
-[providers.codeg]
+[providers.veryagent]
 type = "openai"
-[providers.codeg.env]
+[providers.veryagent.env]
 OPENAI_API_KEY = "sk-x"
-[models.codeg-managed]
-provider = "codeg"
+[models.veryagent-managed]
+provider = "veryagent"
 model = "gpt"
 "#
         .parse()

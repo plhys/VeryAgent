@@ -47,7 +47,7 @@ pub async fn backup_create_ticket(
     Json(params): Json<CreateBackupParams>,
 ) -> Result<Json<DownloadTicketIssued>, AppCommandError> {
     let encrypted = params.passphrase.as_deref().is_some_and(|p| !p.is_empty());
-    let ext = if encrypted { "codegbak" } else { "codeg.zip" };
+    let ext = if encrypted { "veryagentbak" } else { "veryagent.zip" };
 
     let tmp_dir = state.data_dir.join(BACKUP_TMP_DIR);
     tokio::fs::create_dir_all(&tmp_dir)
@@ -60,7 +60,7 @@ pub async fn backup_create_ticket(
     let inputs = BackupInputs {
         conn: &state.db.conn,
         data_dir: &state.data_dir,
-        uploads_root: crate::paths::codeg_uploads_root(),
+        uploads_root: crate::paths::veryagent_uploads_root(),
         app_version: APP_VERSION,
         runtime_label: "server",
     };
@@ -73,7 +73,7 @@ pub async fn backup_create_ticket(
     result?;
 
     let download_name = format!(
-        "codeg-backup-{}.{ext}",
+        "veryagent-backup-{}.{ext}",
         chrono::Utc::now().format("%Y%m%d-%H%M%S")
     );
     let ticket = state
@@ -143,7 +143,7 @@ pub async fn backup_upload(
 
     // Optional hard size cap (default unlimited, matching the attachment-upload
     // convention). Operators on shared deployments can bound it via env.
-    let max_bytes = std::env::var("CODEG_BACKUP_UPLOAD_MAX_BYTES")
+    let max_bytes = std::env::var("VERYAGENT_BACKUP_UPLOAD_MAX_BYTES")
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
         .filter(|v| *v > 0);

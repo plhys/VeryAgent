@@ -186,7 +186,7 @@ mod tests {
         ConversationSummary {
             id: id.to_string(),
             agent_type: AgentType::ClaudeCode,
-            folder_path: Some("/tmp/codeg-import".to_string()),
+            folder_path: Some("/tmp/veryagent-import".to_string()),
             folder_name: None,
             title: title.map(|t| t.to_string()),
             started_at: Utc::now(),
@@ -213,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_refreshes_a_changed_title() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import").await;
         let at = AgentType::ClaudeCode;
 
         let first = import_one(&db.conn, folder, &at, &summary("ext-1", Some("first prompt")))
@@ -239,7 +239,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_skips_an_unchanged_title() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import-same").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import-same").await;
         let at = AgentType::ClaudeCode;
         let s = summary("ext-1", Some("same title"));
 
@@ -258,7 +258,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_never_clobbers_a_manual_rename() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import-lock").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import-lock").await;
         let at = AgentType::ClaudeCode;
 
         import_one(&db.conn, folder, &at, &summary("ext-1", Some("first prompt")))
@@ -287,7 +287,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_with_no_title_keeps_the_existing_one() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import-empty").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import-empty").await;
         let at = AgentType::ClaudeCode;
 
         import_one(&db.conn, folder, &at, &summary("ext-1", Some("kept title")))
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_skips_a_soft_deleted_conversation() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import-deleted").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import-deleted").await;
         let at = AgentType::ClaudeCode;
 
         import_one(&db.conn, folder, &at, &summary("ext-1", Some("original")))
@@ -347,7 +347,7 @@ mod tests {
     #[tokio::test]
     async fn reimport_skips_a_delegation_child() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-import-child").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-import-child").await;
         let at = AgentType::ClaudeCode;
         let at_str = serde_json::to_value(at)
             .expect("ser")

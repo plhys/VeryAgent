@@ -12,10 +12,10 @@ use std::sync::{Arc, Mutex};
 use axum::extract::RawQuery;
 use axum::http::header;
 use axum_test::TestServer;
-use codeg_lib::app_state::AppState;
-use codeg_lib::db::test_helpers::fresh_in_memory_db;
-use codeg_lib::web::router::build_router;
-use codeg_lib::web::shutdown::ShutdownSignal;
+use veryagent_lib::app_state::AppState;
+use veryagent_lib::db::test_helpers::fresh_in_memory_db;
+use veryagent_lib::web::router::build_router;
+use veryagent_lib::web::shutdown::ShutdownSignal;
 
 const TEST_TOKEN: &str = "ow-proxy-test-token";
 const TEST_CAP: &str = "cap-deadbeefcafef00d";
@@ -90,11 +90,11 @@ async fn proxy_rejects_missing_cap() {
 async fn proxy_rejects_wrong_cap() {
     let (server, _data, _static) = build_proxy_server().await;
     let (port, _leaked, _q) = spawn_fake_upstream().await;
-    codeg_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
+    veryagent_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
     let resp = server
         .get(&format!("/api/office-watch-proxy/{port}?cap=wrong"))
         .await;
-    codeg_lib::office_watch::remove_known_port_for_test(port);
+    veryagent_lib::office_watch::remove_known_port_for_test(port);
     assert_eq!(resp.status_code(), 401);
 }
 
@@ -112,7 +112,7 @@ async fn proxy_rejects_unknown_port() {
 async fn proxy_forwards_with_valid_cap_without_leaking_cap() {
     let (server, _data, _static) = build_proxy_server().await;
     let (port, leaked, last_query) = spawn_fake_upstream().await;
-    codeg_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
+    veryagent_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
 
     let resp = server
         .get(&format!(
@@ -120,7 +120,7 @@ async fn proxy_forwards_with_valid_cap_without_leaking_cap() {
         ))
         .await;
 
-    codeg_lib::office_watch::remove_known_port_for_test(port);
+    veryagent_lib::office_watch::remove_known_port_for_test(port);
 
     assert_eq!(resp.status_code(), 200);
     assert_eq!(resp.text(), "upstream-body");
@@ -141,13 +141,13 @@ async fn proxy_forwards_with_valid_cap_without_leaking_cap() {
 async fn proxy_injects_path_rewriting_shim_into_html() {
     let (server, _data, _static) = build_proxy_server().await;
     let (port, _leaked, _q) = spawn_fake_upstream().await;
-    codeg_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
+    veryagent_lib::office_watch::insert_known_port_for_test(port, TEST_CAP);
 
     let resp = server
         .get(&format!("/api/office-watch-proxy/{port}/page?cap={TEST_CAP}"))
         .await;
 
-    codeg_lib::office_watch::remove_known_port_for_test(port);
+    veryagent_lib::office_watch::remove_known_port_for_test(port);
 
     assert_eq!(resp.status_code(), 200);
     let body = resp.text();

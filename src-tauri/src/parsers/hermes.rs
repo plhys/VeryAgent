@@ -68,7 +68,7 @@ impl HermesParser {
 
     /// Open the Hermes state DB read-only. `mode=ro` reads committed WAL frames
     /// even while the Hermes ACP server is actively writing (verified against a
-    /// live process), and guarantees codeg never mutates Hermes data.
+    /// live process), and guarantees veryagent never mutates Hermes data.
     async fn open_sqlite_connection(&self) -> Result<DatabaseConnection, ParseError> {
         let db_path = self.sqlite_db_path();
         let db_url = format!(

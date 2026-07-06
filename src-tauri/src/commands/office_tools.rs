@@ -3,7 +3,7 @@
 //!
 //! Skills are loaded dynamically from the OfficeCLI binary (`officecli
 //! load_skill <id>`) and placed in the same central store
-//! (`~/.codeg/skills/<id>/`) used by built-in experts. Enabling a skill for
+//! (`~/.veryagent/skills/<id>/`) used by built-in experts. Enabling a skill for
 //! an agent reuses the expert system's symlink mechanism.
 
 use std::collections::BTreeMap;
@@ -112,8 +112,8 @@ pub struct SkillSyncReport {
 // ─── Skill metadata (hardcoded — OfficeCLI has no list command) ────────
 
 struct SkillDef {
-    /// Canonical skill identity used throughout codeg: the central-store
-    /// directory name (`~/.codeg/skills/<id>/`) and the agent invocation
+    /// Canonical skill identity used throughout veryagent: the central-store
+    /// directory name (`~/.veryagent/skills/<id>/`) and the agent invocation
     /// name (`/<id>`). Matches the SKILL.md frontmatter `name:` so the
     /// directory and the skill's self-declared name agree.
     id: &'static str,
@@ -322,9 +322,9 @@ pub(crate) fn resolve_officecli() -> Option<PathBuf> {
 /// Directory to prepend to a spawned agent's `PATH` so agent-invoked
 /// `officecli …` (from an enabled office skill) resolves immediately after a
 /// fresh install — before `install.ps1`'s persistent User-PATH change reaches
-/// already-running processes (codeg and the agents it spawns). Returns `None`
+/// already-running processes (veryagent and the agents it spawns). Returns `None`
 /// once `officecli` is on `PATH` (the injection then self-deactivates) or when
-/// it isn't installed. Also closes the latent gap where a GUI-launched codeg on
+/// it isn't installed. Also closes the latent gap where a GUI-launched veryagent on
 /// Unix doesn't inherit `~/.local/bin` on `PATH`.
 pub(crate) fn officecli_agent_path_dir() -> Option<PathBuf> {
     if resolve_command_on_path("officecli").is_some() {
@@ -356,7 +356,7 @@ fn officecli_runtime_dependency_hint(stderr: &str) -> Option<String> {
             "officecli could not start: the server is missing the ICU library its \
              embedded .NET runtime needs. Install it in the runtime image and restart \
              (Debian/Ubuntu: `apt-get install -y libicu72`; Alpine: `apk add icu-libs`), \
-             or upgrade to a codeg image that already includes it."
+             or upgrade to a veryagent image that already includes it."
                 .to_string(),
         );
     }
@@ -652,7 +652,7 @@ pub(crate) async fn officecli_install_core(
 
 // ─── Official installer (shell out, mirror-first) ──────────────────────
 //
-// codeg installs OfficeCLI by running the vendor's official installer script —
+// veryagent installs OfficeCLI by running the vendor's official installer script —
 // `install.sh` on Unix, `install.ps1` on Windows — mirror-first (the
 // CN-reachable `d.officecli.ai`) with a GitHub-raw fallback. This mirrors how
 // iOfficeAI's own AionUi backend installs OfficeCLI, keeps both platforms
@@ -1371,7 +1371,7 @@ pub(crate) fn is_office_path(path: &Path) -> bool {
 
 /// Render an office file (.docx/.xlsx/.pptx) to self-contained HTML via
 /// `officecli view <file> html`, for the in-app preview. Runs officecli in
-/// codeg's own process (not the agent's command sandbox), so it is unaffected
+/// veryagent's own process (not the agent's command sandbox), so it is unaffected
 /// by the sandbox restrictions that can break officecli inside an agent turn.
 ///
 /// `path` is relative to `root_path`; the resolved target is canonicalized and

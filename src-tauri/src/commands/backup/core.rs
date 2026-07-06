@@ -56,7 +56,7 @@ pub(crate) async fn create_backup_core(
     cancel: &CancellationToken,
 ) -> Result<BackupManifest, AppCommandError> {
     let work = tempfile::tempdir().map_err(AppCommandError::io)?;
-    let db_snapshot = work.path().join("codeg.db");
+    let db_snapshot = work.path().join("veryagent.db");
     let zip_tmp = work.path().join("payload.zip");
 
     // ── Phase 1: consistent DB snapshot via VACUUM INTO ──────────────────
@@ -81,7 +81,7 @@ pub(crate) async fn create_backup_core(
 
     let uploads_root = inputs.uploads_root.clone();
     let tokens_json = inputs.data_dir.join("tokens.json");
-    let prefs_json = crate::paths::codeg_home_dir().join("preferences.json");
+    let prefs_json = crate::paths::veryagent_home_dir().join("preferences.json");
     let include_external = options.include_external_transcripts;
 
     let zip_tmp_c = zip_tmp.clone();
@@ -103,7 +103,7 @@ pub(crate) async fn create_backup_core(
                 Some(path.to_string()),
             );
         };
-        builder.add_file("db/codeg.db", &db_snapshot_c, &cancel_c, &mut prog)?;
+        builder.add_file("db/veryagent.db", &db_snapshot_c, &cancel_c, &mut prog)?;
         builder.add_dir(
             "uploads",
             &uploads_root,
@@ -189,7 +189,7 @@ pub(crate) async fn inspect_backup_core(
 
     let (mut compatible, mut reject_reason) = evaluate_compat(&manifest);
     // Mirror the structural checks stage applies, so the preview never reports
-    // "compatible" for a backup that stage will reject (missing db/codeg.db,
+    // "compatible" for a backup that stage will reject (missing db/veryagent.db,
     // unsafe/duplicate manifest paths).
     if compatible && archive::validate_manifest(&manifest).is_err() {
         compatible = false;
@@ -285,13 +285,13 @@ fn known_migration(name: &str) -> bool {
     Migrator::migrations().iter().any(|m| m.name() == name)
 }
 
-/// Exclude upload staging dirs (`uploads/.tmp/`) and any codeg-internal
-/// `.codeg-*` directory (restore staging / safety snapshots) from the archive.
+/// Exclude upload staging dirs (`uploads/.tmp/`) and any veryagent-internal
+/// `.veryagent-*` directory (restore staging / safety snapshots) from the archive.
 fn is_excluded_upload(rel: &Path) -> bool {
     rel.components().any(|c| match c {
         std::path::Component::Normal(s) => {
             let s = s.to_string_lossy();
-            s == ".tmp" || s.starts_with(".codeg")
+            s == ".tmp" || s.starts_with(".veryagent")
         }
         _ => false,
     })
@@ -367,7 +367,7 @@ mod tests {
         std::fs::create_dir_all(uploads.join(".tmp")).unwrap();
         std::fs::write(uploads.join("att.txt"), b"attachment").unwrap();
         std::fs::write(uploads.join(".tmp/partial"), b"should be skipped").unwrap();
-        let dest = dir.path().join("backup.codeg.zip");
+        let dest = dir.path().join("backup.veryagent.zip");
 
         let cancel = CancellationToken::new();
         let manifest = create_backup_core(
@@ -382,7 +382,7 @@ mod tests {
         .unwrap();
 
         assert!(dest.exists());
-        assert!(manifest.entries.iter().any(|e| e.path == "db/codeg.db"));
+        assert!(manifest.entries.iter().any(|e| e.path == "db/veryagent.db"));
         assert!(manifest.entries.iter().any(|e| e.path == "uploads/att.txt"));
         assert!(!manifest.entries.iter().any(|e| e.path.contains(".tmp")));
 
@@ -395,7 +395,7 @@ mod tests {
         let out = dir.path().join("out");
         archive::extract_all(&dest, &out, &manifest, &cancel, &mut archive::null_progress())
             .unwrap();
-        assert_eq!(count_folders(&out.join("db/codeg.db")).await, 1);
+        assert_eq!(count_folders(&out.join("db/veryagent.db")).await, 1);
     }
 
     #[tokio::test]
@@ -404,7 +404,7 @@ mod tests {
         let db = fresh_disk_db(dir.path()).await;
         let uploads = dir.path().join("uploads");
         std::fs::create_dir_all(&uploads).unwrap();
-        let dest = dir.path().join("backup.codegbak");
+        let dest = dir.path().join("backup.veryagentbak");
 
         let cancel = CancellationToken::new();
         create_backup_core(
@@ -453,7 +453,7 @@ mod tests {
             .unwrap();
         let uploads = src_dir.path().join("uploads");
         std::fs::create_dir_all(&uploads).unwrap();
-        let dest = src_dir.path().join("backup.codeg.zip");
+        let dest = src_dir.path().join("backup.veryagent.zip");
 
         let cancel = CancellationToken::new();
         create_backup_core(
@@ -480,11 +480,11 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(PathBuf::from(&staged.staging_dir).join("db/codeg.db").exists());
+        assert!(PathBuf::from(&staged.staging_dir).join("db/veryagent.db").exists());
         assert!(restore_dir.path().join(PENDING_MARKER).is_file());
 
         // Apply on "startup" → live DB carries the two seeded folders. Inject
-        // temp uploads/preferences paths so the test never touches ~/.codeg.
+        // temp uploads/preferences paths so the test never touches ~/.veryagent.
         let live_uploads = restore_dir.path().join("live-uploads");
         let live_prefs = restore_dir.path().join("live-prefs.json");
         let applied = apply_pending_restore_with_paths(
@@ -511,7 +511,7 @@ mod tests {
         let db = fresh_disk_db(src_dir.path()).await;
         let empty_uploads = src_dir.path().join("uploads"); // exists, no files
         std::fs::create_dir_all(&empty_uploads).unwrap();
-        let dest = src_dir.path().join("backup.codeg.zip");
+        let dest = src_dir.path().join("backup.veryagent.zip");
         let cancel = CancellationToken::new();
         create_backup_core(
             inputs(&db.conn, src_dir.path(), empty_uploads),

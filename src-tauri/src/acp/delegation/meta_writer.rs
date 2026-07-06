@@ -1,6 +1,6 @@
 //! `DelegationMetaWriter` — broker capability that attaches the live
 //! delegation state onto the parent's active `delegate_to_agent`
-//! tool-call. The shape written under `meta["codeg.delegation"]`
+//! tool-call. The shape written under `meta["veryagent.delegation"]`
 //! follows the convention documented at
 //! [`crate::acp::session_state::ToolCallState::meta`].
 //!
@@ -28,9 +28,9 @@ use crate::web::event_bridge::emit_with_state;
 /// Top-level key under which delegation state lives on a tool call's
 /// `meta` object. Single source of truth — both the writer and the
 /// frontend reader must spell it the same way.
-pub const DELEGATION_META_KEY: &str = "codeg.delegation";
+pub const DELEGATION_META_KEY: &str = "veryagent.delegation";
 
-/// Capability the broker uses to patch `meta["codeg.delegation"]` on
+/// Capability the broker uses to patch `meta["veryagent.delegation"]` on
 /// the parent connection's active `delegate_to_agent` tool call.
 ///
 /// Errors are swallowed at the impl boundary: a missing parent
@@ -159,7 +159,7 @@ pub mod mock {
     }
 }
 
-/// Helper to construct the canonical `meta["codeg.delegation"]` value.
+/// Helper to construct the canonical `meta["veryagent.delegation"]` value.
 /// Keeps the schema in one place so the writer impls and the broker
 /// callsites can't drift apart on field naming.
 pub fn build_delegation_meta(

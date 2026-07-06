@@ -15,23 +15,23 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use codeg_lib::acp::delegation::broker::{
+use veryagent_lib::acp::delegation::broker::{
     ConversationDepthLookup, DelegationBroker, DelegationConfig,
 };
-use codeg_lib::acp::delegation::listener::{
+use veryagent_lib::acp::delegation::listener::{
     DelegationListener, ParentSessionLookup, TokenEntry, TokenRegistry,
 };
-use codeg_lib::acp::delegation::spawner::{mock::MockSpawner, ConnectionSpawner};
-use codeg_lib::acp::delegation::transport::{
+use veryagent_lib::acp::delegation::spawner::{mock::MockSpawner, ConnectionSpawner};
+use veryagent_lib::acp::delegation::transport::{
     client_ask_round_trip, client_round_trip, client_status_round_trip, BrokerAskRequest,
     BrokerRequest, BrokerStatusRequest,
 };
-use codeg_lib::acp::delegation::types::{DelegationError, DelegationOutcome, DelegationSuccess};
-use codeg_lib::acp::question::{
+use veryagent_lib::acp::delegation::types::{DelegationError, DelegationOutcome, DelegationSuccess};
+use veryagent_lib::acp::question::{
     QuestionAnsweredItem, QuestionOption, QuestionOutcome, QuestionSpec, RegisteredQuestion,
     SessionQuestionAccess,
 };
-use codeg_lib::models::AgentType;
+use veryagent_lib::models::AgentType;
 use serde_json::json;
 use tokio::sync::oneshot;
 
@@ -54,11 +54,11 @@ impl ParentSessionLookup for FixedParent {
 /// No-op feedback access — this e2e suite exercises delegation, not feedback.
 struct NoFeedback;
 #[async_trait]
-impl codeg_lib::acp::feedback::SessionFeedbackAccess for NoFeedback {
+impl veryagent_lib::acp::feedback::SessionFeedbackAccess for NoFeedback {
     async fn read_pending_feedback(
         &self,
         _parent_connection_id: &str,
-    ) -> Vec<codeg_lib::acp::feedback::PendingFeedback> {
+    ) -> Vec<veryagent_lib::acp::feedback::PendingFeedback> {
         Vec::new()
     }
     async fn commit_feedback_delivered(&self, _parent_connection_id: &str, _ids: Vec<String>) {}
@@ -67,13 +67,13 @@ impl codeg_lib::acp::feedback::SessionFeedbackAccess for NoFeedback {
 /// No-op session-info access — this e2e suite never drives `get_session_info`.
 struct NoSessionInfo;
 #[async_trait]
-impl codeg_lib::acp::session_info::SessionInfoAccess for NoSessionInfo {
+impl veryagent_lib::acp::session_info::SessionInfoAccess for NoSessionInfo {
     async fn resolve(
         &self,
         session_id: i32,
         _max_messages: u32,
-    ) -> codeg_lib::acp::session_info::SessionInfo {
-        codeg_lib::acp::session_info::SessionInfo::not_found(session_id)
+    ) -> veryagent_lib::acp::session_info::SessionInfo {
+        veryagent_lib::acp::session_info::SessionInfo::not_found(session_id)
     }
 }
 
@@ -161,14 +161,14 @@ async fn end_to_end_uds_happy_path() {
         broker.clone(),
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
-        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
+        Arc::new(NoFeedback) as Arc<dyn veryagent_lib::acp::feedback::SessionFeedbackAccess>,
         Arc::new(StubQuestions::default()) as Arc<dyn SessionQuestionAccess>,
-        Arc::new(NoSessionInfo) as Arc<dyn codeg_lib::acp::session_info::SessionInfoAccess>,
+        Arc::new(NoSessionInfo) as Arc<dyn veryagent_lib::acp::session_info::SessionInfoAccess>,
     );
 
     // PID-scoped socket inside the OS temp dir — no clashes across test bins.
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("codeg-e2e.sock");
+    let socket = dir.path().join("veryagent-e2e.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
         let _ = listener.run(socket_for_listener).await;
@@ -276,13 +276,13 @@ async fn end_to_end_uds_batch_status() {
         broker.clone(),
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
-        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
+        Arc::new(NoFeedback) as Arc<dyn veryagent_lib::acp::feedback::SessionFeedbackAccess>,
         Arc::new(StubQuestions::default()) as Arc<dyn SessionQuestionAccess>,
-        Arc::new(NoSessionInfo) as Arc<dyn codeg_lib::acp::session_info::SessionInfoAccess>,
+        Arc::new(NoSessionInfo) as Arc<dyn veryagent_lib::acp::session_info::SessionInfoAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("codeg-e2e-batch.sock");
+    let socket = dir.path().join("veryagent-e2e-batch.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
         let _ = listener.run(socket_for_listener).await;
@@ -362,13 +362,13 @@ async fn end_to_end_uds_invalid_token_rejected() {
         broker,
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
-        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
+        Arc::new(NoFeedback) as Arc<dyn veryagent_lib::acp::feedback::SessionFeedbackAccess>,
         Arc::new(StubQuestions::default()) as Arc<dyn SessionQuestionAccess>,
-        Arc::new(NoSessionInfo) as Arc<dyn codeg_lib::acp::session_info::SessionInfoAccess>,
+        Arc::new(NoSessionInfo) as Arc<dyn veryagent_lib::acp::session_info::SessionInfoAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("codeg-e2e-reject.sock");
+    let socket = dir.path().join("veryagent-e2e-reject.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
         let _ = listener.run(socket_for_listener).await;
@@ -427,13 +427,13 @@ async fn end_to_end_uds_ask_question_round_trip() {
         broker.clone(),
         tokens,
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
-        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
+        Arc::new(NoFeedback) as Arc<dyn veryagent_lib::acp::feedback::SessionFeedbackAccess>,
         questions.clone() as Arc<dyn SessionQuestionAccess>,
-        Arc::new(NoSessionInfo) as Arc<dyn codeg_lib::acp::session_info::SessionInfoAccess>,
+        Arc::new(NoSessionInfo) as Arc<dyn veryagent_lib::acp::session_info::SessionInfoAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("codeg-e2e-ask.sock");
+    let socket = dir.path().join("veryagent-e2e-ask.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
         let _ = listener.run(socket_for_listener).await;
@@ -565,13 +565,13 @@ async fn end_to_end_uds_ask_revoked_after_register_declines() {
         broker.clone(),
         tokens.clone(),
         Arc::new(FixedParent(1)) as Arc<dyn ParentSessionLookup>,
-        Arc::new(NoFeedback) as Arc<dyn codeg_lib::acp::feedback::SessionFeedbackAccess>,
+        Arc::new(NoFeedback) as Arc<dyn veryagent_lib::acp::feedback::SessionFeedbackAccess>,
         questions as Arc<dyn SessionQuestionAccess>,
-        Arc::new(NoSessionInfo) as Arc<dyn codeg_lib::acp::session_info::SessionInfoAccess>,
+        Arc::new(NoSessionInfo) as Arc<dyn veryagent_lib::acp::session_info::SessionInfoAccess>,
     );
 
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("codeg-e2e-ask-revoked.sock");
+    let socket = dir.path().join("veryagent-e2e-ask-revoked.sock");
     let socket_for_listener = socket.clone();
     let listener_task = tokio::spawn(async move {
         let _ = listener.run(socket_for_listener).await;

@@ -98,7 +98,7 @@ mod tauri_app {
     /// On Windows, opt-out users can disable WebView2 hardware acceleration to
     /// work around AMD/Intel GPU driver bugs that produce a black-screen
     /// webview. The flag is stored in a tiny sidecar file at
-    /// `~/.codeg/preferences.json` so it can be read **before** the Tauri
+    /// `~/.veryagent/preferences.json` so it can be read **before** the Tauri
     /// builder, plugins, or tokio runtime start — once a tokio worker is alive,
     /// `std::env::set_var` would race with concurrent `getenv` calls from
     /// libraries like reqwest/rustls that read `HTTP_PROXY` etc.
@@ -157,9 +157,9 @@ mod tauri_app {
         // initialization. The callback runs in the *original* process.
         //
         // Skipped in debug builds so a locally-built `cargo run` instance
-        // can run alongside an installed release build of codeg during
+        // can run alongside an installed release build of veryagent during
         // development. Debug desktop builds use an isolated SQLite file, but
-        // they still share other `app.codeg` data-dir artifacts with release.
+        // they still share other `app.veryagent` data-dir artifacts with release.
         #[cfg(not(debug_assertions))]
         let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             windows::show_main_window(app);
@@ -194,7 +194,7 @@ mod tauri_app {
             .manage(windows::MergeWindowState::new())
             .manage(web::WebServerState::new())
             // Remote-workspace IPC proxy. Routes HTTP / WS for windows
-            // opened against a remote codeg-server through Rust so we
+            // opened against a remote veryagent-server through Rust so we
             // bypass webview mixed-content blocking and can centrally
             // manage per-window subscriptions.
             .manage(std::sync::Arc::new(
@@ -226,7 +226,7 @@ mod tauri_app {
 
                 // Unify the data root across every consumer:
                 //   * SQLite database (initialised below)
-                //   * `paths::codeg_uploads_root` / `codeg_pets_root`
+                //   * `paths::veryagent_uploads_root` / `veryagent_pets_root`
                 //   * `AppState.data_dir` and every desktop command
                 //     that injects a git credential helper / askpass
                 //     into a subprocess (terminal, ACP, folder ops)
@@ -236,13 +236,13 @@ mod tauri_app {
                 // source of truth; every desktop call site that
                 // historically read `app.path().app_data_dir()` and
                 // passed it to a credential helper has been migrated
-                // to the same helper so a pre-set `CODEG_DATA_DIR` is
+                // to the same helper so a pre-set `VERYAGENT_DATA_DIR` is
                 // honored end-to-end.
                 //
                 // We also write the absolutized value back to the env,
                 // even when the operator pre-set it, so:
                 //   * subprocesses inherit an absolute path (a relative
-                //     `CODEG_DATA_DIR` would otherwise re-resolve
+                //     `VERYAGENT_DATA_DIR` would otherwise re-resolve
                 //     against the subprocess CWD, which may differ
                 //     from ours), and
                 //   * any future caller that reaches for the env
@@ -254,7 +254,7 @@ mod tauri_app {
                 // main thread before any window or async runtime task
                 // reads the var, the Tauri plugins registered above
                 // (window state, opener, dialog, updater, process,
-                // notification) do not read `CODEG_DATA_DIR`, and the
+                // notification) do not read `VERYAGENT_DATA_DIR`, and the
                 // value is never mutated again for the lifetime of the
                 // process.
                 let effective_data_dir = paths::resolve_effective_data_dir(&app_data_dir);
@@ -263,24 +263,24 @@ mod tauri_app {
                 // the `unsafe` block, mirroring the WebView2 rendering
                 // override.
                 unsafe {
-                    std::env::set_var("CODEG_DATA_DIR", &effective_data_dir);
+                    std::env::set_var("VERYAGENT_DATA_DIR", &effective_data_dir);
                 }
 
-                // `CODEG_HOME` overrides `CODEG_DATA_DIR` inside
-                // `paths::codeg_uploads_root` / `codeg_pets_root` for
-                // backwards-compatibility with the legacy `~/.codeg/`
+                // `VERYAGENT_HOME` overrides `VERYAGENT_DATA_DIR` inside
+                // `paths::veryagent_uploads_root` / `veryagent_pets_root` for
+                // backwards-compatibility with the legacy `~/.veryagent/`
                 // layout. If both are set and point at different roots,
-                // uploads/pets land on `CODEG_HOME` while the database
-                // lands on `CODEG_DATA_DIR` — a silent split. The
+                // uploads/pets land on `VERYAGENT_HOME` while the database
+                // lands on `VERYAGENT_DATA_DIR` — a silent split. The
                 // backup story here is "loud warning, no automatic
                 // override": the operator likely meant one of them, but
                 // we don't know which.
-                if let Some(home) = std::env::var_os("CODEG_HOME").filter(|s| !s.is_empty()) {
+                if let Some(home) = std::env::var_os("VERYAGENT_HOME").filter(|s| !s.is_empty()) {
                     let home_path = git_credential::absolutize(std::path::Path::new(&home));
                     if home_path != effective_data_dir {
                         tracing::warn!(
-                            "[paths][WARN] CODEG_HOME ({}) and CODEG_DATA_DIR ({}) point at different roots. \
-                             Uploads/pets follow CODEG_HOME; the database follows CODEG_DATA_DIR. \
+                            "[paths][WARN] VERYAGENT_HOME ({}) and VERYAGENT_DATA_DIR ({}) point at different roots. \
+                             Uploads/pets follow VERYAGENT_HOME; the database follows VERYAGENT_DATA_DIR. \
                              Unset one or align them to avoid split state.",
                             home_path.display(),
                             effective_data_dir.display()
@@ -342,7 +342,7 @@ mod tauri_app {
                 });
 
                 // Install bundled expert skills into the central store
-                // (`~/.codeg/skills/`). Runs in the background and does
+                // (`~/.veryagent/skills/`). Runs in the background and does
                 // not block startup; failures are logged but non-fatal.
                 tauri::async_runtime::spawn(async move {
                     let report = crate::commands::experts::ensure_central_experts_installed().await;
@@ -606,7 +606,7 @@ mod tauri_app {
                 // Spawn the idle sweep so connections abandoned without an
                 // explicit disconnect (e.g. window/tab closed without
                 // teardown, panic survivors) are reaped. Override the
-                // 60-second default via `CODEG_ACP_IDLE_TIMEOUT_SECS`
+                // 60-second default via `VERYAGENT_ACP_IDLE_TIMEOUT_SECS`
                 // (set to `0` to disable).
                 if let Some(idle_timeout) = crate::acp::idle_timeout_from_env() {
                     let cm = app.state::<ConnectionManager>().clone_ref();
@@ -619,7 +619,7 @@ mod tauri_app {
 
                 // Office watch preview servers: reap dead children + ref0
                 // stragglers (live previews are never swept). Override via
-                // `CODEG_OFFICE_WATCH_IDLE_TIMEOUT_SECS` (`0` disables).
+                // `VERYAGENT_OFFICE_WATCH_IDLE_TIMEOUT_SECS` (`0` disables).
                 if let Some(idle_timeout) = crate::office_watch::idle_timeout_from_env() {
                     tauri::async_runtime::spawn(crate::office_watch::office_watch_idle_sweep_task(
                         idle_timeout,
@@ -651,7 +651,7 @@ mod tauri_app {
                 if app.get_webview_window("main").is_none() {
                     let url = tauri::WebviewUrl::App("workspace".into());
                     let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
-                        .title("Codeg")
+                        .title("VeryAgent")
                         .inner_size(1260.0, 860.0)
                         .min_inner_size(400.0, 600.0);
                     if let Ok(w) = windows::apply_platform_window_style(builder).build() {

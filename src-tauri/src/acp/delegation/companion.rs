@@ -1,4 +1,4 @@
-//! Companion-side MCP protocol — the bits that live inside the `codeg-mcp`
+//! Companion-side MCP protocol — the bits that live inside the `veryagent-mcp`
 //! binary but are factored out into the library so they can be unit-tested
 //! without spawning the binary.
 //!
@@ -56,7 +56,7 @@ use crate::acp::session_info::MAX_SESSION_MESSAGES;
 /// stuck UDS connect/read) and the shutdown-drain loop (so an
 /// unresponsive listener can't keep the EOF / watchdog path hung). 500 ms
 /// is generous for a same-host UDS exchange and short enough that a user
-/// won't notice the bound being hit. Misses are absorbed by the codeg
+/// won't notice the bound being hit. Misses are absorbed by the veryagent
 /// main side's `cancel_by_parent` cascade when the parent ACP connection
 /// eventually ends.
 const BROKER_CANCEL_BUDGET: Duration = Duration::from_millis(500);
@@ -71,7 +71,7 @@ async fn send_broker_cancel(socket_path: &str, req: &BrokerCancelRequest) {
     let _ = tokio::time::timeout(BROKER_CANCEL_BUDGET, client_cancel(socket_path, req)).await;
 }
 
-/// Static MCP tool schema. Lives next to this module so codeg-mcp ships
+/// Static MCP tool schema. Lives next to this module so veryagent-mcp ships
 /// a single embedded copy — no runtime file IO, no version skew with the
 /// broker's [`super::types::DelegationRequest`].
 pub const TOOL_SCHEMA_JSON: &str = include_str!("tool_schema.json");
@@ -127,7 +127,7 @@ pub fn err(id: Value, code: i64, message: impl Into<String>) -> JsonRpcResponse 
     }
 }
 
-/// Which tool groups this companion exposes. One `codeg-mcp` process can carry
+/// Which tool groups this companion exposes. One `veryagent-mcp` process can carry
 /// the delegation tools, the feedback tool, or both — gated independently so
 /// each feature can be toggled in settings without the other. Passed in via the
 /// `--features` arg at launch; a tool whose group is off is hidden from
@@ -329,7 +329,7 @@ pub async fn dispatch_line(
             json!({
                 "protocolVersion": "2024-11-05",
                 "serverInfo": {
-                    "name": "codeg-mcp",
+                    "name": "veryagent-mcp",
                     "version": env!("CARGO_PKG_VERSION"),
                 },
                 "capabilities": { "tools": {} },
@@ -510,8 +510,8 @@ async fn build_tools_call_spawn(
             register_and_spawn(inflight, id, None, round_trip, render_ask_result).await
         }
         "get_session_info" => {
-            // `session_id` is the codeg conversation id the agent read out of a
-            // `codeg://session/<id>` reference. Accept a JSON number or a numeric
+            // `session_id` is the veryagent conversation id the agent read out of a
+            // `veryagent://session/<id>` reference. Accept a JSON number or a numeric
             // string (some hosts stringify integer args); reject anything else
             // synchronously so the LLM can fix it.
             let session_id = match parse_session_id(&arguments) {
@@ -521,7 +521,7 @@ async fn build_tools_call_spawn(
                         id,
                         -32602,
                         "get_session_info requires an integer `session_id` \
-                         (the number in the codeg://session/<id> reference)",
+                         (the number in the veryagent://session/<id> reference)",
                     ));
                 }
             };
@@ -776,7 +776,7 @@ async fn handle_cancel_notification(
 /// fire) so the broker doesn't hold a `pending` row open forever waiting
 /// for a `TurnComplete` whose response we couldn't deliver anyway. Each
 /// cancel is bounded by [`BROKER_CANCEL_BUDGET`] so a hung listener
-/// can't pin shutdown — the codeg main side's `cancel_by_parent` cascade
+/// can't pin shutdown — the veryagent main side's `cancel_by_parent` cascade
 /// is the eventual backstop for any cancel that times out here.
 pub async fn drain_and_cancel_all(
     ctx: &CompanionContext,
@@ -1170,7 +1170,7 @@ mod tests {
     fn ctx_with(features: CompanionFeatures) -> CompanionContext {
         CompanionContext {
             parent_connection_id: "p1".into(),
-            socket_path: "/tmp/codeg-mcp-companion-test-nope.sock".into(),
+            socket_path: "/tmp/veryagent-mcp-companion-test-nope.sock".into(),
             token: "tok".into(),
             features,
         }
@@ -1198,7 +1198,7 @@ mod tests {
         let resp = unwrap_respond(dispatch_for_test(line).await);
         let result = resp.result.unwrap();
         assert_eq!(result["protocolVersion"], "2024-11-05");
-        assert_eq!(result["serverInfo"]["name"], "codeg-mcp");
+        assert_eq!(result["serverInfo"]["name"], "veryagent-mcp");
     }
 
     #[tokio::test]
@@ -1968,7 +1968,7 @@ mod tests {
     fn render_session_result_not_found_is_soft_with_note_text() {
         let outcome = json!({
             "found": false, "session_id": 9,
-            "note": "No session matches id 9. It may have been deleted, or never imported into codeg."
+            "note": "No session matches id 9. It may have been deleted, or never imported into veryagent."
         });
         let rendered = render_session_result(&outcome);
         assert_eq!(rendered["isError"], false);

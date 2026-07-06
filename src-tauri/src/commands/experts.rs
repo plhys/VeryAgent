@@ -1,14 +1,14 @@
 //! Built-in expert skills management.
 //!
-//! Experts are curated skills (from obra/superpowers) that codeg bundles
+//! Experts are curated skills (from obra/superpowers) that veryagent bundles
 //! into its binary via `include_dir!`. On startup they are extracted to a
-//! central directory `~/.codeg/skills/<id>/`. Users can then enable an
+//! central directory `~/.veryagent/skills/<id>/`. Users can then enable an
 //! expert for any ACP agent by creating a symbolic link (or Windows
 //! junction) from the agent's skill directory into the central copy.
 //!
 //! The central store is the single source of truth. Enabling/disabling is
 //! purely "does a link exist in the agent's skill dir" — there is no
-//! database state, and updates propagate automatically when codeg upgrades
+//! database state, and updates propagate automatically when veryagent upgrades
 //! and re-extracts the bundled files.
 
 use std::collections::BTreeMap;
@@ -34,7 +34,7 @@ use crate::models::agent::AgentType;
 
 static EXPERTS_BUNDLE: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/experts");
 
-const CENTRAL_DIR_NAME: &str = ".codeg";
+const CENTRAL_DIR_NAME: &str = ".veryagent";
 const CENTRAL_SKILLS_SUBDIR: &str = "skills";
 const MANIFEST_FILE: &str = ".manifest.json";
 const EXPERTS_TOML: &str = "experts.toml";
@@ -568,7 +568,7 @@ fn ensure_central_experts_installed_blocking() -> InstallReport {
         }
     }
 
-    manifest.codeg_version = env!("CARGO_PKG_VERSION").to_string();
+    manifest.veryagent_version = env!("CARGO_PKG_VERSION").to_string();
     manifest.installed_at = Utc::now().to_rfc3339();
     if let Err(e) = save_manifest(&manifest) {
         report.errors.push(format!("save manifest: {e}"));
@@ -1053,12 +1053,12 @@ mod tests {
         // than a wedged CI run.
         let ops = vec![
             LinkOp {
-                expert_id: "zzz-codeg-batch-test-absent-aaa".into(),
+                expert_id: "zzz-veryagent-batch-test-absent-aaa".into(),
                 agent_type: AgentType::ClaudeCode,
                 enable: false,
             },
             LinkOp {
-                expert_id: "zzz-codeg-batch-test-absent-bbb".into(),
+                expert_id: "zzz-veryagent-batch-test-absent-bbb".into(),
                 agent_type: AgentType::Codex,
                 enable: false,
             },
@@ -1076,7 +1076,7 @@ mod tests {
     async fn apply_links_collects_per_op_results_without_aborting() {
         let ops = vec![
             LinkOp {
-                expert_id: "zzz-codeg-batch-test-absent".into(),
+                expert_id: "zzz-veryagent-batch-test-absent".into(),
                 agent_type: AgentType::ClaudeCode,
                 enable: false,
             },

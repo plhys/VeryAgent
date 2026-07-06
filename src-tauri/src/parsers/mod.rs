@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 /// A root of external agent-CLI transcript data, archived under
 /// `external/<agent>/` by the optional "include conversation content" toggle.
-/// These paths are owned by the respective CLIs — codeg only reads them.
+/// These paths are owned by the respective CLIs — veryagent only reads them.
 #[derive(Clone)]
 pub struct ExternalSource {
     /// Stable directory name inside the archive (`external/<agent>/`).
@@ -1063,9 +1063,9 @@ mod tests {
             fold_reference_links("看看 [README.md](file:///Users/x/README.md) 这是什么"),
             "看看 README.md 这是什么"
         );
-        // codeg:// links fold too; an agent mention keeps its `@`.
+        // veryagent:// links fold too; an agent mention keeps its `@`.
         assert_eq!(
-            fold_reference_links("调用 [@Codex CLI](codeg://agent/codex) 执行"),
+            fold_reference_links("调用 [@Codex CLI](veryagent://agent/codex) 执行"),
             "调用 @Codex CLI 执行"
         );
         // Multiple links in one string.
@@ -1235,12 +1235,12 @@ mod tests {
     #[test]
     fn path_matching_handles_separator_differences() {
         assert!(path_eq_for_matching(
-            "/Users/demo/workspace/codeg",
-            "/Users/demo/workspace/codeg/"
+            "/Users/demo/workspace/veryagent",
+            "/Users/demo/workspace/veryagent/"
         ));
         assert!(path_eq_for_matching(
-            "C:\\Users\\demo\\workspace\\codeg",
-            "C:/Users/demo/workspace/codeg"
+            "C:\\Users\\demo\\workspace\\veryagent",
+            "C:/Users/demo/workspace/veryagent"
         ));
     }
 }

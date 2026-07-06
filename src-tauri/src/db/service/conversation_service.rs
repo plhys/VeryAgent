@@ -567,7 +567,7 @@ mod tests {
     #[tokio::test]
     async fn list_all_excludes_children_by_default() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-list-children-default").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-list-children-default").await;
         let (parent, _child) = seed_parent_with_child(&db.conn, folder).await;
 
         let rows = list_all(&db.conn, None, None, None, None, None, false)
@@ -586,7 +586,7 @@ mod tests {
     #[tokio::test]
     async fn list_all_includes_children_when_requested() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-list-children-on").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-list-children-on").await;
         let (parent, child) = seed_parent_with_child(&db.conn, folder).await;
 
         let rows = list_all(&db.conn, None, None, None, None, None, true)
@@ -602,7 +602,7 @@ mod tests {
     #[tokio::test]
     async fn list_children_returns_only_matching_parent() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-list-children-only").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-list-children-only").await;
         let (parent_a, child_a) = seed_parent_with_child(&db.conn, folder).await;
         let (_parent_b, _child_b) = seed_parent_with_child(&db.conn, folder).await;
 
@@ -620,7 +620,7 @@ mod tests {
     #[tokio::test]
     async fn child_count_reflects_direct_children() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-child-count-direct").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-child-count-direct").await;
         let (parent, child) = seed_parent_with_child(&db.conn, folder).await;
 
         // The root listing carries the parent's direct-child count so the
@@ -640,7 +640,7 @@ mod tests {
     #[tokio::test]
     async fn child_count_counts_grandchildren_for_nested_chevron() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-child-count-nested").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-child-count-nested").await;
         let (parent, child) = seed_parent_with_child(&db.conn, folder).await;
 
         // Delegate a grandchild from the child so the child itself becomes
@@ -671,7 +671,7 @@ mod tests {
     #[tokio::test]
     async fn child_count_excludes_soft_deleted_children() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-child-count-deleted").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-child-count-deleted").await;
         let (parent, child) = seed_parent_with_child(&db.conn, folder).await;
 
         soft_delete(&db.conn, child).await.expect("soft delete child");
@@ -691,7 +691,7 @@ mod tests {
     #[tokio::test]
     async fn update_pin_sets_and_clears_without_bumping_updated_at() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-update-pin").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-update-pin").await;
         let conv = create(&db.conn, folder, AgentType::ClaudeCode, Some("c".into()), None)
             .await
             .expect("create");
@@ -731,7 +731,7 @@ mod tests {
     #[tokio::test]
     async fn list_children_excludes_soft_deleted() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-list-children-soft-del").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-list-children-soft-del").await;
         let (parent, child) = seed_parent_with_child(&db.conn, folder).await;
 
         soft_delete(&db.conn, child).await.expect("soft delete");
@@ -746,7 +746,7 @@ mod tests {
     #[tokio::test]
     async fn create_leaves_title_unlocked() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-unlocked").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-unlocked").await;
         let row = create(&db.conn, folder, AgentType::ClaudeCode, Some("hi".into()), None)
             .await
             .expect("create");
@@ -757,7 +757,7 @@ mod tests {
     #[tokio::test]
     async fn update_title_locks_the_title() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-lock").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-lock").await;
         let row = create(&db.conn, folder, AgentType::ClaudeCode, None, None)
             .await
             .expect("create");
@@ -772,7 +772,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_auto_title_writes_when_unlocked_and_changed() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-auto").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-auto").await;
         let row = create(
             &db.conn,
             folder,
@@ -799,7 +799,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_auto_title_skips_when_unchanged_or_empty() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-auto-skip").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-auto-skip").await;
         let row = create(
             &db.conn,
             folder,
@@ -827,7 +827,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_auto_title_never_clobbers_a_locked_title() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-auto-locked").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-auto-locked").await;
         let row = create(&db.conn, folder, AgentType::ClaudeCode, None, None)
             .await
             .expect("create");
@@ -847,7 +847,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_auto_title_does_not_bump_updated_at() {
         let db = fresh_in_memory_db().await;
-        let folder = seed_folder(&db, "/tmp/codeg-title-no-bump").await;
+        let folder = seed_folder(&db, "/tmp/veryagent-title-no-bump").await;
         let row = create(
             &db.conn,
             folder,

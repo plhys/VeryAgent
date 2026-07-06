@@ -67,13 +67,13 @@ impl WebServerState {
     }
 
     /// Handle to the shutdown coordinator. Exposed so binaries / external
-    /// callers (e.g. `codeg-server`) can pass it to `build_router`.
+    /// callers (e.g. `veryagent-server`) can pass it to `build_router`.
     pub fn shutdown_signal(&self) -> Arc<ShutdownSignal> {
         self.shutdown_signal.clone()
     }
 
     /// Mark the server as running from outside the Tauri command path.
-    /// `codeg-server` calls `axum::serve` directly without going through
+    /// `veryagent-server` calls `axum::serve` directly without going through
     /// `start_web_server`, so without this the `running` flag stays
     /// `false` and `get_web_server_status` lies to web-mode browsers.
     /// Note: handle/shutdown_tx are intentionally left `None` — the bin
@@ -86,7 +86,7 @@ impl WebServerState {
         self.running.store(true, Ordering::Release);
     }
 
-    /// True when the serve task is owned externally (e.g. by `codeg-server`
+    /// True when the serve task is owned externally (e.g. by `veryagent-server`
     /// `axum::serve` in standalone mode), in which case stop/start through
     /// this state must be a no-op.
     pub fn is_externally_managed(&self) -> bool {
@@ -136,7 +136,7 @@ async fn resolve_web_service_token(
 /// upgrade restarts the process, and if the token rotated, the already
 /// authenticated frontend would start getting 401s and could no longer tell a
 /// successful upgrade from an auto-rollback. Resolution mirrors the desktop web
-/// service — a non-empty `CODEG_TOKEN` override wins; otherwise reuse the value
+/// service — a non-empty `VERYAGENT_TOKEN` override wins; otherwise reuse the value
 /// persisted in `AppMetadata`; otherwise generate one and persist it. An empty
 /// or whitespace override is treated as unset (never accepted as a real token).
 /// `*generated` is set when a fresh token was created, so the caller can show
@@ -166,7 +166,7 @@ pub async fn resolve_persisted_server_token(
     if let Err(e) = app_metadata_service::upsert_value(conn, WEB_SERVICE_TOKEN_KEY, &token).await {
         tracing::warn!(
             "[SERVER][WARN] could not persist the generated access token ({e}); it will rotate on \
-             restart and self-update success detection may be unreliable — set CODEG_TOKEN to pin it"
+             restart and self-update success detection may be unreliable — set VERYAGENT_TOKEN to pin it"
         );
     }
     token
@@ -369,7 +369,7 @@ pub fn find_static_dir_standalone(explicit: Option<&str>) -> PathBuf {
         let p = PathBuf::from(dir);
         if p.join("index.html").exists() {
             tracing::info!(
-                "[WEB] Serving static files from CODEG_STATIC_DIR: {}",
+                "[WEB] Serving static files from VERYAGENT_STATIC_DIR: {}",
                 p.display()
             );
             return p;
@@ -470,7 +470,7 @@ pub fn get_local_addresses(port: u16) -> Vec<String> {
 /// Normalize the host to advertise / store for a freshly bound listener.
 ///
 /// Depending on the runtime, the configured host may not be a bare IP
-/// literal: the standalone `codeg-server` binds via `ToSocketAddrs`, so it
+/// literal: the standalone `veryagent-server` binds via `ToSocketAddrs`, so it
 /// also accepts `localhost` (DNS-resolved) and bracketed IPv6 (`[::1]`),
 /// whereas the desktop/web cores parse a `SocketAddr` and accept only IP
 /// literals (bare or bracketed IPv6, never a hostname). [`addresses_for_bind`]
@@ -778,7 +778,7 @@ pub(crate) async fn do_start_web_server_tauri(
             .clone(),
         emitter: crate::web::event_bridge::EventEmitter::Tauri(app.clone()),
         // Resolve through the effective data dir so a custom
-        // `CODEG_DATA_DIR` reaches the credential helper and any HTTP
+        // `VERYAGENT_DATA_DIR` reaches the credential helper and any HTTP
         // handler that reads `state.data_dir`.
         data_dir: crate::paths::resolve_effective_data_dir(
             &app.path().app_data_dir().unwrap_or_default(),

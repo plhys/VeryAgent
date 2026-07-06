@@ -1,7 +1,7 @@
 //! Desktop-pet data model.
 //!
 //! Field shapes mirror the Codex `/pet` + `/hatch` format so a directory under
-//! `~/.codex/pets/<id>/` can be copied verbatim into `~/.codeg/pets/<id>/` and
+//! `~/.codex/pets/<id>/` can be copied verbatim into `~/.veryagent/pets/<id>/` and
 //! work without further translation.
 
 use std::path::PathBuf;
@@ -136,7 +136,7 @@ pub struct ImportablePet {
     pub display_name: String,
     pub description: Option<String>,
     pub source_path: PathBuf,
-    /// True when an entry of the same id already exists in `~/.codeg/pets/`.
+    /// True when an entry of the same id already exists in `~/.veryagent/pets/`.
     pub already_imported: bool,
 }
 

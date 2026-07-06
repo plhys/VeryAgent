@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn normalize_base_url_rejects_non_http_schemes() {
-        let err = normalize_base_url("file:///tmp/codeg").unwrap_err();
+        let err = normalize_base_url("file:///tmp/veryagent").unwrap_err();
         assert!(err.message.contains("http"));
     }
 
@@ -242,13 +242,13 @@ mod tests {
             &db.conn,
             created.id,
             "Server A",
-            "https://codeg.example.com/",
+            "https://veryagent.example.com/",
             "next-token",
         )
         .await
         .unwrap();
         assert_eq!(updated.name, "Server A");
-        assert_eq!(updated.base_url, "https://codeg.example.com");
+        assert_eq!(updated.base_url, "https://veryagent.example.com");
 
         delete(&db.conn, created.id).await.unwrap();
         assert!(list(&db.conn).await.unwrap().is_empty());

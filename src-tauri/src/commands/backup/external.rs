@@ -231,7 +231,7 @@ fn restore_one(src: &Path, base: &Path, target: &Path, policy: ConflictPolicy) -
             // Write to a same-dir temp file, then publish by rename so the final
             // path never holds a partially-written file. The temp is cleaned up
             // on any failure.
-            let tmp = parent.join(format!(".codeg-ext-{}.part", uuid::Uuid::new_v4().simple()));
+            let tmp = parent.join(format!(".veryagent-ext-{}.part", uuid::Uuid::new_v4().simple()));
             let write = (|| -> std::io::Result<()> {
                 let mut out = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
                 let mut input = File::open(src)?;

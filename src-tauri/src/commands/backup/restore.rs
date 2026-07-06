@@ -1,11 +1,11 @@
 //! Restore: stage-then-swap-on-startup.
 //!
-//! The DB connection pool holds `codeg.db` open (WAL sidecars), so swapping it
+//! The DB connection pool holds `veryagent.db` open (WAL sidecars), so swapping it
 //! under a live connection risks corruption (and fails outright on Windows).
 //! Restore therefore runs in two phases:
 //!
 //! 1. **Stage** (while running) — decrypt + extract + checksum-verify the
-//!    archive into `<data_dir>/.codeg-restore-staging/<op_id>/`, then write a
+//!    archive into `<data_dir>/.veryagent-restore-staging/<op_id>/`, then write a
 //!    pending-restore marker. Live data is untouched until this fully succeeds.
 //! 2. **Swap** (next startup) — [`apply_pending_restore_on_startup`] runs as the
 //!    first step of `db::init_database`, before any connection is opened: it
@@ -30,18 +30,18 @@ use super::manifest::{BackupManifest, BackupPhase, BackupProgress, BACKUP_PROGRE
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
 /// Marker committing a staged restore; consumed on next startup.
-pub const PENDING_MARKER: &str = ".codeg-restore-pending.json";
+pub const PENDING_MARKER: &str = ".veryagent-restore-pending.json";
 /// Root for staged (extracted, verified, not-yet-applied) restore payloads.
-pub const STAGING_DIR: &str = ".codeg-restore-staging";
+pub const STAGING_DIR: &str = ".veryagent-restore-staging";
 /// Root for pre-restore safety snapshots of the previous live data.
-pub const SAFETY_DIR: &str = ".codeg-restore-backup";
+pub const SAFETY_DIR: &str = ".veryagent-restore-backup";
 /// Side location external transcripts are restored to (never clobbers the
 /// live CLI dirs without explicit conflict resolution — see M7).
 pub const RESTORED_TRANSCRIPTS_DIR: &str = "restored-transcripts";
 /// Transient dir (server mode) holding export archives awaiting download.
-pub const EXPORT_TMP_DIR: &str = ".codeg-backup-tmp";
+pub const EXPORT_TMP_DIR: &str = ".veryagent-backup-tmp";
 /// Transient dir (server mode) holding uploaded archives awaiting inspect/stage.
-pub const UPLOAD_TMP_DIR: &str = ".codeg-restore-upload";
+pub const UPLOAD_TMP_DIR: &str = ".veryagent-restore-upload";
 
 /// How conflicting files are handled when restoring external transcripts back
 /// to their original CLI locations. Never silent: the UI forces an explicit
@@ -217,14 +217,14 @@ pub fn cleanup_transient_dirs(data_dir: &Path) {
 /// Resolves the live uploads root + preferences path via the env-aware
 /// `paths::*` resolvers (production), then delegates to
 /// [`apply_pending_restore_with_paths`]. Tests call the inner fn with temp
-/// paths so they never touch the real `~/.codeg`.
+/// paths so they never touch the real `~/.veryagent`.
 pub fn apply_pending_restore_on_startup(
     data_dir: &Path,
 ) -> Result<RestoreApplied, std::io::Error> {
     apply_pending_restore_with_paths(
         data_dir,
-        &crate::paths::codeg_uploads_root(),
-        &crate::paths::codeg_home_dir().join("preferences.json"),
+        &crate::paths::veryagent_uploads_root(),
+        &crate::paths::veryagent_home_dir().join("preferences.json"),
     )
 }
 
@@ -265,7 +265,7 @@ pub(crate) fn apply_pending_restore_with_paths(
 
     let db_name = crate::db::database_file_name();
     swap_in(
-        &staging.join("db").join("codeg.db"),
+        &staging.join("db").join("veryagent.db"),
         &data_dir.join(db_name),
         &backup_dir.join(db_name),
     )?;
@@ -325,7 +325,7 @@ fn swap_in(staged: &Path, live: &Path, backup: &Path) -> std::io::Result<()> {
 }
 
 /// Rename `src` → `dst`, falling back to recursive copy + remove across
-/// filesystem boundaries (CODEG_HOME / CODEG_DATA_DIR may differ).
+/// filesystem boundaries (VERYAGENT_HOME / VERYAGENT_DATA_DIR may differ).
 fn move_path(src: &Path, dst: &Path) -> std::io::Result<()> {
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent)?;
@@ -537,7 +537,7 @@ mod tests {
         std::fs::write(data_dir.join(db_name), b"OLD-DB").unwrap();
         let staging = data_dir.join(STAGING_DIR).join("op1");
         std::fs::create_dir_all(staging.join("db")).unwrap();
-        std::fs::write(staging.join("db").join("codeg.db"), b"NEW-DB").unwrap();
+        std::fs::write(staging.join("db").join("veryagent.db"), b"NEW-DB").unwrap();
 
         let marker = PendingRestore {
             staging_dir: staging.to_string_lossy().into_owned(),

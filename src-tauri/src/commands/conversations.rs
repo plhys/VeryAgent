@@ -403,7 +403,7 @@ pub async fn import_local_conversations(
     import_local_conversations_core(&db.conn, &EventEmitter::Tauri(app), folder_id).await
 }
 
-/// Build the `meta["codeg.delegation"]` value for a delegation child loaded
+/// Build the `meta["veryagent.delegation"]` value for a delegation child loaded
 /// from the DB. Mirrors the shape produced at runtime by
 /// `acp::delegation::meta_writer::build_delegation_meta`, but only includes
 /// the fields the DB can vouch for: `status` and `child_conversation_id`.
@@ -443,10 +443,10 @@ fn build_historical_delegation_meta(child: &DbConversationSummary) -> serde_json
 
 /// Walk every `delegate_to_agent` ToolUse block in `turns` and, when its
 /// `tool_use_id` matches a child conversation in `children`, set
-/// `meta["codeg.delegation"]` to the DB-derived snapshot. Skips blocks
+/// `meta["veryagent.delegation"]` to the DB-derived snapshot. Skips blocks
 /// whose meta is already populated so the live-broker write (when present)
 /// always wins. Tool-name match is by substring to cover the
-/// MCP-prefixed (`mcp__codeg-mcp__delegate_to_agent`) and bare forms
+/// MCP-prefixed (`mcp__veryagent-mcp__delegate_to_agent`) and bare forms
 /// the host may have emitted.
 fn inject_delegation_meta(turns: &mut [MessageTurn], children: &[DbConversationSummary]) {
     if children.is_empty() {
@@ -473,7 +473,7 @@ fn inject_delegation_meta(turns: &mut [MessageTurn], children: &[DbConversationS
                 }
                 if let Some(child) = by_parent_tool_use_id.get(tu.as_str()) {
                     *meta = Some(serde_json::json!({
-                        "codeg.delegation": build_historical_delegation_meta(child),
+                        "veryagent.delegation": build_historical_delegation_meta(child),
                     }));
                 }
             }
@@ -592,7 +592,7 @@ pub async fn get_folder_conversation_core(
     summary.message_count = turns.len() as u32;
 
     // Historical recovery for the read-only sub-agent viewer: JSONL parsers
-    // don't carry `meta["codeg.delegation"]`, so a reloaded conversation
+    // don't carry `meta["veryagent.delegation"]`, so a reloaded conversation
     // can't drive the parent UI's child-conversation lookup. Join on
     // `parent_id = summary.id` to repopulate it from the DB. Failure to
     // fetch children silently degrades to "no button on the card" (the
@@ -1013,7 +1013,7 @@ const CHAT_SCRATCH_STALE: std::time::Duration = std::time::Duration::from_secs(1
 /// Layout-invariant key for a chat scratch dir: its trailing `(<date>, <uuid>)`
 /// path components. The GC matches live dirs by this tail rather than the full
 /// path string, so a different *spelling* of the same data_dir (e.g. a symlinked
-/// vs canonical `CODEG_DATA_DIR` naming the same storage) still matches — a live
+/// vs canonical `VERYAGENT_DATA_DIR` naming the same storage) still matches — a live
 /// dir must never be misclassified as an orphan and deleted. `<uuid>` is a v4
 /// UUID (globally unique), so the tail is collision-free in practice. Returns
 /// `None` if the path lacks a leaf or parent component.
@@ -1059,7 +1059,7 @@ pub(crate) async fn gc_orphan_chat_dirs_core_with_threshold(
     // Dirs bound to a live chat conversation, keyed by their layout-invariant
     // `(<date>, <uuid>)` tail (see `chat_dir_key`) rather than the full path
     // string. This survives a data_dir spelled differently across runs (e.g. a
-    // symlinked vs canonical `CODEG_DATA_DIR` pointing at the same storage),
+    // symlinked vs canonical `VERYAGENT_DATA_DIR` pointing at the same storage),
     // which a full-string compare would miss — misclassifying the live dir as an
     // orphan and deleting it. We deliberately do NOT canonicalize (it fails on
     // missing paths and could itself alias two distinct dirs); keying by the tail
@@ -1811,12 +1811,12 @@ mod tests {
     fn inject_delegation_meta_populates_completed_child() {
         let mut turns = vec![tool_use_turn(
             Some("tu-1"),
-            "mcp__codeg-mcp__delegate_to_agent",
+            "mcp__veryagent-mcp__delegate_to_agent",
         )];
         let children = vec![summary_child(42, "tu-1", "completed")];
         inject_delegation_meta(&mut turns, &children);
         let meta = first_block_meta(&turns[0]).expect("meta should be set");
-        let inner = meta.get("codeg.delegation").expect("codeg.delegation key");
+        let inner = meta.get("veryagent.delegation").expect("codeg.delegation key");
         assert_eq!(inner["status"], "completed");
         assert_eq!(inner["child_conversation_id"], 42);
         assert!(
@@ -1832,7 +1832,7 @@ mod tests {
         inject_delegation_meta(&mut turns, &children);
         let inner = first_block_meta(&turns[0])
             .unwrap()
-            .get("codeg.delegation")
+            .get("veryagent.delegation")
             .unwrap();
         assert_eq!(inner["status"], "running");
         assert_eq!(inner["child_conversation_id"], 7);
@@ -1851,7 +1851,7 @@ mod tests {
         inject_delegation_meta(&mut turns, &children);
         let inner = first_block_meta(&turns[0])
             .unwrap()
-            .get("codeg.delegation")
+            .get("veryagent.delegation")
             .unwrap();
         assert_eq!(inner["status"], "completed");
         assert_eq!(inner["child_conversation_id"], 11);
@@ -1870,7 +1870,7 @@ mod tests {
         inject_delegation_meta(&mut turns, &children);
         let inner = first_block_meta(&turns[0])
             .unwrap()
-            .get("codeg.delegation")
+            .get("veryagent.delegation")
             .unwrap();
         assert_eq!(inner["status"], "failed");
         assert!(
@@ -1902,7 +1902,7 @@ mod tests {
     fn inject_delegation_meta_preserves_live_broker_meta() {
         // Defensive: even though parsers always emit `meta: None`, a future
         // snapshot path could carry a live broker write. Don't clobber it.
-        let pre_existing = serde_json::json!({ "codeg.delegation": { "status": "running", "child_conversation_id": 999 } });
+        let pre_existing = serde_json::json!({ "veryagent.delegation": { "status": "running", "child_conversation_id": 999 } });
         let mut turns = vec![MessageTurn {
             id: "t1".into(),
             role: TurnRole::Assistant,
@@ -1923,7 +1923,7 @@ mod tests {
         // The 999 (broker-written) survives — DB-derived 42 is not used here.
         let inner = first_block_meta(&turns[0])
             .unwrap()
-            .get("codeg.delegation")
+            .get("veryagent.delegation")
             .unwrap();
         assert_eq!(inner["child_conversation_id"], 999);
         assert_eq!(inner["status"], "running");
@@ -1953,7 +1953,7 @@ mod tests {
         // tests above; here we just verify the wiring inside the _core fn
         // doesn't error on the join path.
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-inject-test").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-inject-test").await;
         let parent_id = create_conversation_core(
             &db.conn,
             folder_id,
@@ -1990,7 +1990,7 @@ mod tests {
     #[tokio::test]
     async fn create_conversation_core_happy_path() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-conv-test-1").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-conv-test-1").await;
         let id = create_conversation_core(
             &db.conn,
             folder_id,
@@ -2434,7 +2434,7 @@ mod tests {
     async fn chat_folders_excluded_from_user_facing_lists_but_in_all_details() {
         let db = fresh_in_memory_db().await;
         let data_dir = tempfile::tempdir().expect("tempdir");
-        let normal_id = seed_folder(&db, "/tmp/codeg-chat-list-test").await;
+        let normal_id = seed_folder(&db, "/tmp/veryagent-chat-list-test").await;
         let chat_id =
             create_chat_conversation_core(&db.conn, data_dir.path(), AgentType::Codex, None, None)
                 .await
@@ -2515,7 +2515,7 @@ mod tests {
     #[tokio::test]
     async fn save_opened_tabs_core_persists_only_conversation_tabs_and_bumps_version() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tabs-test").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tabs-test").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2560,7 +2560,7 @@ mod tests {
     #[tokio::test]
     async fn save_opened_tabs_core_rejects_stale_version_without_emitting() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tabs-stale").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tabs-stale").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2606,7 +2606,7 @@ mod tests {
     #[tokio::test]
     async fn cleanup_tabs_for_deleted_conversation_removes_tab_and_emits() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tab-conv-del").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tab-conv-del").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2639,7 +2639,7 @@ mod tests {
     #[tokio::test]
     async fn cleanup_tabs_for_deleted_conversation_bumps_barrier_without_emitting_when_no_open_tab() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tab-conv-del-noop").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tab-conv-del-noop").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2662,7 +2662,7 @@ mod tests {
     #[tokio::test]
     async fn remove_folder_from_workspace_cleans_tabs_and_emits() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-folder-remove-tabs").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-folder-remove-tabs").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2694,7 +2694,7 @@ mod tests {
     #[tokio::test]
     async fn stale_save_after_conversation_cleanup_is_rejected_no_resurrection() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tab-cleanup-race").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tab-cleanup-race").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2750,7 +2750,7 @@ mod tests {
     #[tokio::test]
     async fn stale_save_after_folder_removal_is_rejected_no_resurrection() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-folder-remove-race").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-folder-remove-race").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2801,7 +2801,7 @@ mod tests {
         // (built on the pre-deletion version, still listing c1) is then rejected,
         // so a tab for the soft-deleted conversation is never persisted.
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-tab-zero-row-race").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-tab-zero-row-race").await;
         let c1 = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("c1");
@@ -2870,7 +2870,7 @@ mod tests {
     #[tokio::test]
     async fn update_conversation_status_core_invalid_string_errors() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-status-test").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-status-test").await;
         let conv_id = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("create");
@@ -2888,7 +2888,7 @@ mod tests {
     #[tokio::test]
     async fn update_conversation_title_core_roundtrip() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-title-test").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-title-test").await;
         let conv_id = create_conversation_core(&db.conn, folder_id, AgentType::Gemini, None)
             .await
             .expect("create");
@@ -2904,7 +2904,7 @@ mod tests {
     #[tokio::test]
     async fn delete_conversation_core_soft_deletes() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-delete-test").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-delete-test").await;
         let conv_id = create_conversation_core(&db.conn, folder_id, AgentType::Codex, None)
             .await
             .expect("create");
@@ -2928,7 +2928,7 @@ mod tests {
     #[tokio::test]
     async fn list_child_conversations_core_returns_empty_for_no_parent() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-list-children-empty").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-list-children-empty").await;
         let parent_id = create_conversation_core(&db.conn, folder_id, AgentType::Codex, None)
             .await
             .expect("create parent");
@@ -2944,7 +2944,7 @@ mod tests {
         use crate::db::service::conversation_service;
 
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-list-children-match").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-list-children-match").await;
         let parent_id = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("create parent");
@@ -3000,7 +3000,7 @@ mod tests {
     #[tokio::test]
     async fn emit_conversation_upsert_broadcasts_full_root_summary() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-sync-upsert").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-sync-upsert").await;
         let id = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("create");
@@ -3035,7 +3035,7 @@ mod tests {
     #[tokio::test]
     async fn emit_conversation_upsert_carries_new_status_after_update() {
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-sync-status").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-sync-status").await;
         let id = create_conversation_core(&db.conn, folder_id, AgentType::Codex, None)
             .await
             .expect("create");
@@ -3054,7 +3054,7 @@ mod tests {
         // Anti-resurrection: get_by_id filters deleted_at, so an upsert that
         // races a delete emits nothing instead of re-inserting a tombstone.
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-sync-deleted-silent").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-sync-deleted-silent").await;
         let id = create_conversation_core(&db.conn, folder_id, AgentType::Gemini, None)
             .await
             .expect("create");
@@ -3079,7 +3079,7 @@ mod tests {
         // chevron), unlike a root whose `parent_id` is omitted.
         use crate::acp::delegation::spawner::DelegationLink;
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-sync-child-broadcast").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-sync-child-broadcast").await;
         let parent_id = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("parent");
@@ -3123,7 +3123,7 @@ mod tests {
         // symmetric with the create-time parent re-emit.
         use crate::acp::delegation::spawner::DelegationLink;
         let db = fresh_in_memory_db().await;
-        let folder_id = seed_folder(&db, "/tmp/codeg-delete-child-reemit").await;
+        let folder_id = seed_folder(&db, "/tmp/veryagent-delete-child-reemit").await;
         let parent_id = create_conversation_core(&db.conn, folder_id, AgentType::ClaudeCode, None)
             .await
             .expect("parent");

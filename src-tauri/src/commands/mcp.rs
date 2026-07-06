@@ -16,7 +16,7 @@ static MARKETPLACE_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = Lazy
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(20))
-        .user_agent("codeg-mcp-market/1.0")
+        .user_agent("veryagent-mcp-market/1.0")
         .build()
         .map_err(|e| format!("failed to initialize marketplace HTTP client: {e}"))
 });
@@ -606,7 +606,7 @@ fn claude_settings_path() -> PathBuf {
     home_dir_or_default().join(".claude").join("settings.json")
 }
 
-/// The marketplace suffix codeg uses when toggling user-scope Claude Code
+/// The marketplace suffix veryagent uses when toggling user-scope Claude Code
 /// MCP servers via `enabledPlugins`. Empirically validated: `figma@local`
 /// activates a user-scope MCP, `figma@user` does not. The suffix is treated
 /// by Claude Code CLI as a free-form tag identifying the source — `local`
@@ -2293,7 +2293,7 @@ pub fn read_servers_for_agent_type(
         AgentType::CodeBuddy => read_codebuddy_servers(),
         AgentType::KimiCode => read_kimi_code_servers(),
         // pi-acp drops ACP-wire MCP and pi has no native MCP (it needs a
-        // third-party extension), so codeg manages no MCP servers for pi (v1).
+        // third-party extension), so veryagent manages no MCP servers for pi (v1).
         AgentType::Pi => Ok(BTreeMap::new()),
     }
 }
@@ -2308,8 +2308,8 @@ pub fn read_servers_for_agent_type(
 //
 // Because Kimi loads this file natively at session start, `KimiCode` is on the
 // ACP forward skip list in `connection.rs` (like Hermes) so the same user
-// servers aren't double-registered over `session/new`. The built-in `codeg-mcp`
-// companion is injected separately by `inject_codeg_mcp`, so it still reaches
+// servers aren't double-registered over `session/new`. The built-in `veryagent-mcp`
+// companion is injected separately by `inject_veryagent_mcp`, so it still reaches
 // Kimi regardless.
 // ---------------------------------------------------------------------------
 
@@ -2405,7 +2405,7 @@ fn remove_kimi_code_server_at(path: &Path, id: &str) -> Result<bool, AppCommandE
 // Hermes Agent  (~/.hermes/config.yaml  →  mcp_servers)
 //
 // Hermes reads the `mcp_servers` section of its own config.yaml natively at
-// launch (registering each as an `mcp-<name>` toolset), so codeg manages that
+// launch (registering each as an `mcp-<name>` toolset), so veryagent manages that
 // section directly — the same "write the agent's own config file" model used
 // for Codex/OpenCode — rather than forwarding servers over the ACP wire. The
 // ACP forward path (`load_mcp_servers_for_agent`) deliberately skips Hermes to
@@ -2413,10 +2413,10 @@ fn remove_kimi_code_server_at(path: &Path, id: &str) -> Result<bool, AppCommandE
 //
 // Hermes' entry shape: stdio = `{command, args, env}`; remote = `{url}` (+
 // `transport: sse` for SSE, optional `headers` / `client_cert` / `client_key`).
-// Translate to/from codeg's canonical spec, whose discriminator is `type`.
+// Translate to/from veryagent's canonical spec, whose discriminator is `type`.
 // ---------------------------------------------------------------------------
 
-/// Convert one Hermes `mcp_servers` YAML entry into codeg's canonical spec.
+/// Convert one Hermes `mcp_servers` YAML entry into veryagent's canonical spec.
 fn hermes_entry_to_canonical(
     entry: &serde_yaml::Value,
     id: &str,
@@ -2456,7 +2456,7 @@ fn hermes_entry_to_canonical(
     canonicalize_spec(&json, &source)
 }
 
-/// Convert codeg's canonical spec into a Hermes `mcp_servers` YAML entry.
+/// Convert veryagent's canonical spec into a Hermes `mcp_servers` YAML entry.
 fn canonical_to_hermes_entry(spec: &Value) -> Result<serde_yaml::Value, AppCommandError> {
     let canonical = canonicalize_spec(spec, "Hermes conversion")?;
     let obj = canonical
@@ -2555,7 +2555,7 @@ fn read_hermes_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
 /// preserving every other key. Written through the Hermes secret writer
 /// (owner-only perms, symlink-preserving) since the file can carry env secrets.
 /// Note: like the structured model save, this round-trips config.yaml through
-/// serde_yaml and so drops comments — consistent with codeg's existing Hermes
+/// serde_yaml and so drops comments — consistent with veryagent's existing Hermes
 /// config edits.
 fn upsert_hermes_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     use serde_yaml::{Mapping, Value as Yaml};

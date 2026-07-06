@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use codeg_lib::app_state::AppState;
-use codeg_lib::web::event_bridge::{EventEmitter, WebEventBroadcaster};
-use codeg_lib::web::{
+use veryagent_lib::app_state::AppState;
+use veryagent_lib::web::event_bridge::{EventEmitter, WebEventBroadcaster};
+use veryagent_lib::web::{
     addresses_for_bind, advertise_host, find_static_dir_standalone, resolve_persisted_server_token,
     WebServerState,
 };
@@ -13,7 +13,7 @@ fn main() -> ExitCode {
     // Capture our own executable path before anything can rename it (an
     // in-place upgrade swaps the binary mid-run; `current_exe()` would then
     // resolve to a `" (deleted)"` path on Linux). Cheap, single-shot.
-    codeg_lib::update::runtime::prime_self_exe();
+    veryagent_lib::update::runtime::prime_self_exe();
 
     // Support --version flag
     let args: Vec<String> = std::env::args().collect();
@@ -23,13 +23,13 @@ fn main() -> ExitCode {
     }
 
     // `--supervise`: run as the process supervisor that owns the worker's
-    // lifecycle (PID 1 in Docker). It spawns `codeg-server` without this
+    // lifecycle (PID 1 in Docker). It spawns `veryagent-server` without this
     // flag and relaunches it after an in-place upgrade. Never returns.
     if args.iter().any(|a| a == "--supervise") {
         // This mode never reaches init_server(); install a stderr-only
         // subscriber so the supervisor's diagnostics still reach Docker logs.
-        let _log_guard = codeg_lib::logging::init::init_stderr_only();
-        codeg_lib::supervise::run();
+        let _log_guard = veryagent_lib::logging::init::init_stderr_only();
+        veryagent_lib::supervise::run();
     }
 
     // When invoked as a git credential helper (by the script written via
@@ -41,35 +41,35 @@ fn main() -> ExitCode {
         // Subprocess mode, before init_server(): stderr-only subscriber so
         // helper diagnostics aren't dropped, while stdout stays the git
         // credential protocol channel.
-        let _log_guard = codeg_lib::logging::init::init_stderr_only();
-        codeg_lib::git_credential::run_credential_helper();
+        let _log_guard = veryagent_lib::logging::init::init_stderr_only();
+        veryagent_lib::git_credential::run_credential_helper();
         return ExitCode::SUCCESS;
     }
 
     // PATH initialisation MUST happen before the tokio runtime is created.
     // std::env::set_var is not thread-safe (unsafe in Rust edition 2024);
     // #[tokio::main] would spawn worker threads before we reach this point.
-    codeg_lib::process::ensure_node_in_path();
-    codeg_lib::process::ensure_user_npm_prefix_in_path();
+    veryagent_lib::process::ensure_node_in_path();
+    veryagent_lib::process::ensure_user_npm_prefix_in_path();
 
-    // Resolve and pin `CODEG_DATA_DIR` before any threads exist.
+    // Resolve and pin `VERYAGENT_DATA_DIR` before any threads exist.
     //
     // Two things matter here, both single-shot:
     //
     // 1. Absolutize: child processes (notably the credential helper
     //    subprocess invoked by git from inside the user's repo) inherit
     //    the env var and use it via `keyring_store::tokens_file_path` to
-    //    find `tokens.json`. A relative `CODEG_DATA_DIR=data` would
+    //    find `tokens.json`. A relative `VERYAGENT_DATA_DIR=data` would
     //    otherwise resolve against git's CWD, not the server's startup
     //    CWD, and the helper would silently miss the token file even
     //    though we found the database.
     //
     // 2. Fill in the default if unset, so every downstream resolver —
-    //    `paths::codeg_uploads_root`, `paths::codeg_pets_root`,
+    //    `paths::veryagent_uploads_root`, `paths::veryagent_pets_root`,
     //    the credential subprocess — converges on the same root the
     //    server itself chose for the database. Without this, a default
     //    deployment (env var unset) puts the DB under
-    //    `dirs::data_dir()/codeg` but uploads under `~/.codeg/uploads`,
+    //    `dirs::data_dir()/codeg` but uploads under `~/.veryagent/uploads`,
     //    splitting the persistent surface across two filesystem roots
     //    and silently breaking single-volume backups, container mounts,
     //    and any `file://` URI in session history that points at an
@@ -78,31 +78,31 @@ fn main() -> ExitCode {
     // `std::env::set_var` is not thread-safe (unsafe in Rust edition
     // 2024); doing this before the tokio runtime is built guarantees we
     // are still single-threaded.
-    let resolved_data_dir = std::env::var("CODEG_DATA_DIR")
+    let resolved_data_dir = std::env::var("VERYAGENT_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| default_data_dir());
-    let resolved_data_dir = codeg_lib::git_credential::absolutize(&resolved_data_dir);
-    std::env::set_var("CODEG_DATA_DIR", &resolved_data_dir);
+    let resolved_data_dir = veryagent_lib::git_credential::absolutize(&resolved_data_dir);
+    std::env::set_var("VERYAGENT_DATA_DIR", &resolved_data_dir);
 
-    // Install the logging subscriber now that CODEG_DATA_DIR is pinned (the logs
+    // Install the logging subscriber now that VERYAGENT_DATA_DIR is pinned (the logs
     // dir resolves from it). Doing it here — before the first server diagnostic
-    // below — captures even the CODEG_HOME warning and the FATAL upload-quota
+    // below — captures even the VERYAGENT_HOME warning and the FATAL upload-quota
     // abort. Hold the guard for the whole process so buffered file lines flush
     // on a graceful exit.
-    let _log_guard = codeg_lib::logging::init::init_server();
+    let _log_guard = veryagent_lib::logging::init::init_server();
 
-    // `CODEG_HOME` overrides `CODEG_DATA_DIR` for uploads/pets inside
-    // `paths::codeg_*_root` (legacy `~/.codeg/` layout). If both are set
+    // `VERYAGENT_HOME` overrides `VERYAGENT_DATA_DIR` for uploads/pets inside
+    // `paths::codeg_*_root` (legacy `~/.veryagent/` layout). If both are set
     // and resolve to different roots, the database and uploads land on
     // different filesystems — a silent split. Warn loudly so the
     // operator notices before relying on a backup or volume mount that
     // only covers one of them.
-    if let Some(home) = std::env::var_os("CODEG_HOME").filter(|s| !s.is_empty()) {
-        let home_path = codeg_lib::git_credential::absolutize(std::path::Path::new(&home));
+    if let Some(home) = std::env::var_os("VERYAGENT_HOME").filter(|s| !s.is_empty()) {
+        let home_path = veryagent_lib::git_credential::absolutize(std::path::Path::new(&home));
         if home_path != resolved_data_dir {
             tracing::warn!(
-                "[paths][WARN] CODEG_HOME ({}) and CODEG_DATA_DIR ({}) point at different roots. \
-                 Uploads/pets follow CODEG_HOME; the database follows CODEG_DATA_DIR. \
+                "[paths][WARN] VERYAGENT_HOME ({}) and VERYAGENT_DATA_DIR ({}) point at different roots. \
+                 Uploads/pets follow VERYAGENT_HOME; the database follows VERYAGENT_DATA_DIR. \
                  Unset one or align them to avoid split state.",
                 home_path.display(),
                 resolved_data_dir.display()
@@ -114,8 +114,8 @@ fn main() -> ExitCode {
     // here means a misconfigured strict deployment never reaches the
     // tokio runtime, never binds a port, and never persists config —
     // the operator sees the FATAL line and a clean exit code 2.
-    codeg_lib::web::handlers::files::log_upload_quota_config_at_startup();
-    if let Err(err) = codeg_lib::web::handlers::files::validate_upload_quota_config() {
+    veryagent_lib::web::handlers::files::log_upload_quota_config_at_startup();
+    if let Err(err) = veryagent_lib::web::handlers::files::validate_upload_quota_config() {
         tracing::error!("[uploads][FATAL] {err}; aborting startup.");
         // Return (don't process::exit) so `_log_guard` drops on the way out and
         // flushes the non-blocking file appender before the process ends.
@@ -137,21 +137,21 @@ async fn async_main() -> ExitCode {
     // errors are silenced, no subprocesses spawned.
     std::thread::spawn(|| {
         let _ = std::panic::catch_unwind(|| {
-            codeg_lib::sweep_acp_binary_trash();
+            veryagent_lib::sweep_acp_binary_trash();
         });
     });
 
-    let port: u16 = std::env::var("CODEG_PORT")
+    let port: u16 = std::env::var("VERYAGENT_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(3080);
-    let host = std::env::var("CODEG_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    // CODEG_DATA_DIR was already resolved and absolutized in `main()` so
+    let host = std::env::var("VERYAGENT_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    // VERYAGENT_DATA_DIR was already resolved and absolutized in `main()` so
     // all path resolvers across the process see the same root. Read it
     // back rather than re-deriving the default.
     let data_dir =
-        PathBuf::from(std::env::var("CODEG_DATA_DIR").expect("CODEG_DATA_DIR set by main()"));
-    let static_dir_env = std::env::var("CODEG_STATIC_DIR").ok();
+        PathBuf::from(std::env::var("VERYAGENT_DATA_DIR").expect("VERYAGENT_DATA_DIR set by main()"));
+    let static_dir_env = std::env::var("VERYAGENT_STATIC_DIR").ok();
 
     let static_dir = find_static_dir_standalone(static_dir_env.as_deref());
     let app_version = env!("CARGO_PKG_VERSION");
@@ -161,7 +161,7 @@ async fn async_main() -> ExitCode {
     // this freshly-swapped version is still unproven (re-swapping would clobber
     // the only good `.bak` and make a trial-failure rollback restore the
     // unproven version).
-    if codeg_lib::update::runtime::is_supervised() {
+    if veryagent_lib::update::runtime::is_supervised() {
         // Supervised trial: if this launch is the trial of a freshly-swapped
         // version (marker present), keep the marker until we have stayed up
         // past the trial window — at which point the upgrade is proven and the
@@ -169,11 +169,11 @@ async fn async_main() -> ExitCode {
         // only peeks at the marker to set probation; clearing is the worker's
         // job. If this version can't survive the window the supervisor rolls it
         // back first (which clears the marker), so this task never fires.
-        if codeg_lib::update::install::upgrade_staged() {
-            let trial = codeg_lib::update::runtime::upgrade_trial_secs();
+        if veryagent_lib::update::install::upgrade_staged() {
+            let trial = veryagent_lib::update::runtime::upgrade_trial_secs();
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(trial)).await;
-                let _ = codeg_lib::update::install::take_upgrade_staged();
+                let _ = veryagent_lib::update::install::take_upgrade_staged();
             });
         }
     } else {
@@ -181,30 +181,30 @@ async fn async_main() -> ExitCode {
         // with no supervisor and thus no trial/rollback. Clear the marker on
         // startup so a re-exec'd upgrade doesn't leave it behind and block every
         // future update with "already staged".
-        let _ = codeg_lib::update::install::take_upgrade_staged();
+        let _ = veryagent_lib::update::install::take_upgrade_staged();
     }
 
-    tracing::info!("[SERVER] codeg-server v{}", app_version);
+    tracing::info!("[SERVER] veryagent-server v{}", app_version);
     tracing::info!("[SERVER] Data directory: {}", data_dir.display());
     tracing::info!("[SERVER] Static directory: {}", static_dir.display());
 
     // Initialize database
-    let db = codeg_lib::db::init_database(&data_dir, app_version)
+    let db = veryagent_lib::db::init_database(&data_dir, app_version)
         .await
         .expect("Failed to initialize database");
 
     // Logging phase 2: override the default level from the persisted
     // `logging.level` now that the DB is open. Phase 3 (wiring the emitter)
     // happens once AppState exists, below.
-    codeg_lib::logging::init::apply_persisted_level(&db.conn).await;
+    veryagent_lib::logging::init::apply_persisted_level(&db.conn).await;
 
     // Resolve the access token *after* the DB is up so a generated token can be
     // persisted and reused across restarts (a self-update restart must not
-    // rotate it). An empty/whitespace CODEG_TOKEN is treated as unset.
+    // rotate it). An empty/whitespace VERYAGENT_TOKEN is treated as unset.
     let mut token_generated = false;
     let token = resolve_persisted_server_token(
         &db.conn,
-        std::env::var("CODEG_TOKEN").ok(),
+        std::env::var("VERYAGENT_TOKEN").ok(),
         &mut token_generated,
     )
     .await;
@@ -214,15 +214,15 @@ async fn async_main() -> ExitCode {
         // in-app log viewer. `eprintln!` bypasses the tracing sinks (file +
         // ring buffer); only the local terminal / Docker stderr sees it.
         eprintln!(
-            "[SERVER] No CODEG_TOKEN set; generated an access token (persisted): {token}"
+            "[SERVER] No VERYAGENT_TOKEN set; generated an access token (persisted): {token}"
         );
-        eprintln!("[SERVER] Pin your own by setting the CODEG_TOKEN environment variable.");
+        eprintln!("[SERVER] Pin your own by setting the VERYAGENT_TOKEN environment variable.");
     }
 
     // Restore and apply saved system proxy settings before any network operation.
     // reqwest clients (including the LazyLock in check_app_update) cache the proxy
     // config at build time, so this must run before the first one is constructed.
-    codeg_lib::init_proxy_from_db(&db.conn).await;
+    veryagent_lib::init_proxy_from_db(&db.conn).await;
 
     // Reclaim orphaned chat scratch dirs (pre-send drafts that never bound to a
     // conversation, plus dirs left behind by deleted chat conversations).
@@ -231,7 +231,7 @@ async fn async_main() -> ExitCode {
         let gc_conn = db.conn.clone();
         let gc_data_dir = data_dir.clone();
         tokio::spawn(async move {
-            match codeg_lib::commands::conversations::gc_orphan_chat_dirs_core(
+            match veryagent_lib::commands::conversations::gc_orphan_chat_dirs_core(
                 &gc_conn,
                 &gc_data_dir,
             )
@@ -248,15 +248,15 @@ async fn async_main() -> ExitCode {
 
     // Create shared broadcaster + internal ACP event bus.
     let broadcaster = Arc::new(WebEventBroadcaster::new());
-    let event_bus_metrics = Arc::new(codeg_lib::acp::EventBusMetrics::default());
-    let acp_event_bus = Arc::new(codeg_lib::acp::InternalEventBus::new(
+    let event_bus_metrics = Arc::new(veryagent_lib::acp::EventBusMetrics::default());
+    let acp_event_bus = Arc::new(veryagent_lib::acp::InternalEventBus::new(
         event_bus_metrics.clone(),
     ));
     let emitter = EventEmitter::web_only(broadcaster.clone(), acp_event_bus.clone());
 
     // Build AppState
-    let pet_state_handle = codeg_lib::pet_state_mapper::new_pet_state_handle();
-    let connection_manager = codeg_lib::app_state::default_connection_manager();
+    let pet_state_handle = veryagent_lib::pet_state_mapper::new_pet_state_handle();
+    let connection_manager = veryagent_lib::app_state::default_connection_manager();
     let (
         delegation_broker,
         delegation_tokens,
@@ -264,7 +264,7 @@ async fn async_main() -> ExitCode {
         feedback_config,
         question_config,
         session_info_config,
-    ) = codeg_lib::app_state::build_delegation_stack(
+    ) = veryagent_lib::app_state::build_delegation_stack(
         &connection_manager,
         db.conn.clone(),
         data_dir.clone(),
@@ -272,15 +272,15 @@ async fn async_main() -> ExitCode {
     let state = Arc::new(AppState {
         db,
         connection_manager,
-        terminal_manager: codeg_lib::app_state::default_terminal_manager(),
+        terminal_manager: veryagent_lib::app_state::default_terminal_manager(),
         event_broadcaster: broadcaster,
         acp_event_bus: acp_event_bus.clone(),
         emitter,
         data_dir,
         web_server_state: WebServerState::new(),
-        chat_channel_manager: codeg_lib::app_state::default_chat_channel_manager(),
+        chat_channel_manager: veryagent_lib::app_state::default_chat_channel_manager(),
         workspace_transfer: Arc::new(
-            codeg_lib::workspace_transfer::WorkspaceTransferManager::new_from_env(),
+            veryagent_lib::workspace_transfer::WorkspaceTransferManager::new_from_env(),
         ),
         pet_state: pet_state_handle.clone(),
         delegation_broker: delegation_broker.clone(),
@@ -289,13 +289,13 @@ async fn async_main() -> ExitCode {
         feedback_config: feedback_config.clone(),
         question_config: question_config.clone(),
         session_info_config: session_info_config.clone(),
-        system_op_lock: codeg_lib::app_state::default_system_op_lock(),
-        update_state: codeg_lib::app_state::default_update_state(),
+        system_op_lock: veryagent_lib::app_state::default_system_op_lock(),
+        update_state: veryagent_lib::app_state::default_update_state(),
     });
 
     // Logging phase 3: wire the emitter so the Logs viewer's live tail
     // (`logs://appended`) reaches WS clients.
-    if let Some(hub) = codeg_lib::logging::hub::log_hub() {
+    if let Some(hub) = veryagent_lib::logging::hub::log_hub() {
         hub.set_emitter(state.emitter.clone());
     }
 
@@ -304,23 +304,23 @@ async fn async_main() -> ExitCode {
     // sees the operator's configured behavior. Cancellation is handled
     // out-of-band via MCP `notifications/cancelled` — no broker-side
     // timeout to apply here.
-    codeg_lib::commands::delegation::apply_persisted_config(&state.db.conn, &delegation_broker)
+    veryagent_lib::commands::delegation::apply_persisted_config(&state.db.conn, &delegation_broker)
         .await;
     // Same for the live-feedback enable flag, so the first companion launch
     // sees the operator's configured behavior.
-    codeg_lib::commands::feedback::apply_persisted_feedback_config(
+    veryagent_lib::commands::feedback::apply_persisted_feedback_config(
         &state.db.conn,
         &feedback_config,
     )
     .await;
     // Same for the ask-user-question enable flag.
-    codeg_lib::commands::question::apply_persisted_question_config(
+    veryagent_lib::commands::question::apply_persisted_question_config(
         &state.db.conn,
         &question_config,
     )
     .await;
     // Same for the get-session-info enable flag.
-    codeg_lib::commands::session_info::apply_persisted_session_info_config(
+    veryagent_lib::commands::session_info::apply_persisted_session_info_config(
         &state.db.conn,
         &session_info_config,
     )
@@ -330,20 +330,20 @@ async fn async_main() -> ExitCode {
     // through the broker. Path is PID-scoped, so the listener owns it for
     // the lifetime of the process.
     {
-        let listener = codeg_lib::acp::delegation::listener::DelegationListener::new(
+        let listener = veryagent_lib::acp::delegation::listener::DelegationListener::new(
             delegation_broker,
             delegation_tokens,
-            Arc::new(codeg_lib::acp::manager::ConnectionManagerParentLookup {
+            Arc::new(veryagent_lib::acp::manager::ConnectionManagerParentLookup {
                 manager: Arc::new(state.connection_manager.clone_ref()),
             }),
-            Arc::new(codeg_lib::acp::manager::ConnectionManagerFeedbackLookup {
+            Arc::new(veryagent_lib::acp::manager::ConnectionManagerFeedbackLookup {
                 manager: Arc::new(state.connection_manager.clone_ref()),
             }),
-            Arc::new(codeg_lib::acp::manager::ConnectionManagerQuestionLookup {
+            Arc::new(veryagent_lib::acp::manager::ConnectionManagerQuestionLookup {
                 manager: Arc::new(state.connection_manager.clone_ref()),
             }),
-            Arc::new(codeg_lib::commands::session_info::DbSessionInfoLookup::new(
-                Arc::new(codeg_lib::db::AppDatabase {
+            Arc::new(veryagent_lib::commands::session_info::DbSessionInfoLookup::new(
+                Arc::new(veryagent_lib::db::AppDatabase {
                     conn: state.db.conn.clone(),
                 }),
             )),
@@ -357,10 +357,10 @@ async fn async_main() -> ExitCode {
     }
 
     // Install bundled expert skills into the central store
-    // (`~/.codeg/skills/`). Runs in the background; failures are logged
+    // (`~/.veryagent/skills/`). Runs in the background; failures are logged
     // but non-fatal.
     tokio::spawn(async move {
-        let report = codeg_lib::commands::experts::ensure_central_experts_installed().await;
+        let report = veryagent_lib::commands::experts::ensure_central_experts_installed().await;
         if !report.errors.is_empty() {
             tracing::error!(
                 "[Experts] install finished with {} error(s): {:?}",
@@ -393,7 +393,7 @@ async fn async_main() -> ExitCode {
     // broker is supplied so TurnComplete on a delegation child resolves the
     // parent's pending `delegate_to_agent` tool_use_id and emits
     // `DelegationCompleted`.
-    tokio::spawn(codeg_lib::lifecycle_subscriber_task(
+    tokio::spawn(veryagent_lib::lifecycle_subscriber_task(
         state.db.conn.clone(),
         state.connection_manager.clone_ref(),
         state.acp_event_bus.clone(),
@@ -405,7 +405,7 @@ async fn async_main() -> ExitCode {
     // bridge, just like the Tauri webview does in desktop mode. ACP events
     // come through the typed bus; folder/app side-channels stay on the
     // JSON broadcaster.
-    tokio::spawn(codeg_lib::pet_state_mapper::pet_state_subscriber_task(
+    tokio::spawn(veryagent_lib::pet_state_mapper::pet_state_subscriber_task(
         state.acp_event_bus.clone(),
         state.event_broadcaster.clone(),
         state.emitter.clone(),
@@ -414,28 +414,28 @@ async fn async_main() -> ExitCode {
 
     // Spawn the idle sweep so connections abandoned without an explicit
     // disconnect (e.g. browser tab closed, panic survivors) are reaped.
-    // Override the 60-second default via `CODEG_ACP_IDLE_TIMEOUT_SECS`
+    // Override the 60-second default via `VERYAGENT_ACP_IDLE_TIMEOUT_SECS`
     // (set to `0` to disable).
-    if let Some(idle_timeout) = codeg_lib::idle_timeout_from_env() {
-        tokio::spawn(codeg_lib::idle_sweep_task(
+    if let Some(idle_timeout) = veryagent_lib::idle_timeout_from_env() {
+        tokio::spawn(veryagent_lib::idle_sweep_task(
             state.connection_manager.clone_ref(),
             idle_timeout,
-            std::time::Duration::from_secs(codeg_lib::SWEEP_INTERVAL_SECS),
+            std::time::Duration::from_secs(veryagent_lib::SWEEP_INTERVAL_SECS),
         ));
     }
 
     // Office watch preview servers: reap dead children + ref0 stragglers.
-    if let Some(idle_timeout) = codeg_lib::office_watch::idle_timeout_from_env() {
-        tokio::spawn(codeg_lib::office_watch::office_watch_idle_sweep_task(
+    if let Some(idle_timeout) = veryagent_lib::office_watch::idle_timeout_from_env() {
+        tokio::spawn(veryagent_lib::office_watch::office_watch_idle_sweep_task(
             idle_timeout,
-            std::time::Duration::from_secs(codeg_lib::office_watch::SWEEP_INTERVAL_SECS),
+            std::time::Duration::from_secs(veryagent_lib::office_watch::SWEEP_INTERVAL_SECS),
         ));
     }
 
     // Automation engine (mirrors lib.rs setup): manual + scheduled fires,
     // event-bus completion, reconcile, boot recovery. One per process.
-    if let Some(engine) = codeg_lib::automation::build_engine(
-        codeg_lib::db::AppDatabase {
+    if let Some(engine) = veryagent_lib::automation::build_engine(
+        veryagent_lib::db::AppDatabase {
             conn: state.db.conn.clone(),
         },
         state.connection_manager.clone_ref(),
@@ -443,18 +443,18 @@ async fn async_main() -> ExitCode {
         state.acp_event_bus.clone(),
         state.data_dir.clone(),
     ) {
-        tokio::spawn(codeg_lib::automation::run_automation_engine(engine));
+        tokio::spawn(veryagent_lib::automation::run_automation_engine(engine));
     }
 
     // Sweep abandoned upload staging files from any prior run before
     // serving the first request. The quota log/validate ran earlier in
     // `main` so strict-mode misconfigurations abort before we touch
     // disk; no second log line here.
-    codeg_lib::web::handlers::files::purge_upload_staging().await;
+    veryagent_lib::web::handlers::files::purge_upload_staging().await;
 
     // Build router
     let shutdown_signal = state.web_server_state.shutdown_signal();
-    let router = codeg_lib::web::router::build_router(
+    let router = veryagent_lib::web::router::build_router(
         state.clone(),
         token.clone(),
         static_dir,
@@ -471,7 +471,7 @@ async fn async_main() -> ExitCode {
         }
     };
 
-    if let Err(e) = codeg_lib::web::socket_inherit::mark_listener_non_inheritable(&listener) {
+    if let Err(e) = veryagent_lib::web::socket_inherit::mark_listener_non_inheritable(&listener) {
         tracing::warn!(
             "[SERVER][WARN] failed to mark listener non-inheritable: {}",
             e
@@ -480,7 +480,7 @@ async fn async_main() -> ExitCode {
 
     let local_addr = listener.local_addr().ok();
     let actual_port = local_addr.map(|a| a.port()).unwrap_or(port);
-    // `CODEG_HOST` may be `localhost` or a bracketed IPv6 (`[::1]`); advertise
+    // `VERYAGENT_HOST` may be `localhost` or a bracketed IPv6 (`[::1]`); advertise
     // the concrete IP the socket bound to, not the raw config string.
     let advertised_host = advertise_host(local_addr, &host);
 
@@ -507,12 +507,12 @@ async fn async_main() -> ExitCode {
     }
     // Graceful shutdown: release any live office watch preview servers
     // (kill_on_drop is the backstop, but this frees their ports promptly).
-    codeg_lib::office_watch::stop_all_office_watches();
+    veryagent_lib::office_watch::stop_all_office_watches();
     ExitCode::SUCCESS
 }
 
 fn default_data_dir() -> PathBuf {
     dirs::data_dir()
-        .map(|d| d.join("codeg"))
-        .unwrap_or_else(|| PathBuf::from(".codeg-data"))
+        .map(|d| d.join("veryagent"))
+        .unwrap_or_else(|| PathBuf::from(".veryagent-data"))
 }

@@ -2,7 +2,7 @@
 //!
 //! Mid-turn an agent can ask the user one or more multiple-choice questions and
 //! BLOCK until the user answers — the `ask_user_question` MCP tool exposed by
-//! `codeg-mcp`. Unlike live-feedback ([`crate::acp::feedback`]), which is a
+//! `veryagent-mcp`. Unlike live-feedback ([`crate::acp::feedback`]), which is a
 //! non-blocking pull the user pushes into, a question PAUSES the agent's tool
 //! call: the questions render as an interactive card above the conversation
 //! input box (driven by [`crate::acp::session_state::SessionState`], in-memory
@@ -423,7 +423,7 @@ pub fn build_outcome(questions: &[QuestionSpec], answer: &QuestionAnswer) -> Que
 
 /// The hot-swappable feature config read at MCP injection time. Kept tiny and
 /// separate from `FeedbackConfig` / `DelegationConfig` so the three features
-/// toggle independently — `codeg-mcp` is injected when ANY is enabled, and each
+/// toggle independently — `veryagent-mcp` is injected when ANY is enabled, and each
 /// tool is listed only when its own feature is on.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct QuestionConfig {
