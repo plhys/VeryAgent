@@ -1,7 +1,7 @@
-# Codeg
+# VeryAgent
 
-[![Release](https://img.shields.io/github/v/release/xintaofei/codeg)](https://github.com/xintaofei/codeg/releases)
-[![License](https://img.shields.io/github/license/xintaofei/codeg)](../../LICENSE)
+[![Release](https://img.shields.io/github/v/release/plhys/veryagent-plus)](https://github.com/plhys/veryagent-plus/releases)
+[![License](https://img.shields.io/github/license/plhys/veryagent-plus)](../../LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](../../Dockerfile)
@@ -19,7 +19,7 @@
   <a href="./README.ar.md">العربية</a>
 </p>
 
-Codeg（Code Generation）是一个多智能体编码工作台，它将多个智能体（Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw、Cline、Hermes Agent、CodeBuddy、Kimi Code、Pi 等）统一到一个工作区中，支持会话聚合和多智能体协作，支持桌面安装，服务器/Docker 部署。
+VeryAgent（Code Generation）是一个多智能体编码工作台，它将多个智能体（Claude Code、Codex CLI、OpenCode、Gemini CLI、OpenClaw、Cline、Hermes Agent、CodeBuddy、Kimi Code、Pi 等）统一到一个工作区中，支持会话聚合和多智能体协作，支持桌面安装，服务器/Docker 部署。
 
 ![gallery](../images/gallery.svg)
 
@@ -28,16 +28,16 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 <table>
   <tr>
     <td colspan="2" align="center">
-      <a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg" target="_blank"><img src="https://raw.githubusercontent.com/LeoYeAI/myclaw-sponsor-preview/main/banner.svg" alt="MyClaw.ai — Your OpenClaw Agent, Always On." /></a><br/>
-      <strong><a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg">MyClaw.ai</a></strong> — 全托管的 OpenClaw 云端实例服务，一键部署、7×24 全天候在线、数据完全由用户掌控，无需自行管理服务器。
+      <a href="https://myclaw.ai/?utm_source=github&utm_campaign=veryagent" target="_blank"><img src="https://raw.githubusercontent.com/LeoYeAI/myclaw-sponsor-preview/main/banner.svg" alt="MyClaw.ai — Your OpenClaw Agent, Always On." /></a><br/>
+      <strong><a href="https://myclaw.ai/?utm_source=github&utm_campaign=veryagent">MyClaw.ai</a></strong> — 全托管的 OpenClaw 云端实例服务，一键部署、7×24 全天候在线、数据完全由用户掌控，无需自行管理服务器。
     </td>
   </tr>
   <tr>
     <td align="center" width="220">
-      <a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg" target="_blank"><img src="../images/compshare.png" alt="优云智算" width="160" /></a><br/>
-      <strong><a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg">优云智算</a></strong>
+      <a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent" target="_blank"><img src="../images/compshare.png" alt="优云智算" width="160" /></a><br/>
+      <strong><a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent">优云智算</a></strong>
     </td>
-    <td>感谢优云智算赞助了本项目！优云智算是 UCloud 旗下 AI 云平台，主打包月、按次的高性价比国模 agent Plan 套餐，低至 49 元/月起。同时提供官转稳定海外模型。支持接入 Claude Code、Codex 及 API 调用。支持企业高并发、7*24 技术支持、自助开票。通过<a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg">此链接</a>注册的用户，可得免费 5 元平台体验金！</td>
+    <td>感谢优云智算赞助了本项目！优云智算是 UCloud 旗下 AI 云平台，主打包月、按次的高性价比国模 agent Plan 套餐，低至 49 元/月起。同时提供官转稳定海外模型。支持接入 Claude Code、Codex 及 API 调用。支持企业高并发、7*24 技术支持、自助开票。通过<a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent">此链接</a>注册的用户，可得免费 5 元平台体验金！</td>
   </tr>
   <tr>
     <td align="center" width="220">
@@ -48,22 +48,22 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
   </tr>
 </table>
 
-> 想成为 Codeg 赞助商？[欢迎通过邮件与我们联系。](mailto:itpkcn@gmail.com)
+> 想成为 VeryAgent 赞助商？[欢迎通过邮件与我们联系。](mailto:itpkcn@gmail.com)
 
 ## 主界面
 
-![Codeg Light](../images/main-light.png#gh-light-mode-only)
-![Codeg Dark](../images/main-dark.png#gh-dark-mode-only)
+![VeryAgent Light](../images/main-light.png#gh-light-mode-only)
+![VeryAgent Dark](../images/main-dark.png#gh-dark-mode-only)
 
 ## 多智能体协作
 
-![Codeg Light](../images/collaboration-light.png#gh-light-mode-only)
-![Codeg Dark](../images/collaboration-dark.png#gh-dark-mode-only)
+![VeryAgent Light](../images/collaboration-light.png#gh-light-mode-only)
+![VeryAgent Dark](../images/collaboration-dark.png#gh-dark-mode-only)
 
 ## 日常办公
 
-![Codeg Light](../images/office-light.png#gh-light-mode-only)
-![Codeg Dark](../images/office-dark.png#gh-dark-mode-only)
+![VeryAgent Light](../images/office-light.png#gh-light-mode-only)
+![VeryAgent Dark](../images/office-dark.png#gh-dark-mode-only)
 
 ## 核心亮点
 
@@ -77,8 +77,8 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 - MCP 管理（本地扫描 + 市场搜索/安装）
 - Skills 管理（全局与项目级）
 - Git 远程账号管理（支持 GitHub 及其它 Git 服务器）
-- Web 服务模式 — 开启后可在浏览器中访问 Codeg，支持远程工作
-- **独立服务器部署** — 在任意 Linux/macOS 服务器上运行 `codeg-server`，通过浏览器访问
+- Web 服务模式 — 开启后可在浏览器中访问 VeryAgent，支持远程工作
+- **独立服务器部署** — 在任意 Linux/macOS 服务器上运行 `veryagent-server`，通过浏览器访问
 - **Docker 支持** — `docker compose up` 或 `docker run`，可自定义令牌、端口，支持数据持久化及项目目录挂载
 - 运行时日志 — 内置实时日志查看器，支持筛选和按模块设置日志级别
 - 集成工程闭环（文件树、Diff、Git 变更、提交、终端）
@@ -114,7 +114,7 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 - **实时预览** — 在创建项目前，实时查看所选样式的渲染效果
 - **一键创建** — 点击"创建项目"，启动器将使用您的预设配置、框架模板（Next.js / Vite / React Router / Astro / Laravel）和包管理器（pnpm / npm / yarn / bun）执行 `shadcn init`
 - **包管理器检测** — 自动检测已安装的包管理器并显示版本号
-- **无缝集成** — 新创建的项目会立即在 Codeg 工作台中打开
+- **无缝集成** — 新创建的项目会立即在 VeryAgent 工作台中打开
 
 目前支持 **shadcn/ui** 项目脚手架，选项卡式设计为未来支持更多项目类型做好了准备。
 
@@ -140,7 +140,7 @@ Codeg（Code Generation）是一个多智能体编码工作台，它将多个智
 <details>
 <summary><h2>Office 文档</h2></summary>
 
-将 Word、Excel 和 PowerPoint 文件纳入一等工作流。内置的 **officecli** 工具集让你的智能体能够创建、分析、校对和编辑 .docx、.xlsx、.pptx 文档——并可直接在 Codeg 内预览结果。
+将 Word、Excel 和 PowerPoint 文件纳入一等工作流。内置的 **officecli** 工具集让你的智能体能够创建、分析、校对和编辑 .docx、.xlsx、.pptx 文档——并可直接在 VeryAgent 内预览结果。
 
 ### 功能特性
 
@@ -188,15 +188,15 @@ sudo apt-get install -y \
 
 ### 二进制文件
 
-Codeg 在单个 workspace 中提供三个 Rust 二进制文件：
+VeryAgent 在单个 workspace 中提供三个 Rust 二进制文件：
 
 | 二进制         | 角色                                                                                         | 构建方式                                                                    |
 | -------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `codeg`        | Tauri 桌面应用（窗口、托盘、自动更新）                                                       | `pnpm tauri build`（发布）/ `pnpm tauri dev`（开发）                        |
-| `codeg-server` | 用于浏览器/无头部署的独立 HTTP + WebSocket 服务器                                            | `pnpm server:build` / `pnpm server:dev`                                     |
-| `codeg-mcp`    | 单次启动的 stdio MCP 协作进程，向 agent CLI 暴露 `delegate_to_agent` 工具（多智能体协作）    | `pnpm tauri:prepare-sidecars`（由 `tauri dev` / `tauri build` 自动调用）    |
+| `veryagent`        | Tauri 桌面应用（窗口、托盘、自动更新）                                                       | `pnpm tauri build`（发布）/ `pnpm tauri dev`（开发）                        |
+| `veryagent-server` | 用于浏览器/无头部署的独立 HTTP + WebSocket 服务器                                            | `pnpm server:build` / `pnpm server:dev`                                     |
+| `veryagent-mcp`    | 单次启动的 stdio MCP 协作进程，向 agent CLI 暴露 `delegate_to_agent` 工具（多智能体协作）    | `pnpm tauri:prepare-sidecars`（由 `tauri dev` / `tauri build` 自动调用）    |
 
-`codeg-mcp` 在运行时必须与其父二进制位于同一目录——安装器、Docker 镜像和 Tauri sidecar 打包器都会把它放在 `codeg` / `codeg-server` 旁边。源码构建和自定义部署可以通过 `CODEG_MCP_BIN=/abs/path/codeg-mcp` 环境变量覆盖查找路径。如果协作进程缺失，委托功能会被跳过（仅记录一条警告日志），其余 agent 会话仍可正常工作。
+`veryagent-mcp` 在运行时必须与其父二进制位于同一目录——安装器、Docker 镜像和 Tauri sidecar 打包器都会把它放在 `veryagent` / `veryagent-server` 旁边。源码构建和自定义部署可以通过 `VERYAGENT_MCP_BIN=/abs/path/veryagent-mcp` 环境变量覆盖查找路径。如果协作进程缺失，委托功能会被跳过（仅记录一条警告日志），其余 agent 会话仍可正常工作。
 
 ### 开发命令
 
@@ -209,21 +209,21 @@ pnpm dev
 # 前端静态导出到 out/
 pnpm build
 
-# 完整桌面应用（Tauri + Next.js，自动构建 codeg-mcp sidecar）
+# 完整桌面应用（Tauri + Next.js，自动构建 veryagent-mcp sidecar）
 pnpm tauri dev
 
-# 桌面发布构建（将 codeg-mcp 作为 externalBin 打包）
+# 桌面发布构建（将 veryagent-mcp 作为 externalBin 打包）
 pnpm tauri build
 
 # 独立服务器（无需 Tauri/GUI）
 pnpm server:dev
-pnpm server:build                  # 发布二进制位于 src-tauri/target/release/codeg-server
+pnpm server:build                  # 发布二进制位于 src-tauri/target/release/veryagent-server
 
-# 显式构建 codeg-mcp 协作进程（针对当前主机 triple）
-pnpm tauri:prepare-sidecars        # 输出：src-tauri/binaries/codeg-mcp-<triple>
+# 显式构建 veryagent-mcp 协作进程（针对当前主机 triple）
+pnpm tauri:prepare-sidecars        # 输出：src-tauri/binaries/veryagent-mcp-<triple>
 
 # 当只调试前端且不需要委托功能时，跳过 sidecar 准备
-CODEG_SKIP_SIDECAR=1 pnpm tauri dev
+VERYAGENT_SKIP_SIDECAR=1 pnpm tauri dev
 
 # Lint
 pnpm eslint .
@@ -235,44 +235,44 @@ pnpm test:coverage
 
 # Rust 检查（在 src-tauri/ 下执行）
 cargo check                                                     # 桌面（默认 features）
-cargo check --no-default-features --bin codeg-server            # 服务器模式
-cargo check --no-default-features --bin codeg-mcp               # MCP 协作进程
+cargo check --no-default-features --bin veryagent-server            # 服务器模式
+cargo check --no-default-features --bin veryagent-mcp               # MCP 协作进程
 cargo clippy --all-targets --features test-utils -- -D warnings
 
 # Rust 测试
 cargo test --features test-utils                                # 桌面（含集成）
-cargo test --no-default-features --bin codeg-server --lib       # 服务器模式
+cargo test --no-default-features --bin veryagent-server --lib       # 服务器模式
 cargo insta review                                              # 接受解析器快照变更
 ```
 
-> 提示：当你在 `src-tauri/target/release/` 下有新构建的 `codeg-mcp` 并想让手动启动的 `codeg-server` 在不重新安装的情况下指向它时，可以导出 `CODEG_MCP_BIN=$(pwd)/src-tauri/target/release/codeg-mcp`。
+> 提示：当你在 `src-tauri/target/release/` 下有新构建的 `veryagent-mcp` 并想让手动启动的 `veryagent-server` 在不重新安装的情况下指向它时，可以导出 `VERYAGENT_MCP_BIN=$(pwd)/src-tauri/target/release/veryagent-mcp`。
 
 ### 服务器部署
 
-Codeg 可以作为独立 Web 服务器运行，无需桌面环境。
+VeryAgent 可以作为独立 Web 服务器运行，无需桌面环境。
 
 #### 方式一：一键安装（Linux / macOS）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash
 ```
 
 安装指定版本或到自定义目录：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 然后运行：
 
 ```bash
-codeg-server
+veryagent-server
 ```
 
 #### 方式二：一键安装（Windows PowerShell）
 
 ```powershell
-irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.ps1 | iex
 ```
 
 或安装指定版本：
@@ -283,21 +283,21 @@ irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
 
 #### 方式三：从 GitHub Releases 下载
 
-预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/xintaofei/codeg/releases) 页面下载：
+预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/plhys/veryagent-plus/releases) 页面下载：
 
 | 平台        | 文件                               |
 | ----------- | ---------------------------------- |
-| Linux x64   | `codeg-server-linux-x64.tar.gz`    |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz`  |
-| macOS x64   | `codeg-server-darwin-x64.tar.gz`   |
-| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip`     |
+| Linux x64   | `veryagent-server-linux-x64.tar.gz`    |
+| Linux arm64 | `veryagent-server-linux-arm64.tar.gz`  |
+| macOS x64   | `veryagent-server-darwin-x64.tar.gz`   |
+| macOS arm64 | `veryagent-server-darwin-arm64.tar.gz` |
+| Windows x64 | `veryagent-server-windows-x64.zip`     |
 
 ```bash
 # 示例：下载、解压、运行
-tar xzf codeg-server-linux-x64.tar.gz
-cd codeg-server-linux-x64
-CODEG_STATIC_DIR=./web ./codeg-server
+tar xzf veryagent-server-linux-x64.tar.gz
+cd veryagent-server-linux-x64
+VERYAGENT_STATIC_DIR=./web ./veryagent-server
 ```
 
 #### 方式四：Docker
@@ -307,14 +307,14 @@ CODEG_STATIC_DIR=./web ./codeg-server
 docker compose up -d
 
 # 或直接使用 Docker 运行
-docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+docker run -d -p 3080:3080 -v veryagent-data:/data ghcr.io/plhys/veryagent-plus:latest
 
 # 自定义令牌并挂载项目目录
 docker run -d -p 3080:3080 \
-  -v codeg-data:/data \
+  -v veryagent-data:/data \
   -v /path/to/projects:/projects \
-  -e CODEG_TOKEN=your-secret-token \
-  ghcr.io/xintaofei/codeg:latest
+  -e VERYAGENT_TOKEN=your-secret-token \
+  ghcr.io/plhys/veryagent-plus:latest
 ```
 
 Docker 镜像采用多阶段构建（Node.js + Rust → 精简 Debian 运行时），内置 `git` 和 `ssh` 以支持仓库操作。数据持久化存储在 `/data` 卷中。可选挂载项目目录以从容器内访问本地仓库。
@@ -324,12 +324,12 @@ Docker 镜像采用多阶段构建（Node.js + Rust → 精简 Debian 运行时�
 ```bash
 pnpm install && pnpm build          # 构建前端
 cd src-tauri
-cargo build --release --bin codeg-server --no-default-features
-cargo build --release --bin codeg-mcp --no-default-features    # 委托协作进程
-CODEG_STATIC_DIR=../out ./target/release/codeg-server          # codeg-mcp 会作为同级二进制被自动发现
+cargo build --release --bin veryagent-server --no-default-features
+cargo build --release --bin veryagent-mcp --no-default-features    # 委托协作进程
+VERYAGENT_STATIC_DIR=../out ./target/release/veryagent-server          # veryagent-mcp 会作为同级二进制被自动发现
 ```
 
-> 如果两个二进制分别存放在不同目录，请设置 `CODEG_MCP_BIN=/abs/path/to/codeg-mcp`，运行时才能找到协作进程；否则多智能体委托会被静默禁用。
+> 如果两个二进制分别存放在不同目录，请设置 `VERYAGENT_MCP_BIN=/abs/path/to/veryagent-mcp`，运行时才能找到协作进程；否则多智能体委托会被静默禁用。
 
 #### 配置
 
@@ -337,15 +337,15 @@ CODEG_STATIC_DIR=../out ./target/release/codeg-server          # codeg-mcp 会�
 
 | 变量                           | 默认值                 | 说明                                                                                                                                                                                                                                                                                                        |
 | ------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CODEG_PORT`                   | `3080`                 | HTTP 端口                                                                                                                                                                                                                                                                                                   |
-| `CODEG_HOST`                   | `0.0.0.0`              | 绑定地址                                                                                                                                                                                                                                                                                                    |
-| `CODEG_TOKEN`                  | _（随机）_             | 认证令牌（启动时输出到 stderr）                                                                                                                                                                                                                                                                             |
-| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | SQLite 数据库目录（同时也是 `uploads/`、`pets/` 的根目录）                                                                                                                                                                                                                                                  |
-| `CODEG_STATIC_DIR`             | `./web` 或 `./out`     | Next.js 静态导出目录                                                                                                                                                                                                                                                                                        |
-| `CODEG_MCP_BIN`                | _（未设置）_           | `codeg-mcp` 协作进程的绝对路径。会覆盖默认的"可执行文件同级目录 + `PATH`"查找逻辑。用于源码构建或协作进程不在服务端安装目录内的自定义部署。                                                                                                                                                                  |
-| `CODEG_SKIP_SIDECAR`           | _（未设置）_           | 仅供 `pnpm tauri dev` / `pnpm tauri build` 调试前端时使用——当值为 `1` 时，跳过 `codeg-mcp` sidecar 的构建。此类构建不支持委托功能；发布质量的产物必须保持此变量未设置。                                                                                                                                      |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _（未设置）_           | `<data dir>/uploads/` 下所有文件总字节数的硬上限。十进制字节数（例如 `10737418240` 表示 10 GiB）。未设置、`0` 或无法解析的值会禁用上限，并在启动时打印一行日志以便观察当前状态。该上限仅在单个 `codeg-server` 进程内生效——共享一个 `uploads/` 卷的横向扩展部署需要外部协调（文件锁、Redis、反向代理配额）。 |
-| `CODEG_UPLOAD_QUOTA_STRICT`    | _（未设置）_           | 当值为真（`1` / `true` / `yes` / `on`）时，若 `CODEG_UPLOAD_MAX_TOTAL_BYTES` 设置为无法解析的值，则以退出码 2 中止启动，而不是发出 WARN 后继续运行。当安全策略要求"配置的配额必须生效"时使用此选项。                                                                                                        |
+| `VERYAGENT_PORT`                   | `3080`                 | HTTP 端口                                                                                                                                                                                                                                                                                                   |
+| `VERYAGENT_HOST`                   | `0.0.0.0`              | 绑定地址                                                                                                                                                                                                                                                                                                    |
+| `VERYAGENT_TOKEN`                  | _（随机）_             | 认证令牌（启动时输出到 stderr）                                                                                                                                                                                                                                                                             |
+| `VERYAGENT_DATA_DIR`               | `~/.local/share/veryagent` | SQLite 数据库目录（同时也是 `uploads/`、`pets/` 的根目录）                                                                                                                                                                                                                                                  |
+| `VERYAGENT_STATIC_DIR`             | `./web` 或 `./out`     | Next.js 静态导出目录                                                                                                                                                                                                                                                                                        |
+| `VERYAGENT_MCP_BIN`                | _（未设置）_           | `veryagent-mcp` 协作进程的绝对路径。会覆盖默认的"可执行文件同级目录 + `PATH`"查找逻辑。用于源码构建或协作进程不在服务端安装目录内的自定义部署。                                                                                                                                                                  |
+| `VERYAGENT_SKIP_SIDECAR`           | _（未设置）_           | 仅供 `pnpm tauri dev` / `pnpm tauri build` 调试前端时使用——当值为 `1` 时，跳过 `veryagent-mcp` sidecar 的构建。此类构建不支持委托功能；发布质量的产物必须保持此变量未设置。                                                                                                                                      |
+| `VERYAGENT_UPLOAD_MAX_TOTAL_BYTES` | _（未设置）_           | `<data dir>/uploads/` 下所有文件总字节数的硬上限。十进制字节数（例如 `10737418240` 表示 10 GiB）。未设置、`0` 或无法解析的值会禁用上限，并在启动时打印一行日志以便观察当前状态。该上限仅在单个 `veryagent-server` 进程内生效——共享一个 `uploads/` 卷的横向扩展部署需要外部协调（文件锁、Redis、反向代理配额）。 |
+| `VERYAGENT_UPLOAD_QUOTA_STRICT`    | _（未设置）_           | 当值为真（`1` / `true` / `yes` / `on`）时，若 `VERYAGENT_UPLOAD_MAX_TOTAL_BYTES` 设置为无法解析的值，则以退出码 2 中止启动，而不是发出 WARN 后继续运行。当安全策略要求"配置的配额必须生效"时使用此选项。                                                                                                        |
 
 </details>
 
@@ -363,7 +363,7 @@ Next.js 16 (Static Export) + React 19
   └─────────────────────────┘
         |
         v
-┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+┌─── Tauri Desktop ───┐    ┌─── veryagent-server ───┐
 │  Tauri 2 Commands    │    │  Axum HTTP + WS    │
 │  (window management) │    │  (standalone mode)  │
 └──────────┬───────────┘    └──────────┬──────────┘
@@ -405,16 +405,16 @@ Next.js 16 (Static Export) + React 19
 
 ## Coffee
 
-- 如果 Codeg 对你有帮助，不如请我喝杯咖啡吧
+- 如果 VeryAgent 对你有帮助，不如请我喝杯咖啡吧
 
-<img src="../images/weixin-sponsor-light.jpg#gh-light-mode-only" alt="赞助 Codeg" width="240" />
-<img src="../images/weixin-sponsor-dark.jpg#gh-dark-mode-only" alt="赞助 Codeg" width="240" />
+<img src="../images/weixin-sponsor-light.jpg#gh-light-mode-only" alt="赞助 VeryAgent" width="240" />
+<img src="../images/weixin-sponsor-dark.jpg#gh-dark-mode-only" alt="赞助 VeryAgent" width="240" />
 
 ## 鸣谢
 
-- [ACP](https://agentclientprotocol.com)：智能体客户端协议 (ACP) 是 codeg 实现多智能体连接的基础
-- [Superpowers](https://github.com/obra/superpowers)：为 Codeg 的专家技能模块提供支持
-- [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI)：为 Codeg 的 Office 文档工作流提供支持
+- [ACP](https://agentclientprotocol.com)：智能体客户端协议 (ACP) 是 veryagent 实现多智能体连接的基础
+- [Superpowers](https://github.com/obra/superpowers)：为 VeryAgent 的专家技能模块提供支持
+- [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI)：为 VeryAgent 的 Office 文档工作流提供支持
 
 ## 许可证
 

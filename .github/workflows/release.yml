@@ -76,7 +76,7 @@ jobs:
             const tag = context.ref.replace("refs/tags/", "");
             const { owner, repo } = context.repo;
             const prerelease = process.env.PRERELEASE === "true";
-            const releaseName = `codeg ${tag}`;
+            const releaseName = `veryagent ${tag}`;
             const { data: tagRef } = await github.rest.git.getRef({
               owner,
               repo,
@@ -300,27 +300,27 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build the `codeg-mcp` companion binary for the matrix target and
+      # Build the `veryagent-mcp` companion binary for the matrix target and
       # stage it as a Tauri sidecar at
-      # `src-tauri/binaries/codeg-mcp-<triple>{.exe}`. `tauri-action` (below)
+      # `src-tauri/binaries/veryagent-mcp-<triple>{.exe}`. `tauri-action` (below)
       # then bundles it via the `bundle.externalBin` entry in
       # `tauri.conf.json` — Tauri installs it next to the main executable
       # (Contents/MacOS on macOS, install root on Linux/Windows) where the
-      # runtime `locate_codeg_mcp_binary()` finds it via `current_exe`
+      # runtime `locate_veryagent_mcp_binary()` finds it via `current_exe`
       # sibling lookup. The Linux arm64 cross env vars set above also
       # apply to this cargo invocation.
-      - name: Stage codeg-mcp sidecar for Tauri bundle
+      - name: Stage veryagent-mcp sidecar for Tauri bundle
         shell: bash
         run: pnpm tauri:prepare-sidecars --target ${{ matrix.target }}
 
-      - name: Verify codeg-mcp sidecar landed
+      - name: Verify veryagent-mcp sidecar landed
         shell: bash
         run: |
           ext=""
           case "${{ matrix.target }}" in
             *windows*) ext=".exe" ;;
           esac
-          file="src-tauri/binaries/codeg-mcp-${{ matrix.target }}${ext}"
+          file="src-tauri/binaries/veryagent-mcp-${{ matrix.target }}${ext}"
           if [ ! -f "$file" ]; then
             echo "FATAL: sidecar $file missing after prepare-sidecars"
             exit 1
@@ -358,9 +358,9 @@ jobs:
             exit 1
           fi
 
-          keychain_path="$RUNNER_TEMP/codeg-signing.keychain-db"
+          keychain_path="$RUNNER_TEMP/veryagent-signing.keychain-db"
           certificate_path="$RUNNER_TEMP/developer-id.p12"
-          keychain_search_list_path="$RUNNER_TEMP/codeg-keychains.txt"
+          keychain_search_list_path="$RUNNER_TEMP/veryagent-keychains.txt"
           original_default_keychain="$(
             security default-keychain -d user \
               | sed -e 's/^[[:space:]]*//' -e 's/^"//' -e 's/"$//'
@@ -431,7 +431,7 @@ jobs:
           # The matrix-target sidecar is already staged and verified above.
           # Skip the duplicate beforeBuildCommand sidecar pass so cross builds
           # do not fall back to the runner host triple.
-          CODEG_SKIP_SIDECAR: "1"
+          VERYAGENT_SKIP_SIDECAR: "1"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -463,7 +463,7 @@ jobs:
           # The matrix-target sidecar is already staged and verified above.
           # Skip the duplicate beforeBuildCommand sidecar pass so cross builds
           # do not fall back to the runner host triple.
-          CODEG_SKIP_SIDECAR: "1"
+          VERYAGENT_SKIP_SIDECAR: "1"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -488,7 +488,7 @@ jobs:
           # The matrix-target sidecar is already staged and verified above.
           # Skip the duplicate beforeBuildCommand sidecar pass so cross builds
           # do not fall back to the runner host triple.
-          CODEG_SKIP_SIDECAR: "1"
+          VERYAGENT_SKIP_SIDECAR: "1"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -510,7 +510,7 @@ jobs:
           # The matrix-target sidecar is already staged and verified above.
           # Skip the duplicate beforeBuildCommand sidecar pass so cross builds
           # do not fall back to the runner host triple.
-          CODEG_SKIP_SIDECAR: "1"
+          VERYAGENT_SKIP_SIDECAR: "1"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -577,23 +577,23 @@ jobs:
           - name: "Linux x64"
             runner: "ubuntu-22.04"
             target: "x86_64-unknown-linux-gnu"
-            artifact: "codeg-server-linux-x64"
+            artifact: "veryagent-server-linux-x64"
           - name: "Linux arm64"
             runner: "ubuntu-22.04"
             target: "aarch64-unknown-linux-gnu"
-            artifact: "codeg-server-linux-arm64"
+            artifact: "veryagent-server-linux-arm64"
           - name: "macOS x64"
             runner: "macos-latest"
             target: "x86_64-apple-darwin"
-            artifact: "codeg-server-darwin-x64"
+            artifact: "veryagent-server-darwin-x64"
           - name: "macOS arm64"
             runner: "macos-latest"
             target: "aarch64-apple-darwin"
-            artifact: "codeg-server-darwin-arm64"
+            artifact: "veryagent-server-darwin-arm64"
           - name: "Windows x64"
             runner: "windows-2022"
             target: "x86_64-pc-windows-msvc"
-            artifact: "codeg-server-windows-x64"
+            artifact: "veryagent-server-windows-x64"
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -662,24 +662,24 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      - name: Build server + codeg-mcp companion
+      - name: Build server + veryagent-mcp companion
         working-directory: src-tauri
-        # `codeg-mcp` is the stdio MCP companion the runtime injects per
+        # `veryagent-mcp` is the stdio MCP companion the runtime injects per
         # session (see acp/delegation/companion.rs). Built with the same
         # `--no-default-features --target` flags as the server so it shares
         # the cross-compile env (Linux arm64) without dragging in tauri
         # runtime deps.
         run: |
-          cargo build --release --bin codeg-server --no-default-features --target ${{ matrix.target }}
-          cargo build --release --bin codeg-mcp --no-default-features --target ${{ matrix.target }}
+          cargo build --release --bin veryagent-server --no-default-features --target ${{ matrix.target }}
+          cargo build --release --bin veryagent-mcp --no-default-features --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist/${{ matrix.artifact }}
-          cp src-tauri/target/${{ matrix.target }}/release/codeg-server dist/${{ matrix.artifact }}/
-          cp src-tauri/target/${{ matrix.target }}/release/codeg-mcp dist/${{ matrix.artifact }}/
-          chmod +x dist/${{ matrix.artifact }}/codeg-server dist/${{ matrix.artifact }}/codeg-mcp
+          cp src-tauri/target/${{ matrix.target }}/release/veryagent-server dist/${{ matrix.artifact }}/
+          cp src-tauri/target/${{ matrix.target }}/release/veryagent-mcp dist/${{ matrix.artifact }}/
+          chmod +x dist/${{ matrix.artifact }}/veryagent-server dist/${{ matrix.artifact }}/veryagent-mcp
           cp -r out dist/${{ matrix.artifact }}/web
           cd dist && tar czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
 
@@ -688,8 +688,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist/${{ matrix.artifact }}
-          Copy-Item src-tauri/target/${{ matrix.target }}/release/codeg-server.exe dist/${{ matrix.artifact }}/
-          Copy-Item src-tauri/target/${{ matrix.target }}/release/codeg-mcp.exe dist/${{ matrix.artifact }}/
+          Copy-Item src-tauri/target/${{ matrix.target }}/release/veryagent-server.exe dist/${{ matrix.artifact }}/
+          Copy-Item src-tauri/target/${{ matrix.target }}/release/veryagent-mcp.exe dist/${{ matrix.artifact }}/
           Copy-Item -Recurse out dist/${{ matrix.artifact }}/web
           Compress-Archive -Path dist/${{ matrix.artifact }} -DestinationPath dist/${{ matrix.artifact }}.zip
 
@@ -697,32 +697,32 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           set -euo pipefail
-          test -x "dist/${{ matrix.artifact }}/codeg-server"
-          test -x "dist/${{ matrix.artifact }}/codeg-mcp"
-          # `codeg-mcp --help` exits 0 without flags and prints the usage
+          test -x "dist/${{ matrix.artifact }}/veryagent-server"
+          test -x "dist/${{ matrix.artifact }}/veryagent-mcp"
+          # `veryagent-mcp --help` exits 0 without flags and prints the usage
           # line. Only run it for native targets; cross-compiled arm64
           # binaries on x64 runners can't execute.
           if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ] || \
              [ "${{ matrix.target }}" = "x86_64-apple-darwin" ] || \
              [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
-            "dist/${{ matrix.artifact }}/codeg-mcp" --help | grep -F 'codeg-mcp --parent-connection-id'
+            "dist/${{ matrix.artifact }}/veryagent-mcp" --help | grep -F 'veryagent-mcp --parent-connection-id'
           else
-            echo "skipping codeg-mcp --help on cross-target ${{ matrix.target }}"
+            echo "skipping veryagent-mcp --help on cross-target ${{ matrix.target }}"
           fi
 
       - name: Smoke test packaged artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/${{ matrix.artifact }}/codeg-server.exe")) {
-            throw "codeg-server.exe missing from packaged artifact"
+          if (-not (Test-Path "dist/${{ matrix.artifact }}/veryagent-server.exe")) {
+            throw "veryagent-server.exe missing from packaged artifact"
           }
-          if (-not (Test-Path "dist/${{ matrix.artifact }}/codeg-mcp.exe")) {
-            throw "codeg-mcp.exe missing from packaged artifact"
+          if (-not (Test-Path "dist/${{ matrix.artifact }}/veryagent-mcp.exe")) {
+            throw "veryagent-mcp.exe missing from packaged artifact"
           }
-          $help = & "dist/${{ matrix.artifact }}/codeg-mcp.exe" --help
-          if ($help -notlike "*codeg-mcp --parent-connection-id*") {
-            throw "codeg-mcp --help output unexpected: $help"
+          $help = & "dist/${{ matrix.artifact }}/veryagent-mcp.exe" --help
+          if ($help -notlike "*veryagent-mcp --parent-connection-id*") {
+            throw "veryagent-mcp --help output unexpected: $help"
           }
 
       - name: Upload artifact for Docker build (Linux only)
@@ -794,29 +794,29 @@ jobs:
       - name: Download Linux x64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: codeg-server-linux-x64
+          name: veryagent-server-linux-x64
           path: artifacts/linux-x64
 
       - name: Download Linux arm64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: codeg-server-linux-arm64
+          name: veryagent-server-linux-arm64
           path: artifacts/linux-arm64
 
       - name: Prepare Docker build context
         run: |
           set -euo pipefail
           mkdir -p dist/amd64 dist/arm64
-          cp artifacts/linux-x64/codeg-server dist/amd64/codeg-server
-          cp artifacts/linux-x64/codeg-mcp dist/amd64/codeg-mcp
-          cp artifacts/linux-arm64/codeg-server dist/arm64/codeg-server
-          cp artifacts/linux-arm64/codeg-mcp dist/arm64/codeg-mcp
+          cp artifacts/linux-x64/veryagent-server dist/amd64/veryagent-server
+          cp artifacts/linux-x64/veryagent-mcp dist/amd64/veryagent-mcp
+          cp artifacts/linux-arm64/veryagent-server dist/arm64/veryagent-server
+          cp artifacts/linux-arm64/veryagent-mcp dist/arm64/veryagent-mcp
           cp -r artifacts/linux-x64/web dist/web
-          chmod +x dist/amd64/codeg-server dist/amd64/codeg-mcp \
-                   dist/arm64/codeg-server dist/arm64/codeg-mcp
+          chmod +x dist/amd64/veryagent-server dist/amd64/veryagent-mcp \
+                   dist/arm64/veryagent-server dist/arm64/veryagent-mcp
           # Fail fast if any companion went missing — Docker would otherwise
           # produce an image where delegation silently degrades.
-          for f in dist/amd64/codeg-mcp dist/arm64/codeg-mcp; do
+          for f in dist/amd64/veryagent-mcp dist/arm64/veryagent-mcp; do
             test -x "$f" || { echo "FATAL: $f missing or non-exec"; exit 1; }
           done
 
@@ -853,8 +853,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/codeg:${{ steps.version.outputs.version }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/codeg:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/veryagent:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/veryagent:latest
 
   publish-release:
     needs:

@@ -1808,43 +1808,43 @@ fn tray_labels_for(locale: crate::models::system::AppLocale) -> TrayLabels {
     match locale {
         AppLocale::ZhCn => TrayLabels {
             show_workspace: "显示工作台",
-            quit: "退出 Codeg",
+            quit: "退出 VeryAgent",
         },
         AppLocale::ZhTw => TrayLabels {
             show_workspace: "顯示工作臺",
-            quit: "退出 Codeg",
+            quit: "退出 VeryAgent",
         },
         AppLocale::Ja => TrayLabels {
             show_workspace: "ワークスペースを表示",
-            quit: "Codeg を終了",
+            quit: "VeryAgent を終了",
         },
         AppLocale::Ko => TrayLabels {
             show_workspace: "워크스페이스 표시",
-            quit: "Codeg 종료",
+            quit: "VeryAgent 종료",
         },
         AppLocale::Es => TrayLabels {
             show_workspace: "Mostrar el área de trabajo",
-            quit: "Salir de Codeg",
+            quit: "Salir de VeryAgent",
         },
         AppLocale::De => TrayLabels {
             show_workspace: "Arbeitsbereich anzeigen",
-            quit: "Codeg beenden",
+            quit: "VeryAgent beenden",
         },
         AppLocale::Fr => TrayLabels {
             show_workspace: "Afficher l'espace de travail",
-            quit: "Quitter Codeg",
+            quit: "Quitter VeryAgent",
         },
         AppLocale::Pt => TrayLabels {
             show_workspace: "Mostrar área de trabalho",
-            quit: "Sair do Codeg",
+            quit: "Sair do VeryAgent",
         },
         AppLocale::Ar => TrayLabels {
             show_workspace: "إظهار مساحة العمل",
-            quit: "إنهاء Codeg",
+            quit: "إنهاء VeryAgent",
         },
         AppLocale::En => TrayLabels {
             show_workspace: "Show Workspace",
-            quit: "Quit Codeg",
+            quit: "Quit VeryAgent",
         },
     }
 }

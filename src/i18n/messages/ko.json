@@ -2672,7 +2672,7 @@
     "port": "포트",
     "status": "상태",
     "autoStart": "자동 시작",
-    "autoStartHint": "Codeg가 시작될 때 웹 서비스를 시작합니다",
+    "autoStartHint": "VeryAgent가 시작될 때 웹 서비스를 시작합니다",
     "running": "실행 중",
     "stopped": "중지됨",
     "processing": "처리 중...",

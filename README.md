@@ -1,7 +1,7 @@
-# Codeg
+# VeryAgent
 
-[![Release](https://img.shields.io/github/v/release/xintaofei/codeg)](https://github.com/xintaofei/codeg/releases)
-[![License](https://img.shields.io/github/license/xintaofei/codeg)](./LICENSE)
+[![Release](https://img.shields.io/github/v/release/plhys/veryagent-plus)](https://github.com/plhys/veryagent-plus/releases)
+[![License](https://img.shields.io/github/license/plhys/veryagent-plus)](./LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](./Dockerfile)
@@ -19,7 +19,7 @@
   <a href="./docs/readme/README.ar.md">العربية</a>
 </p>
 
-Codeg (Code Generation) is a multi-agent coding workspace. It brings multiple agents (Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Cline, Hermes Agent, CodeBuddy, Kimi Code, Pi, etc.) into one workspace, supporting conversation aggregation and multi-agent collaboration, with desktop installation plus server/Docker deployment.
+VeryAgent (Code Generation) is a multi-agent coding workspace. It brings multiple agents (Claude Code, Codex CLI, OpenCode, Gemini CLI, OpenClaw, Cline, Hermes Agent, CodeBuddy, Kimi Code, Pi, etc.) into one workspace, supporting conversation aggregation and multi-agent collaboration, with desktop installation plus server/Docker deployment.
 
 ![gallery](./docs/images/gallery.svg)
 
@@ -28,16 +28,16 @@ Codeg (Code Generation) is a multi-agent coding workspace. It brings multiple ag
 <table>
   <tr>
     <td colspan="2" align="center">
-      <a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg" target="_blank"><img src="https://raw.githubusercontent.com/LeoYeAI/myclaw-sponsor-preview/main/banner.svg" alt="MyClaw.ai — Your OpenClaw Agent, Always On." /></a><br/>
-      <strong><a href="https://myclaw.ai/?utm_source=github&utm_campaign=codeg">MyClaw.ai</a></strong> — A fully managed OpenClaw cloud platform with one-click setup, 24/7 uptime, and full data ownership — no server management required.
+      <a href="https://myclaw.ai/?utm_source=github&utm_campaign=veryagent" target="_blank"><img src="https://raw.githubusercontent.com/LeoYeAI/myclaw-sponsor-preview/main/banner.svg" alt="MyClaw.ai — Your OpenClaw Agent, Always On." /></a><br/>
+      <strong><a href="https://myclaw.ai/?utm_source=github&utm_campaign=veryagent">MyClaw.ai</a></strong> — A fully managed OpenClaw cloud platform with one-click setup, 24/7 uptime, and full data ownership — no server management required.
     </td>
   </tr>
   <tr>
     <td align="center" width="220">
-      <a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg" target="_blank"><img src="./docs/images/compshare.png" alt="Compshare" width="160" /></a><br/>
-      <strong><a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg">Compshare (UCloud)</a></strong>
+      <a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent" target="_blank"><img src="./docs/images/compshare.png" alt="Compshare" width="160" /></a><br/>
+      <strong><a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent">Compshare (UCloud)</a></strong>
     </td>
-    <td>Thanks to Compshare for sponsoring this project! Compshare is UCloud's AI cloud platform, offering cost-effective monthly and pay-as-you-go agent Plan subscriptions for Chinese models, starting at just ¥49/month. It also provides stable officially-proxied access to overseas models. Supports Claude Code, Codex, and API integrations. Enterprise-ready with high concurrency, 24/7 technical support, and self-service invoicing. Users who sign up via <a href="https://www.compshare.cn/?ytag=GPU_YY_git_codeg">this link</a> receive ¥5 in free platform credits!</td>
+    <td>Thanks to Compshare for sponsoring this project! Compshare is UCloud's AI cloud platform, offering cost-effective monthly and pay-as-you-go agent Plan subscriptions for Chinese models, starting at just ¥49/month. It also provides stable officially-proxied access to overseas models. Supports Claude Code, Codex, and API integrations. Enterprise-ready with high concurrency, 24/7 technical support, and self-service invoicing. Users who sign up via <a href="https://www.compshare.cn/?ytag=GPU_YY_git_veryagent">this link</a> receive ¥5 in free platform credits!</td>
   </tr>
   <tr>
     <td align="center" width="220">
@@ -48,22 +48,22 @@ Codeg (Code Generation) is a multi-agent coding workspace. It brings multiple ag
   </tr>
 </table>
 
-> Want to become a Codeg sponsor? [Reach out to us by email.](mailto:itpkcn@gmail.com)
+> Want to become a VeryAgent sponsor? [Reach out to us by email.](mailto:itpkcn@gmail.com)
 
 ## Main Interface
 
-![Codeg Light](./docs/images/main-light.png#gh-light-mode-only)
-![Codeg Dark](./docs/images/main-dark.png#gh-dark-mode-only)
+![VeryAgent Light](./docs/images/main-light.png#gh-light-mode-only)
+![VeryAgent Dark](./docs/images/main-dark.png#gh-dark-mode-only)
 
 ## Multi-Agent Collaboration
 
-![Codeg Light](./docs/images/collaboration-light.png#gh-light-mode-only)
-![Codeg Dark](./docs/images/collaboration-dark.png#gh-dark-mode-only)
+![VeryAgent Light](./docs/images/collaboration-light.png#gh-light-mode-only)
+![VeryAgent Dark](./docs/images/collaboration-dark.png#gh-dark-mode-only)
 
 ## Office Workflow
 
-![Codeg Light](./docs/images/office-light.png#gh-light-mode-only)
-![Codeg Dark](./docs/images/office-dark.png#gh-dark-mode-only)
+![VeryAgent Light](./docs/images/office-light.png#gh-light-mode-only)
+![VeryAgent Dark](./docs/images/office-dark.png#gh-dark-mode-only)
 
 ## Highlights
 
@@ -77,8 +77,8 @@ Codeg (Code Generation) is a multi-agent coding workspace. It brings multiple ag
 - MCP management (local scan + registry search/install)
 - Skills management (global and project scope)
 - Git remote account management (GitHub and other Git servers)
-- Web service mode — access Codeg from any browser for remote work
-- **Standalone server deployment** — run `codeg-server` on any Linux/macOS server, access via browser
+- Web service mode — access VeryAgent from any browser for remote work
+- **Standalone server deployment** — run `veryagent-server` on any Linux/macOS server, access via browser
 - **Docker support** — `docker compose up` or `docker run`, with custom token, port, and volume mounts for data persistence and project directories
 - Runtime Logs — a live in-app log viewer with filtering and per-module log levels
 - Integrated engineering loop (file tree, diff, git changes, commit, terminal)
@@ -114,7 +114,7 @@ Create new projects visually with a split-pane interface: configure on the left,
 - **Live Preview** — see your chosen look & feel rendered in real time before creating anything
 - **One-Click Scaffolding** — hit "Create Project" and the launcher runs `shadcn init` with your preset, framework template (Next.js / Vite / React Router / Astro / Laravel), and package manager of choice (pnpm / npm / yarn / bun)
 - **Package Manager Detection** — automatically checks which package managers are installed and shows their versions
-- **Seamless Integration** — the newly created project opens in Codeg's workspace right away
+- **Seamless Integration** — the newly created project opens in VeryAgent's workspace right away
 
 Currently supports **shadcn/ui** project scaffolding, with a tab-based design ready for more project types in the future.
 
@@ -140,7 +140,7 @@ Connect your favorite messaging apps — Telegram, Lark (Feishu), iLink (Weixin)
 <details>
 <summary><h2>Office Documents</h2></summary>
 
-Work with Word, Excel, and PowerPoint files as a first-class workflow. The bundled **officecli** toolset lets your agents create, analyze, proofread, and edit `.docx`, `.xlsx`, and `.pptx` documents — and you can preview the result right inside Codeg.
+Work with Word, Excel, and PowerPoint files as a first-class workflow. The bundled **officecli** toolset lets your agents create, analyze, proofread, and edit `.docx`, `.xlsx`, and `.pptx` documents — and you can preview the result right inside VeryAgent.
 
 ### What it does
 
@@ -188,15 +188,15 @@ sudo apt-get install -y \
 
 ### Binaries
 
-Codeg ships three Rust binaries from a single workspace:
+VeryAgent ships three Rust binaries from a single workspace:
 
 | Binary         | Role                                                                                                         | Build                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `codeg`        | Tauri desktop app (window, tray, updater)                                                                    | `pnpm tauri build` (release) / `pnpm tauri dev` (dev)                       |
-| `codeg-server` | Standalone HTTP + WebSocket server for browser/headless deployments                                          | `pnpm server:build` / `pnpm server:dev`                                     |
-| `codeg-mcp`    | Per-launch stdio MCP companion that surfaces the `delegate_to_agent` tool to agent CLIs (multi-agent collab) | `pnpm tauri:prepare-sidecars` (auto-invoked by `tauri dev` / `tauri build`) |
+| `veryagent`        | Tauri desktop app (window, tray, updater)                                                                    | `pnpm tauri build` (release) / `pnpm tauri dev` (dev)                       |
+| `veryagent-server` | Standalone HTTP + WebSocket server for browser/headless deployments                                          | `pnpm server:build` / `pnpm server:dev`                                     |
+| `veryagent-mcp`    | Per-launch stdio MCP companion that surfaces the `delegate_to_agent` tool to agent CLIs (multi-agent collab) | `pnpm tauri:prepare-sidecars` (auto-invoked by `tauri dev` / `tauri build`) |
 
-`codeg-mcp` must sit next to its parent binary at runtime — installers, the Docker image, and the Tauri sidecar bundler all place it next to `codeg` / `codeg-server`. Source builds and custom layouts can override the lookup with the `CODEG_MCP_BIN=/abs/path/codeg-mcp` env var. If the companion is missing, delegation is skipped (a single warning is logged) and the rest of the agent session keeps working.
+`veryagent-mcp` must sit next to its parent binary at runtime — installers, the Docker image, and the Tauri sidecar bundler all place it next to `veryagent` / `veryagent-server`. Source builds and custom layouts can override the lookup with the `VERYAGENT_MCP_BIN=/abs/path/veryagent-mcp` env var. If the companion is missing, delegation is skipped (a single warning is logged) and the rest of the agent session keeps working.
 
 ### Development
 
@@ -209,21 +209,21 @@ pnpm dev
 # Frontend static export to out/
 pnpm build
 
-# Full desktop app (Tauri + Next.js, builds codeg-mcp sidecar automatically)
+# Full desktop app (Tauri + Next.js, builds veryagent-mcp sidecar automatically)
 pnpm tauri dev
 
-# Desktop release build (bundles codeg-mcp as externalBin)
+# Desktop release build (bundles veryagent-mcp as externalBin)
 pnpm tauri build
 
 # Standalone server (no Tauri/GUI required)
 pnpm server:dev
-pnpm server:build                  # release binary at src-tauri/target/release/codeg-server
+pnpm server:build                  # release binary at src-tauri/target/release/veryagent-server
 
-# Build the codeg-mcp companion explicitly (for the host triple)
-pnpm tauri:prepare-sidecars        # output: src-tauri/binaries/codeg-mcp-<triple>
+# Build the veryagent-mcp companion explicitly (for the host triple)
+pnpm tauri:prepare-sidecars        # output: src-tauri/binaries/veryagent-mcp-<triple>
 
 # Skip sidecar prep when iterating on the frontend and you don't need delegation
-CODEG_SKIP_SIDECAR=1 pnpm tauri dev
+VERYAGENT_SKIP_SIDECAR=1 pnpm tauri dev
 
 # Lint
 pnpm eslint .
@@ -235,44 +235,44 @@ pnpm test:coverage
 
 # Rust checks (run in src-tauri/)
 cargo check                                                     # desktop (default features)
-cargo check --no-default-features --bin codeg-server            # server mode
-cargo check --no-default-features --bin codeg-mcp               # MCP companion
+cargo check --no-default-features --bin veryagent-server            # server mode
+cargo check --no-default-features --bin veryagent-mcp               # MCP companion
 cargo clippy --all-targets --features test-utils -- -D warnings
 
 # Rust tests
 cargo test --features test-utils                                # desktop (incl. integration)
-cargo test --no-default-features --bin codeg-server --lib       # server mode
+cargo test --no-default-features --bin veryagent-server --lib       # server mode
 cargo insta review                                              # accept parser snapshot updates
 ```
 
-> Tip: when you have a fresh `codeg-mcp` build under `src-tauri/target/release/` and want to point a manually-launched `codeg-server` at it without reinstalling, export `CODEG_MCP_BIN=$(pwd)/src-tauri/target/release/codeg-mcp`.
+> Tip: when you have a fresh `veryagent-mcp` build under `src-tauri/target/release/` and want to point a manually-launched `veryagent-server` at it without reinstalling, export `VERYAGENT_MCP_BIN=$(pwd)/src-tauri/target/release/veryagent-mcp`.
 
 ### Server Deployment
 
-Codeg can run as a standalone web server without a desktop environment.
+VeryAgent can run as a standalone web server without a desktop environment.
 
 #### Option 1: One-line install (Linux / macOS)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash
 ```
 
 Install a specific version or to a custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xintaofei/codeg/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 Then run:
 
 ```bash
-codeg-server
+veryagent-server
 ```
 
 #### Option 2: One-line install (Windows PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/xintaofei/codeg/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.ps1 | iex
 ```
 
 Or install a specific version:
@@ -283,21 +283,21 @@ Or install a specific version:
 
 #### Option 3: Download from GitHub Releases
 
-Pre-built binaries (with bundled web assets) are available on the [Releases](https://github.com/xintaofei/codeg/releases) page:
+Pre-built binaries (with bundled web assets) are available on the [Releases](https://github.com/plhys/veryagent-plus/releases) page:
 
 | Platform    | File                               |
 | ----------- | ---------------------------------- |
-| Linux x64   | `codeg-server-linux-x64.tar.gz`    |
-| Linux arm64 | `codeg-server-linux-arm64.tar.gz`  |
-| macOS x64   | `codeg-server-darwin-x64.tar.gz`   |
-| macOS arm64 | `codeg-server-darwin-arm64.tar.gz` |
-| Windows x64 | `codeg-server-windows-x64.zip`     |
+| Linux x64   | `veryagent-server-linux-x64.tar.gz`    |
+| Linux arm64 | `veryagent-server-linux-arm64.tar.gz`  |
+| macOS x64   | `veryagent-server-darwin-x64.tar.gz`   |
+| macOS arm64 | `veryagent-server-darwin-arm64.tar.gz` |
+| Windows x64 | `veryagent-server-windows-x64.zip`     |
 
 ```bash
 # Example: download, extract, and run
-tar xzf codeg-server-linux-x64.tar.gz
-cd codeg-server-linux-x64
-CODEG_STATIC_DIR=./web ./codeg-server
+tar xzf veryagent-server-linux-x64.tar.gz
+cd veryagent-server-linux-x64
+VERYAGENT_STATIC_DIR=./web ./veryagent-server
 ```
 
 > For unattended deployments, start it with `--supervise` so a failed in-place upgrade is automatically rolled back — see [In-place updates](#in-place-updates).
@@ -309,14 +309,14 @@ CODEG_STATIC_DIR=./web ./codeg-server
 docker compose up -d
 
 # Or run directly with Docker
-docker run -d -p 3080:3080 -v codeg-data:/data ghcr.io/xintaofei/codeg:latest
+docker run -d -p 3080:3080 -v veryagent-data:/data ghcr.io/plhys/veryagent-plus:latest
 
 # With custom token and project directory mounted
 docker run -d -p 3080:3080 \
-  -v codeg-data:/data \
+  -v veryagent-data:/data \
   -v /path/to/projects:/projects \
-  -e CODEG_TOKEN=your-secret-token \
-  ghcr.io/xintaofei/codeg:latest
+  -e VERYAGENT_TOKEN=your-secret-token \
+  ghcr.io/plhys/veryagent-plus:latest
 ```
 
 The Docker image uses a multi-stage build (Node.js + Rust → slim Debian runtime) and includes `git` and `ssh` for repository operations. Data is persisted in the `/data` volume. You can optionally mount project directories to access local repos from within the container.
@@ -326,12 +326,12 @@ The Docker image uses a multi-stage build (Node.js + Rust → slim Debian runtim
 ```bash
 pnpm install && pnpm build          # build frontend
 cd src-tauri
-cargo build --release --bin codeg-server --no-default-features
-cargo build --release --bin codeg-mcp --no-default-features    # delegation companion
-CODEG_STATIC_DIR=../out ./target/release/codeg-server          # codeg-mcp is picked up as a sibling
+cargo build --release --bin veryagent-server --no-default-features
+cargo build --release --bin veryagent-mcp --no-default-features    # delegation companion
+VERYAGENT_STATIC_DIR=../out ./target/release/veryagent-server          # veryagent-mcp is picked up as a sibling
 ```
 
-If you keep the two binaries in separate directories, set `CODEG_MCP_BIN=/abs/path/to/codeg-mcp` so the runtime can still find the companion; without it, multi-agent delegation is silently disabled.
+If you keep the two binaries in separate directories, set `VERYAGENT_MCP_BIN=/abs/path/to/veryagent-mcp` so the runtime can still find the companion; without it, multi-agent delegation is silently disabled.
 
 #### In-place updates
 
@@ -340,7 +340,7 @@ The server can update itself from **Settings → Software Update**: it downloads
 **Run under the supervisor for auto-rollback.** Start the standalone server with `--supervise` so a freshly-upgraded process that fails to boot within the trial window is automatically reverted to the previous version:
 
 ```bash
-CODEG_STATIC_DIR=./web ./codeg-server --supervise
+VERYAGENT_STATIC_DIR=./web ./veryagent-server --supervise
 ```
 
 Without `--supervise` the server still updates in place (it re-execs itself), but the upgrade is best-effort: there is no supervisor to auto-roll-back a version that can't start. The Docker image already runs under the supervisor.
@@ -353,15 +353,15 @@ Environment variables:
 
 | Variable                       | Default                | Description                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CODEG_PORT`                   | `3080`                 | HTTP port                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `CODEG_HOST`                   | `0.0.0.0`              | Bind address                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `CODEG_TOKEN`                  | _(random)_             | Auth token (printed to stderr on start)                                                                                                                                                                                                                                                                                                                                                                                          |
-| `CODEG_DATA_DIR`               | `~/.local/share/codeg` | SQLite database directory (also roots `uploads/`, `pets/`)                                                                                                                                                                                                                                                                                                                                                                       |
-| `CODEG_STATIC_DIR`             | `./web` or `./out`     | Next.js static export directory                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `CODEG_MCP_BIN`                | _(unset)_              | Absolute path to the `codeg-mcp` companion. Overrides the default sibling-of-executable + `PATH` lookup. Use this for source builds or custom layouts where the companion lives outside the server's install directory.                                                                                                                                                                                                          |
-| `CODEG_SKIP_SIDECAR`           | _(unset)_              | Frontend-only convenience for `pnpm tauri dev` / `pnpm tauri build` — when `1`, skips building the `codeg-mcp` sidecar. Delegation is disabled in that build; ship-quality artifacts must leave it unset.                                                                                                                                                                                                                        |
-| `CODEG_UPLOAD_MAX_TOTAL_BYTES` | _(unset)_              | Hard cap on total bytes resident under `<data dir>/uploads/`. Plain decimal byte count (e.g. `10737418240` for 10 GiB). Unset, `0`, or an unparseable value disables the cap and prints a startup line so the posture is visible. The cap is enforced within a single `codeg-server` process — horizontally-scaled deployments sharing one `uploads/` volume need external coordination (file lock, Redis, reverse-proxy quota). |
-| `CODEG_UPLOAD_QUOTA_STRICT`    | _(unset)_              | When truthy (`1` / `true` / `yes` / `on`), abort startup with exit code 2 if `CODEG_UPLOAD_MAX_TOTAL_BYTES` is set to an unparseable value, instead of fail-open with a WARN. Use this when your security policy requires "configured quota must be effective".                                                                                                                                                                  |
+| `VERYAGENT_PORT`                   | `3080`                 | HTTP port                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `VERYAGENT_HOST`                   | `0.0.0.0`              | Bind address                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `VERYAGENT_TOKEN`                  | _(random)_             | Auth token (printed to stderr on start)                                                                                                                                                                                                                                                                                                                                                                                          |
+| `VERYAGENT_DATA_DIR`               | `~/.local/share/veryagent` | SQLite database directory (also roots `uploads/`, `pets/`)                                                                                                                                                                                                                                                                                                                                                                       |
+| `VERYAGENT_STATIC_DIR`             | `./web` or `./out`     | Next.js static export directory                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `VERYAGENT_MCP_BIN`                | _(unset)_              | Absolute path to the `veryagent-mcp` companion. Overrides the default sibling-of-executable + `PATH` lookup. Use this for source builds or custom layouts where the companion lives outside the server's install directory.                                                                                                                                                                                                          |
+| `VERYAGENT_SKIP_SIDECAR`           | _(unset)_              | Frontend-only convenience for `pnpm tauri dev` / `pnpm tauri build` — when `1`, skips building the `veryagent-mcp` sidecar. Delegation is disabled in that build; ship-quality artifacts must leave it unset.                                                                                                                                                                                                                        |
+| `VERYAGENT_UPLOAD_MAX_TOTAL_BYTES` | _(unset)_              | Hard cap on total bytes resident under `<data dir>/uploads/`. Plain decimal byte count (e.g. `10737418240` for 10 GiB). Unset, `0`, or an unparseable value disables the cap and prints a startup line so the posture is visible. The cap is enforced within a single `veryagent-server` process — horizontally-scaled deployments sharing one `uploads/` volume need external coordination (file lock, Redis, reverse-proxy quota). |
+| `VERYAGENT_UPLOAD_QUOTA_STRICT`    | _(unset)_              | When truthy (`1` / `true` / `yes` / `on`), abort startup with exit code 2 if `VERYAGENT_UPLOAD_MAX_TOTAL_BYTES` is set to an unparseable value, instead of fail-open with a WARN. Use this when your security policy requires "configured quota must be effective".                                                                                                                                                                  |
 
 </details>
 
@@ -379,7 +379,7 @@ Next.js 16 (Static Export) + React 19
   └─────────────────────────┘
         |
         v
-┌─── Tauri Desktop ───┐    ┌─── codeg-server ───┐
+┌─── Tauri Desktop ───┐    ┌─── veryagent-server ───┐
 │  Tauri 2 Commands    │    │  Axum HTTP + WS    │
 │  (window management) │    │  (standalone mode)  │
 └──────────┬───────────┘    └──────────┬──────────┘
@@ -421,16 +421,16 @@ Next.js 16 (Static Export) + React 19
 
 ## Coffee
 
-- If Codeg has helped you, consider buying me a coffee
+- If VeryAgent has helped you, consider buying me a coffee
 
-<img src="./docs/images/weixin-sponsor-light.jpg#gh-light-mode-only" alt="Sponsor Codeg" width="240" />
-<img src="./docs/images/weixin-sponsor-dark.jpg#gh-dark-mode-only" alt="Sponsor Codeg" width="240" />
+<img src="./docs/images/weixin-sponsor-light.jpg#gh-light-mode-only" alt="Sponsor VeryAgent" width="240" />
+<img src="./docs/images/weixin-sponsor-dark.jpg#gh-dark-mode-only" alt="Sponsor VeryAgent" width="240" />
 
 ## Acknowledgments
 
-- [ACP](https://agentclientprotocol.com) — the Agent Client Protocol (ACP) is the foundation that enables Codeg to connect with multiple agents
-- [Superpowers](https://github.com/obra/superpowers) — powers Codeg's expert skills module
-- [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — powers Codeg's Office documents workflow
+- [ACP](https://agentclientprotocol.com) — the Agent Client Protocol (ACP) is the foundation that enables VeryAgent to connect with multiple agents
+- [Superpowers](https://github.com/obra/superpowers) — powers VeryAgent's expert skills module
+- [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) — powers VeryAgent's Office documents workflow
 
 ## License
 

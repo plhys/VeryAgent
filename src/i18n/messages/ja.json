@@ -2668,7 +2668,7 @@
   "WebServiceSettings": {
     "addressSwitchHint": "切り替えても、ここに表示され開くアドレスが変わるだけです。サービスはすべてのインターフェースで待ち受けており、どのアドレスからもアクセスできます。",
     "sectionTitle": "Webサービス",
-    "sectionDescription": "有効にするとブラウザからCodegにリモートアクセスできます",
+    "sectionDescription": "有効にするとブラウザからVeryAgentにリモートアクセスできます",
     "port": "ポート",
     "status": "ステータス",
     "autoStart": "自動起動",

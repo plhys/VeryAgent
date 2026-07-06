@@ -91,7 +91,7 @@ mod tauri_app {
         );
         tauri::async_runtime::spawn(async move {
             let _ =
-                notification::send_notification(app, "Codeg Web service".to_string(), body).await;
+                notification::send_notification(app, "VeryAgent Web service".to_string(), body).await;
         });
     }
 
