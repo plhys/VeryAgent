@@ -130,7 +130,7 @@ mod tauri_commands {
         let inputs = BackupInputs {
             conn: &db.conn,
             data_dir: &data_dir,
-            uploads_root: crate::paths::codeg_uploads_root(),
+            uploads_root: crate::paths::veryagent_uploads_root(),
             app_version: APP_VERSION,
             runtime_label: "desktop",
         };

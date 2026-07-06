@@ -1,3 +1,28 @@
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-linux-gnu-gcc"
-ar = "aarch64-linux-gnu-gcc-ar"
+# ── 编译提速配置 ──────────────────────────────────────────────
+# sccache：跨机器可迁移的编译缓存。
+# 命中缓存时单个 crate 从「编译几十秒」变成「<1 秒」。
+# 缓存目录默认在 %LOCALAPPDATA%\Mozilla.sccache，换机器时整个目录拷过去即可复用。
+# 首次编译仍需全量（填充缓存），第二次起命中缓存。
+#
+# 启用方式：设置环境变量 RUSTC_WRAPPER=sccache（见下方 [env]）。
+# sccache 未安装时此设置会让编译失败 —— 所以默认注释掉，
+# 装好 sccache 后取消注释即可（或设全局环境变量 RUSTC_WRAPPER=sccache）。
+[env]
+# sccache 已安装（cargo install sccache）。启用编译缓存：
+RUSTC_WRAPPER = "sccache"
+
+# ── Windows: 用更快的链接策略 ─────────────────────────────────
+# Windows MSVC 工具链默认用 link.exe，对大型 Rust 项目链接较慢。
+# 如果安装了 lld（随 LLVM/Swift/Rust 自带），改用它可显著缩短链接时间。
+# 通过 rustup component add llvm-tools-preview 可获取 lld。
+# 以下是「条件启用」写法：如果本机有 lld-link 就用它，否则回退默认。
+# 注：若 lld-link 不在 PATH，这行不会生效也不会报错（cargo 会回退）。
+[target.x86_64-pc-windows-msvc]
+# 暂不硬绑 lld，避免你机器没装时报错。
+# 装好后取消下面两行注释即可（rustup component add llvm-tools-preview）：
+# linker = "rust-lld"
+# rustflags = ["-C", "link-arg=/MANIFEST:NO"]
+
+# ── 共享 target 缓存目录（可选，换机器时不建议，见说明）──────
+# 不要设 CARGO_TARGET_DIR 到共享路径：不同项目依赖版本冲突会互相 invalidate 缓存，
+# 反而更慢。每个项目用默认 ./target 即可。

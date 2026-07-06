@@ -36,6 +36,40 @@ tauri-runtime = [
 # this feature the items are physically uncompiled in release builds.
 test-utils = []
 
+# ── 编译提速 profile ─────────────────────────────────────────
+# dev（`cargo run` / `pnpm tauri dev` 默认）：
+#   - incremental=true     增量编译，只重编改动处（默认即开，显式声明）
+#   - opt-level=0          不优化，编译最快
+#   - debug=0              不生成调试符号（仍可 panic 定位，体积更小、链接更快）
+#                          如果你需要断点调试，改成 debug=2
+[profile.dev]
+incremental = true
+opt-level = 0
+debug = 0
+
+# release（`cargo build --release` / `pnpm tauri build`）：
+#   - codegen-units=8      默认 16 并行度太高、单文件优化差；降到 8 平衡
+#   - lto=false            不做跨 crate 链接期优化（lto="thin" 可缩体积但慢很多）
+#   - incremental=false    release 不缓存增量（产物要干净）
+[profile.release]
+codegen-units = 8
+lto = false
+incremental = false
+# 打包发布版才需要的体积优化，放 [profile.release] package 时手动加：
+# lto = "thin"
+# codegen-units = 1
+# strip = true
+
+# ── 让 release 依赖也走 dev 配置（关键提速点）─────────────────
+# Rust 默认把「依赖」用 release 编译（opt-level=3），「你自己的代码」用 dev 编译。
+# 依赖首次 opt-level=3 全量优化非常慢。改成 false 后依赖也用 dev 配置，
+# 首次 `cargo run` 从「编译+优化所有依赖的 release 版」变成「只快速编译依赖」，
+# 通常快 3-5 倍。代价是运行时依赖代码没优化（你自己的逻辑不受影响）。
+# 真要发布时用 `pnpm tauri build`（走 [profile.release]，自动覆盖此设置）。
+[profile.dev.package."*"]
+opt-level = 0
+debug = 0
+
 [[bin]]
 name = "veryagent"
 path = "src/main.rs"

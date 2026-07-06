@@ -156,7 +156,7 @@ pub struct InstallReport {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Manifest {
     #[serde(default)]
-    codeg_version: String,
+    veryagent_version: String,
     #[serde(default)]
     installed_at: String,
     #[serde(default)]

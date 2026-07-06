@@ -53,5 +53,14 @@ docs/superpowers
 # release.yml, not git.
 src-tauri/binaries/
 
+# Compiled binaries / build artifacts (Rust target dir, stray exes).
+# These are produced by `pnpm tauri build`; never commit them.
+src-tauri/target/
+*.exe
+!src-tauri/binaries/.gitkeep
+
 # pnpm local store (pnpm 11+)
 .pnpm-store/
+
+# sccache local cache (do not commit; migrate manually per BUILD-SPEED.md)
+.sccache/
