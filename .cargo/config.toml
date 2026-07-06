@@ -4,12 +4,11 @@
 # 缓存目录默认在 %LOCALAPPDATA%\Mozilla.sccache，换机器时整个目录拷过去即可复用。
 # 首次编译仍需全量（填充缓存），第二次起命中缓存。
 #
-# 启用方式：设置环境变量 RUSTC_WRAPPER=sccache（见下方 [env]）。
-# sccache 未安装时此设置会让编译失败 —— 所以默认注释掉，
-# 装好 sccache 后取消注释即可（或设全局环境变量 RUSTC_WRAPPER=sccache）。
-[env]
-# sccache 已安装（cargo install sccache）。启用编译缓存：
-RUSTC_WRAPPER = "sccache"
+# 用 build.rustc-wrapper 配置（cargo 官方推荐方式，比 [env] RUSTC_WRAPPER 更可靠）。
+# sccache 未安装时编译会失败 —— 没装 sccache 的机器注释掉下面这行即可
+# （或跑 scripts/setup-dev.sh 自动安装）。
+[build]
+rustc-wrapper = "sccache"
 
 # ── Windows: 用更快的链接策略 ─────────────────────────────────
 # Windows MSVC 工具链默认用 link.exe，对大型 Rust 项目链接较慢。
