@@ -90,11 +90,11 @@ const READ_LOG_MAX_BYTES = 16 * 1024 * 1024
 // Curated tracing targets offered as autocomplete suggestions for per-module
 // overrides (free text is still allowed). Module paths under `codeg_lib`.
 const CURATED_TARGETS = [
-  "codeg_lib::acp",
-  "codeg_lib::acp::delegation",
-  "codeg_lib::web",
-  "codeg_lib::chat_channel",
-  "codeg_lib::db",
+  "veryagent_lib::acp",
+  "veryagent_lib::acp::delegation",
+  "veryagent_lib::web",
+  "veryagent_lib::chat_channel",
+  "veryagent_lib::db",
 ]
 
 // A valid tracing target: `ident(::ident)*`. Rows failing this are flagged and
@@ -604,7 +604,7 @@ export function LogsSettings() {
     try {
       const path = await openLogsDir()
       // `revealItemInDir` (not `openPath`): the opener plugin's path scope
-      // rejects the hidden `~/.codeg/logs` path under its require-literal-
+      // rejects the hidden `~/.veryagent/logs` path under its require-literal-
       // leading-dot Unix default, whereas reveal is not scope-checked.
       await revealItemInDir(path)
     } catch (err) {
@@ -742,8 +742,8 @@ export function LogsSettings() {
                           handleTargetNameChange(i, e.target.value)
                         }
                         onBlur={queueSave}
-                        placeholder="codeg_lib::acp"
-                        list="codeg-log-targets"
+                        placeholder="veryagent_lib::acp"
+                        list="veryagent-log-targets"
                         disabled={envLocked}
                         className={`h-8 flex-1 text-xs ${
                           invalid ? "border-red-500/60" : ""
@@ -784,7 +784,7 @@ export function LogsSettings() {
                     </div>
                   )
                 })}
-                <datalist id="codeg-log-targets">
+                <datalist id="veryagent-log-targets">
                   {CURATED_TARGETS.map((tgt) => (
                     <option key={tgt} value={tgt} />
                   ))}

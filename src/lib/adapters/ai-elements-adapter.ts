@@ -47,7 +47,7 @@ export type AdaptedToolCallPart = {
   /**
    * ACP extensibility metadata forwarded from `ContentBlock.tool_use.meta`.
    * Opaque pass-through; the only consumer today is `<DelegatedSubThread>`
-   * which reads `meta["codeg.delegation"]` as a binding fallback when the
+   * which reads `meta["veryagent.delegation"]` as a binding fallback when the
    * live DelegationContext entry is missing (page refresh, late mount).
    */
   meta?: Record<string, unknown> | null
@@ -756,7 +756,7 @@ function stripBlockedMentions(
 
 /** Apply the per-scheme rule to ONE Markdown link, mutating `resources`. Returns
  *  the text to keep in place of the link: the original `match` for an inline-kept
- *  ref (file / codeg / non-resource link), or "" for a moved-out `@mention`. */
+ *  ref (file / veryagent / non-resource link), or "" for a moved-out `@mention`. */
 function handleMarkdownLink(
   match: string,
   label: string,
@@ -772,18 +772,18 @@ function handleMarkdownLink(
     rawUri.startsWith("<") && rawUri.endsWith(">")
       ? rawUri.slice(1, -1).trim()
       : rawUri
-  // A `codeg://` reference (session / commit / agent) renders as an inline badge
+  // A `veryagent://` reference (session / commit / agent) renders as an inline badge
   // in the transcript (markdown-link → ReferenceBadge); never lift it to the
   // bottom resource-chip row. The guard mirrors markdown-link's interception
-  // (`href.startsWith("codeg:")`): an unrecognized codeg path is parsed back to
+  // (`href.startsWith("veryagent:")`): an unrecognized veryagent path is parsed back to
   // null there and degrades to a plain inline link — still in-flow, never a chip.
-  // (The `@`-prefixed agent link `[@label](codeg://agent/…)` would otherwise be
+  // (The `@`-prefixed agent link `[@label](veryagent://agent/…)` would otherwise be
   // caught by `hasMentionLabel` below.)
-  if (normalizedUri.toLowerCase().startsWith("codeg:")) {
-    // A `codeg://embedded/…` ref is a path-less pasted attachment — still an
+  if (normalizedUri.toLowerCase().startsWith("veryagent:")) {
+    // A `veryagent://embedded/…` ref is a path-less pasted attachment — still an
     // attached file, so it is COPIED to the row too (kept inline as its inert
-    // badge). Other codeg refs are not attachments: inline only.
-    if (normalizedUri.toLowerCase().startsWith("codeg://embedded/")) {
+    // badge). Other veryagent refs are not attachments: inline only.
+    if (normalizedUri.toLowerCase().startsWith("veryagent://embedded/")) {
       addResource(resources, {
         name: unescapeReferenceLabel(normalizedLabel) || "attachment",
         uri: normalizedUri,

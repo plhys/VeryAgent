@@ -179,7 +179,7 @@ describe("isBackgroundTaskToolCall", () => {
     expect(
       isBackgroundTaskToolCall(
         poll({
-          toolName: "mcp__codeg-mcp__get_delegation_status",
+          toolName: "mcp__veryagent-mcp__get_delegation_status",
           input: JSON.stringify({ task_ids: ["a"] }),
           output: JSON.stringify({
             tasks: [{ task_id: "a", status: "running" }],
@@ -190,7 +190,7 @@ describe("isBackgroundTaskToolCall", () => {
     expect(
       isBackgroundTaskToolCall(
         poll({
-          toolName: "mcp__codeg-mcp__cancel_delegation",
+          toolName: "mcp__veryagent-mcp__cancel_delegation",
           input: JSON.stringify({ task_id: "a" }),
           output: "Canceled task a",
         })

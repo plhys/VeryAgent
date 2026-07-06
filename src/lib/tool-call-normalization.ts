@@ -61,18 +61,18 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   update_goal: "update_goal",
   "functions.update_goal": "update_goal",
   request_user_input: "question",
-  // codeg multi-agent delegation MCP tools (server prefix varies by host)
+  // veryagent multi-agent delegation MCP tools (server prefix varies by host)
   delegate_to_agent: "delegate_to_agent",
-  "mcp__codeg-mcp__delegate_to_agent": "delegate_to_agent",
-  "mcp__codeg-delegate__delegate_to_agent": "delegate_to_agent",
+  "mcp__veryagent-mcp__delegate_to_agent": "delegate_to_agent",
+  "mcp__veryagent-delegate__delegate_to_agent": "delegate_to_agent",
   mcp__codeg__delegate_to_agent: "delegate_to_agent",
   get_delegation_status: "get_delegation_status",
   cancel_delegation: "cancel_delegation",
-  // codeg-mcp live-feedback poll (server prefix varies by host; the suffix rule
+  // veryagent-mcp live-feedback poll (server prefix varies by host; the suffix rule
   // in `normalizeToolName` covers the other separators). Codex persists it under
   // the bare `check_user_feedback` name, dropping the `mcp__codeg_mcp` namespace.
   check_user_feedback: "check_user_feedback",
-  "mcp__codeg-mcp__check_user_feedback": "check_user_feedback",
+  "mcp__veryagent-mcp__check_user_feedback": "check_user_feedback",
   mcp__codeg__check_user_feedback: "check_user_feedback",
   // OpenCode
   delegate_task: "task",
@@ -86,9 +86,9 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   question: "question",
   ask_user_question: "question",
   askuserquestion: "question",
-  // codeg-mcp ask-user-question companion tool (server prefix varies by host;
+  // veryagent-mcp ask-user-question companion tool (server prefix varies by host;
   // the suffix rule in `normalizeToolName` covers the other separators)
-  "mcp__codeg-mcp__ask_user_question": "question",
+  "mcp__veryagent-mcp__ask_user_question": "question",
   lsp_diagnostics: "lsp",
   lsp_document_symbols: "lsp",
   lsp_goto_definition: "lsp",
@@ -259,7 +259,7 @@ function inferFromInput(
   if (hasGlob) return "glob"
 
   // `question` (singular) covers Cline/Codex follow-up tools; `questions`
-  // (plural) is the codeg-mcp `ask_user_question` payload shape, so the live
+  // (plural) is the veryagent-mcp `ask_user_question` payload shape, so the live
   // stream resolves to "question" before the tool result arrives.
   if (hasAnyKey(parsed, ["question", "questions"])) return "question"
 
@@ -334,14 +334,14 @@ export function normalizeToolName(toolName: string): string {
   if (/[^a-z0-9]create_goal$/.test(canonical)) return "create_goal"
   if (/[^a-z0-9]update_goal$/.test(canonical)) return "update_goal"
 
-  // codeg-mcp ask-user-question companion tool. Same host-prefix story as the
+  // veryagent-mcp ask-user-question companion tool. Same host-prefix story as the
   // delegation tools above (`mcp__<server>__ask_user_question`,
   // `<server>/ask_user_question`, …) — the bare `ask_user_question` alias only
   // catches the unprefixed form, so collapse every separator here. Note the
   // freeform matcher below intentionally does NOT catch the underscore form.
   if (/[^a-z0-9]ask_user_question$/.test(canonical)) return "question"
 
-  // codeg-mcp live-feedback poll. Same host-prefix story as the delegation tools
+  // veryagent-mcp live-feedback poll. Same host-prefix story as the delegation tools
   // (`mcp__<server>__check_user_feedback`, `<server>/check_user_feedback`, …) —
   // collapse every separator to the canonical name the renderer dispatches on.
   if (/[^a-z0-9]check_user_feedback$/.test(canonical))
@@ -359,7 +359,7 @@ export function normalizeToolName(toolName: string): string {
   return trimmed
 }
 
-// Canonical names of the codeg-mcp delegation companion tools. Each has a
+// Canonical names of the veryagent-mcp delegation companion tools. Each has a
 // dedicated card renderer, so its identity must win over input-shape
 // heuristics during live streaming (see `inferLiveToolName`).
 const DELEGATION_COMPANION_TOOLS: ReadonlySet<string> = new Set([
@@ -397,7 +397,7 @@ export function inferLiveToolName(params: {
   // otherwise collapse `spawn_agent`→"agent" / `wait_agent`→"task").
   if (isCodexCollabInput(params.rawInput)) return COLLAB_AGENT_TOOL_NAME
 
-  // The codeg-mcp delegation companion tools carry their authoritative identity
+  // The veryagent-mcp delegation companion tools carry their authoritative identity
   // in `meta.claudeCode.toolName` — claude-agent-acp sets it to the raw
   // `mcp__<server>__<tool>` name for every MCP call. Resolve them FIRST, ahead
   // of `inferFromInput`, so the live stream routes into the same delegation

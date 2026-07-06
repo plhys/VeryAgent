@@ -97,12 +97,12 @@ describe("inferLiveToolName meta.claudeCode.toolName override", () => {
     // detail). meta must win.
     expect(
       inferLiveToolName({
-        title: "mcp__codeg-delegate__get_delegation_status",
+        title: "mcp__veryagent-delegate__get_delegation_status",
         kind: "other",
         rawInput: JSON.stringify({ task_ids: ["t1"], wait_ms: 1000 }),
         meta: {
           claudeCode: {
-            toolName: "mcp__codeg-delegate__get_delegation_status",
+            toolName: "mcp__veryagent-delegate__get_delegation_status",
           },
         },
       })
@@ -110,22 +110,22 @@ describe("inferLiveToolName meta.claudeCode.toolName override", () => {
 
     expect(
       inferLiveToolName({
-        title: "mcp__codeg-delegate__cancel_delegation",
+        title: "mcp__veryagent-delegate__cancel_delegation",
         kind: "other",
         rawInput: JSON.stringify({ task_id: "t1" }),
         meta: {
-          claudeCode: { toolName: "mcp__codeg-delegate__cancel_delegation" },
+          claudeCode: { toolName: "mcp__veryagent-delegate__cancel_delegation" },
         },
       })
     ).toBe("cancel_delegation")
 
     expect(
       inferLiveToolName({
-        title: "mcp__codeg-delegate__delegate_to_agent",
+        title: "mcp__veryagent-delegate__delegate_to_agent",
         kind: "other",
         rawInput: JSON.stringify({ agent_type: "codex", task: "do it" }),
         meta: {
-          claudeCode: { toolName: "mcp__codeg-delegate__delegate_to_agent" },
+          claudeCode: { toolName: "mcp__veryagent-delegate__delegate_to_agent" },
         },
       })
     ).toBe("delegate_to_agent")
@@ -176,20 +176,20 @@ describe("inferLiveToolName meta.claudeCode.toolName override", () => {
 })
 
 describe("normalizeToolName collapses delegate_to_agent across hosts", () => {
-  // The codeg multi-agent delegation MCP tool is named the same across hosts
+  // The veryagent multi-agent delegation MCP tool is named the same across hosts
   // (`delegate_to_agent`) but each host serializes the server prefix
   // differently: Claude Code uses `mcp__<server>__`, Codex live ACP uses
   // `<server>/`, others use `.` or `:`. All forms must collapse to the
   // canonical name so the renderer routes them into DelegatedSubThread.
   it.each([
     "delegate_to_agent",
-    "mcp__codeg-mcp__delegate_to_agent",
-    "mcp__codeg-delegate__delegate_to_agent",
+    "mcp__veryagent-mcp__delegate_to_agent",
+    "mcp__veryagent-delegate__delegate_to_agent",
     "mcp__codeg__delegate_to_agent",
-    "codeg-mcp/delegate_to_agent",
-    "codeg-delegate/delegate_to_agent",
-    "codeg-delegate.delegate_to_agent",
-    "codeg-delegate:delegate_to_agent",
+    "veryagent-mcp/delegate_to_agent",
+    "veryagent-delegate/delegate_to_agent",
+    "veryagent-delegate.delegate_to_agent",
+    "veryagent-delegate:delegate_to_agent",
     "codeg_delegate__delegate_to_agent",
   ])("%s -> delegate_to_agent", (input) => {
     expect(normalizeToolName(input)).toBe("delegate_to_agent")
@@ -205,26 +205,26 @@ describe("normalizeToolName collapses delegate_to_agent across hosts", () => {
 describe("normalizeToolName collapses delegation companion tools across hosts", () => {
   it.each([
     "get_delegation_status",
-    "mcp__codeg-mcp__get_delegation_status",
-    "mcp__codeg-delegate__get_delegation_status",
+    "mcp__veryagent-mcp__get_delegation_status",
+    "mcp__veryagent-delegate__get_delegation_status",
     "mcp__codeg__get_delegation_status",
-    "codeg-mcp/get_delegation_status",
-    "codeg-delegate/get_delegation_status",
-    "codeg-delegate.get_delegation_status",
-    "codeg-delegate:get_delegation_status",
+    "veryagent-mcp/get_delegation_status",
+    "veryagent-delegate/get_delegation_status",
+    "veryagent-delegate.get_delegation_status",
+    "veryagent-delegate:get_delegation_status",
   ])("%s -> get_delegation_status", (input) => {
     expect(normalizeToolName(input)).toBe("get_delegation_status")
   })
 
   it.each([
     "cancel_delegation",
-    "mcp__codeg-mcp__cancel_delegation",
-    "mcp__codeg-delegate__cancel_delegation",
+    "mcp__veryagent-mcp__cancel_delegation",
+    "mcp__veryagent-delegate__cancel_delegation",
     "mcp__codeg__cancel_delegation",
-    "codeg-mcp/cancel_delegation",
-    "codeg-delegate/cancel_delegation",
-    "codeg-delegate.cancel_delegation",
-    "codeg-delegate:cancel_delegation",
+    "veryagent-mcp/cancel_delegation",
+    "veryagent-delegate/cancel_delegation",
+    "veryagent-delegate.cancel_delegation",
+    "veryagent-delegate:cancel_delegation",
   ])("%s -> cancel_delegation", (input) => {
     expect(normalizeToolName(input)).toBe("cancel_delegation")
   })
@@ -244,10 +244,10 @@ describe("normalizeToolName collapses ask_user_question across hosts", () => {
     "question",
     "ask_user_question",
     "askuserquestion",
-    "mcp__codeg-mcp__ask_user_question",
-    "codeg-mcp/ask_user_question",
-    "codeg-mcp.ask_user_question",
-    "codeg-mcp:ask_user_question",
+    "mcp__veryagent-mcp__ask_user_question",
+    "veryagent-mcp/ask_user_question",
+    "veryagent-mcp.ask_user_question",
+    "veryagent-mcp:ask_user_question",
   ])("%s -> question", (input) => {
     expect(normalizeToolName(input)).toBe("question")
   })
@@ -260,11 +260,11 @@ describe("normalizeToolName collapses ask_user_question across hosts", () => {
 describe("normalizeToolName collapses check_user_feedback across hosts", () => {
   it.each([
     "check_user_feedback",
-    "mcp__codeg-mcp__check_user_feedback",
+    "mcp__veryagent-mcp__check_user_feedback",
     "mcp__codeg__check_user_feedback",
-    "codeg-mcp/check_user_feedback",
-    "codeg-mcp.check_user_feedback",
-    "codeg-mcp:check_user_feedback",
+    "veryagent-mcp/check_user_feedback",
+    "veryagent-mcp.check_user_feedback",
+    "veryagent-mcp:check_user_feedback",
   ])("%s -> check_user_feedback", (input) => {
     expect(normalizeToolName(input)).toBe("check_user_feedback")
   })

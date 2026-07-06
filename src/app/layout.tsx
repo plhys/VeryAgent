@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "codeg",
+  title: "veryagent",
   description: "AI Coding Agent Conversation Manager",
   icons: {
     icon: [
