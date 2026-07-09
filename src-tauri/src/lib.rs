@@ -659,6 +659,131 @@ mod tauri_app {
                     }
                 }
 
+                // Auto-open the pet window on startup so it's always visible.
+                if app.get_webview_window("pet").is_none() {
+                    let db = app.state::<crate::db::AppDatabase>();
+                    let pet_app = app.handle().clone();
+                    let pet_db = db.conn.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let db_ref = &pet_db;
+                        let config = match crate::commands::pet::pet_get_settings_core(db_ref).await {
+                            Ok(c) => c,
+                            Err(_) => return,
+                        };
+                        let pet_id = config.active_pet_id.clone().unwrap_or_else(|| "default".to_string());
+                        let scale = config.scale.clamp(0.5, 3.0);
+                        let win_w = windows::PET_BASE_WIDTH * scale;
+                        let win_h = windows::PET_BASE_HEIGHT * scale;
+
+                        // Calculate bottom-right position from the primary monitor's
+                        // work area BEFORE building the window. Using work_area
+                        // excludes the Windows taskbar / macOS Dock.  Setting
+                        // position on the builder avoids the race where
+                        // current_monitor() returns None on a just-created window.
+                        let mut pos_x = 100.0f64;
+                        let mut pos_y = 100.0f64;
+                        if let Ok(Some(monitor)) = pet_app.primary_monitor() {
+                            let sf = monitor.scale_factor();
+                            let area_pos: tauri::LogicalPosition<f64> =
+                                monitor.work_area().position.to_logical(sf);
+                            let area_size: tauri::LogicalSize<f64> =
+                                monitor.work_area().size.to_logical(sf);
+                            let margin = 24.0;
+                            pos_x = area_pos.x + area_size.width - win_w - margin;
+                            pos_y = area_pos.y + area_size.height - win_h - margin;
+                        }
+
+                        let url = tauri::WebviewUrl::App(format!("pet?petId={pet_id}").into());
+                        let builder = tauri::WebviewWindowBuilder::new(&pet_app, "pet", url)
+                            .title("veryagent pet")
+                            .inner_size(win_w, win_h)
+                            .position(pos_x, pos_y)
+                            .resizable(false)
+                            .decorations(false)
+                            .transparent(true)
+                            .always_on_top(config.always_on_top)
+                            .skip_taskbar(true)
+                            .shadow(false)
+                            .focused(false)
+                            .accept_first_mouse(true);
+
+                        let _win = match windows::apply_pet_window_style(builder).build() {
+                            Ok(w) => w,
+                            Err(e) => {
+                                tracing::warn!("[Pet] auto-open failed: {e}");
+                                return;
+                            }
+                        };
+
+                        // Also create the bubble window (hidden)
+                        if pet_app.get_webview_window("pet-bubble").is_none() {
+                            let bubble_url = tauri::WebviewUrl::App("pet-bubble".into());
+                            let bubble_builder =
+                                tauri::WebviewWindowBuilder::new(&pet_app, "pet-bubble", bubble_url)
+                                    .title("veryagent pet bubble")
+                                    .inner_size(windows::PET_BUBBLE_WIDTH, windows::PET_BUBBLE_HEIGHT)
+                                    .decorations(false)
+                                    .transparent(true)
+                                    .always_on_top(true)
+                                    .resizable(false)
+                                    .skip_taskbar(true)
+                                    .shadow(false)
+                                    .focused(false)
+                                    .visible(false);
+                            if let Err(e) = windows::apply_pet_window_style(bubble_builder).build() {
+                                tracing::warn!("[Pet] auto-open bubble failed: {e}");
+                            }
+                        }
+
+                        windows::spawn_pet_hover_watcher(pet_app);
+                    });
+                }
+
+                // Listen for bubble window visibility requests from the
+                // pet-bubble frontend. The bubble page emits
+                // `pet://set-bubble-visible` to show/hide itself based on
+                // whether it has content to display.
+                {
+                    use tauri::Listener;
+                    let bubble_app = app.handle().clone();
+                    let _ = app.listen("pet://set-bubble-visible", move |event| {
+                        let visible = serde_json::from_str::<bool>(event.payload()).ok().unwrap_or(false);
+                        if let Some(bubble) = bubble_app.get_webview_window("pet-bubble") {
+                            if visible {
+                                let _ = bubble.show();
+                                // Position bubble above the pet window.
+                                if let Some(pet) = bubble_app.get_webview_window("pet") {
+                                    if let Ok(pet_pos) = pet.outer_position() {
+                                        // All size/position APIs return physical pixels
+                                        // on Tauri 2. Convert to logical via scale
+                                        // factor so set_position(LogicalPosition) is
+                                        // correct on HiDPI displays.
+                                        let scale = bubble.scale_factor().unwrap_or(1.0);
+                                        let bubble_size: tauri::LogicalSize<f64> = bubble.inner_size()
+                                            .unwrap_or_default()
+                                            .to_logical(scale);
+                                        let pet_size: tauri::LogicalSize<f64> = pet.inner_size()
+                                            .unwrap_or_default()
+                                            .to_logical(scale);
+                                        let pet_pos_logical: tauri::LogicalPosition<f64> = pet_pos.to_logical(scale);
+                                        // Horizontally: right-align with the pet, then shift right
+                                        let bx = pet_pos_logical.x + pet_size.width - bubble_size.width + 120.0;
+                                        // Vertically: bubble bottom overlaps the top 40% of the pet,
+                                        // shifted 20px upward
+                                        let by = pet_pos_logical.y - bubble_size.height + pet_size.height * 0.4 - 20.0;
+                                        let _ = bubble.set_position(tauri::LogicalPosition::new(
+                                            bx,
+                                            by.max(0.0),
+                                        ));
+                                    }
+                                }
+                            } else {
+                                let _ = bubble.hide();
+                            }
+                        }
+                    });
+                }
+
                 Ok(())
             })
             .on_menu_event(|app, event| {

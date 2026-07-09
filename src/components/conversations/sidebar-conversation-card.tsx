@@ -219,7 +219,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            className="relative h-[1.75rem] bg-sidebar"
+	            className="relative h-[2.125rem] bg-sidebar"
             data-conv-key={`${conversation.agent_type}:${conversation.id}`}
             // Per-level indent: shift the shared rail axis right by one step per
             // depth. Root rows (depth 0) leave the var untouched so they inherit
@@ -236,12 +236,12 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           >
             <div
               className={cn(
-                "group relative flex h-[1.6875rem] w-full items-center",
+	                "group relative flex h-[2.0625rem] w-full items-center",
                 "rounded-full text-sidebar-foreground",
                 "transition-colors duration-[120ms]",
                 isSelected
                   ? "bg-sidebar-primary/8"
-                  : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_2%)]"
+	                  : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
               )}
             >
               <button

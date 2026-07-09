@@ -1208,7 +1208,9 @@
       "newChatAction": "New chat",
       "automations": "Automations",
       "skillsAndTools": "Skills & Tools",
-      "loadingSubsessions": "Loading sub-conversations…"
+      "loadingSubsessions": "Loading sub-conversations…",
+      "removeFromWorkspace": "Remove from workspace",
+      "untitledConversation": "Untitled conversation"
     },
     "conversation": {
       "reloadFailed": "Failed to reload conversation: {message}",
@@ -2488,7 +2490,8 @@
         "collapsedSummary": "Messages {count}",
         "fileCount": "{count, plural, one {# file} other {# files}}",
         "remove": "Remove",
-        "noDiffDataAvailable": "No diff data available for {filePath}"
+        "noDiffDataAvailable": "No diff data available for {filePath}",
+        "jumpToMessage": "Jump to message #{ordinal}"
       },
       "replyArtifacts": {
         "title": "Files changed",
@@ -2915,7 +2918,10 @@
     "delete": "Delete",
     "create": "Create",
     "save": "Save",
-    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}"
+    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "Comma-separated agent types (e.g. hermes, claude_code)"
   },
   "SkillMatrix": {
     "loading": "Loading…",

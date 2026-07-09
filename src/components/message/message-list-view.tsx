@@ -63,12 +63,8 @@ import type {
 } from "@/lib/types"
 import { copyTextToClipboard } from "@/lib/utils"
 import { VirtualizedMessageThread } from "@/components/message/virtualized-message-thread"
-import {
-  ConversationMessageNav,
-  type MessageNavEntry,
-} from "@/components/message/conversation-message-nav"
+import { MessageNavDots, type NavDotEntry } from "@/components/message/message-nav-dots"
 import type { MessageScrollContextValue } from "@/components/message/message-scroll-context"
-import { extractSessionFilesGrouped } from "@/lib/session-files"
 import { unescapeComposerText } from "@/lib/composer-copy-text"
 import { useStickToBottomContext } from "use-stick-to-bottom"
 
@@ -143,10 +139,6 @@ const getThreadItemKey = (item: ThreadRenderItem) => item.key
 // Stable empty reference so the SubAgentOverlay memo can bail out when there
 // are no delegations in the last reply.
 const EMPTY_DELEGATIONS: DelegationCardSource[] = []
-
-// Stable empty reference so the navigator memo / equality checks don't churn
-// when a conversation has no user messages.
-const EMPTY_NAV_ENTRIES: MessageNavEntry[] = []
 
 // A single turn's `sourceTurns` is just `[turn]`. Cache the wrapper per turn
 // object so an unchanged historical turn keeps a stable `sourceTurns` reference
@@ -801,60 +793,55 @@ export function MessageListView({
   const scrollApiRef = useRef<MessageScrollContextValue | null>(null)
   // Collapse state is owned here (not in the panel) so the expensive per-file
   // `navEntries` is computed only while the panel is open.
-  const [navExpanded, setNavExpanded] = useState(false)
-
-  // Cheap user-message tally for the collapsed chip — counts user turns without
-  // parsing any file diffs.
-  const userMessageCount = useMemo(() => {
-    if (!showMessageNav) return 0
-    let count = 0
-    for (const item of threadItems) {
-      if (item.kind === "turn" && item.group.role === "user") count += 1
-    }
-    return count
-  }, [showMessageNav, threadItems])
-
-  // One entry per user message — including ones with no edits (placeholders).
-  // Computed lazily: only while the panel is expanded, since
-  // `extractSessionFilesGrouped` parses every turn's diffs. Collapsed (the
-  // default) it stays EMPTY, keeping the streaming hot path free of diff parsing.
-  const navEntries = useMemo<MessageNavEntry[]>(() => {
-    if (!showMessageNav || !navExpanded) return EMPTY_NAV_ENTRIES
-    const turns = timelineTurns.map((item) => item.turn)
-    const groups = extractSessionFilesGrouped(turns, { includeEmpty: true })
-    if (groups.length === 0) return EMPTY_NAV_ENTRIES
-
-    const indexByTurnId = new Map<string, number>()
+  // Lightweight dot entries for the right-edge nav rail — no diff parsing needed.
+  const navDots = useMemo<NavDotEntry[]>(() => {
+    if (!showMessageNav) return []
+    const entries: NavDotEntry[] = []
     for (let i = 0; i < threadItems.length; i++) {
       const item = threadItems[i]
       if (item.kind === "turn" && item.group.role === "user") {
-        indexByTurnId.set(item.group.id, i)
+        // Extract a short label from the first text part
+        let label = ""
+        for (const part of item.group.parts) {
+          if (part.type === "text") {
+            label = part.text.slice(0, 80)
+            break
+          }
+        }
+        // Heuristic: if the next assistant turn has file-write tool calls,
+        // mark as having changes (avoids the expensive extractSessionFilesGrouped)
+        let hasChanges = false
+        for (let j = i + 1; j < threadItems.length; j++) {
+          const next = threadItems[j]
+          if (next.kind === "turn" && next.group.role === "assistant") {
+            for (const part of next.group.parts) {
+              if (part.type === "tool-call") {
+                const name = normalizeToolName(part.toolName)
+                if (
+                  name.includes("write") ||
+                  name.includes("edit") ||
+                  name.includes("create") ||
+                  name.includes("file")
+                ) {
+                  hasChanges = true
+                  break
+                }
+              }
+            }
+            break
+          }
+          break
+        }
+        entries.push({
+          threadIndex: i,
+          ordinal: entries.length + 1,
+          label: label || "…",
+          hasChanges,
+        })
       }
     }
-
-    const entries: MessageNavEntry[] = []
-    for (const group of groups) {
-      const threadIndex = indexByTurnId.get(group.userTurnId)
-      if (threadIndex == null) continue
-      let additions = 0
-      let deletions = 0
-      for (const file of group.files) {
-        additions += file.additions
-        deletions += file.deletions
-      }
-      entries.push({
-        threadIndex,
-        turnId: group.userTurnId,
-        ordinal: entries.length + 1,
-        label: group.userMessage,
-        additions,
-        deletions,
-        files: group.files,
-        hasChanges: group.files.length > 0,
-      })
-    }
-    return entries.length > 0 ? entries : EMPTY_NAV_ENTRIES
-  }, [showMessageNav, navExpanded, timelineTurns, threadItems])
+    return entries
+  }, [showMessageNav, threadItems])
 
   const hasRenderableContent = threadItems.length > 0 || Boolean(liveMessage)
 
@@ -951,23 +938,14 @@ export function MessageListView({
       )}
       {/* Shared overlay stack pinned to the inline-start edge (top-left in LTR,
           top-right in RTL). A flex column keeps the order stable regardless of
-          each panel's expand/collapse height: the message navigator first, then
-          the plan panel, then the sub-agent panel. Empty panels render null and
-          collapse out. Positioning lives here (not in the child overlays); the
-          chips are "bullets" — flat on the start side (flush to the pinned
-          edge), rounded on the end side — that expand toward the inline-end on
-          hover. Logical `start-0` + `items-start` keep the anchor and the bullet
-          on the same side, so the whole stack mirrors cleanly in RTL. */}
+          each panel's expand/collapse height: the plan panel, then the sub-agent
+          panel. Empty panels render null and collapse out. Positioning lives here
+          (not in the child overlays); the chips are "bullets" — flat on the start
+          side (flush to the pinned edge), rounded on the end side — that expand
+          toward the inline-end on hover. Logical `start-0` + `items-start` keep
+          the anchor and the bullet on the same side, so the whole stack mirrors
+          cleanly in RTL. */}
       <div className="pointer-events-none absolute start-0 top-4 z-20 flex max-w-[min(22rem,calc(100%-2rem))] flex-col items-start gap-2">
-        {showMessageNav && userMessageCount > 0 && (
-          <ConversationMessageNav
-            count={userMessageCount}
-            expanded={navExpanded}
-            onToggle={setNavExpanded}
-            entries={navEntries}
-            scrollApiRef={scrollApiRef}
-          />
-        )}
         <AgentPlanOverlay
           key={agentPlanOverlayKey}
           message={liveMessage ?? null}
@@ -982,6 +960,10 @@ export function MessageListView({
           overlayKey={subAgentOverlayKey}
         />
       </div>
+      {/* Right-edge dot rail for message navigation */}
+      {showMessageNav && navDots.length > 0 && (
+        <MessageNavDots dots={navDots} scrollApiRef={scrollApiRef} />
+      )}
     </div>
   )
 }

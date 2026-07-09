@@ -1206,7 +1206,9 @@
       "skillsAndTools": "Habilidades y herramientas",
       "loadingSubsessions": "Cargando subconversaciones…",
       "chats": "Chats",
-      "projects": "Proyectos"
+      "projects": "Proyectos",
+      "removeFromWorkspace": "Eliminar del espacio de trabajo",
+      "untitledConversation": "Conversación sin título"
     },
     "conversation": {
       "reloadFailed": "No se pudo recargar la conversación: {message}",
@@ -2486,7 +2488,8 @@
         "collapsedSummary": "Mensajes {count}",
         "fileCount": "{count, plural, one {# archivo} other {# archivos}}",
         "remove": "Quitar",
-        "noDiffDataAvailable": "No hay datos de diff disponibles para {filePath}"
+        "noDiffDataAvailable": "No hay datos de diff disponibles para {filePath}",
+        "jumpToMessage": "Ir al mensaje #{ordinal}"
       },
       "replyArtifacts": {
         "title": "Archivos modificados",
@@ -2901,7 +2904,10 @@
     "delete": "Eliminar",
     "create": "Crear",
     "save": "Guardar",
-    "affectedRunningSessions": "{count, plural, one {# sesión activa necesita reconectarse para aplicar el cambio} other {# sesiones activas necesitan reconectarse para aplicar el cambio}}"
+    "affectedRunningSessions": "{count, plural, one {# sesión activa necesita reconectarse para aplicar el cambio} other {# sesiones activas necesitan reconectarse para aplicar el cambio}}",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "Tipos de agente separados por comas (ej: hermes, claude_code)"
   },
   "SkillMatrix": {
     "loading": "Cargando…",

@@ -2,10 +2,11 @@ confirmModulesPurge: false
 
 overrides:
   mermaid: ">=11.13.0"
-  
+
 allowBuilds:
   "@parcel/watcher": true
   "@swc/core": true
+  better-sqlite3: set this to true or false
   esbuild: true
   msw: true
   sharp: true

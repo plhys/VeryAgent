@@ -1206,7 +1206,9 @@
       "skillsAndTools": "Compétences et outils",
       "loadingSubsessions": "Chargement des sous-conversations…",
       "chats": "Chats",
-      "projects": "Projets"
+      "projects": "Projets",
+      "removeFromWorkspace": "Retirer de l'espace de travail",
+      "untitledConversation": "Conversation sans titre"
     },
     "conversation": {
       "reloadFailed": "Échec du rechargement de la conversation : {message}",
@@ -2486,7 +2488,8 @@
         "collapsedSummary": "Messages {count}",
         "fileCount": "{count, plural, one {# fichier} other {# fichiers}}",
         "remove": "Retirer",
-        "noDiffDataAvailable": "Aucune donnée de diff disponible pour {filePath}"
+        "noDiffDataAvailable": "Aucune donnée de diff disponible pour {filePath}",
+        "jumpToMessage": "Aller au message #{ordinal}"
       },
       "replyArtifacts": {
         "title": "Fichiers modifiés",
@@ -2901,7 +2904,10 @@
     "delete": "Supprimer",
     "create": "Créer",
     "save": "Enregistrer",
-    "affectedRunningSessions": "{count, plural, one {# session active doit se reconnecter pour appliquer la modification} other {# sessions actives doivent se reconnecter pour appliquer la modification}}"
+    "affectedRunningSessions": "{count, plural, one {# session active doit se reconnecter pour appliquer la modification} other {# sessions actives doivent se reconnecter pour appliquer la modification}}",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "Types d'agent séparés par des virgules (ex: hermes, claude_code)"
   },
   "SkillMatrix": {
     "loading": "Chargement…",

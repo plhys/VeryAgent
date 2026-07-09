@@ -238,12 +238,12 @@ const FolderHeader = memo(function FolderHeader({
         <div
           inert={suppressed || undefined}
           aria-hidden={suppressed || undefined}
-          className={cn("relative h-[1.75rem]", isDragging && "opacity-60")}
+	          className={cn("relative h-[2.125rem]", isDragging && "opacity-60")}
         >
           <div
             onPointerDown={(e) => onGripPointerDown?.(folderId, e)}
             className={cn(
-              "group flex h-[1.6875rem] w-full items-center",
+	              "group flex h-[2.0625rem] w-full items-center",
               "rounded-full",
               "transition-colors duration-150",
               isDragging
@@ -1565,7 +1565,7 @@ export function SidebarConversationList({
   // Fixed height of one folder header row (Tailwind `h-[2rem]`); the drag
   // surface collapses every folder to just its header so the target slot is a
   // simple `floor(pointerY / FOLDER_ROW_HEIGHT)`.
-  const FOLDER_ROW_HEIGHT = 28
+  const FOLDER_ROW_HEIGHT = 34
   const DRAG_THRESHOLD_PX = 6
   const AUTOSCROLL_EDGE_PX = 28
   const AUTOSCROLL_STEP_PX = 12
@@ -2082,7 +2082,7 @@ export function SidebarConversationList({
                     ref={virtualizerRef}
                     scrollRef={viewportRef}
                     data={rows}
-                    itemSize={28}
+                    itemSize={34}
                     bufferSize={400}
                     onScroll={handleVirtuaScroll}
                   >

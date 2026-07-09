@@ -209,48 +209,106 @@ export function SidebarProjectList() {
               </span>
             </button>
 
-            {/* 展开的会话列表 — 子弹线串联 */}
+            {/* 展开的会话列表 — 树形子弹线 */}
             {!isCollapsed && (
-              <div className="relative ml-[1.375rem] flex flex-col gap-1 border-l-2 border-sidebar-border pl-3 pt-0.5 pb-0.5">
+              <div className="relative ml-[1.375rem] pl-4 pt-1 pb-1">
                 {folderConvs.length === 0 ? (
                   <p className="py-1 text-[0.75rem] text-muted-foreground/60">
                     {t("emptyFolderHint")}
                   </p>
-                ) : (
-                  folderConvs.map((conv) => {
-                    const isConvActive =
+                ) : (() => {
+                  // 找到选中项的索引
+                  const activeIdx = folderConvs.findIndex(
+                    (c) =>
                       activeTabId != null &&
                       tabs.find(
-                        (t) =>
-                          t.conversationId === conv.id &&
-                          t.folderId === conv.folder_id
+                        (tab) =>
+                          tab.conversationId === c.id &&
+                          tab.folderId === c.folder_id
                       )?.id === activeTabId
-                    return (
-                    <button
-                      key={conv.id}
-                      type="button"
-                      onClick={() => handleConversationClick(conv)}
-                      className={cn(
-                        "flex h-8 w-full items-center gap-1.5 rounded-full pl-2 pr-2",
-                        "text-left text-[0.875rem] transition-colors duration-150",
-                        "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
-                        isConvActive
-                          ? "bg-sidebar-border dark:bg-[#3D3D3D] text-primary font-medium"
-                          : "text-sidebar-foreground/80"
-                      )}
-                    >
-                      <MessageSquare className={cn(
-                        "h-3 w-3 shrink-0",
-                        isConvActive ? "text-primary" : "text-muted-foreground"
-                      )} />
-                      <span className="truncate">
-                        {formatConversationTitle(conv.title) ||
-                          t("untitledConversation")}
-                      </span>
-                    </button>
-                    )
-                  })
-                )}
+                  )
+                  return (
+                    <div className="flex flex-col">
+                      {folderConvs.map((conv, idx) => {
+                        const isConvActive = idx === activeIdx
+                        const isLast = idx === folderConvs.length - 1
+                        // 竖线：选中项以上(含)实线，以下虚线
+                        const trunkSolid = activeIdx >= 0 && idx <= activeIdx
+                        // 下方竖线：选中项以上实线，以下虚线
+                        const belowSolid = activeIdx >= 0 && idx < activeIdx
+                        // 水平分支：仅选中项实线
+                        const branchSolid = isConvActive
+                        return (
+                          <div key={conv.id} className="relative mb-1.5">
+                            {/* 上方竖线 */}
+                            <div
+                              className="absolute"
+                              style={{
+                                left: "-1rem",
+                                top: 0,
+                                height: "50%",
+                                width: 0,
+                                borderLeft: trunkSolid
+                                  ? "1.5px solid var(--color-primary, var(--primary))"
+                                  : "1px dashed var(--color-sidebar-border, #e5e5e5)",
+                              }}
+                            />
+                            {/* 水平分支线 */}
+                            <div
+                              className="absolute"
+                              style={{
+                                left: "-1rem",
+                                top: "50%",
+                                width: "1rem",
+                                height: 0,
+                                borderTop: branchSolid
+                                  ? "1.5px solid var(--color-primary, var(--primary))"
+                                  : "1px dashed var(--color-sidebar-border, #e5e5e5)",
+                                transform: "translateY(-0.5px)",
+                              }}
+                            />
+                            {/* 下方竖线（最后一项不画） */}
+                            {!isLast && (
+                              <div
+                                className="absolute"
+                                style={{
+                                  left: "-1rem",
+                                  top: "50%",
+                                  bottom: 0,
+                                  width: 0,
+                                  borderLeft: belowSolid
+                                    ? "1.5px solid var(--color-primary, var(--primary))"
+                                    : "1px dashed var(--color-sidebar-border, #e5e5e5)",
+                                }}
+                              />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleConversationClick(conv)}
+                              className={cn(
+                                "flex h-8 w-full items-center gap-1.5 rounded-full pl-2 pr-2",
+                                "text-left text-[0.875rem] transition-colors duration-150",
+                                "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
+                                isConvActive
+                                  ? "bg-sidebar-border dark:bg-[#3D3D3D] text-primary font-medium"
+                                  : "text-sidebar-foreground/80"
+                              )}
+                            >
+                              <MessageSquare className={cn(
+                                "h-3 w-3 shrink-0",
+                                isConvActive ? "text-primary" : "text-muted-foreground"
+                              )} />
+                              <span className="truncate">
+                                {formatConversationTitle(conv.title) ||
+                                  t("untitledConversation")}
+                              </span>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>

@@ -1206,7 +1206,9 @@
       "skillsAndTools": "Fähigkeiten und Werkzeuge",
       "loadingSubsessions": "Unterkonversationen werden geladen…",
       "chats": "Chats",
-      "projects": "Projekte"
+      "projects": "Projekte",
+      "removeFromWorkspace": "Aus Arbeitsbereich entfernen",
+      "untitledConversation": "Unbenanntes Gespräch"
     },
     "conversation": {
       "reloadFailed": "Konversation konnte nicht neu geladen werden: {message}",
@@ -2486,7 +2488,8 @@
         "collapsedSummary": "Nachrichten {count}",
         "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
         "remove": "Entfernen",
-        "noDiffDataAvailable": "Keine Diff-Daten verfügbar für {filePath}"
+        "noDiffDataAvailable": "Keine Diff-Daten verfügbar für {filePath}",
+        "jumpToMessage": "Zu Nachricht #{ordinal} springen"
       },
       "replyArtifacts": {
         "title": "Geänderte Dateien",
@@ -2901,7 +2904,10 @@
     "delete": "Löschen",
     "create": "Erstellen",
     "save": "Speichern",
-    "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}"
+    "affectedRunningSessions": "{count, plural, one {# laufende Sitzung muss zum Anwenden neu verbunden werden} other {# laufende Sitzungen müssen zum Anwenden neu verbunden werden}}",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "Komma-getrennte Agent-Typen (z.B. hermes, claude_code)"
   },
   "SkillMatrix": {
     "loading": "Wird geladen…",

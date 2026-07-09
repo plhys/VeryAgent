@@ -187,8 +187,8 @@ export function useEnabledSkillIds(agentType: AgentType | null, strict = false):
   }, [agentType, agentsFresh, agents])
 
   const enabledIds = useMemo(() => {
-    if (piSkillsUnmanaged) return new Set()
-    if (!snapshot) return new Set()
+    if (piSkillsUnmanaged) return new Set<string>()
+    if (!snapshot) return new Set<string>()
     if (strict) {
       return new Set(
         snapshot

@@ -1206,7 +1206,9 @@
       "skillsAndTools": "技能與工具",
       "loadingSubsessions": "正在載入子會話…",
       "chats": "聊天",
-      "projects": "專案"
+      "projects": "專案",
+      "removeFromWorkspace": "從工作區移除",
+      "untitledConversation": "未命名對話"
     },
     "conversation": {
       "reloadFailed": "會話重新載入失敗：{message}",
@@ -2486,7 +2488,8 @@
         "collapsedSummary": "訊息 {count}",
         "fileCount": "{count} 個檔案",
         "remove": "移除",
-        "noDiffDataAvailable": "找不到 {filePath} 的差異資料"
+        "noDiffDataAvailable": "找不到 {filePath} 的差異資料",
+        "jumpToMessage": "跳轉到第 #{ordinal} 條訊息"
       },
       "replyArtifacts": {
         "title": "變更檔案",
@@ -2901,7 +2904,10 @@
     "delete": "刪除",
     "create": "建立",
     "save": "儲存",
-    "affectedRunningSessions": "{count} 個進行中的工作階段需重新連線以套用變更"
+    "affectedRunningSessions": "{count} 個進行中的工作階段需重新連線以套用變更",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "逗號分隔的智能體類型（如 hermes, claude_code）"
   },
   "SkillMatrix": {
     "loading": "載入中…",

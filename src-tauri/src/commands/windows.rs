@@ -1041,13 +1041,16 @@ pub async fn open_project_boot_window(
 // ─── Desktop pet window ─────────────────────────────────────────────────
 
 const PET_WINDOW_LABEL: &str = "pet";
+const PET_BUBBLE_WINDOW_LABEL: &str = "pet-bubble";
 const PET_HOVER_ENTER_EVENT: &str = "pet://hover-enter";
 const PET_HOVER_LEAVE_EVENT: &str = "pet://hover-leave";
-/// Single-frame logical pixel dimensions, locked to the Codex sprite-sheet
-/// contract. The window is sized as one frame × user scale, with no extra
-/// chrome — DPR handling lives inside the webview.
-const PET_BASE_WIDTH: f64 = 192.0;
-const PET_BASE_HEIGHT: f64 = 208.0;
+/// Base logical pixel dimensions for the pet window. The webm video renderer
+/// needs a larger viewport than the old 192×208 spritesheet frame.
+pub const PET_BASE_WIDTH: f64 = 320.0;
+pub const PET_BASE_HEIGHT: f64 = 320.0;
+/// Bubble window dimensions (shown next to the pet when AI is responding).
+pub const PET_BUBBLE_WIDTH: f64 = 180.0;
+pub const PET_BUBBLE_HEIGHT: f64 = 200.0;
 
 /// Process-global "cursor is currently inside the pet window" flag, owned by
 /// the hover watcher but readable/writable by the context-menu command so
@@ -1062,7 +1065,7 @@ static PET_HOVER_WAS_INSIDE: AtomicBool = AtomicBool::new(false);
 /// for the main / settings / git windows, which would defeat the
 /// transparent + chromeless pet window. The pet builder needs only
 /// borderless decoration; transparency itself is set by the caller.
-fn apply_pet_window_style<'a, R, M>(
+pub fn apply_pet_window_style<'a, R, M>(
     builder: WebviewWindowBuilder<'a, R, M>,
 ) -> WebviewWindowBuilder<'a, R, M>
 where
@@ -1094,14 +1097,15 @@ pub async fn open_pet_window(
     db: tauri::State<'_, AppDatabase>,
 ) -> Result<(), AppCommandError> {
     let mut config = crate::commands::pet::pet_get_settings_core(&db.conn).await?;
-    let pet_id = config
-        .active_pet_id
-        .clone()
-        .ok_or_else(|| AppCommandError::configuration_missing("No active pet selected."))?;
+    // The webm-based pet sprite does not require a configured pet from the
+    // old spritesheet system.  Fall back to "default" so the window opens
+    // even when no active pet has been selected in settings.
+    let pet_id = config.active_pet_id.clone().unwrap_or_else(|| "default".to_string());
 
-    // Validate the pet still exists; otherwise fail loudly so the caller
-    // can route the user to the picker rather than open an empty window.
-    {
+    // Validate the pet still exists; skip validation for the default id
+    // (it may not have a spritesheet entry — the webm renderer doesn't
+    // need one).
+    if pet_id != "default" {
         let id = pet_id.clone();
         tokio::task::spawn_blocking(move || crate::pets::get_pet(&id))
             .await
@@ -1132,11 +1136,31 @@ pub async fn open_pet_window(
     .await?;
 
     let url = WebviewUrl::App(format!("pet?petId={pet_id}").into());
-    let mut builder = WebviewWindowBuilder::new(&app, PET_WINDOW_LABEL, url)
+
+    // Calculate bottom-right position from the primary monitor's work area
+    // BEFORE building the window, so the position is set in the builder and
+    // doesn't depend on current_monitor() which can return None on a new window.
+    let win_w = PET_BASE_WIDTH * scale;
+    let win_h = PET_BASE_HEIGHT * scale;
+    let mut pos_x = 100.0f64;
+    let mut pos_y = 100.0f64;
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let sf = monitor.scale_factor();
+        let area_pos: tauri::LogicalPosition<f64> =
+            monitor.work_area().position.to_logical(sf);
+        let area_size: tauri::LogicalSize<f64> =
+            monitor.work_area().size.to_logical(sf);
+        let margin = 24.0;
+        pos_x = area_pos.x + area_size.width - win_w - margin;
+        pos_y = area_pos.y + area_size.height - win_h - margin;
+    }
+
+    let builder = WebviewWindowBuilder::new(&app, PET_WINDOW_LABEL, url)
         .title("veryagent pet")
-        .inner_size(PET_BASE_WIDTH * scale, PET_BASE_HEIGHT * scale)
+        .inner_size(win_w, win_h)
         .min_inner_size(PET_BASE_WIDTH * 0.5, PET_BASE_HEIGHT * 0.5)
         .max_inner_size(PET_BASE_WIDTH * 3.0, PET_BASE_HEIGHT * 3.0)
+        .position(pos_x, pos_y)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -1149,14 +1173,8 @@ pub async fn open_pet_window(
         .focused(false)
         .accept_first_mouse(true);
 
-    builder = builder.center();
-
-    apply_pet_window_style(builder)
-        .build()
+    let _win = apply_pet_window_style(builder).build()
         .map_err(|e| AppCommandError::window("Failed to open pet window", e.to_string()))?;
-
-    spawn_pet_hover_watcher(app.clone());
-
     Ok(())
 }
 
@@ -1166,7 +1184,7 @@ pub async fn open_pet_window(
 /// detect "cursor over the pet" in Rust and let the frontend trigger the
 /// waving animation in response. The task ends when the pet window is
 /// closed.
-fn spawn_pet_hover_watcher(app: AppHandle) {
+pub fn spawn_pet_hover_watcher(app: AppHandle) {
     use std::time::Duration;
     use tauri::Emitter;
 
@@ -1238,6 +1256,10 @@ pub async fn close_pet_window(
 ) -> Result<(), AppCommandError> {
     if let Some(existing) = app.get_webview_window(PET_WINDOW_LABEL) {
         let _ = existing.close();
+    }
+    // Also close the bubble window when the pet is dismissed.
+    if let Some(bubble) = app.get_webview_window(PET_BUBBLE_WINDOW_LABEL) {
+        let _ = bubble.close();
     }
     let _ = crate::commands::pet::pet_save_window_state_core(
         &db.conn,

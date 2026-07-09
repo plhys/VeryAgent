@@ -287,6 +287,24 @@ fn emit_oneshot(emitter: &EventEmitter, kind: PetState) {
     emit_event(emitter, "pet://oneshot", kind);
 }
 
+/// Forward AI stream events to the bubble window. These are higher-frequency
+/// events (text deltas, tool calls) that the bubble card needs but the ambient
+/// state mapper deliberately filters out. Uses `emit_to` so only the bubble
+/// window receives them — the pet sprite window doesn't need them.
+fn emit_bubble_event(emitter: &EventEmitter, event_type: &str, payload: serde_json::Value) {
+    match emitter {
+        #[cfg(feature = "tauri-runtime")]
+        EventEmitter::Tauri(app) => {
+            use tauri::Emitter;
+            let _ = app.emit_to("pet-bubble", event_type, payload);
+        }
+        EventEmitter::WebOnly { broadcaster, .. } => {
+            broadcaster.send(event_type, &payload);
+        }
+        EventEmitter::Noop => {}
+    }
+}
+
 /// Schedule (or restart) the auto-recovery timer that will clear the
 /// `erroring` set after `PET_FAILED_RECOVERY_MS`. Aborts any in-flight
 /// timer first so successive errors keep the failed animation visible
@@ -347,6 +365,62 @@ pub fn pet_state_subscriber_task(
                     match acp_event {
                         Ok(envelope_arc) => {
                             let envelope = envelope_arc.as_ref();
+
+                            // Forward bubble-relevant events to the pet-bubble window
+                            // BEFORE the ambient state filter drops them.
+                            if !snapshot.delegation_children.contains(&envelope.connection_id) {
+                                match &envelope.payload {
+                                    AcpEvent::StatusChanged { status: ConnectionStatus::Prompting } => {
+                                        emit_bubble_event(&emitter, "pet://ai-run-start", serde_json::json!({}));
+                                    }
+                                    AcpEvent::ContentDelta { text } => {
+                                        // Skip thinking/reasoning content that some agents
+                                        // emit as regular ContentDelta (e.g. <think> tags).
+                                        if text.contains("<think>") || text.contains("</think>") {
+                                            continue;
+                                        }
+                                        emit_bubble_event(&emitter, "pet://ai-chunk", serde_json::json!({ "text": text }));
+                                    }
+                                    // Thinking events are not forwarded to the bubble —
+                                    // the pet card should only show the final response.
+                                    AcpEvent::Thinking { .. } => {}
+                                    AcpEvent::ToolCall { tool_call_id, title, status, .. } => {
+                                        let phase = if status == "completed" || status == "failed" { "done" } else { "running" };
+                                        emit_bubble_event(&emitter, "pet://ai-tool", serde_json::json!({
+                                            "toolCallId": tool_call_id,
+                                            "name": title,
+                                            "phase": phase,
+                                            "actionText": title,
+                                        }));
+                                    }
+                                    AcpEvent::ToolCallUpdate { tool_call_id, title, status, .. } => {
+                                        let phase = match status.as_deref() {
+                                            Some("completed") | Some("failed") => "done",
+                                            _ => "running",
+                                        };
+                                        let mut payload = serde_json::json!({
+                                            "toolCallId": tool_call_id,
+                                            "phase": phase,
+                                        });
+                                        if let Some(t) = title {
+                                            payload["actionText"] = serde_json::Value::String(t.clone());
+                                        }
+                                        emit_bubble_event(&emitter, "pet://ai-tool", payload);
+                                    }
+                                    AcpEvent::TurnComplete { stop_reason, .. } => {
+                                        emit_bubble_event(&emitter, "pet://ai-done", serde_json::json!({
+                                            "aborted": stop_reason == "cancelled",
+                                        }));
+                                    }
+                                    AcpEvent::Error { message, .. } => {
+                                        emit_bubble_event(&emitter, "pet://api-error", serde_json::json!({
+                                            "message": message,
+                                        }));
+                                    }
+                                    _ => {}
+                                }
+                            }
+
                             if !is_acp_event_relevant(&envelope.payload) {
                                 continue;
                             }

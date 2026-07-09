@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
-import { Loader2 } from "lucide-react"
 import { getPet, getPetSettings, readPetSpritesheet } from "@/lib/pet/api"
 import type { PetDetail, PetWindowConfig } from "@/lib/pet/types"
 import {
@@ -29,15 +28,9 @@ export interface PetWindowProps {
 }
 
 // Hover/click animations loop this many times before resolving back to the
-// agent state. The animator naturally chains non-idle states back to col 0,
-// so we just hold the state for N × single-cycle duration. The +80ms slack
-// covers tick-rounding in the JS animator so we don't cut the last frame.
-const INTERACTION_LOOPS = 3
+// agent state. The +80ms slack covers tick-rounding in the JS animator so
+// we don't cut the last frame.
 const INTERACTION_SLACK_MS = 80
-const JUMPING_DURATION_MS =
-  sumDurations("jumping") * INTERACTION_LOOPS + INTERACTION_SLACK_MS
-const WAVING_DURATION_MS =
-  sumDurations("waving") * INTERACTION_LOOPS + INTERACTION_SLACK_MS
 const PET_HOVER_ENTER_EVENT = "pet://hover-enter"
 const PET_HOVER_LEAVE_EVENT = "pet://hover-leave"
 const PET_ACTIVE_CHANGED_EVENT = "pet://active-changed"
@@ -82,12 +75,11 @@ export function PetWindow({ petId }: PetWindowProps) {
   const interactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pointerDownRef = useRef(false)
 
-  const handleDragDirection = useCallback((s: PetState | null) => {
-    if (interactionTimerRef.current) {
-      clearTimeout(interactionTimerRef.current)
-      interactionTimerRef.current = null
-    }
-    setInteractionState(s)
+  // Drag direction changes are ignored for the webm sprite — there are no
+  // dedicated running-right/left video files. The sprite stays in its
+  // current agent-driven state during drag.
+  const handleDragDirection = useCallback((_s: PetState | null) => {
+    // No-op: webm pet does not change animation on drag direction
   }, [])
 
   const playOneShot = useCallback((state: PetState, durationMs: number) => {
@@ -103,12 +95,36 @@ export function PetWindow({ petId }: PetWindowProps) {
     handleDragDirection(null)
   }, [handleDragDirection])
 
-  // A tap (vs. drag) on the sprite is just tactile feedback — the jump. Opening
-  // the session panel is reserved for the status badge (see PetBadge); tapping
-  // the body of the pet must not pop the panel.
+  // Single click does nothing. Double-click toggles the main window visibility.
+  const lastClickRef = useRef(0)
+
   const handleClick = useCallback(() => {
-    playOneShot("jumping", JUMPING_DURATION_MS)
-  }, [playOneShot])
+    if (!isDesktop()) return
+    const now = Date.now()
+    if (now - lastClickRef.current < 400) {
+      // Double-click: toggle main window visibility
+      lastClickRef.current = 0
+      void (async () => {
+        try {
+          const { Window } = await import("@tauri-apps/api/window")
+          const mainWindow = await Window.getByLabel("main")
+          if (mainWindow) {
+            const visible = await mainWindow.isVisible()
+            if (visible) {
+              await mainWindow.hide()
+            } else {
+              await mainWindow.show()
+              await mainWindow.setFocus()
+            }
+          }
+        } catch (err) {
+          console.warn("[Pet] failed to toggle main window:", err)
+        }
+      })()
+    } else {
+      lastClickRef.current = now
+    }
+  }, [])
 
   // Track held-mouse-button state so hover-driven waving stays out of the
   // way of any active interaction (drag, click-and-hold). Listening on
@@ -154,8 +170,12 @@ export function PetWindow({ petId }: PetWindowProps) {
         const { listen } = await import("@tauri-apps/api/event")
         const [offEnter, offLeave] = await Promise.all([
           listen(PET_HOVER_ENTER_EVENT, () => {
+            // Webm pet: skip hover-triggered waving — the enter→loop
+            // video transition is jarring on every mouse pass. The hover
+            // leave still cancels any in-flight interaction so the pet
+            // returns to its ambient state promptly.
             if (cancelled || pointerDownRef.current) return
-            playOneShot("waving", WAVING_DURATION_MS)
+            // No waving animation on hover
           }),
           listen(PET_HOVER_LEAVE_EVENT, () => {
             if (cancelled || pointerDownRef.current) return
@@ -208,8 +228,6 @@ export function PetWindow({ petId }: PetWindowProps) {
     let cancelled = false
     let objectUrl: string | null = null
     setError(null)
-    setPet(null)
-    setSpritesheetUrl(null)
 
     async function load() {
       try {
@@ -226,8 +244,20 @@ export function PetWindow({ petId }: PetWindowProps) {
         setPet(detail)
         setSpritesheetUrl(objectUrl)
         setScale(config.scale ?? 1)
-      } catch (err) {
-        if (!cancelled) setError(toMessage(err))
+      } catch {
+        // Pet data (spritesheet/manifest) may not exist when using the
+        // webm video renderer.  The webm PetSprite doesn't need these
+        // assets at all, so swallow the error and render with defaults.
+        if (!cancelled) {
+          setPet(null)
+          setSpritesheetUrl(null)
+          try {
+            const config = await getPetSettings()
+            if (!cancelled) setScale(config.scale ?? 1)
+          } catch {
+            // Use default scale
+          }
+        }
       }
     }
 
@@ -282,10 +312,15 @@ export function PetWindow({ petId }: PetWindowProps) {
     document.body.style.background = "transparent"
     document.documentElement.style.background = "transparent"
     document.body.classList.add("pet-body")
+    // Remove focus outlines from the transparent pet window
+    const style = document.createElement("style")
+    style.textContent = "*:focus, *:focus-visible { outline: none !important; }"
+    document.head.appendChild(style)
     return () => {
       document.body.style.background = prevBg
       document.documentElement.style.background = prevHtmlBg
       document.body.classList.remove("pet-body")
+      style.remove()
     }
   }, [])
 
@@ -313,17 +348,10 @@ export function PetWindow({ petId }: PetWindowProps) {
     )
   }
 
-  if (!pet || !spritesheetUrl) {
-    return (
-      <div
-        className="flex h-screen w-screen items-center justify-center"
-        style={{ background: "transparent" }}
-      >
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
+  // Render the pet sprite immediately — the webm video renderer does not
+  // need a spritesheet or pet manifest, so we don't gate on `pet` or
+  // `spritesheetUrl` being loaded.  The old spritesheet-based path still
+  // works when those assets are available.
   return (
     <div
       className="relative flex h-screen w-screen select-none items-center justify-center"
@@ -334,20 +362,10 @@ export function PetWindow({ petId }: PetWindowProps) {
         spritesheetUrl={spritesheetUrl}
         state={renderState}
         scale={scale}
-        label={pet.displayName}
+        label={pet?.displayName ?? "VeryAgent Pet"}
       />
       <PetBadge />
       <PetMenu onScaleChange={setScale} onOpenSettings={openManager} />
     </div>
   )
-}
-
-function toMessage(err: unknown): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === "string") return err
-  if (err && typeof err === "object" && "message" in err) {
-    const m = (err as { message: unknown }).message
-    if (typeof m === "string") return m
-  }
-  return String(err)
 }

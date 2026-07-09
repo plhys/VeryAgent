@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import {
   BookOpenText,
   Check,
-  ChevronUp,
+  ChevronDown,
   ClipboardPaste,
   Cog,
   Copy,
@@ -2736,21 +2736,21 @@ export function MessageInput({
         onClick={handleSend}
         disabled={disabled || !hasSendableContent}
         size="icon"
-        className="h-8 w-8 rounded-r-none"
+        className="h-8 w-8"
         title={t("send")}
       >
         <Send className="size-4" />
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
+          <button
+            type="button"
             disabled={disabled || !hasSendableContent}
-            size="icon"
-            className="h-8 w-5 rounded-l-none border-l border-primary-foreground/20"
+            className="flex h-8 w-4 shrink-0 items-center justify-center rounded-[0.25rem] text-primary-foreground/60 transition-colors hover:text-primary-foreground disabled:opacity-50"
             aria-label={t("forkAndSend")}
           >
-            <ChevronUp className="size-4" />
-          </Button>
+            <ChevronDown className="size-3" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top">
           <DropdownMenuItem onSelect={handleForkSendClick}>
@@ -2864,7 +2864,7 @@ export function MessageInput({
                 // blank areas (padding, the dead space below a short message, the
                 // action-bar gaps) so the whole input reads as clickable-to-type;
                 // interactive controls re-assert their own cursor (see globals.css).
-                "veryagent-composer-chrome @container relative flex flex-col rounded-xl border border-input bg-transparent transition-colors focus-within:!border-input focus-within:!ring-0 focus-within:!shadow-none focus-within:!outline-none",
+                "veryagent-composer-chrome @container relative flex flex-col rounded-xl border border-input bg-transparent transition-colors focus-within:!ring-0 focus-within:!shadow-none focus-within:!outline-none",
                 // Standard focus ring — always shown when the composer is
                 // focused (the plain default input style).
                 folderBranchPickerAttached ? "bg-background" : "",

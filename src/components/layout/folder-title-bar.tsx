@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { openSettingsWindow } from "@/lib/api"
-import { getPetSettings, openPetWindow } from "@/lib/pet/api"
+import { openPetWindow } from "@/lib/pet/api"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
@@ -32,7 +32,6 @@ import {
   matchShortcutEvent,
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
-import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
 import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
@@ -67,14 +66,9 @@ export function FolderTitleBar() {
   const handleOpenPet = useCallback(async () => {
     if (!isDesktop()) return
     try {
-      const settings = await getPetSettings()
-      if (!settings.activePetId) {
-        await openSettingsWindow("appearance")
-        return
-      }
       await openPetWindow()
     } catch {
-      // No active pet or window error — route the user to the manager.
+      // Window error — route the user to the manager.
       try {
         await openSettingsWindow("appearance")
       } catch (err) {

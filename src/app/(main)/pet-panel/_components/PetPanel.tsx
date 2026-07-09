@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { Inbox, X } from "lucide-react"
 import { closePetPanel, resizePetPanel } from "@/lib/pet/api"
 import { isDesktop } from "@/lib/transport"
-import { usePetSessions } from "../../pet/_hooks/usePetSessions"
+import { usePetSessions } from "@/app/pet/_hooks/usePetSessions"
 import { sessionSortRank } from "@/lib/pet/session-display"
 import { SessionRow } from "./SessionRow"
 

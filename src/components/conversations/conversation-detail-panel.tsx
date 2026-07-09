@@ -41,7 +41,6 @@ import { useSessionFeedback } from "@/hooks/use-session-feedback"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
 import { WelcomeHero, WelcomeTip } from "@/components/chat/welcome-hero"
-import { QuickActions } from "@/components/chat/quick-actions"
 import type { ComposerInjectContent } from "@/components/chat/message-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useConversationSkillInjectStore } from "@/stores/conversation-skill-inject-store"
@@ -1281,9 +1280,6 @@ const ConversationTabView = memo(function ConversationTabView({
   const showDraftHeader = !hasPersistedConversation && !hasSentMessage
   const isWelcomeMode = showDraftHeader
 
-  const handleQuickAction = useCallback((payload: ComposerInjectContent) => {
-    setQuickActionInject(payload)
-  }, [])
 
   useEffect(() => {
     if (!pendingSkillInject) return
@@ -1589,7 +1585,6 @@ export function ConversationDetailPanel() {
     switchTab,
     onPreviewTabReplaced,
   } = useTabActions()
-  const queueSkillInject = useConversationSkillInjectStore((s) => s.queueInject)
   const newConversation = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
     if (!activeTab || activeTab.conversationId != null) return null
@@ -1790,15 +1785,6 @@ export function ConversationDetailPanel() {
     closeTab(activeTabId)
   }, [activeTabId, closeTab])
 
-  const injectSkillIntoActiveConversation = useCallback(
-    (payload: ComposerInjectContent) => {
-      if (!activeTabId) return false
-      switchTab(activeTabId)
-      queueSkillInject(activeTabId, payload)
-      return true
-    },
-    [activeTabId, queueSkillInject, switchTab]
-  )
 
   // Narrow reactive reads for the ACTIVE conversation only — a background
   // conversation's streaming token no longer re-renders this panel. `canExport`

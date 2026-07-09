@@ -9,7 +9,7 @@ vi.mock("@/lib/pet/api", () => ({
   closePetPanel: vi.fn(() => Promise.resolve()),
   resizePetPanel: vi.fn(() => Promise.resolve()),
 }))
-vi.mock("../../pet/_hooks/usePetSessions", () => ({
+vi.mock("@/app/pet/_hooks/usePetSessions", () => ({
   usePetSessions: vi.fn(),
 }))
 vi.mock("motion/react", () => ({
@@ -25,7 +25,7 @@ vi.mock("./SessionRow", () => ({
 import { PetPanel } from "./PetPanel"
 import { isDesktop } from "@/lib/transport"
 import { closePetPanel, resizePetPanel } from "@/lib/pet/api"
-import { usePetSessions } from "../../pet/_hooks/usePetSessions"
+import { usePetSessions } from "@/app/pet/_hooks/usePetSessions"
 import enMessages from "@/i18n/messages/en.json"
 import type { PetSessionEntry, PetSessionsPayload } from "@/lib/pet/types"
 

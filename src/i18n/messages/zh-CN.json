@@ -1208,7 +1208,9 @@
       "chats": "会话",
       "projects": "项目",
       "noFolders": "暂无文件夹",
-      "noFoldersHint": "先添加工作文件夹，这里才会显示项目列表。"
+      "noFoldersHint": "先添加工作文件夹，这里才会显示项目列表。",
+      "removeFromWorkspace": "从工作区移除",
+      "untitledConversation": "未命名会话"
     },
     "conversation": {
       "reloadFailed": "会话重新加载失败：{message}",
@@ -2488,7 +2490,8 @@
         "collapsedSummary": "消息 {count}",
         "fileCount": "{count} 个文件",
         "remove": "移除",
-        "noDiffDataAvailable": "未找到 {filePath} 的差异数据"
+        "noDiffDataAvailable": "未找到 {filePath} 的差异数据",
+        "jumpToMessage": "跳转到第 #{ordinal} 条消息"
       },
       "replyArtifacts": {
         "title": "改动文件",
@@ -2915,7 +2918,10 @@
     "delete": "删除",
     "create": "创建",
     "save": "保存",
-    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改"
+    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "逗号分隔的智能体类型（如 hermes, claude_code）"
   },
   "SkillMatrix": {
     "loading": "加载中…",

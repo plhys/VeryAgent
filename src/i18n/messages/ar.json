@@ -1206,7 +1206,9 @@
       "skillsAndTools": "المهارات والأدوات",
       "loadingSubsessions": "جارٍ تحميل المحادثات الفرعية…",
       "chats": "المحادثات",
-      "projects": "المشاريع"
+      "projects": "المشاريع",
+      "removeFromWorkspace": "إزالة من مساحة العمل",
+      "untitledConversation": "محادثة بدون عنوان"
     },
     "conversation": {
       "reloadFailed": "فشل إعادة تحميل المحادثة: {message}",
@@ -2486,7 +2488,8 @@
         "collapsedSummary": "الرسائل {count}",
         "fileCount": "{count, plural, one {# ملف} other {# ملفات}}",
         "remove": "إزالة",
-        "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}"
+        "noDiffDataAvailable": "لا توجد بيانات diff متاحة لـ {filePath}",
+        "jumpToMessage": "الانتقال إلى الرسالة #{ordinal}"
       },
       "replyArtifacts": {
         "title": "الملفات المتغيرة",
@@ -2901,7 +2904,10 @@
     "delete": "حذف",
     "create": "إنشاء",
     "save": "حفظ",
-    "affectedRunningSessions": "{count} جلسة نشطة تحتاج إلى إعادة الاتصال لتطبيق التغيير"
+    "affectedRunningSessions": "{count} جلسة نشطة تحتاج إلى إعادة الاتصال لتطبيق التغيير",
+    "modelPlaceholderKimi": "kimi-k2-0711",
+    "modelPlaceholderHermes": "deepseek-v3-0324",
+    "agentTypesHint": "أنواع الوكلاء مفصولة بفواصل (مثال: hermes, claude_code)"
   },
   "SkillMatrix": {
     "loading": "جارٍ التحميل…",

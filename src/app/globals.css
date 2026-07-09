@@ -1525,7 +1525,7 @@
   cursor: text;
 }
 .veryagent-composer-chrome:focus-within {
-  border-color: var(--input);
+  border-color: rgba(255,255,255,0.15);
   box-shadow: none;
   outline: none;
 }
@@ -1595,6 +1595,13 @@
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.55;
+}
+
+/* Remove browser-default focus ring on the Tiptap editor wrapper */
+.veryagent-composer .tiptap.ProseMirror:focus-visible,
+.veryagent-composer [contenteditable]:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* Keep the text selection visible after the editor loses focus to an overlay

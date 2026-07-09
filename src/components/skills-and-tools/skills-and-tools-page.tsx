@@ -55,7 +55,7 @@ import { AGENT_LABELS } from "@/lib/types"
 import { OFFICE_ACTIONS } from "@/lib/office-actions"
 import { useTabActions, useTabStore } from "@/contexts/tab-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
-import { useConversationSkillInjectStore } from "@/stores/conversation-skill-inject-store"
+import { useConversationSkillInjectStore, type ConversationSkillInjectPayload } from "@/stores/conversation-skill-inject-store"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -193,7 +193,7 @@ interface RepoActionContext {
   activeAgentType: AgentType | null
   activeAgentLabel: string
   enabledIds: Set<string>
-  queueInject: ReturnType<typeof useConversationSkillInjectStore>["queueInject"]
+  queueInject: (targetTabId: string, payload: ConversationSkillInjectPayload) => void
   openConversations: () => void
   switchTab: (tabId: string) => void
 }
@@ -605,11 +605,12 @@ function SkillsRepoTab() {
         { id: expert.metadata.id, label },
         "",
         activeAgentType
-          ? () =>
-              expertsLinkToAgent({
+          ? async () => {
+              await expertsLinkToAgent({
                 expertId: expert.metadata.id,
                 agentType: activeAgentType,
               })
+            }
           : undefined
       )
     },
@@ -629,11 +630,12 @@ function SkillsRepoTab() {
         { id: skill.id, label },
         prompt,
         activeAgentType
-          ? () =>
-              officecliSkillLinkToAgent({
+          ? async () => {
+              await officecliSkillLinkToAgent({
                 skillId: skill.id,
                 agentType: activeAgentType,
               })
+            }
           : undefined
       )
     },
