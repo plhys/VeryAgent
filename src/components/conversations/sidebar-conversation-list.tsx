@@ -238,12 +238,12 @@ const FolderHeader = memo(function FolderHeader({
         <div
           inert={suppressed || undefined}
           aria-hidden={suppressed || undefined}
-          className={cn("relative h-[2rem]", isDragging && "opacity-60")}
+          className={cn("relative h-[1.75rem]", isDragging && "opacity-60")}
         >
           <div
             onPointerDown={(e) => onGripPointerDown?.(folderId, e)}
             className={cn(
-              "group flex h-[1.9375rem] w-full items-center",
+              "group flex h-[1.6875rem] w-full items-center",
               "rounded-full",
               "transition-colors duration-150",
               isDragging
@@ -554,6 +554,8 @@ export interface SidebarConversationListProps {
   showCompleted?: boolean
   sortMode?: SidebarSortMode
   sectionOrder?: SidebarSectionOrder
+  /** 隐藏文件夹分组（与外部 tab 切换配合，避免重复） */
+  hideFolderSections?: boolean
 }
 
 export function SidebarConversationList({
@@ -561,6 +563,7 @@ export function SidebarConversationList({
   showCompleted = true,
   sortMode = "created",
   sectionOrder = "folders-first",
+  hideFolderSections = false,
 }: SidebarConversationListProps & {
   ref?: Ref<SidebarConversationListHandle>
 }) {
@@ -979,6 +982,7 @@ export function SidebarConversationList({
         chatConversations,
         chatsExpanded,
         sectionOrder,
+        hideFolderSections,
         conversationExpanded,
         childrenByParent,
         childrenLoading,
@@ -994,6 +998,7 @@ export function SidebarConversationList({
       chatConversations,
       chatsExpanded,
       sectionOrder,
+      hideFolderSections,
       conversationExpanded,
       childrenByParent,
       childrenLoading,
@@ -1560,7 +1565,7 @@ export function SidebarConversationList({
   // Fixed height of one folder header row (Tailwind `h-[2rem]`); the drag
   // surface collapses every folder to just its header so the target slot is a
   // simple `floor(pointerY / FOLDER_ROW_HEIGHT)`.
-  const FOLDER_ROW_HEIGHT = 32
+  const FOLDER_ROW_HEIGHT = 28
   const DRAG_THRESHOLD_PX = 6
   const AUTOSCROLL_EDGE_PX = 28
   const AUTOSCROLL_STEP_PX = 12
@@ -2077,7 +2082,7 @@ export function SidebarConversationList({
                     ref={virtualizerRef}
                     scrollRef={viewportRef}
                     data={rows}
-                    itemSize={32}
+                    itemSize={28}
                     bufferSize={400}
                     onScroll={handleVirtuaScroll}
                   >

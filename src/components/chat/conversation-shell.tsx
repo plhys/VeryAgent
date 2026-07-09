@@ -19,6 +19,7 @@ import type {
 } from "@/contexts/acp-connections-context"
 import type { QueuedMessage } from "@/hooks/use-message-queue"
 import { Loader2 } from "lucide-react"
+import type { ComposerInjectContent } from "@/components/chat/message-input"
 import { ChatInput } from "@/components/chat/chat-input"
 import { PermissionDialog } from "@/components/chat/permission-dialog"
 import { QuestionDialog } from "@/components/chat/question-dialog"
@@ -83,6 +84,8 @@ interface ConversationShellProps {
   onSaveQueueEdit?: (draft: PromptDraft) => void
   onCancelQueueEdit?: () => void
   onForkSend?: (draft: PromptDraft, modeId?: string | null) => void
+  injectContent?: ComposerInjectContent | null
+  onInjectConsumed?: () => void
   /** Optional banner pinned to the top of the panel, above the message area
    *  (e.g. the "restart to apply" config-stale banner). Renders nothing when
    *  omitted. */
@@ -136,6 +139,8 @@ export function ConversationShell({
   onSaveQueueEdit,
   onCancelQueueEdit,
   onForkSend,
+  injectContent,
+  onInjectConsumed,
   topBanner,
 }: ConversationShellProps) {
   const tAcp = useTranslations("Folder.chat.acpConnections")
@@ -262,6 +267,8 @@ export function ConversationShell({
               onForkSend={onForkSend}
               onAddFeedback={onAddFeedback}
               feedbackAddDisabled={feedbackAddDisabled}
+              injectContent={injectContent}
+              onInjectConsumed={onInjectConsumed}
             />
           </div>
         )}

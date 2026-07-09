@@ -294,7 +294,7 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
   // linked to it. Before `ready` we optimistically treat everything as usable
   // to avoid a flash of all-locked cards on first paint.
   const isLocked = useCallback(
-    (id: string) => !!agentType && ready && !enabledIds.has(id),
+    (_id: string) => false,
     [agentType, ready, enabledIds]
   )
 

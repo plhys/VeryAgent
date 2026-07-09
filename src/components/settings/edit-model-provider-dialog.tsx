@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -14,19 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { updateModelProvider } from "@/lib/api"
 import {
   MODEL_PROVIDER_AGENT_TYPES,
   AGENT_LABELS,
   parseClaudeProviderModel,
   serializeClaudeProviderModel,
+  extractAgentModel,
   type AgentType,
   type ClaudeProviderModel,
   type ModelProviderInfo,
@@ -50,10 +45,8 @@ export function EditModelProviderDialog({
   const [name, setName] = useState("")
   const [apiUrl, setApiUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
-  const [agentType, setAgentType] = useState<AgentType>(
-    MODEL_PROVIDER_AGENT_TYPES[0]
-  )
-  const [singleModel, setSingleModel] = useState("")
+  const [selectedAgentTypes, setSelectedAgentTypes] = useState<AgentType[]>([])
+  const [agentModels, setAgentModels] = useState<Record<string, string>>({})
   const [claudeModel, setClaudeModel] = useState<ClaudeProviderModel>({})
 
   useEffect(() => {
@@ -61,14 +54,20 @@ export function EditModelProviderDialog({
       setName(provider.name)
       setApiUrl(provider.api_url)
       setApiKey("")
-      setAgentType(provider.agent_type)
-      if (provider.agent_type === "claude_code") {
-        setClaudeModel(parseClaudeProviderModel(provider.model))
-        setSingleModel("")
-      } else {
-        setSingleModel(provider.model ?? "")
-        setClaudeModel({})
+      setSelectedAgentTypes(provider.agent_types)
+
+      // Parse per-agent model values from the multi-agent model JSON
+      const newAgentModels: Record<string, string> = {}
+      for (const at of provider.agent_types) {
+        if (at === "claude_code") {
+          const claudeStr = extractAgentModel(provider.model, at)
+          setClaudeModel(parseClaudeProviderModel(claudeStr))
+        } else {
+          const modelVal = extractAgentModel(provider.model, at)
+          newAgentModels[at] = modelVal ?? ""
+        }
       }
+      setAgentModels(newAgentModels)
       setError(null)
     }
   }, [provider])
@@ -81,11 +80,29 @@ export function EditModelProviderDialog({
     [onOpenChange]
   )
 
-  const modelPlaceholder = useMemo(() => {
-    if (agentType === "codex") return t("modelPlaceholderCodex")
-    if (agentType === "gemini") return t("modelPlaceholderGemini")
-    return ""
-  }, [agentType, t])
+  const toggleAgentType = useCallback(
+    (at: AgentType) => {
+      setSelectedAgentTypes((prev) => {
+        if (prev.includes(at)) {
+          if (prev.length <= 1) return prev
+          return prev.filter((x) => x !== at)
+        }
+        return [...prev, at]
+      })
+    },
+    []
+  )
+
+  const getModelPlaceholder = useCallback(
+    (at: AgentType) => {
+      if (at === "codex") return t("modelPlaceholderCodex")
+      if (at === "gemini") return t("modelPlaceholderGemini")
+      if (at === "kimi_code") return t("modelPlaceholderKimi")
+      if (at === "hermes") return t("modelPlaceholderHermes")
+      return ""
+    },
+    [t]
+  )
 
   const handleSubmit = useCallback(async () => {
     if (!provider) return
@@ -97,37 +114,43 @@ export function EditModelProviderDialog({
       setError(t("apiUrlRequired"))
       return
     }
-    if (!agentType) {
+    if (selectedAgentTypes.length === 0) {
       setError(t("agentTypeRequired"))
       return
     }
 
-    let modelPayload: string | null = null
-    if (agentType === "claude_code") {
-      modelPayload = serializeClaudeProviderModel(claudeModel)
-    } else if (singleModel.trim()) {
-      modelPayload = singleModel.trim()
-    } else {
-      modelPayload = ""
+    // Build the models map: agent_type -> model string
+    const models: Record<string, string> = {}
+    for (const at of selectedAgentTypes) {
+      if (at === "claude_code") {
+        const claudeStr = serializeClaudeProviderModel(claudeModel)
+        if (claudeStr) models[at] = claudeStr
+      } else {
+        const val = agentModels[at]?.trim()
+        if (val) models[at] = val
+      }
     }
-    const previousModel = provider.model ?? ""
-    const nextModel = modelPayload ?? ""
-    const modelChanged = previousModel !== nextModel
+
+    // Compute what changed
+    const nameChanged = name.trim() !== provider.name
+    const urlChanged = apiUrl.trim() !== provider.api_url
+    const keyProvided = apiKey.trim().length > 0
+    const agentTypesChanged =
+      selectedAgentTypes.length !== provider.agent_types.length ||
+      selectedAgentTypes.some((at, i) => at !== provider.agent_types[i])
 
     setLoading(true)
     setError(null)
     try {
       const { affectedRunningSessions } = await updateModelProvider({
         id: provider.id,
-        name: name.trim() !== provider.name ? name.trim() : undefined,
-        apiUrl: apiUrl.trim() !== provider.api_url ? apiUrl.trim() : undefined,
-        apiKey: apiKey.trim() || undefined,
-        agentType: agentType !== provider.agent_type ? agentType : undefined,
-        model: modelChanged ? nextModel : undefined,
+        name: nameChanged ? name.trim() : undefined,
+        apiUrl: urlChanged ? apiUrl.trim() : undefined,
+        apiKey: keyProvided ? apiKey.trim() : undefined,
+        agentTypes: agentTypesChanged ? selectedAgentTypes : undefined,
+        models: models, // Always send models (backend merges)
       })
       toast.success(t("editSuccess"))
-      // Bound agents' running sessions stay on the old credentials until
-      // restarted — tell the user how many need a restart to pick up the change.
       if (affectedRunningSessions > 0) {
         toast.info(
           t("affectedRunningSessions", { count: affectedRunningSessions })
@@ -152,22 +175,25 @@ export function EditModelProviderDialog({
     name,
     apiUrl,
     apiKey,
-    agentType,
-    singleModel,
+    selectedAgentTypes,
+    agentModels,
     claudeModel,
     handleOpenChange,
     onProviderUpdated,
     t,
   ])
 
+  const showClaudeFields = selectedAgentTypes.includes("claude_code")
+
   return (
     <Dialog open={!!provider} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("editProvider")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Provider Name */}
           <div className="space-y-1.5">
             <label htmlFor="edit-mp-name" className="text-xs font-medium">
               {t("providerName")}
@@ -180,6 +206,7 @@ export function EditModelProviderDialog({
             />
           </div>
 
+          {/* API URL — shared across all selected agents */}
           <div className="space-y-1.5">
             <label htmlFor="edit-mp-url" className="text-xs font-medium">
               {t("apiUrl")}
@@ -192,6 +219,7 @@ export function EditModelProviderDialog({
             />
           </div>
 
+          {/* API Key — shared across all selected agents */}
           <div className="space-y-1.5">
             <label htmlFor="edit-mp-key" className="text-xs font-medium">
               {t("apiKey")}
@@ -205,159 +233,183 @@ export function EditModelProviderDialog({
             />
           </div>
 
+          {/* Agent Types — multi-select checkboxes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium">{t("agentType")}</label>
-            <Select value={agentType} disabled>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
-                  <SelectItem key={at} value={at}>
-                    {AGENT_LABELS[at]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <label className="text-xs font-medium">
+              {t("agentTypes")}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
+                <label
+                  key={at}
+                  className="flex items-center gap-1.5 text-xs cursor-pointer"
+                >
+                  <Checkbox
+                    checked={selectedAgentTypes.includes(at)}
+                    onCheckedChange={() => toggleAgentType(at)}
+                  />
+                  {AGENT_LABELS[at]}
+                </label>
+              ))}
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              {t("agentTypeImmutableHint")}
+              {t("agentTypesHint")}
             </p>
           </div>
 
-          {agentType === "claude_code" ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
+          {/* Per-agent model inputs */}
+          {selectedAgentTypes.map((at) => {
+            if (at === "claude_code") return null
+            return (
+              <div key={at} className="space-y-1.5">
                 <label className="text-xs font-medium">
-                  {t("claudeMainModel")}
+                  {AGENT_LABELS[at]} {t("model")}
                 </label>
                 <Input
-                  value={claudeModel.main ?? ""}
+                  value={agentModels[at] ?? ""}
                   onChange={(e) =>
-                    setClaudeModel((prev) => ({
+                    setAgentModels((prev) => ({
                       ...prev,
-                      main: e.target.value,
+                      [at]: e.target.value,
                     }))
                   }
-                  placeholder="claude-sonnet-5"
+                  placeholder={getModelPlaceholder(at)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">
-                  {t("claudeReasoningModel")}
-                </label>
-                <Input
-                  value={claudeModel.reasoning ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      reasoning: e.target.value,
-                    }))
-                  }
-                  placeholder="claude-opus-4-8"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">
-                  {t("claudeHaikuDefaultModel")}
-                </label>
-                <Input
-                  value={claudeModel.haiku ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      haiku: e.target.value,
-                    }))
-                  }
-                  placeholder="claude-haiku-4-5"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">
-                  {t("claudeSonnetDefaultModel")}
-                </label>
-                <Input
-                  value={claudeModel.sonnet ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      sonnet: e.target.value,
-                    }))
-                  }
-                  placeholder="claude-sonnet-5"
-                />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-medium">
-                  {t("claudeOpusDefaultModel")}
-                </label>
-                <Input
-                  value={claudeModel.opus ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      opus: e.target.value,
-                    }))
-                  }
-                  placeholder="claude-opus-4-8"
-                />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-xs font-medium">
-                  {t("claudeCustomModelOption")}
-                </label>
-                <Input
-                  value={claudeModel.customOption ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      customOption: e.target.value,
-                    }))
-                  }
-                  placeholder="my-gateway/claude-opus-4-8"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">
-                  {t("claudeCustomModelOptionName")}
-                </label>
-                <Input
-                  value={claudeModel.customOptionName ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      customOptionName: e.target.value,
-                    }))
-                  }
-                  placeholder="Gateway Opus"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">
-                  {t("claudeCustomModelOptionDescription")}
-                </label>
-                <Input
-                  value={claudeModel.customOptionDescription ?? ""}
-                  onChange={(e) =>
-                    setClaudeModel((prev) => ({
-                      ...prev,
-                      customOptionDescription: e.target.value,
-                    }))
-                  }
-                  placeholder="Routed via custom gateway"
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground md:col-span-2">
-                {t("claudeCustomModelOptionHint")}
+            )
+          })}
+
+          {/* Claude model fields */}
+          {showClaudeFields && (
+            <div className="space-y-3 rounded-md border p-3">
+              <p className="text-xs font-medium">
+                {AGENT_LABELS.claude_code} {t("model")}
               </p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">{t("model")}</label>
-              <Input
-                value={singleModel}
-                onChange={(e) => setSingleModel(e.target.value)}
-                placeholder={modelPlaceholder}
-              />
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeMainModel")}
+                  </label>
+                  <Input
+                    value={claudeModel.main ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        main: e.target.value,
+                      }))
+                    }
+                    placeholder="claude-sonnet-5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeReasoningModel")}
+                  </label>
+                  <Input
+                    value={claudeModel.reasoning ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        reasoning: e.target.value,
+                      }))
+                    }
+                    placeholder="claude-opus-4-8"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeHaikuDefaultModel")}
+                  </label>
+                  <Input
+                    value={claudeModel.haiku ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        haiku: e.target.value,
+                      }))
+                    }
+                    placeholder="claude-haiku-4-5"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeSonnetDefaultModel")}
+                  </label>
+                  <Input
+                    value={claudeModel.sonnet ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        sonnet: e.target.value,
+                      }))
+                    }
+                    placeholder="claude-sonnet-5"
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">
+                    {t("claudeOpusDefaultModel")}
+                  </label>
+                  <Input
+                    value={claudeModel.opus ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        opus: e.target.value,
+                      }))
+                    }
+                    placeholder="claude-opus-4-8"
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-medium">
+                    {t("claudeCustomModelOption")}
+                  </label>
+                  <Input
+                    value={claudeModel.customOption ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        customOption: e.target.value,
+                      }))
+                    }
+                    placeholder="my-gateway/claude-opus-4-8"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeCustomModelOptionName")}
+                  </label>
+                  <Input
+                    value={claudeModel.customOptionName ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        customOptionName: e.target.value,
+                      }))
+                    }
+                    placeholder="Gateway Opus"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    {t("claudeCustomModelOptionDescription")}
+                  </label>
+                  <Input
+                    value={claudeModel.customOptionDescription ?? ""}
+                    onChange={(e) =>
+                      setClaudeModel((prev) => ({
+                        ...prev,
+                        customOptionDescription: e.target.value,
+                      }))
+                    }
+                    placeholder="Routed via custom gateway"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground md:col-span-2">
+                  {t("claudeCustomModelOptionHint")}
+                </p>
+              </div>
             </div>
           )}
 

@@ -1203,7 +1203,10 @@
       "noChats": "لا توجد محادثات",
       "newChatAction": "محادثة جديدة",
       "automations": "الأتمتة",
-      "loadingSubsessions": "جارٍ تحميل المحادثات الفرعية…"
+      "skillsAndTools": "المهارات والأدوات",
+      "loadingSubsessions": "جارٍ تحميل المحادثات الفرعية…",
+      "chats": "المحادثات",
+      "projects": "المشاريع"
     },
     "conversation": {
       "reloadFailed": "فشل إعادة تحميل المحادثة: {message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "لا توجد أوامر مطابقة",
         "experts": "الخبراء",
         "office": "الأعمال المكتبية",
+        "addExpertSkill": "إضافة مهارة خبير",
+        "addOfficeSkill": "إضافة مهارة مكتبية",
         "attachLocalUpload": "تحميل ملف محلي",
         "attachServerFile": "اختيار ملف من الخادم",
         "attachUploadTooLarge": "{names} يتجاوز حد التحميل {limit}MB وتم تخطيه.",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "تم التبديل إلى وضع المحادثة",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "إضافة مجلد"
     },
     "cloneDialog": {
       "title": "استنساخ مستودع",
@@ -3573,5 +3579,28 @@
     "branchRemote": "بعيد",
     "branchSearchPlaceholder": "بحث في الفروع…",
     "branchNone": "لا توجد فروع"
+  },
+  "SkillsAndTools": {
+    "title": "المهارات والأدوات",
+    "tabCurrentAgent": "الوكيل الحالي",
+    "tabSkillsRepo": "المهارات",
+    "tabPluginsRepo": "الإضافات",
+    "loading": "جارٍ التحميل…",
+    "active": "نشط",
+    "noAgent": "لا يوجد وكلاء متاحون",
+    "enabledSkills": "المهارات المفعّلة",
+    "noSkills": "لا توجد مهارات متاحة",
+    "codingExperts": "خبراء البرمجة",
+    "noExperts": "لا يوجد خبراء متاحون",
+    "officeSkills": "مهارات Office",
+    "noOfficeSkills": "لا توجد مهارات Office متاحة",
+    "installedPlugins": "الإضافات المثبتة",
+    "noPlugins": "لا توجد إضافات مثبتة",
+    "install": "تثبيت",
+    "uninstall": "إزالة",
+    "installSuccess": "تم التثبيت بنجاح",
+    "uninstallSuccess": "تمت الإزالة بنجاح",
+    "installFailed": "فشل التثبيت: {error}",
+    "uninstallFailed": "فشل الإزالة: {error}"
   }
 }

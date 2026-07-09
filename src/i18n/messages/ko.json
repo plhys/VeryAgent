@@ -1203,7 +1203,10 @@
       "noChats": "채팅 없음",
       "newChatAction": "새 채팅",
       "automations": "자동화",
-      "loadingSubsessions": "하위 대화 로드 중…"
+      "skillsAndTools": "스킬 및 도구",
+      "loadingSubsessions": "하위 대화 로드 중…",
+      "chats": "채팅",
+      "projects": "프로젝트"
     },
     "conversation": {
       "reloadFailed": "대화 다시 불러오기 실패: {message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "일치하는 명령이 없습니다",
         "experts": "전문가",
         "office": "일상 업무",
+        "addExpertSkill": "전문가 스킬 추가",
+        "addOfficeSkill": "오피스 스킬 추가",
         "attachLocalUpload": "로컬 파일 첨부",
         "attachServerFile": "서버 파일 첨부",
         "attachUploadTooLarge": "{names}이(가) {limit}MB 업로드 한도를 초과하여 건너뛰었습니다.",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "채팅 모드로 전환했습니다",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "폴더 추가"
     },
     "cloneDialog": {
       "title": "저장소 클론",
@@ -3573,5 +3579,28 @@
     "branchRemote": "원격",
     "branchSearchPlaceholder": "브랜치 검색…",
     "branchNone": "브랜치 없음"
+  },
+  "SkillsAndTools": {
+    "title": "스킬 및 도구",
+    "tabCurrentAgent": "현재 에이전트",
+    "tabSkillsRepo": "스킬",
+    "tabPluginsRepo": "플러그인",
+    "loading": "로딩 중…",
+    "active": "활성",
+    "noAgent": "사용 가능한 에이전트가 없습니다",
+    "enabledSkills": "활성화된 스킬",
+    "noSkills": "사용 가능한 스킬이 없습니다",
+    "codingExperts": "코딩 전문가",
+    "noExperts": "사용 가능한 전문가가 없습니다",
+    "officeSkills": "Office 스킬",
+    "noOfficeSkills": "사용 가능한 Office 스킬이 없습니다",
+    "installedPlugins": "설치된 플러그인",
+    "noPlugins": "설치된 플러그인이 없습니다",
+    "install": "설치",
+    "uninstall": "제거",
+    "installSuccess": "설치 완료",
+    "uninstallSuccess": "제거 완료",
+    "installFailed": "설치 실패: {error}",
+    "uninstallFailed": "제거 실패: {error}"
   }
 }

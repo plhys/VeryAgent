@@ -34,7 +34,6 @@ import {
 import { AppTitleBar } from "./app-title-bar"
 import { BranchDropdown } from "./branch-dropdown"
 import { CommandDropdown } from "./command-dropdown"
-import { NewFolderDropdown } from "./new-folder-dropdown"
 import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
@@ -188,9 +187,7 @@ export function FolderTitleBar() {
               >
                 <Menu className="h-4 w-4" />
               </Button>
-              <NewFolderDropdown />
               <RemoteWorkspaceDropdown />
-              <BranchDropdown />
             </div>
           ) : (
             <div className="flex h-8 flex-1 items-center gap-6">
@@ -198,7 +195,7 @@ export function FolderTitleBar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 hover:text-foreground/80"
+                  className="group/logo relative h-7 w-7 hover:text-foreground/80 border border-border rounded-md p-0.5 mt-2.5"
                   onClick={toggle}
                   title={tTitleBar("withShortcut", {
                     label: tTitleBar(isOpen ? "hideSidebar" : "showSidebar"),
@@ -208,21 +205,24 @@ export function FolderTitleBar() {
                     ),
                   })}
                 >
-                  <PanelLeft className="h-3.5 w-3.5" />
+                  <img
+                    src="/logo-01.png"
+                    alt=""
+                    className="h-6 w-6 object-contain group-hover/logo:hidden"
+                  />
+                  <PanelLeft className="hidden h-5 w-5 group-hover/logo:block mt-1" />
                 </Button>
-                <NewFolderDropdown />
                 <RemoteWorkspaceDropdown />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 hover:text-foreground/80"
+                  className="h-7 w-7 hover:text-foreground/80 border border-border rounded-md p-0.5 mt-2.5"
                   onClick={handleOpenPet}
                   title={tPet("manager.summon")}
                 >
-                  <PawPrint className="h-3.5 w-3.5" />
+                  <PawPrint className="h-5 w-5" />
                 </Button>
               </div>
-              <BranchDropdown />
               <div data-tauri-drag-region className="h-8 flex-1" />
             </div>
           )

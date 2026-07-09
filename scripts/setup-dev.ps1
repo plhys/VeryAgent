@@ -68,7 +68,7 @@ Write-Host ""
 
 # ── 5. 验证 ──
 Write-Host "=> 验证配置..."
-if (Select-String -Path ".cargo/config.toml" -Pattern 'RUSTC_WRAPPER = "sccache"' -Quiet) {
+if (Select-String -Path ".cargo/config.toml" -Pattern 'rustc-wrapper = "sccache"' -Quiet) {
     Info ".cargo/config.toml 已配置 sccache"
 } else {
     Warn ".cargo/config.toml 未启用 sccache"

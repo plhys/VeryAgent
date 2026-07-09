@@ -1203,7 +1203,10 @@
       "noChats": "Sin chats",
       "newChatAction": "Nuevo chat",
       "automations": "Automatizaciones",
-      "loadingSubsessions": "Cargando subconversaciones…"
+      "skillsAndTools": "Habilidades y herramientas",
+      "loadingSubsessions": "Cargando subconversaciones…",
+      "chats": "Chats",
+      "projects": "Proyectos"
     },
     "conversation": {
       "reloadFailed": "No se pudo recargar la conversación: {message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "Sin comandos coincidentes",
         "experts": "Expertos",
         "office": "Ofimática",
+        "addExpertSkill": "Añadir habilidad experta",
+        "addOfficeSkill": "Añadir habilidad de oficina",
         "attachLocalUpload": "Subir archivo local",
         "attachServerFile": "Seleccionar archivo del servidor",
         "attachUploadTooLarge": "{names} supera el límite de carga de {limit}MB y se omitió.",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "Cambiado al modo de chat",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "Añadir carpeta"
     },
     "cloneDialog": {
       "title": "Clonar repositorio",
@@ -3573,5 +3579,28 @@
     "branchRemote": "Remota",
     "branchSearchPlaceholder": "Buscar ramas…",
     "branchNone": "Sin ramas"
+  },
+  "SkillsAndTools": {
+    "title": "Habilidades y herramientas",
+    "tabCurrentAgent": "Agente actual",
+    "tabSkillsRepo": "Habilidades",
+    "tabPluginsRepo": "Plugins",
+    "loading": "Cargando…",
+    "active": "Activo",
+    "noAgent": "No hay agentes disponibles",
+    "enabledSkills": "Habilidades activadas",
+    "noSkills": "No hay habilidades disponibles",
+    "codingExperts": "Expertos en programación",
+    "noExperts": "No hay expertos disponibles",
+    "officeSkills": "Habilidades de Office",
+    "noOfficeSkills": "No hay habilidades de Office disponibles",
+    "installedPlugins": "Plugins instalados",
+    "noPlugins": "No hay plugins instalados",
+    "install": "Instalar",
+    "uninstall": "Desinstalar",
+    "installSuccess": "Instalado correctamente",
+    "uninstallSuccess": "Desinstalado correctamente",
+    "installFailed": "Error al instalar: {error}",
+    "uninstallFailed": "Error al desinstalar: {error}"
   }
 }

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  FolderPlus,
   GitBranch,
   Loader2,
   MessageSquare,
@@ -57,6 +58,9 @@ import {
   resolvePickerSelectedFolderId,
 } from "@/lib/folder-display"
 import { useSwitchToBranch } from "@/hooks/use-switch-to-branch"
+import { isDesktop, openFileDialog } from "@/lib/platform"
+import { getActiveRemoteConnectionId } from "@/lib/transport"
+import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 
 interface ConversationContextBarProps {
   extraContent?: React.ReactNode
@@ -143,7 +147,9 @@ export const ConversationFolderBranchPicker = memo(
     const folders = useAppWorkspaceStore((s) => s.folders)
     const allFolders = useAppWorkspaceStore((s) => s.allFolders)
     const branches = useAppWorkspaceStore((s) => s.branches)
+    const openFolder = useAppWorkspaceStore((s) => s.openFolder)
     const switchToBranch = useSwitchToBranch()
+    const [browserOpen, setBrowserOpen] = useState(false)
 
     const ownTab = useMemo(() => {
       const lookupId = tabId ?? activeTabId
@@ -242,6 +248,25 @@ export const ConversationFolderBranchPicker = memo(
               toast.error(t("toasts.openFolderFailed"))
             }
           }}
+          labelAddFolder={t("addFolder")}
+          onAddFolder={async () => {
+            if (isDesktop() && getActiveRemoteConnectionId() === null) {
+              const selected = await openFileDialog({
+                directory: true,
+                multiple: false,
+              })
+              if (selected) {
+                const path = Array.isArray(selected) ? selected[0] : selected
+                const detail = await openFolder(path)
+                openNewConversationTab(detail.id, detail.path, {
+                  inheritFromActive: true,
+                })
+                toast.success(t("toasts.folderChanged", { name: detail.name }))
+              }
+            } else {
+              setBrowserOpen(true)
+            }
+          }}
         />
 
         {showBranchPicker && ownFolder && (
@@ -268,6 +293,25 @@ export const ConversationFolderBranchPicker = memo(
             }}
           />
         )}
+        <DirectoryBrowserDialog
+          open={browserOpen}
+          onOpenChange={setBrowserOpen}
+          onSelect={async (path) => {
+            try {
+              const detail = await openFolder(path)
+              openNewConversationTab(detail.id, detail.path, {
+                inheritFromActive: true,
+              })
+              toast.success(t("toasts.folderChanged", { name: detail.name }))
+            } catch (err) {
+              console.error(
+                "[ConversationFolderBranchPicker] open folder failed:",
+                err
+              )
+              toast.error(t("toasts.openFolderFailed"))
+            }
+          }}
+        />
       </>
     )
   }
@@ -317,6 +361,10 @@ interface FolderPickerProps {
   isChatMode: boolean
   /** Select folderless chat mode. */
   onSelectChatMode: () => void
+  /** Label for the pinned "add folder" item. */
+  labelAddFolder: string
+  /** Open a dialog to add a new folder. */
+  onAddFolder: () => void | Promise<void>
 }
 
 const FolderPicker = memo(function FolderPicker({
@@ -331,6 +379,8 @@ const FolderPicker = memo(function FolderPicker({
   labelChatMode,
   isChatMode,
   onSelectChatMode,
+  labelAddFolder,
+  onAddFolder,
 }: FolderPickerProps) {
   const [open, setOpen] = useState(false)
 
@@ -360,33 +410,57 @@ const FolderPicker = memo(function FolderPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" className="p-0 w-72 overflow-hidden">
-        <Command className="rounded-2xl">
-          <CommandInput placeholder={labelSearch} />
-          <CommandList>
-            <CommandEmpty>{labelEmpty}</CommandEmpty>
-            <CommandGroup>
-              {folders.map((f) => (
-                <CommandItem
-                  key={f.id}
-                  value={`${f.name} ${f.path}`}
-                  onSelect={() => {
-                    setOpen(false)
-                    void onSelect(f.id)
-                  }}
-                >
-                  <Folder className="h-4 w-4" />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="truncate font-medium">{f.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {f.path}
-                    </span>
-                  </div>
-                  {f.id === currentFolderId && (
-                    <Check className="h-4 w-4 shrink-0" />
-                  )}
-                </CommandItem>
-              ))}
+      <PopoverContent align="start" side="top" className="p-0 w-72 overflow-hidden">
+        <Command className="rounded-2xl [&_[cmdk-item]]:text-[0.6875rem] [&_[cmdk-item]]:py-0.5 [&_[cmdk-input]]:text-[0.6875rem] [&_[cmdk-input]]:h-6 [&_[cmdk-input-wrapper]]:text-[0.6875rem]">
+	          {folders.length > 0 && (
+	            <CommandInput placeholder={labelSearch} />
+	          )}
+            <CommandList>
+              {folders.length > 0 ? (
+                <>
+                  <CommandEmpty>{labelEmpty}</CommandEmpty>
+                  <CommandGroup>
+                    {folders.map((f) => (
+                      <CommandItem
+                        key={f.id}
+                        value={`${f.name} ${f.path}`}
+                        onSelect={() => {
+                          setOpen(false)
+                          void onSelect(f.id)
+                        }}
+                      >
+                        <Folder className="h-3 w-3" />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="truncate font-medium">{f.name}</span>
+                          <span className="truncate text-[0.625rem] text-muted-foreground">
+                            {f.path}
+                          </span>
+                        </div>
+                        {f.id === currentFolderId && (
+                          <Check className="h-3 w-3 shrink-0" />
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                  <CommandSeparator />
+                </>
+              ) : null}
+            {/* Pinned: "Add Folder" entry. Stable value keeps it visible under
+                any search filter so the entry point is always reachable. */}
+            <CommandGroup forceMount>
+              <CommandItem
+                value="__add_folder__ add folder open folder"
+                forceMount
+                onSelect={() => {
+                  setOpen(false)
+                  void onAddFolder()
+                }}
+              >
+                <FolderPlus className="h-3 w-3" />
+                <span className="flex-1 truncate font-medium">
+                  {labelAddFolder}
+                </span>
+              </CommandItem>
             </CommandGroup>
             <CommandSeparator />
             {/* Pinned to the bottom: folderless "chat mode". A stable, plain
@@ -401,11 +475,11 @@ const FolderPicker = memo(function FolderPicker({
                   onSelectChatMode()
                 }}
               >
-                <MessageSquare className="h-4 w-4" />
+                <MessageSquare className="h-3 w-3" />
                 <span className="flex-1 truncate font-medium">
                   {labelChatMode}
                 </span>
-                {isChatMode && <Check className="h-4 w-4 shrink-0" />}
+                {isChatMode && <Check className="h-3 w-3 shrink-0" />}
               </CommandItem>
             </CommandGroup>
           </CommandList>

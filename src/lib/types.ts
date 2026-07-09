@@ -486,6 +486,10 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "claude_code",
   "codex",
   "gemini",
+  "kimi_code",
+  "hermes",
+  "open_claw",
+  "cline",
 ]
 
 /**
@@ -2258,10 +2262,15 @@ export interface ModelProviderInfo {
   api_url: string
   api_key: string
   api_key_masked: string
+  /** All agent types this provider serves. */
+  agent_types: AgentType[]
+  /** First element of agent_types for backward compat. */
   agent_type: AgentType
   /**
-   * Model value, interpretation depends on agent_type:
-   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus}
+   * Model value as a JSON object keyed by agent_type:
+   * `{"claude_code":"{\"main\":\"...\"}","codex":"gpt-5"}`
+   * Each agent_type's value follows its own format:
+   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus, ...}
    * - codex / gemini / others: plain model name string
    */
   model: string | null
@@ -2336,4 +2345,64 @@ export function serializeClaudeProviderModel(
   if (obj.customOptionDescription?.trim())
     cleaned.customOptionDescription = obj.customOptionDescription.trim()
   return Object.keys(cleaned).length === 0 ? null : JSON.stringify(cleaned)
+}
+
+/**
+ * Extract the model value for a specific agent_type from a provider's
+ * multi-agent model JSON. The `model` field is a JSON object keyed by
+ * agent_type, e.g. `{"claude_code":"{\"main\":\"...\"}","codex":"gpt-5"}`.
+ * Returns the raw string value for that agent_type, or null if absent.
+ */
+export function extractAgentModel(
+  model: string | null,
+  agentType: AgentType
+): string | null {
+  if (!model) return null
+  try {
+    const parsed = JSON.parse(model)
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      // Check if it's a multi-agent format (keys are agent_type strings)
+      if (agentType in parsed) {
+        const val = parsed[agentType]
+        return typeof val === "string" ? val : JSON.stringify(val)
+      }
+      // Could be a legacy single-agent format (Claude JSON object)
+      // If none of the keys match known agent_types, return as-is
+      const knownAgentTypes = MODEL_PROVIDER_AGENT_TYPES as readonly string[]
+      const hasAgentKey = Object.keys(parsed).some((k) =>
+        knownAgentTypes.includes(k)
+      )
+      if (hasAgentKey) return null // Multi-agent format, our type not present
+      // Legacy single-agent — return the whole thing
+      return model
+    }
+    // Legacy single-agent plain string
+    return model
+  } catch {
+    // Not JSON — legacy plain string model
+    return model
+  }
+}
+
+/**
+ * Serialize a models map (agent_type -> model string) into a JSON object
+ * string for storage. For claude_code the model string is itself a JSON
+ * object; for others it's a plain string.
+ */
+export function serializeModelsMap(
+  models: Record<string, string>
+): string | null {
+  const obj: Record<string, unknown> = {}
+  for (const [agentType, raw] of Object.entries(models)) {
+    const trimmed = raw.trim()
+    if (!trimmed) continue
+    // Try to parse as JSON; if it works, embed as structured value,
+    // otherwise embed as a plain string.
+    try {
+      obj[agentType] = JSON.parse(trimmed)
+    } catch {
+      obj[agentType] = trimmed
+    }
+  }
+  return Object.keys(obj).length === 0 ? null : JSON.stringify(obj)
 }

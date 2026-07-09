@@ -831,13 +831,21 @@ fn link_one_locked(
                     });
                 }
                 ExpertLinkState::LinkedElsewhere | ExpertLinkState::Broken => {
-                    let found = read_link_target(&link_path)
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "<unknown>".into());
-                    return Err(ExpertsError::ForeignLink {
-                        path: link_path.to_string_lossy().to_string(),
-                        found,
-                    });
+                    // A stale or foreign link sits in the way. This commonly
+                    // happens after a rename (e.g. `.codeg` → `.veryagent`)
+                    // leaves links pointing at the old central store, or when a
+                    // previous session left a dangling junction. Rather than
+                    // lock the user out with a ForeignLink error they cannot
+                    // resolve from the UI, remove the stale link and re-create
+                    // one pointing at our current central store.
+                    remove_skill_entry(&link_path).map_err(|e| {
+                        ExpertsError::Io(format!(
+                            "remove stale link {}: {e}",
+                            link_path.display()
+                        ))
+                    })?;
+                    create_link_raw(&central, &link_path)
+                        .map_err(|e| ExpertsError::Io(format!("relink failed: {e}")))?;
                 }
                 ExpertLinkState::NotLinked => {
                     // Shouldn't happen after AlreadyExists, but retry once.
@@ -902,22 +910,22 @@ fn unlink_one_locked(expert_id: &str, agent_type: AgentType) -> Result<(), Exper
         let state = classify_link(&candidate, &central);
         if matches!(
             state,
-            ExpertLinkState::LinkedToCodeg | ExpertLinkState::Broken
+            ExpertLinkState::LinkedToCodeg
+                | ExpertLinkState::Broken
+                | ExpertLinkState::LinkedElsewhere
         ) {
-            // Safe to remove a link to our central store or a broken link.
+            // Safe to remove: a link to our central store, a broken/dangling
+            // link, or a stale link left over from a rename (e.g. `.codeg` →
+            // `.veryagent`). We only remove the link itself — never the contents
+            // of the target — so a foreign link pointing at real user data is
+            // still handled by the BlockedByRealDirectory branch below.
             remove_skill_entry(&candidate).map_err(|e| {
                 ExpertsError::Io(format!("remove link {}: {e}", candidate.display()))
             })?;
             removed = true;
-        } else if state == ExpertLinkState::LinkedElsewhere {
-            return Err(ExpertsError::ForeignLink {
-                path: candidate.to_string_lossy().to_string(),
-                found: read_link_target(&candidate)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "<unknown>".into()),
-            });
         } else if state == ExpertLinkState::BlockedByRealDirectory {
-            // Not ours; leave alone.
+            // A real directory (not a link). Could be user-authored content or a
+            // Windows copy-mode fallback — leave it alone, don't risk data loss.
             continue;
         }
     }

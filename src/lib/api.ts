@@ -38,6 +38,7 @@ import type {
   AgentSkillContent,
   ExpertListItem,
   ExpertInstallStatus,
+  ExpertLinkState,
   LinkOp,
   LinkOpResult,
   FolderHistoryEntry,
@@ -725,7 +726,19 @@ export async function expertsGetInstallStatus(
 export async function expertsListAllInstallStatuses(): Promise<
   ExpertInstallStatus[]
 > {
-  return getTransport().call("experts_list_all_install_statuses")
+  const result = (await getTransport().call(
+    "experts_list_all_install_statuses"
+  )) as ExpertInstallStatus[]
+  // 后端序列化为 "linked_to_codeg"，前端类型用的是 "linked_to_veryagent" —— 只做命名映射，
+  // 保留后端返回的真实状态（not_linked / broken / linked_elsewhere 等），不能覆盖成统一的值，
+  // 否则矩阵显示与文件系统脱节、toggleCell 会走错启用/禁用分支。
+  return result.map((item) => ({
+    ...item,
+    state:
+      item.state === ("linked_to_codeg" as ExpertLinkState)
+        ? ("linked_to_veryagent" as const)
+        : item.state,
+  }))
 }
 
 /** Apply a batch of enable/disable ops; returns one result per op. */
@@ -819,7 +832,17 @@ export async function officecliSkillGetInstallStatus(
 export async function officecliSkillListAllInstallStatuses(): Promise<
   ExpertInstallStatus[]
 > {
-  return getTransport().call("officecli_skill_list_all_install_statuses")
+  const result = (await getTransport().call(
+    "officecli_skill_list_all_install_statuses"
+  )) as ExpertInstallStatus[]
+  // 同 expertsListAllInstallStatuses：只做命名映射，保留真实状态。
+  return result.map((item) => ({
+    ...item,
+    state:
+      item.state === ("linked_to_codeg" as ExpertLinkState)
+        ? ("linked_to_veryagent" as const)
+        : item.state,
+  }))
 }
 
 /** Apply a batch of enable/disable ops; returns one result per op. */
@@ -3076,15 +3099,15 @@ export async function createModelProvider(params: {
   name: string
   apiUrl: string
   apiKey: string
-  agentType: string
-  model?: string | null
+  agentTypes: string[]
+  models: Record<string, string>
 }): Promise<ModelProviderInfo> {
   return getTransport().call("create_model_provider", {
     name: params.name,
     apiUrl: params.apiUrl,
     apiKey: params.apiKey,
-    agentType: params.agentType,
-    model: params.model ?? null,
+    agentTypes: params.agentTypes,
+    models: params.models,
   })
 }
 
@@ -3093,16 +3116,16 @@ export async function updateModelProvider(params: {
   name?: string | null
   apiUrl?: string | null
   apiKey?: string | null
-  agentType?: string | null
-  model?: string | null
+  agentTypes?: string[] | null
+  models?: Record<string, string> | null
 }): Promise<UpdateModelProviderResult> {
   return getTransport().call("update_model_provider", {
     id: params.id,
     name: params.name ?? null,
     apiUrl: params.apiUrl ?? null,
     apiKey: params.apiKey ?? null,
-    agentType: params.agentType ?? null,
-    model: params.model ?? null,
+    agentTypes: params.agentTypes ?? null,
+    models: params.models ?? null,
   })
 }
 

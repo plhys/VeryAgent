@@ -5115,12 +5115,53 @@ fn cascade_update_agent_config(
 
 /// Cascade model provider changes (credentials + model) to all dependent agent settings
 /// and config files.
+/// Extract the model value for a specific agent_type from a provider's model
+/// field. The model field can be in two formats:
+/// - **Multi-agent format** (new): `{"claude_code": {...}, "codex": "gpt-5"}`
+///   → returns the value for the given `agent_type_str` as a string.
+/// - **Legacy single-agent format**: a plain string or a Claude JSON object
+///   (when there's only one agent_type) → returned as-is.
+///
+/// Returns `None` when the model field is absent or the agent_type has no entry.
+pub(crate) fn extract_agent_model(
+    raw: Option<&str>,
+    agent_type_str: &str,
+) -> Option<String> {
+    let trimmed = raw.map(str::trim).filter(|s| !s.is_empty())?;
+    // Try parsing as a multi-agent JSON object first.
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if let Some(obj) = val.as_object() {
+            // If the top-level key matches an agent_type, it's the multi-agent format.
+            if let Some(entry) = obj.get(agent_type_str) {
+                return Some(entry.to_string());
+            }
+            // If the object contains known agent_type keys but not ours, we have no model.
+            // Heuristic: check if any key looks like an agent_type (contains underscore
+            // or matches known types).
+            let has_agent_key = obj.keys().any(|k| {
+                k.contains('_') || k == "claude_code" || k == "codex" || k == "gemini"
+                    || k == "kimi_code" || k == "hermes" || k == "openhands"
+                    || k == "openclaw" || k == "cline" || k == "augment"
+            });
+            if has_agent_key {
+                // Multi-agent format but this agent_type has no entry.
+                return None;
+            }
+            // Otherwise it might be a Claude JSON object (legacy single-agent).
+            // Fall through to return as-is.
+        }
+    }
+    // Legacy single-agent format: return as-is.
+    Some(trimmed.to_string())
+}
+
 pub(crate) async fn cascade_update_model_provider(
     db: &AppDatabase,
     provider_id: i32,
     new_api_url: &str,
     new_api_key: &str,
     new_model: Option<&str>,
+    agent_types: &[String],
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, provider_id)
@@ -5132,6 +5173,13 @@ pub(crate) async fn cascade_update_model_provider(
             Ok(at) => at,
             Err(_) => continue,
         };
+
+        // Extract this agent's model from the multi-agent model JSON.
+        let agent_type_str = serde_json::to_value(&agent_type)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| agent_type.to_string());
+        let agent_model = extract_agent_model(new_model, &agent_type_str);
 
         // 1. Update env_json in database (uses agent_env_keys for consistent key names)
         let (url_key, key_key, _) = agent_env_keys(agent_type);
@@ -5148,7 +5196,7 @@ pub(crate) async fn cascade_update_model_provider(
             env_map.insert(key_key.to_string(), new_api_key.to_string());
         }
 
-        let model_env = parse_provider_model(agent_type, new_model);
+        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
         for (k, v) in &model_env {
             match v {
                 Some(value) => {
@@ -5170,7 +5218,7 @@ pub(crate) async fn cascade_update_model_provider(
             .map_err(|e| AcpError::protocol(e.to_string()))?;
 
         // 2. Update on-disk config files
-        let codex_action = provider_codex_model_action(agent_type, new_model);
+        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         if let Err(e) = cascade_update_agent_config(
             agent_type,
             new_api_url,
@@ -5185,6 +5233,39 @@ pub(crate) async fn cascade_update_model_provider(
 
         emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
     }
+
+    // Also cascade to agent_types that are in the provider but don't yet have
+    // a dependent agent_setting row (e.g. newly added agent_type). We need to
+    // ensure their on-disk configs get updated too if they exist.
+    let dependent_agent_types: std::collections::HashSet<String> = dependents
+        .iter()
+        .filter_map(|s| serde_json::from_str::<AgentType>(&s.agent_type).ok())
+        .map(|at| at.to_string())
+        .collect();
+    for at_str in agent_types {
+        if dependent_agent_types.contains(at_str) {
+            continue; // already handled above
+        }
+        let agent_type: AgentType = match serde_json::from_str(at_str) {
+            Ok(at) => at,
+            Err(_) => continue,
+        };
+        let agent_model = extract_agent_model(new_model, at_str);
+        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
+        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
+        if let Err(e) = cascade_update_agent_config(
+            agent_type,
+            new_api_url,
+            new_api_key,
+            &model_env,
+            &codex_action,
+        ) {
+            tracing::warn!(
+                "[ModelProvider] cascade_update_agent_config({agent_type}) for new agent_type failed: {e}, skipping"
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -6134,25 +6215,27 @@ pub(crate) async fn acp_update_agent_env_core(
             .map_err(|e| AcpError::protocol(e.to_string()))?
             .ok_or_else(|| AcpError::protocol(format!("model provider not found: {pid}")))?;
 
-        // Reject cross-type binding: provider.model is formatted for its declared
-        // agent_type (Claude = JSON, Codex/Gemini/others = plain string). Binding
-        // a mismatched provider would parse the model under the wrong format and
-        // silently write invalid env / config.toml entries.
-        let provider_agent_type: AgentType =
-            serde_json::from_value(serde_json::Value::String(provider.agent_type.clone()))
-                .map_err(|_| {
-                    AcpError::protocol(format!(
-                        "model provider {pid} has invalid agent_type: {}",
-                        provider.agent_type
-                    ))
-                })?;
-        if provider_agent_type != agent_type {
+        // A provider can serve multiple agent_types. Verify the agent is in the
+        // provider's agent_types list (or the legacy single agent_type column).
+        let agent_type_str = serde_json::to_value(&agent_type)
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| agent_type.to_string());
+        let provider_agent_types = crate::models::model_provider::parse_agent_types_from_row(
+            &provider.agent_types_json,
+            &provider.agent_type,
+        );
+        if !provider_agent_types.contains(&agent_type_str) {
             return Err(AcpError::protocol(format!(
-                "model provider {pid} is for {provider_agent_type}, cannot be bound to {agent_type}"
+                "model provider {pid} is for [{}], cannot be bound to {agent_type}",
+                provider_agent_types.join(", ")
             )));
         }
 
-        let model_env = parse_provider_model(agent_type, provider.model.as_deref());
+        // Extract this agent's model from the multi-agent model JSON.
+        let agent_model = extract_agent_model(provider.model.as_deref(), &agent_type_str);
+
+        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
         for (k, v) in &model_env {
             match v {
                 Some(value) => {
@@ -6163,7 +6246,7 @@ pub(crate) async fn acp_update_agent_env_core(
                 }
             }
         }
-        codex_action = provider_codex_model_action(agent_type, provider.model.as_deref());
+        codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         // Codex's on-disk config is handled by `apply_codex_root_model_action`
         // below; Gemini's analogous config.env gap is pre-existing and out of
         // scope here. Only Claude needs the local-config cascade on bind.
@@ -8038,12 +8121,12 @@ wire_api = "responses"
 base_url = "https://gateway.example/v1"
 wire_api = "chat"
 "#;
-        let other = codeg.replace(
+        let other = veryagent.replace(
             "model_provider = \"veryagent\"",
             "model_provider = \"other\"",
         );
 
-        let p_codeg = codex_config_projection_from_toml(codeg);
+        let p_codeg = codex_config_projection_from_toml(veryagent);
         let p_other = codex_config_projection_from_toml(&other);
 
         assert_eq!(
@@ -8060,7 +8143,7 @@ wire_api = "chat"
         assert_ne!(p_codeg, p_other);
 
         // Deterministic for identical input.
-        assert_eq!(codex_config_projection_from_toml(codeg), p_codeg);
+        assert_eq!(codex_config_projection_from_toml(veryagent), p_codeg);
 
         // `modelProvider` must NOT be an AgentRuntimeConfig key, or
         // build_runtime_env_from_setting would mirror it back into a runtime env

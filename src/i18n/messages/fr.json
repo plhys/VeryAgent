@@ -1203,7 +1203,10 @@
       "noChats": "Aucune discussion",
       "newChatAction": "Nouvelle discussion",
       "automations": "Automatisations",
-      "loadingSubsessions": "Chargement des sous-conversations…"
+      "skillsAndTools": "Compétences et outils",
+      "loadingSubsessions": "Chargement des sous-conversations…",
+      "chats": "Chats",
+      "projects": "Projets"
     },
     "conversation": {
       "reloadFailed": "Échec du rechargement de la conversation : {message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "Aucune commande correspondante",
         "experts": "Experts",
         "office": "Bureautique",
+        "addExpertSkill": "Ajouter une compétence experte",
+        "addOfficeSkill": "Ajouter une compétence bureautique",
         "attachLocalUpload": "Téléverser un fichier local",
         "attachServerFile": "Sélectionner un fichier serveur",
         "attachUploadTooLarge": "{names} dépasse la limite de téléversement de {limit} Mo et a été ignoré.",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "Basculé en mode discussion",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "Ajouter un dossier"
     },
     "cloneDialog": {
       "title": "Cloner un dépôt",
@@ -3573,5 +3579,28 @@
     "branchRemote": "Distante",
     "branchSearchPlaceholder": "Rechercher des branches…",
     "branchNone": "Aucune branche"
+  },
+  "SkillsAndTools": {
+    "title": "Compétences et outils",
+    "tabCurrentAgent": "Agent actuel",
+    "tabSkillsRepo": "Compétences",
+    "tabPluginsRepo": "Plugins",
+    "loading": "Chargement…",
+    "active": "Actif",
+    "noAgent": "Aucun agent disponible",
+    "enabledSkills": "Compétences activées",
+    "noSkills": "Aucune compétence disponible",
+    "codingExperts": "Experts en codage",
+    "noExperts": "Aucun expert disponible",
+    "officeSkills": "Compétences Office",
+    "noOfficeSkills": "Aucune compétence Office disponible",
+    "installedPlugins": "Plugins installés",
+    "noPlugins": "Aucun plugin installé",
+    "install": "Installer",
+    "uninstall": "Désinstaller",
+    "installSuccess": "Installé avec succès",
+    "uninstallSuccess": "Désinstallé avec succès",
+    "installFailed": "Échec de l'installation : {error}",
+    "uninstallFailed": "Échec de la désinstallation : {error}"
   }
 }

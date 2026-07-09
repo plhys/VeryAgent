@@ -103,7 +103,7 @@ export const SidebarSectionHeader = memo(function SidebarSectionHeader({
   )
   return (
     <div className={cn(topGap && "pt-[0.75rem]")}>
-      <div className="group/header relative h-[2rem]">
+      <div className="group/header relative h-[1.75rem]">
         <button
           type="button"
           onClick={() => onToggle(section)}

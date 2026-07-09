@@ -13,12 +13,14 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
+  LayoutGrid,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
 import { STATUS_ORDER } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
+import { useTabStore } from "@/contexts/tab-context"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -144,6 +146,9 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const tSidebar = useTranslations("Folder.sidebar")
   const tStatus = useTranslations("Folder.statusLabels")
   const tDetails = useTranslations("Folder.sessionDetails")
+  const tTabs = useTranslations("Folder.tabs")
+  const isTileMode = useTabStore((s) => s.isTileMode)
+  const toggleTileMode = useTabStore((s) => s.toggleTileMode)
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -214,7 +219,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            className="relative h-[2rem] bg-sidebar"
+            className="relative h-[1.75rem] bg-sidebar"
             data-conv-key={`${conversation.agent_type}:${conversation.id}`}
             // Per-level indent: shift the shared rail axis right by one step per
             // depth. Root rows (depth 0) leave the var untouched so they inherit
@@ -231,7 +236,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           >
             <div
               className={cn(
-                "group relative flex h-[1.9375rem] w-full items-center",
+                "group relative flex h-[1.6875rem] w-full items-center",
                 "rounded-full text-sidebar-foreground",
                 "transition-colors duration-[120ms]",
                 isSelected
@@ -520,6 +525,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           <ContextMenuItem onSelect={() => setDetailsOpen(true)}>
             <Info className="h-4 w-4" />
             {tDetails("menuLabel")}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={toggleTileMode}>
+            <LayoutGrid className="h-4 w-4" />
+            {isTileMode ? tTabs("untileDisplay") : tTabs("tileDisplay")}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuSub>

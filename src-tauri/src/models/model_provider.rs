@@ -7,7 +7,14 @@ pub struct ModelProviderInfo {
     pub api_url: String,
     pub api_key: String,
     pub api_key_masked: String,
+    /// All agent types this provider is associated with (authoritative, from
+    /// `agent_types_json`). A provider can serve multiple agents — each gets
+    /// its own model value from the `model` JSON object.
+    pub agent_types: Vec<String>,
+    /// First element of `agent_types` for backward compat with older clients.
     pub agent_type: String,
+    /// JSON object keyed by agent_type: `{"claude_code":"{...}","codex":"gpt-5"}`.
+    /// Each agent reads its own model value with its own format.
     pub model: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -30,23 +37,36 @@ fn mask_api_key(key: &str) -> String {
     }
 }
 
+/// Parse `agent_types_json` into a Vec<String>. Falls back to deriving from
+/// `agent_type` for rows that haven't been migrated yet.
+pub fn parse_agent_types_from_row(agent_types_json: &str, agent_type: &str) -> Vec<String> {
+    if let Ok(list) = serde_json::from_str::<Vec<String>>(agent_types_json) {
+        if !list.is_empty() {
+            return list;
+        }
+    }
+    // Fallback for rows backfilled with empty agent_types_json but set agent_type.
+    if !agent_type.is_empty() {
+        vec![agent_type.to_string()]
+    } else {
+        Vec::new()
+    }
+}
+
 impl From<crate::db::entities::model_provider::Model> for ModelProviderInfo {
     fn from(m: crate::db::entities::model_provider::Model) -> Self {
-        let agent_type = if m.agent_type.is_empty() {
-            // Fallback for rows backfilled with empty agent_type.
-            serde_json::from_str::<Vec<String>>(&m.agent_types_json)
-                .ok()
-                .and_then(|list| list.into_iter().next())
-                .unwrap_or_default()
-        } else {
-            m.agent_type
-        };
+        let agent_types = parse_agent_types_from_row(&m.agent_types_json, &m.agent_type);
+        let agent_type = agent_types
+            .first()
+            .cloned()
+            .unwrap_or_else(|| m.agent_type.clone());
         Self {
             id: m.id,
             name: m.name,
             api_url: m.api_url,
             api_key: m.api_key.clone(),
             api_key_masked: mask_api_key(&m.api_key),
+            agent_types,
             agent_type,
             model: m.model,
             created_at: m.created_at.to_rfc3339(),

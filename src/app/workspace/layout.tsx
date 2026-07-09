@@ -52,7 +52,6 @@ import {
 } from "@/contexts/workspace-context"
 import { RemoteConnectionGate } from "@/contexts/remote-connection-context"
 import { UpdateProvider } from "@/components/providers/update-provider"
-import { TabBar } from "@/components/tabs/tab-bar"
 import { TerminalPanel } from "@/components/terminal/terminal-panel"
 import { AuxPanel } from "@/components/layout/aux-panel"
 import { FileWorkspaceTabBar } from "@/components/files/file-workspace-tab-bar"
@@ -246,7 +245,8 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
               onFocusCapture={markConversationActive}
               inert={filesMaximized || undefined}
             >
-              <TabBar />
+              {/* TabBar 已移除：会话标签页与左侧侧边栏会话列表功能重复。
+                  平铺显示功能保留在侧边栏会话卡片右键菜单中。 */}
               <div className="relative flex-1 min-h-0 overflow-hidden">
                 {children}
               </div>
@@ -317,7 +317,8 @@ function MobileWorkspaceContent({ children }: { children: React.ReactNode }) {
       <div className="h-full min-h-0" inert={!isConversations || undefined}>
         {showConversation ? (
           <section className="flex h-full min-h-0 flex-col overflow-hidden">
-            <TabBar />
+            {/* TabBar 已移除：会话标签页与左侧侧边栏会话列表功能重复。
+                平铺显示功能保留在侧边栏会话卡片右键菜单中。 */}
             <div className="relative flex-1 min-h-0 overflow-hidden">
               {children}
             </div>
@@ -726,7 +727,7 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
         <ResizablePanel
           id={FOLDER_SHELL_LEFT_PANEL_ID}
           order={1}
-          defaultSize={18}
+          defaultSize={17}
           minSize={sidebarOpen ? sidebarSizeRange.minSize : 0}
           maxSize={sidebarOpen ? sidebarSizeRange.maxSize : 0}
         >
@@ -819,9 +820,15 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
 
 function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
+  const { isOpen: sidebarOpen, width: sidebarWidth } = useSidebarContext()
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
+    <div
+      className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+      style={{
+        "--sidebar-width-px": sidebarOpen ? `${sidebarWidth}px` : "0px",
+      } as React.CSSProperties}
+    >
       <ChatModeAuxAutoHide />
       <FolderTitleBar />
       {isMobile ? (

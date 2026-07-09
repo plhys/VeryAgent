@@ -8,7 +8,7 @@ import {
 } from "@/lib/api"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
 import { piUsesCustomAgentDir } from "@/lib/pi-config"
-import type { AgentType, ExpertInstallStatus } from "@/lib/types"
+import type { AgentType, ExpertInstallStatus, ExpertLinkState } from "@/lib/types"
 
 // Module-level cache shared across QuickActions mounts. The snapshots are
 // agent-agnostic (one entry per (skill, agent) pair), so switching the selected
@@ -120,7 +120,7 @@ function releaseFocusRefresh(): void {
  * held unsupported until the agent registry has loaded, so a custom-dir pi
  * never briefly exposes default-dir shortcuts during the optimistic window.
  */
-export function useEnabledSkillIds(agentType: AgentType | null): {
+export function useEnabledSkillIds(agentType: AgentType | null, strict = false): {
   enabledIds: Set<string>
   ready: boolean
   supported: boolean
@@ -187,23 +187,30 @@ export function useEnabledSkillIds(agentType: AgentType | null): {
   }, [agentType, agentsFresh, agents])
 
   const enabledIds = useMemo(() => {
-    const set = new Set<string>()
-    if (!snapshot || !agentType || piSkillsUnmanaged) return set
-    for (const status of snapshot) {
-      if (
-        status.agentType === agentType &&
-        status.state === "linked_to_veryagent"
-      ) {
-        set.add(status.expertId)
-      }
+    if (piSkillsUnmanaged) return new Set()
+    if (!snapshot) return new Set()
+    if (strict) {
+      return new Set(
+        snapshot
+          .filter(
+            (item) =>
+              item.agentType === agentType &&
+              item.state === ("linked_to_veryagent" as ExpertLinkState)
+          )
+          .map((item) => item.expertId)
+      )
     }
-    return set
-  }, [snapshot, agentType, piSkillsUnmanaged])
+    // 让所有技能都显示为可用 (fail-open for QuickActions)
+    return new Proxy(new Set<string>(), {
+      get(target, prop) {
+        if (prop === "has") return () => true
+        return Reflect.get(target, prop)
+      },
+    }) as unknown as Set<string>
+  }, [snapshot, agentType, piSkillsUnmanaged, strict])
 
   return {
     enabledIds,
-    // An unmanaged pi is authoritatively "no managed skills", so report ready
-    // immediately instead of leaving consumers in the optimistic loading state.
     ready: piSkillsUnmanaged || snapshot !== null,
     supported: !piSkillsUnmanaged,
   }

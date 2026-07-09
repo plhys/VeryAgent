@@ -1149,13 +1149,19 @@ fn link_one_locked(
                     });
                 }
                 ExpertLinkState::LinkedElsewhere | ExpertLinkState::Broken => {
-                    let found = read_link_target(&link_path)
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "<unknown>".into());
-                    return Err(OfficeToolsError::ForeignLink {
-                        path: link_path.to_string_lossy().to_string(),
-                        found,
-                    });
+                    // A stale or foreign link sits in the way (commonly a
+                    // leftover from the `.codeg` → `.veryagent` rename, or a
+                    // dangling junction from a prior session). Remove it and
+                    // re-link to our current central store instead of locking
+                    // the user out with an unrecoverable ForeignLink error.
+                    remove_skill_entry(&link_path).map_err(|e| {
+                        OfficeToolsError::Io(format!(
+                            "remove stale link {}: {e}",
+                            link_path.display()
+                        ))
+                    })?;
+                    create_link_raw(&central, &link_path)
+                        .map_err(|e| OfficeToolsError::Io(format!("relink failed: {e}")))?;
                 }
                 ExpertLinkState::NotLinked => {
                     create_link_raw(&central, &link_path)
@@ -1215,24 +1221,22 @@ fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), Office
         }
         let state = classify_link(&candidate, &central);
         let should_remove = match state {
-            ExpertLinkState::LinkedToCodeg => true,
-            ExpertLinkState::Broken => read_link_target(&candidate)
-                .map(|t| t.starts_with(&central))
-                .unwrap_or(false),
+            ExpertLinkState::LinkedToCodeg
+            | ExpertLinkState::Broken
+            | ExpertLinkState::LinkedElsewhere => {
+                // Remove links to our central store, dangling links, and stale
+                // links left over from a rename (`.codeg` → `.veryagent`). Only
+                // the link itself is removed, never the target's contents.
+                true
+            }
             _ => false,
         };
         if should_remove {
             remove_skill_entry(&candidate).map_err(|e| {
                 OfficeToolsError::Io(format!("remove link {}: {e}", candidate.display()))
             })?;
-        } else if state == ExpertLinkState::LinkedElsewhere {
-            return Err(OfficeToolsError::ForeignLink {
-                path: candidate.to_string_lossy().to_string(),
-                found: read_link_target(&candidate)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "<unknown>".into()),
-            });
         }
+        // BlockedByRealDirectory (a real dir / copy-mode fallback) is left alone.
     }
     Ok(())
 }

@@ -1348,11 +1348,7 @@ export const useTabStore = create<TabStoreState>()((set, get) => ({
         return
       }
     }
-    const first = folders[0]
-    if (first) {
-      get().openNewConversationTab(first.id, first.path)
-      return
-    }
+    // No saved context — default to free workspace instead of the first folder.
     get().openChatModeTab()
   },
 

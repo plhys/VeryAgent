@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{extract::Extension, Json};
@@ -18,8 +19,8 @@ pub struct CreateModelProviderParams {
     pub name: String,
     pub api_url: String,
     pub api_key: String,
-    pub agent_type: String,
-    pub model: Option<String>,
+    pub agent_types: Vec<String>,
+    pub models: HashMap<String, String>,
 }
 
 #[derive(Deserialize)]
@@ -29,8 +30,8 @@ pub struct UpdateModelProviderParams {
     pub name: Option<String>,
     pub api_url: Option<String>,
     pub api_key: Option<String>,
-    pub agent_type: Option<String>,
-    pub model: Option<String>,
+    pub agent_types: Option<Vec<String>>,
+    pub models: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize)]
@@ -59,8 +60,8 @@ pub async fn create_model_provider(
         params.name,
         params.api_url,
         params.api_key,
-        params.agent_type,
-        params.model,
+        params.agent_types,
+        params.models,
     )
     .await?;
     Ok(Json(result))
@@ -78,8 +79,8 @@ pub async fn update_model_provider(
         params.name,
         params.api_url,
         params.api_key,
-        params.agent_type,
-        params.model,
+        params.agent_types,
+        params.models,
         &state.emitter,
     )
     .await?;

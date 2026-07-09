@@ -55,17 +55,17 @@ export function NewFolderDropdown() {
             <FolderPlus className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="min-w-56" align="start">
-          <DropdownMenuItem onSelect={handleOpenFolder}>
-            <FolderOpenDot className="h-3.5 w-3.5 shrink-0" />
+        <DropdownMenuContent className="min-w-44" align="start">
+          <DropdownMenuItem onSelect={handleOpenFolder} className="py-1.5">
+            <FolderOpenDot className="h-3 w-3 shrink-0" />
             {t("openFolder")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setCloneOpen(true)}>
-            <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+          <DropdownMenuItem onSelect={() => setCloneOpen(true)} className="py-1.5">
+            <FolderGit2 className="h-3 w-3 shrink-0" />
             {t("cloneRepository")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openProjectBootWindow()}>
-            <Rocket className="h-3.5 w-3.5 shrink-0" />
+          <DropdownMenuItem onSelect={() => openProjectBootWindow()} className="py-1.5">
+            <Rocket className="h-3 w-3 shrink-0" />
             {t("projectBoot")}
           </DropdownMenuItem>
         </DropdownMenuContent>

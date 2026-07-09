@@ -4703,7 +4703,7 @@ export function AcpAgentSettings() {
   const selectedModelProviders = useMemo(() => {
     if (!selectedAgent) return []
     return modelProviders.filter(
-      (p) => p.agent_type === selectedAgent.agent_type
+      (p) => p.agent_types.includes(selectedAgent.agent_type)
     )
   }, [modelProviders, selectedAgent])
 

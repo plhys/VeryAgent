@@ -464,6 +464,8 @@ export function buildRows(args: {
    *  present) always stays on top regardless. Optional — omitted (e.g. in
    *  tests) defaults to `folders-first`, the historical layout. */
   sectionOrder?: SidebarSectionOrder
+  /** 与外部 tab 切换配合：true 时隐藏文件夹分组，避免重复 */
+  hideFolderSections?: boolean
   /** Ids whose delegation subtree is open. A conversation row with
    *  `child_count > 0` and id in this set recurses into its cached children.
    *  Optional — omitted (e.g. in tests) means nothing is expanded. */
@@ -489,6 +491,7 @@ export function buildRows(args: {
     chatConversations,
     chatsExpanded,
     sectionOrder = "folders-first",
+    hideFolderSections = false,
     conversationExpanded = EMPTY_EXPANDED,
     childrenByParent = EMPTY_CHILDREN,
     childrenLoading = EMPTY_EXPANDED,
@@ -558,15 +561,17 @@ export function buildRows(args: {
   }
 
   const pushChats = () => {
-    // The Chat section header is always present (a permanent entry point),
-    // unlike the conditional Pinned/Folders headers.
-    rows.push({
-      kind: "section",
-      section: "chats",
-      expanded: chatsExpanded,
-      count: chatConversations.length,
-    })
-    if (chatsExpanded) {
+    if (!hideFolderSections) {
+      // 外部已有 tab 切换时，不显示聊天分组标题（避免重复）
+      rows.push({
+        kind: "section",
+        section: "chats",
+        expanded: chatsExpanded,
+        count: chatConversations.length,
+      })
+    }
+    const showChatContent = hideFolderSections || chatsExpanded
+    if (showChatContent) {
       if (chatConversations.length === 0) {
         rows.push({ kind: "chats-empty" })
       } else {
@@ -584,7 +589,9 @@ export function buildRows(args: {
     }
   }
 
-  if (sectionOrder === "chats-first") {
+  if (hideFolderSections) {
+    pushChats()
+  } else if (sectionOrder === "chats-first") {
     pushChats()
     pushFolders()
   } else {

@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Crosshair,
-  Funnel,
+  MessageSquare,
+  Folder as FolderIcon,
   Search,
   SquarePen,
   Zap,
+  Wrench,
   type LucideIcon,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -22,17 +21,8 @@ import {
   SidebarConversationList,
   type SidebarConversationListHandle,
 } from "@/components/conversations/sidebar-conversation-list"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { SidebarProjectList } from "@/components/conversations/sidebar-project-list"
+import { NewFolderDropdown } from "./new-folder-dropdown"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useIsMac } from "@/hooks/use-is-mac"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -41,9 +31,6 @@ import {
   loadShowCompleted,
   loadSortMode,
   loadSectionOrder,
-  saveShowCompleted,
-  saveSortMode,
-  saveSectionOrder,
   type SidebarSortMode,
   type SidebarSectionOrder,
 } from "@/lib/sidebar-view-mode-storage"
@@ -93,7 +80,7 @@ function SidebarNavButton({
       className={cn(
         "group flex h-8 w-full items-center gap-[0.4375rem] rounded-full pl-[0.4375rem] pr-1.5",
         "text-[0.875rem] text-sidebar-foreground outline-none",
-        "transition-colors duration-150 hover:bg-sidebar-accent",
+        "transition-colors duration-150 hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         active && "bg-sidebar-primary/8"
       )}
@@ -119,10 +106,10 @@ export function Sidebar() {
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const [showCompleted, setShowCompleted] = useState(false)
+  const [activeTab, setActiveTab] = useState<"conversations" | "projects">("conversations")
   const [sortMode, setSortMode] = useState<SidebarSortMode>("created")
   const [sectionOrder, setSectionOrder] =
     useState<SidebarSectionOrder>("folders-first")
-  const [allExpanded, setAllExpanded] = useState(true)
   const searchShortcutLabel = formatShortcutLabel(
     shortcuts.toggle_search,
     isMac
@@ -131,49 +118,12 @@ export function Sidebar() {
     shortcuts.new_conversation,
     isMac
   )
-  // General umbrella name for the funnel menu (show-completed + sort + section
-  // order). Kept generic so the accessible name / tooltip stays accurate as the
-  // menu gains options.
-  const viewOptionsLabel = t("viewOptions")
-  const toggleExpandLabel = allExpanded
-    ? t("collapseAllGroups")
-    : t("expandAllGroups")
 
   useEffect(() => {
-    // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowCompleted(loadShowCompleted())
     setSortMode(loadSortMode())
     setSectionOrder(loadSectionOrder())
   }, [])
-
-  const handleSetShowCompleted = useCallback((value: boolean) => {
-    setShowCompleted(value)
-    saveShowCompleted(value)
-  }, [])
-
-  const handleSetSortMode = useCallback((value: string) => {
-    const mode: SidebarSortMode = value === "updated" ? "updated" : "created"
-    setSortMode(mode)
-    saveSortMode(mode)
-  }, [])
-
-  const handleSetSectionOrder = useCallback((value: string) => {
-    const next: SidebarSectionOrder =
-      value === "chats-first" ? "chats-first" : "folders-first"
-    setSectionOrder(next)
-    saveSectionOrder(next)
-  }, [])
-
-  const handleToggleExpandAll = useCallback(() => {
-    if (allExpanded) {
-      listRef.current?.collapseAll()
-      setAllExpanded(false)
-    } else {
-      listRef.current?.expandAll()
-      setAllExpanded(true)
-    }
-  }, [allExpanded])
 
   const handleNewConversation = useCallback(() => {
     // Starting a conversation always returns to the conversation workspace (in
@@ -192,97 +142,9 @@ export function Sidebar() {
   if (!isOpen) return null
 
   return (
-    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none">
-      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border pl-4 pr-2">
-        <div className="flex min-w-0 items-center gap-4">
-          <h2 className="truncate text-[0.875rem] font-bold tracking-[-0.00625rem] text-sidebar-foreground">
-            {t("title")}
-          </h2>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0 text-muted-foreground"
-            onClick={() => listRef.current?.scrollToActive()}
-            title={t("locateActiveConversation")}
-            aria-label={t("locateActiveConversation")}
-          >
-            <Crosshair aria-hidden="true" className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 shrink-0 text-muted-foreground"
-            onClick={handleToggleExpandAll}
-            title={toggleExpandLabel}
-            aria-label={toggleExpandLabel}
-          >
-            {allExpanded ? (
-              <ChevronsDownUp aria-hidden="true" className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronsUpDown aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 text-muted-foreground"
-                title={viewOptionsLabel}
-                aria-label={viewOptionsLabel}
-              >
-                <Funnel aria-hidden="true" className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuCheckboxItem
-                checked={showCompleted}
-                onCheckedChange={handleSetShowCompleted}
-              >
-                {t("showCompleted")}
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>{t("sortBy")}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={sortMode}
-                onValueChange={handleSetSortMode}
-              >
-                <DropdownMenuRadioItem value="created">
-                  {t("sortByCreatedAt")}
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="updated">
-                  {t("sortByUpdatedAt")}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>{t("sectionOrder")}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={sectionOrder}
-                onValueChange={handleSetSectionOrder}
-              >
-                <DropdownMenuRadioItem value="folders-first">
-                  {t("sectionOrderFoldersFirst")}
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="chats-first">
-                  {t("sectionOrderChatsFirst")}
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Fixed actions above the scrollable list. `shrink-0` keeps them pinned —
-          they never scroll with the conversation list. Rows are `rounded-full`
-          like the conversation pills, and the icon/text geometry matches the
-          folder header: a 0.875rem icon + 0.875rem label at a 0.4375rem gap, with
-          the row's pl-[0.4375rem] (atop the container's px-1.5) placing the icon
-          center on the same 0.875rem rail axis as the folder/conversation icons in
-          the list below. Each row is a `group` so its shortcut hint reveals on
-          hover / keyboard focus. */}
-      <div className="flex shrink-0 flex-col gap-0.5 px-1.5 pt-1.5">
+    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none px-2.5">
+      {/* Fixed actions above the scrollable list. */}
+      <div className="flex shrink-0 flex-col gap-0.5 px-1.5 pt-5">
         <SidebarNavButton
           icon={SquarePen}
           label={t("newChat")}
@@ -318,13 +180,54 @@ export function Sidebar() {
             ) : null
           }
         />
+        <SidebarNavButton
+          icon={Wrench}
+          label={t("skillsAndTools")}
+          active={routeId === "skillsAndTools"}
+          onClick={() => setRoute("skillsAndTools")}
+        />
       </div>
 
-      {/* On mobile, clicking a conversation card auto-closes the Sheet */}
+      {/* Tab 切换：聊天 / 文件夹 + 右侧打开文件夹按钮 */}
+      <div className="flex shrink-0 items-center pl-1.5 pr-0 pt-3.5 pb-0.5">
+        <div className="flex items-center rounded-full border border-sidebar-border dark:border-[#4A4A4A] p-0 gap-px bg-sidebar">
+          <button
+            type="button"
+            onClick={() => setActiveTab("conversations")}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
+              activeTab === "conversations"
+                ? "bg-[#F8F8F8] dark:bg-[#4A4A4A] text-sidebar-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.15)]"
+                : "text-muted-foreground hover:text-sidebar-foreground"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            {t("chats")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("projects")}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
+              activeTab === "projects"
+                ? "bg-[#F8F8F8] dark:bg-[#4A4A4A] text-sidebar-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.15)]"
+                : "text-muted-foreground hover:text-sidebar-foreground"
+            )}
+          >
+            <FolderIcon className="h-3 w-3" />
+            {t("projects")}
+          </button>
+        </div>
+        <div className="ml-auto pr-1.5">
+          <NewFolderDropdown />
+        </div>
+      </div>
+
+      {/* Content area: switches between conversation list and project list */}
       <div
         className="flex flex-col flex-1 min-h-0 overflow-hidden pt-1.5"
         onClick={
-          isMobile
+          isMobile && activeTab === "conversations"
             ? (e) => {
                 const target = e.target as HTMLElement
                 if (target.closest("[data-conversation-id]")) {
@@ -334,12 +237,17 @@ export function Sidebar() {
             : undefined
         }
       >
-        <SidebarConversationList
-          ref={listRef}
-          showCompleted={showCompleted}
-          sortMode={sortMode}
-          sectionOrder={sectionOrder}
-        />
+        {activeTab === "conversations" ? (
+          <SidebarConversationList
+            ref={listRef}
+            showCompleted={showCompleted}
+            sortMode={sortMode}
+            sectionOrder={sectionOrder}
+            hideFolderSections
+          />
+        ) : (
+          <SidebarProjectList />
+        )}
       </div>
     </aside>
   )

@@ -1198,11 +1198,16 @@
         "toastOpFailed": "Operation failed: {message}"
       },
       "sectionPinned": "Pinned",
+      "chats": "Chats",
+      "projects": "Projects",
+      "noFolders": "No folders",
+      "noFoldersHint": "Add a working folder first to show the project list here.",
       "sectionFolders": "Folders",
       "sectionChats": "Chat",
       "noChats": "No chats",
       "newChatAction": "New chat",
       "automations": "Automations",
+      "skillsAndTools": "Skills & Tools",
       "loadingSubsessions": "Loading sub-conversations…"
     },
     "conversation": {
@@ -2079,6 +2084,8 @@
         "slashSearchEmpty": "No matching commands",
         "experts": "Experts",
         "office": "Office Work",
+        "addExpertSkill": "Add expert skill",
+        "addOfficeSkill": "Add office skill",
         "attachUploadTooLarge": "{names} exceeds the {limit}MB upload limit and was skipped.",
         "attachUploadFailed": "Failed to upload {names}.",
         "attachUploadNotAFile": "{names} isn't a regular file (directory or special file) and was skipped.",
@@ -2171,10 +2178,10 @@
             "writingSkillsDesc": "Create, edit & verify reusable skills"
           },
           "notEnabled": {
-            "title": "“{skill}” isn’t enabled for {agent} yet",
-            "description": "Enable it in Settings to use it here.",
-            "action": "Enable",
-            "hint": "Skill not enabled"
+            "title": "“{skill}” isn’t available to {agent} yet",
+            "description": "Add it to this agent in Settings before using it here.",
+            "action": "Open settings",
+            "hint": "Skill not available for this agent"
           }
         }
       },
@@ -2577,7 +2584,8 @@
         "switchedToChatMode": "Switched to chat mode",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "Add Folder"
     },
     "cloneDialog": {
       "title": "Clone Repository",
@@ -3573,5 +3581,44 @@
     "branchRemote": "Remote",
     "branchSearchPlaceholder": "Search branches…",
     "branchNone": "No branches"
+  },
+  "SkillsAndTools": {
+    "title": "Skills & Tools",
+    "tabCurrentAgent": "Current Agent",
+    "tabSkillsRepo": "Skills Library",
+    "tabPluginsRepo": "Plugins",
+    "loading": "Loading…",
+    "active": "Active",
+    "available": "Available",
+    "currentAgentHint": "This section shows the skills available to the current agent.",
+    "currentAgentLocked": "Entry agent",
+    "entryAgentHint": "You entered Skills & Tools through this agent, so everything you view and add here applies only to this agent.",
+    "noAgent": "No agent available",
+    "enabledSkills": "Enabled Skills",
+    "availableToAgent": "Available to this agent",
+    "addedToAgent": "Added to agent",
+    "addToAgent": "Add to agent",
+    "addToAgentFirst": "Add to agent first",
+    "useInConversation": "Add to conversation",
+    "useInConversationSuccess": "Added to conversation",
+    "noActiveConversation": "Open a conversation first to use this skill",
+    "notAvailableToAgent": "This skill is not available to {agent} yet. Adding it to the agent first.",
+    "enableSyncPending": "It was just added to the agent. Click + again in a moment.",
+    "installedInLibrary": "Installed in library",
+    "noSkills": "No skills available",
+    "codingExperts": "Coding Experts",
+    "noExperts": "No experts available",
+    "officeSkills": "Office Skills",
+    "noOfficeSkills": "No office skills available",
+    "installedPlugins": "Installed Plugins",
+    "noPlugins": "No plugins installed",
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "installSuccess": "Installed successfully",
+    "addedToAgentSuccess": "Added “{skill}” to {agent}",
+    "uninstallSuccess": "Uninstalled successfully",
+    "installFailed": "Install failed: {error}",
+    "addToAgentFailed": "Failed to add skill to agent: {error}",
+    "uninstallFailed": "Uninstall failed: {error}"
   }
 }

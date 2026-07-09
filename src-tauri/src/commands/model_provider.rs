@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::acp::manager::ConnectionManager;
@@ -14,12 +15,28 @@ use crate::web::event_bridge::EventEmitter;
 // Shared core functions (used by both Tauri commands and web handlers)
 // ---------------------------------------------------------------------------
 
-fn validate_agent_type(agent_type: &str) -> Result<(), AppCommandError> {
-    if agent_type.trim().is_empty() {
-        return Err(AppCommandError::invalid_input("Agent type is required"));
+/// Validate a list of agent types — must be non-empty and all valid.
+fn validate_agent_types(agent_types: &[String]) -> Result<(), AppCommandError> {
+    if agent_types.is_empty() {
+        return Err(AppCommandError::invalid_input(
+            "At least one agent type is required",
+        ));
     }
-    let _: AgentType = serde_json::from_value(serde_json::Value::String(agent_type.to_string()))
-        .map_err(|_| AppCommandError::invalid_input(format!("Invalid agent type: {agent_type}")))?;
+    // Deduplicate while preserving order.
+    let mut seen = std::collections::HashSet::new();
+    for at in agent_types {
+        if !seen.insert(at.clone()) {
+            return Err(AppCommandError::invalid_input(format!(
+                "Duplicate agent type: {at}"
+            )));
+        }
+        // Validate each individual agent type string.
+        if at.trim().is_empty() {
+            return Err(AppCommandError::invalid_input("Agent type is required"));
+        }
+        let _: AgentType = serde_json::from_value(serde_json::Value::String(at.clone()))
+            .map_err(|_| AppCommandError::invalid_input(format!("Invalid agent type: {at}")))?;
+    }
     Ok(())
 }
 
@@ -57,27 +74,60 @@ fn validate_fields(
     Ok(())
 }
 
-fn validate_model(agent_type: &str, model: Option<&str>) -> Result<(), AppCommandError> {
-    let Some(raw) = model.map(str::trim).filter(|s| !s.is_empty()) else {
-        return Ok(());
-    };
-    if raw.len() > 4096 {
-        return Err(AppCommandError::invalid_input(
-            "Model must be 4096 characters or less",
-        ));
-    }
-    // ClaudeCode requires a JSON object; other agents accept a plain string.
-    if agent_type == "claude_code" {
-        let value: serde_json::Value = serde_json::from_str(raw).map_err(|e| {
-            AppCommandError::invalid_input(format!("Invalid Claude model JSON: {e}"))
-        })?;
-        if !value.is_object() {
+/// Validate model values for each agent type.
+/// `models` is a map of agent_type -> model string. For claude_code the model
+/// must be a JSON object; for others a plain string.
+fn validate_models(
+    models: &HashMap<String, String>,
+) -> Result<(), AppCommandError> {
+    for (agent_type, raw) in models {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.len() > 4096 {
             return Err(AppCommandError::invalid_input(
-                "Claude model must be a JSON object",
+                "Model must be 4096 characters or less",
             ));
+        }
+        // ClaudeCode requires a JSON object; other agents accept a plain string.
+        if agent_type == "claude_code" {
+            let value: serde_json::Value = serde_json::from_str(trimmed).map_err(|e| {
+                AppCommandError::invalid_input(format!("Invalid Claude model JSON: {e}"))
+            })?;
+            if !value.is_object() {
+                return Err(AppCommandError::invalid_input(
+                    "Claude model must be a JSON object",
+                ));
+            }
         }
     }
     Ok(())
+}
+
+/// Serialize a `models` map (agent_type -> model string) into a JSON object
+/// string for storage. Empty/blank values are dropped. Returns None if the
+/// result is an empty object.
+fn serialize_models(models: &HashMap<String, String>) -> Option<String> {
+    let mut obj = serde_json::Map::new();
+    for (agent_type, raw) in models {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // If the value is valid JSON, embed it as-is (preserves Claude's JSON
+        // object); otherwise embed as a JSON string.
+        let value = if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            parsed
+        } else {
+            serde_json::Value::String(trimmed.to_string())
+        };
+        obj.insert(agent_type.clone(), value);
+    }
+    if obj.is_empty() {
+        return None;
+    }
+    Some(serde_json::Value::Object(obj).to_string())
 }
 
 pub async fn list_model_providers_core(
@@ -94,24 +144,25 @@ pub async fn create_model_provider_core(
     name: String,
     api_url: String,
     api_key: String,
-    agent_type: String,
-    model: Option<String>,
+    agent_types: Vec<String>,
+    models: HashMap<String, String>,
 ) -> Result<ModelProviderInfo, AppCommandError> {
     validate_fields(Some(&name), Some(&api_url), Some(&api_key))?;
-    validate_agent_type(&agent_type)?;
-    validate_model(&agent_type, model.as_deref())?;
+    validate_agent_types(&agent_types)?;
+    validate_models(&models)?;
 
+    let model = serialize_models(&models);
     let model_row =
-        model_provider_service::create(&db.conn, name, api_url, api_key, agent_type, model)
+        model_provider_service::create(&db.conn, name, api_url, api_key, agent_types, model)
             .await
             .map_err(AppCommandError::from)?;
     Ok(ModelProviderInfo::from(model_row))
 }
 
-/// Update a model provider. For the `model` parameter:
+/// Update a model provider. For the `models` parameter:
 /// - `None` (omitted) means "don't change"
-/// - `Some("")` means "clear"
-/// - `Some(value)` means "set to value"
+/// - `Some(map)` means "merge into the stored model JSON — new keys overwrite,
+///   absent keys are left untouched"
 #[allow(clippy::too_many_arguments)]
 pub async fn update_model_provider_core(
     db: &AppDatabase,
@@ -119,47 +170,70 @@ pub async fn update_model_provider_core(
     name: Option<String>,
     api_url: Option<String>,
     api_key: Option<String>,
-    agent_type: Option<String>,
-    model: Option<String>,
+    agent_types: Option<Vec<String>>,
+    models: Option<HashMap<String, String>>,
     emitter: &EventEmitter,
 ) -> Result<ModelProviderInfo, AppCommandError> {
     validate_fields(name.as_deref(), api_url.as_deref(), api_key.as_deref())?;
-    if let Some(ref at) = agent_type {
-        validate_agent_type(at)?;
+    if let Some(ref ats) = agent_types {
+        validate_agent_types(ats)?;
+    }
+    if let Some(ref ms) = models {
+        validate_models(ms)?;
     }
 
-    // Fetch old provider to detect changes and to determine effective agent_type for model validation.
+    // Fetch old provider to detect changes and merge model data.
     let old_provider = model_provider_service::get_by_id(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?
         .ok_or_else(|| AppCommandError::not_found(format!("model provider not found: {id}")))?;
 
-    // agent_type is immutable after creation: dependent agents bind to a provider by id
-    // and rely on provider.agent_type matching their own. Changing it would silently
-    // mis-parse provider.model (e.g. Claude JSON written into Codex's config.toml).
-    if let Some(ref new_at) = agent_type {
-        if new_at != &old_provider.agent_type {
-            return Err(AppCommandError::invalid_input(format!(
-                "agent_type is immutable after creation (current: {}, requested: {new_at})",
-                old_provider.agent_type
-            )));
+    // Compute the final agent_types (for model merge & cascade).
+    let final_agent_types = agent_types
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(|| {
+            parse_agent_types_from_info(&old_provider)
+        });
+
+    // Compute the final model: merge the new models map into the existing stored model.
+    let final_model = if let Some(ref new_models) = models {
+        // Start from the existing model JSON, then overlay new entries.
+        let mut existing_obj: serde_json::Map<String, serde_json::Value> = old_provider
+            .model
+            .as_deref()
+            .and_then(|raw| serde_json::from_str(raw).ok())
+            .and_then(|v: serde_json::Value| v.as_object().cloned())
+            .unwrap_or_default();
+        let new_serialized = serialize_models(new_models);
+        if let Some(ref new_json) = new_serialized {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(new_json) {
+                if let Some(obj) = parsed.as_object() {
+                    for (k, v) in obj {
+                        existing_obj.insert(k.clone(), v.clone());
+                    }
+                }
+            }
         }
-    }
+        // Remove keys for agent_types that were dropped
+        let at_set: std::collections::HashSet<&String> = final_agent_types.iter().collect();
+        existing_obj.retain(|k, _v| at_set.contains(&k.to_string()));
 
-    let effective_agent_type = old_provider.agent_type.as_str();
-    if let Some(ref raw) = model {
-        validate_model(effective_agent_type, Some(raw))?;
-    }
-
-    // Translate Some("") to Some(None) (clear), Some(value) to Some(Some(value)), None to None.
-    let model_patch: Option<Option<String>> = model.as_ref().map(|raw| {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
+        if existing_obj.is_empty() {
             None
         } else {
-            Some(trimmed.to_string())
+            Some(serde_json::Value::Object(existing_obj).to_string())
         }
-    });
+    } else {
+        old_provider.model.clone()
+    };
+
+    // Build the service-level model patch: Some(Some(value)) to set, Some(None) to clear.
+    let model_patch: Option<Option<String>> = if models.is_some() {
+        Some(final_model)
+    } else {
+        None
+    };
 
     let model_row = model_provider_service::update(
         &db.conn,
@@ -167,7 +241,7 @@ pub async fn update_model_provider_core(
         name,
         api_url.clone(),
         api_key.clone(),
-        None, // agent_type is immutable; rejected above if differs
+        agent_types.clone(),
         model_patch.clone(),
     )
     .await
@@ -183,20 +257,23 @@ pub async fn update_model_provider_core(
     let model_changed = model_patch
         .as_ref()
         .is_some_and(|new_value| new_value.as_deref() != old_provider.model.as_deref());
+    let agent_types_changed = agent_types
+        .as_ref()
+        .is_some_and(|new_ats| {
+            let old_ats = parse_agent_types_from_info(&old_provider);
+            new_ats != &old_ats
+        });
 
-    if url_changed || key_changed || model_changed {
+    if url_changed || key_changed || model_changed || agent_types_changed {
         let final_url = api_url.as_deref().unwrap_or(&old_provider.api_url);
         let final_key = api_key.as_deref().unwrap_or(&old_provider.api_key);
-        let final_model_owned: Option<String> = match &model_patch {
-            Some(inner) => inner.clone(),
-            None => old_provider.model.clone(),
-        };
         acp::cascade_update_model_provider(
             db,
             id,
             final_url,
             final_key,
-            final_model_owned.as_deref(),
+            model_patch.as_ref().and_then(|opt| opt.as_deref()),
+            &final_agent_types,
             emitter,
         )
         .await
@@ -204,6 +281,12 @@ pub async fn update_model_provider_core(
     }
 
     Ok(ModelProviderInfo::from(model_row))
+}
+
+/// Parse `agent_types` from an existing model_provider row, falling back the
+/// same way `ModelProviderInfo::from` does.
+fn parse_agent_types_from_info(row: &crate::db::entities::model_provider::Model) -> Vec<String> {
+    crate::models::model_provider::parse_agent_types_from_row(&row.agent_types_json, &row.agent_type)
 }
 
 /// Result of `update_model_provider`: the updated provider row plus how many
@@ -231,12 +314,12 @@ pub async fn update_model_provider_and_refresh(
     name: Option<String>,
     api_url: Option<String>,
     api_key: Option<String>,
-    agent_type: Option<String>,
-    model: Option<String>,
+    agent_types: Option<Vec<String>>,
+    models: Option<HashMap<String, String>>,
     emitter: &EventEmitter,
 ) -> Result<UpdateModelProviderResult, AppCommandError> {
     let provider =
-        update_model_provider_core(db, id, name, api_url, api_key, agent_type, model, emitter)
+        update_model_provider_core(db, id, name, api_url, api_key, agent_types, models, emitter)
             .await?;
 
     // Every agent bound to this provider may now be on stale config (the cascade
@@ -308,10 +391,10 @@ pub async fn create_model_provider(
     name: String,
     api_url: String,
     api_key: String,
-    agent_type: String,
-    model: Option<String>,
+    agent_types: Vec<String>,
+    models: HashMap<String, String>,
 ) -> Result<ModelProviderInfo, AppCommandError> {
-    create_model_provider_core(&db, name, api_url, api_key, agent_type, model).await
+    create_model_provider_core(&db, name, api_url, api_key, agent_types, models).await
 }
 
 #[cfg(feature = "tauri-runtime")]
@@ -324,8 +407,8 @@ pub async fn update_model_provider(
     name: Option<String>,
     api_url: Option<String>,
     api_key: Option<String>,
-    agent_type: Option<String>,
-    model: Option<String>,
+    agent_types: Option<Vec<String>>,
+    models: Option<HashMap<String, String>>,
     app: tauri::AppHandle,
 ) -> Result<UpdateModelProviderResult, AppCommandError> {
     use tauri::Manager;
@@ -343,8 +426,8 @@ pub async fn update_model_provider(
         name,
         api_url,
         api_key,
-        agent_type,
-        model,
+        agent_types,
+        models,
         &emitter,
     )
     .await
@@ -379,8 +462,8 @@ mod tests {
             "Provider".to_string(),
             "https://api.example.com".to_string(),
             "sk-密钥abcd1234".to_string(),
-            "codex".to_string(),
-            None,
+            vec!["codex".to_string()],
+            HashMap::new(),
         )
         .await;
         assert!(
@@ -425,8 +508,8 @@ mod tests {
             "Prov".to_string(),
             "https://api.example.com".to_string(),
             "sk-old-key".to_string(),
-            "codex".to_string(),
-            None,
+            vec!["codex".to_string()],
+            HashMap::new(),
         )
         .await
         .expect("create provider");

@@ -1203,7 +1203,10 @@
       "noChats": "沒有聊天",
       "newChatAction": "新增聊天",
       "automations": "自動化",
-      "loadingSubsessions": "正在載入子會話…"
+      "skillsAndTools": "技能與工具",
+      "loadingSubsessions": "正在載入子會話…",
+      "chats": "聊天",
+      "projects": "專案"
     },
     "conversation": {
       "reloadFailed": "會話重新載入失敗：{message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "沒有符合的指令",
         "experts": "專家",
         "office": "日常辦公",
+        "addExpertSkill": "新增專家技能",
+        "addOfficeSkill": "新增辦公技能",
         "attachLocalUpload": "附加本機檔案",
         "attachServerFile": "附加伺服器檔案",
         "attachUploadTooLarge": "{names} 超過 {limit}MB 上傳上限，已略過。",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "已切換到聊天模式",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "新增資料夾"
     },
     "cloneDialog": {
       "title": "複製倉庫",
@@ -3573,5 +3579,28 @@
     "branchRemote": "遠端",
     "branchSearchPlaceholder": "搜尋分支…",
     "branchNone": "無分支"
+  },
+  "SkillsAndTools": {
+    "title": "技能和工具",
+    "tabCurrentAgent": "當前智能體",
+    "tabSkillsRepo": "技能",
+    "tabPluginsRepo": "外掛",
+    "loading": "載入中…",
+    "active": "已啟用",
+    "noAgent": "沒有可用的智能體",
+    "enabledSkills": "已啟用的技能",
+    "noSkills": "沒有可用的技能",
+    "codingExperts": "程式專家",
+    "noExperts": "沒有可用的專家",
+    "officeSkills": "Office 技能",
+    "noOfficeSkills": "沒有可用的 Office 技能",
+    "installedPlugins": "已安裝的外掛",
+    "noPlugins": "沒有安裝外掛",
+    "install": "安裝",
+    "uninstall": "解除安裝",
+    "installSuccess": "安裝成功",
+    "uninstallSuccess": "解除安裝成功",
+    "installFailed": "安裝失敗：{error}",
+    "uninstallFailed": "解除安裝失敗：{error}"
   }
 }

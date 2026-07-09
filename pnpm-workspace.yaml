@@ -1,6 +1,8 @@
+confirmModulesPurge: false
+
 overrides:
   mermaid: ">=11.13.0"
-
+  
 allowBuilds:
   "@parcel/watcher": true
   "@swc/core": true

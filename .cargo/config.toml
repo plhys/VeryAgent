@@ -1,7 +1,7 @@
 # ── 编译提速配置 ──────────────────────────────────────────────
 # sccache：跨机器可迁移的编译缓存。
 # 命中缓存时单个 crate 从「编译几十秒」变成「<1 秒」。
-# 缓存目录默认在 %LOCALAPPDATA%\Mozilla.sccache，换机器时整个目录拷过去即可复用。
+# 缓存目录默认在 %LOCALAPPDATA%\Mozilla\sccache\cache，换机器时整个目录拷过去即可复用。
 # 首次编译仍需全量（填充缓存），第二次起命中缓存。
 #
 # 用 build.rustc-wrapper 配置（cargo 官方推荐方式，比 [env] RUSTC_WRAPPER 更可靠）。

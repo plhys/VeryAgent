@@ -2864,12 +2864,10 @@ export function MessageInput({
                 // blank areas (padding, the dead space below a short message, the
                 // action-bar gaps) so the whole input reads as clickable-to-type;
                 // interactive controls re-assert their own cursor (see globals.css).
-                "veryagent-composer-chrome @container relative flex flex-col rounded-xl border border-input bg-transparent transition-colors",
+                "veryagent-composer-chrome @container relative flex flex-col rounded-xl border border-input bg-transparent transition-colors focus-within:!border-input focus-within:!ring-0 focus-within:!shadow-none focus-within:!outline-none",
                 // Standard focus ring — always shown when the composer is
                 // focused (the plain default input style).
-                folderBranchPickerAttached
-                  ? "bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"
-                  : "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+                folderBranchPickerAttached ? "bg-background" : "",
                 // Active session, tiled across multiple sessions: a gradient
                 // flows around the border to mark which tile is active — but ONLY
                 // while the composer itself is not focused. Focusing it hides the
@@ -3160,7 +3158,7 @@ export function MessageInput({
                               disabled={expertsSorted.length === 0}
                             >
                               <Sparkles className="size-4" />
-                              {t("experts")}
+                              {t("addExpertSkill")}
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent
                               className="min-w-44 overflow-y-auto"
@@ -3197,7 +3195,7 @@ export function MessageInput({
                           <DropdownMenuSub>
                             <DropdownMenuSubTrigger>
                               <FileStack className="size-4" />
-                              {t("office")}
+                              {t("addOfficeSkill")}
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent
                               className="min-w-44 overflow-y-auto"

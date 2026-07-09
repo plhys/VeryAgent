@@ -92,7 +92,7 @@ echo
 
 # ── 5. 验证 ──────────────────────────────────────────────────
 echo "▸ 验证配置..."
-if grep -q 'RUSTC_WRAPPER = "sccache"' .cargo/config.toml 2>/dev/null; then
+if grep -q 'rustc-wrapper = "sccache"' .cargo/config.toml 2>/dev/null; then
     info ".cargo/config.toml 已配置 sccache"
 else
     warn ".cargo/config.toml 未启用 sccache，请检查（首次构建可能较慢）"

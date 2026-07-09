@@ -1203,7 +1203,10 @@
       "noChats": "チャットがありません",
       "newChatAction": "新しいチャット",
       "automations": "オートメーション",
-      "loadingSubsessions": "サブ会話を読み込み中…"
+      "skillsAndTools": "スキルとツール",
+      "loadingSubsessions": "サブ会話を読み込み中…",
+      "chats": "チャット",
+      "projects": "プロジェクト"
     },
     "conversation": {
       "reloadFailed": "会話の再読み込みに失敗しました: {message}",
@@ -2077,6 +2080,8 @@
         "slashSearchEmpty": "一致するコマンドがありません",
         "experts": "エキスパート",
         "office": "日常業務",
+        "addExpertSkill": "エキスパートスキルを追加",
+        "addOfficeSkill": "オフィススキルを追加",
         "attachLocalUpload": "ローカルファイルを添付",
         "attachServerFile": "サーバーファイルを添付",
         "attachUploadTooLarge": "{names} は {limit}MB のアップロード上限を超えたためスキップしました。",
@@ -2577,7 +2582,8 @@
         "switchedToChatMode": "チャットモードに切り替えました",
         "openStashFailed": "Failed to open stash window",
         "openMergeFailed": "Failed to open merge window"
-      }
+      },
+      "addFolder": "フォルダを追加"
     },
     "cloneDialog": {
       "title": "リポジトリをクローン",
@@ -3573,5 +3579,28 @@
     "branchRemote": "リモート",
     "branchSearchPlaceholder": "ブランチを検索…",
     "branchNone": "ブランチがありません"
+  },
+  "SkillsAndTools": {
+    "title": "スキルとツール",
+    "tabCurrentAgent": "現在のエージェント",
+    "tabSkillsRepo": "スキル",
+    "tabPluginsRepo": "プラグイン",
+    "loading": "読み込み中…",
+    "active": "アクティブ",
+    "noAgent": "利用可能なエージェントがありません",
+    "enabledSkills": "有効なスキル",
+    "noSkills": "利用可能なスキルがありません",
+    "codingExperts": "コーディングエキスパート",
+    "noExperts": "利用可能なエキスパートがありません",
+    "officeSkills": "Office スキル",
+    "noOfficeSkills": "利用可能な Office スキルがありません",
+    "installedPlugins": "インストール済みプラグイン",
+    "noPlugins": "プラグインがインストールされていません",
+    "install": "インストール",
+    "uninstall": "アンインストール",
+    "installSuccess": "インストールしました",
+    "uninstallSuccess": "アンインストールしました",
+    "installFailed": "インストール失敗：{error}",
+    "uninstallFailed": "アンインストール失敗：{error}"
   }
 }

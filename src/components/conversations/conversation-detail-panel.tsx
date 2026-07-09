@@ -44,6 +44,7 @@ import { WelcomeHero, WelcomeTip } from "@/components/chat/welcome-hero"
 import { QuickActions } from "@/components/chat/quick-actions"
 import type { ComposerInjectContent } from "@/components/chat/message-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useConversationSkillInjectStore } from "@/stores/conversation-skill-inject-store"
 import {
   acpFork,
   createChatConversation,
@@ -283,6 +284,10 @@ const ConversationTabView = memo(function ConversationTabView({
   const [hasSentMessage, setHasSentMessage] = useState(false)
   const [quickActionInject, setQuickActionInject] =
     useState<ComposerInjectContent | null>(null)
+  const pendingSkillInject = useConversationSkillInjectStore((s) => s.request)
+  const clearPendingSkillInject = useConversationSkillInjectStore(
+    (s) => s.clearRequest
+  )
 
   const hasPersistedConversation = dbConversationId != null
 
@@ -1280,6 +1285,14 @@ const ConversationTabView = memo(function ConversationTabView({
     setQuickActionInject(payload)
   }, [])
 
+  useEffect(() => {
+    if (!pendingSkillInject) return
+    if (!isActive) return
+    if (pendingSkillInject.targetTabId !== tabId) return
+    setQuickActionInject(pendingSkillInject.payload)
+    clearPendingSkillInject(pendingSkillInject.requestId)
+  }, [pendingSkillInject, isActive, tabId, clearPendingSkillInject])
+
   const handleQuickActionConsumed = useCallback(() => {
     setQuickActionInject(null)
   }, [])
@@ -1416,16 +1429,24 @@ const ConversationTabView = memo(function ConversationTabView({
           ? handleForkSend
           : undefined
       }
+      injectContent={quickActionInject}
+      onInjectConsumed={handleQuickActionConsumed}
     >
       {isWelcomeMode ? (
         <div className="relative isolate flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
-          <div className="flex-1" />
+          {/* 欢迎页 logo */}
+          <div className="mx-auto w-full max-w-3xl px-4 pt-11 pb-4">
+            <video
+              src="/welcome-logo.webm"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="mx-auto h-auto max-h-48 w-auto"
+            />
+          </div>
           <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-col gap-6 px-4 py-4">
             <WelcomeHero />
-            <QuickActions
-              onSelect={handleQuickAction}
-              agentType={selectedAgent}
-            />
             <div className="flex justify-center">
               <AgentSelector
                 defaultAgentType={selectedAgent}
@@ -1562,8 +1583,13 @@ export function ConversationDetailPanel() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const isTileMode = useTabStore((s) => s.isTileMode)
-  const { openNewConversationTab, closeTab, switchTab, onPreviewTabReplaced } =
-    useTabActions()
+  const {
+    openNewConversationTab,
+    closeTab,
+    switchTab,
+    onPreviewTabReplaced,
+  } = useTabActions()
+  const queueSkillInject = useConversationSkillInjectStore((s) => s.queueInject)
   const newConversation = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
     if (!activeTab || activeTab.conversationId != null) return null
@@ -1763,6 +1789,16 @@ export function ConversationDetailPanel() {
     if (!activeTabId) return
     closeTab(activeTabId)
   }, [activeTabId, closeTab])
+
+  const injectSkillIntoActiveConversation = useCallback(
+    (payload: ComposerInjectContent) => {
+      if (!activeTabId) return false
+      switchTab(activeTabId)
+      queueSkillInject(activeTabId, payload)
+      return true
+    },
+    [activeTabId, queueSkillInject, switchTab]
+  )
 
   // Narrow reactive reads for the ACTIVE conversation only — a background
   // conversation's streaming token no longer re-renders this panel. `canExport`

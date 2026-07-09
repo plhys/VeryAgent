@@ -393,17 +393,37 @@ export function SkillAgentMatrix({
   const toggleCell = useCallback(
     (skillId: string, agentType: AgentType) => {
       const enabled = isEnabled(statuses.get(statusKey(skillId, agentType)))
-      // Single-cell toggles are frictionless — no confirm even when disabling.
-      void runOps(
-        computeLinkDelta(
-          [{ skillId, agentType }],
-          !enabled,
-          statuses,
-          isSkillEnableable
+      if (!enabled) {
+        // 先清掉所有智能体的旧链接，再链接到当前智能体
+        void runOps(
+          computeLinkDelta(
+            agentTypes.map((a) => ({ skillId, agentType: a })),
+            false,
+            statuses,
+            isSkillEnableable
+          )
+        ).then(() =>
+          runOps(
+            computeLinkDelta(
+              [{ skillId, agentType }],
+              true,
+              statuses,
+              isSkillEnableable
+            )
+          )
         )
-      )
+      } else {
+        void runOps(
+          computeLinkDelta(
+            [{ skillId, agentType }],
+            false,
+            statuses,
+            isSkillEnableable
+          )
+        )
+      }
     },
-    [statuses, isSkillEnableable, runOps]
+    [statuses, isSkillEnableable, runOps, agentTypes]
   )
 
   const rowBatch = (skillId: string, enable: boolean) =>

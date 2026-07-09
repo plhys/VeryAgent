@@ -33,7 +33,7 @@ export function AppTitleBar({
   const usesRightControls = (isWindows || isLinux) && hasDesktopWindowChrome
 
   const rowPadding = cn(
-    "px-3",
+    "pl-4 pr-3",
     isMac && hasDesktopWindowChrome && "pl-[92px]",
     usesRightControls && "pr-[138px]"
   )
@@ -41,10 +41,13 @@ export function AppTitleBar({
   return (
     <div
       className={cn(
-        "relative shrink-0 border-b bg-muted/70 select-none",
+        "relative shrink-0 select-none",
         isMobile ? "h-11" : "h-8",
         className
       )}
+      style={{
+        background: `linear-gradient(to right, var(--sidebar) var(--sidebar-width-px, 0px), var(--background) var(--sidebar-width-px, 0px))`,
+      }}
     >
       <div data-tauri-drag-region className="absolute inset-0" />
 

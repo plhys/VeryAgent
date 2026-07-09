@@ -63,7 +63,7 @@ export function ModelProviderSettings() {
 
   const filteredProviders = useMemo(() => {
     if (!filter) return providers
-    return providers.filter((p) => p.agent_type === filter)
+    return providers.filter((p) => p.agent_types.includes(filter))
   }, [providers, filter])
 
   const handleDelete = useCallback(async () => {
@@ -155,13 +155,16 @@ export function ModelProviderSettings() {
                       {p.api_url}
                     </div>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0"
-                    >
-                      {AGENT_LABELS[p.agent_type] ?? p.agent_type}
-                    </Badge>
+                  <div className="flex shrink-0 gap-1 flex-wrap">
+                    {p.agent_types.map((at) => (
+                      <Badge
+                        key={at}
+                        variant="secondary"
+                        className="text-[10px] px-1.5 py-0"
+                      >
+                        {AGENT_LABELS[at] ?? at}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
