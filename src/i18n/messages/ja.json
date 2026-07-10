@@ -3118,9 +3118,17 @@
       "statusError": "エラー"
     },
     "menu": {
-      "scale": "拡大率",
-      "openManager": "ペット管理",
-      "close": "閉じる"
+      "quit": "終了",
+      "hidePet": "ペットを非表示"
+    },
+    "panel": {
+      "title": "アクティブなセッション",
+      "empty": "アクティブなセッションはありません",
+      "emptyHint": "実行中、または対応が必要なセッションがここに表示されます。",
+      "close": "閉じる",
+      "statusRunning": "実行中",
+      "statusWaiting": "待機中",
+      "statusError": "エラー"
     },
     "loadError": "ペットの読み込みに失敗",
     "missingPetIdParam": "ペットが選択されていません",
@@ -3161,7 +3169,8 @@
         "loadFailed": "ペット一覧の取得に失敗しました",
         "setActiveFailed": "アクティブなペットの設定に失敗しました",
         "summonFailed": "ペットウィンドウの召喚に失敗しました"
-      }
+      },
+      "builtIn": "ビルトイン"
     },
     "import": {
       "title": "Codex から取り込む",

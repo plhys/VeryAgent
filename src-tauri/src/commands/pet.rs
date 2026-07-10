@@ -15,10 +15,11 @@ use crate::db::service::{app_metadata_service, conversation_service};
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::pet::{
-    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetCelebrationKind,
-    PetDetail, PetMetaPatch, PetSessionEntry, PetSessionsPayload, PetSpriteAsset, PetState,
-    PetSummary, PetWindowConfig, PetWindowStatePatch,
-};
+	    builtin_default_pet_detail, builtin_default_pet_summary, BUILTIN_PET_ID,
+	    ImportCodexPetsRequest, ImportCodexPetsResult, ImportablePet, NewPetInput, PetCelebrationKind,
+	    PetDetail, PetMetaPatch, PetSessionEntry, PetSessionsPayload, PetSpriteAsset, PetState,
+	    PetSummary, PetWindowConfig, PetWindowStatePatch,
+	};
 use crate::pet_state_mapper::{read_pet_state, PetStateHandle};
 use crate::pets;
 use crate::pets::marketplace::{
@@ -33,18 +34,44 @@ const PET_CONFIG_KEY: &str = "pet.config";
 // ─── pure ops (filesystem) ──────────────────────────────────────────────
 
 pub async fn pet_list_core() -> Result<Vec<PetSummary>, AppCommandError> {
-    tokio::task::spawn_blocking(pets::list_pets)
-        .await
-        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
-}
+	    let mut list = tokio::task::spawn_blocking(pets::list_pets)
+	        .await
+	        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))??;
+	    // Always include the built-in default pet in the list, even when no
+	    // spritesheet pets exist on disk. Deduplicate: if a user-created pet
+	    // happens to have the same id, keep the filesystem version (it's real
+	    // data the user controls).
+	    if !list.iter().any(|p| p.id == BUILTIN_PET_ID) {
+	        list.push(builtin_default_pet_summary());
+	    }
+	    // Sort with built-in pet first, then alphabetically.
+	    list.sort_by(|a, b| {
+	        if a.built_in != b.built_in {
+	            b.built_in.cmp(&a.built_in) // built-in = true sorts first
+	        } else {
+	            a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase())
+	        }
+	    });
+	    Ok(list)
+	}
 
 pub async fn pet_get_core(id: String) -> Result<PetDetail, AppCommandError> {
-    tokio::task::spawn_blocking(move || pets::get_pet(&id))
-        .await
-        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
-}
+	    // Built-in webm pet: return the virtual entry without hitting the filesystem.
+	    if id == BUILTIN_PET_ID {
+	        return Ok(builtin_default_pet_detail());
+	    }
+	    tokio::task::spawn_blocking(move || pets::get_pet(&id))
+	        .await
+	        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
+	}
 
 pub async fn pet_read_spritesheet_core(id: String) -> Result<PetSpriteAsset, AppCommandError> {
+    // The built-in webm pet has no real spritesheet on disk (only a 1x1 stub).
+    if id == BUILTIN_PET_ID {
+        return Err(AppCommandError::not_found(
+            "The built-in default pet does not have a spritesheet asset.",
+        ));
+    }
     tokio::task::spawn_blocking(move || pets::read_pet_spritesheet(&id))
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
@@ -60,6 +87,12 @@ pub async fn pet_update_meta_core(
     id: String,
     patch: PetMetaPatch,
 ) -> Result<PetSummary, AppCommandError> {
+    // Built-in pets cannot be edited — they ship with the app.
+    if id == BUILTIN_PET_ID {
+        return Err(AppCommandError::invalid_input(
+            "The built-in default pet cannot be edited.",
+        ));
+    }
     tokio::task::spawn_blocking(move || pets::update_pet_meta(&id, patch))
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
@@ -69,13 +102,25 @@ pub async fn pet_replace_sprite_core(
     id: String,
     spritesheet_base64: String,
 ) -> Result<(), AppCommandError> {
+    // Built-in pets use webm rendering — no spritesheet to replace.
+    if id == BUILTIN_PET_ID {
+        return Err(AppCommandError::invalid_input(
+            "The built-in default pet does not support spritesheet replacement.",
+        ));
+    }
     tokio::task::spawn_blocking(move || pets::replace_pet_sprite(&id, &spritesheet_base64))
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?
 }
 
 pub async fn pet_delete_core(db: &DatabaseConnection, id: String) -> Result<(), AppCommandError> {
-    let id_for_fs = id.clone();
+	    // Built-in pets cannot be deleted — they ship with the app.
+	    if id == BUILTIN_PET_ID {
+	        return Err(AppCommandError::invalid_input(
+	            "The built-in default pet cannot be deleted.",
+	        ));
+	    }
+	    let id_for_fs = id.clone();
     tokio::task::spawn_blocking(move || pets::delete_pet(&id_for_fs))
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))??;
@@ -137,28 +182,36 @@ pub async fn pet_get_settings_core(
 }
 
 pub async fn pet_set_active_core(
-    db: &DatabaseConnection,
-    emitter: &EventEmitter,
-    pet_id: Option<String>,
-) -> Result<PetWindowConfig, AppCommandError> {
-    let mut config = load_config(db).await?;
+	    db: &DatabaseConnection,
+	    emitter: &EventEmitter,
+	    pet_id: Option<String>,
+	) -> Result<PetWindowConfig, AppCommandError> {
+	    let mut config = load_config(db).await?;
 
-    if let Some(ref id) = pet_id {
-        // Defense in depth: don't persist a non-existent id.
-        let id_clone = id.clone();
-        let exists = tokio::task::spawn_blocking(move || pets::get_pet(&id_clone))
-            .await
-            .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
-        let _ = exists?;
+	    if let Some(ref id) = pet_id {
+	        // The built-in webm pet ("default") doesn't have a filesystem entry,
+	        // so skip validation for it. All other ids must exist on disk.
+	        if id != BUILTIN_PET_ID {
+	            let id_clone = id.clone();
+	            let exists = tokio::task::spawn_blocking(move || pets::get_pet(&id_clone))
+	                .await
+	                .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+	            let _ = exists?;
+	        }
+	    }
+
+    config.active_pet_id = pet_id.clone();
+    // Only force-enable when a pet is actually selected (including "default").
+    // Clearing the active pet (pet_id: None) should not change the enabled flag.
+    if pet_id.is_some() {
+        config.enabled = true;
     }
-
-    config.active_pet_id = pet_id;
-    save_config(db, &config).await?;
-    // Notify the live pet window (and any WebSocket subscribers) so it can
-    // swap sprites in place rather than requiring close-and-reopen.
-    emit_event(emitter, "pet://active-changed", &config);
-    Ok(config)
-}
+	    save_config(db, &config).await?;
+	    // Notify the live pet window (and any WebSocket subscribers) so it can
+	    // swap sprites in place rather than requiring close-and-reopen.
+	    emit_event(emitter, "pet://active-changed", &config);
+	    Ok(config)
+	}
 
 /// Manual oneshot trigger for events the backend can't observe directly
 /// (e.g. `folder://merge-completed`, which is currently emitted only by

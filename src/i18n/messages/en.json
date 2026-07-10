@@ -3132,9 +3132,17 @@
       "statusError": "Error"
     },
     "menu": {
-      "scale": "Scale",
-      "openManager": "Manage pets",
-      "close": "Close"
+      "quit": "Quit",
+      "hidePet": "Hide pet"
+    },
+    "panel": {
+      "title": "Active sessions",
+      "empty": "No active sessions",
+      "emptyHint": "Running agents and ones that need you appear here.",
+      "close": "Close",
+      "statusRunning": "Running",
+      "statusWaiting": "Waiting",
+      "statusError": "Error"
     },
     "loadError": "Failed to load pet",
     "missingPetIdParam": "No pet selected",
@@ -3175,7 +3183,8 @@
         "loadFailed": "Failed to load pets",
         "setActiveFailed": "Failed to set active pet",
         "summonFailed": "Failed to summon pet window"
-      }
+      },
+      "builtIn": "Built-in"
     },
     "import": {
       "title": "Import from Codex",

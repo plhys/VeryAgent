@@ -226,6 +226,17 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
     // Prevent the default drag-region behaviour and text selection.
     event.preventDefault()
 
+    // Set dragging state synchronously so that fast clicks (including
+    // double-click) can be detected. The pointerup handler needs
+    // draggingRef to be true even when the async initialization hasn't
+    // completed yet — otherwise a quick click's pointerup arrives before
+    // the drag ref is set, and onClick() is never called.
+    draggingRef.current = true
+    totalMovedRef.current = 0
+    lastDirRef.current = null
+    lastScreenXRef.current = event.screenX
+    startScreenRef.current = { x: event.screenX, y: event.screenY }
+
     void (async () => {
       try {
         const [{ getCurrentWindow }, dpiModule] = await Promise.all([
@@ -237,12 +248,7 @@ export function usePetDrag(opts: UsePetDragOptions): UsePetDragResult {
         const pos = await win.outerPosition()
 
         scaleFactorRef.current = scale
-        startScreenRef.current = { x: event.screenX, y: event.screenY }
         startWinLogicalRef.current = { x: pos.x / scale, y: pos.y / scale }
-        totalMovedRef.current = 0
-        lastScreenXRef.current = event.screenX
-        lastDirRef.current = null
-        draggingRef.current = true
 
         const PhysicalPosition = dpiModule.PhysicalPosition
         setPositionFnRef.current = async (x, y) => {

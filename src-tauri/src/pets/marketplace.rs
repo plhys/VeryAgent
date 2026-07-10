@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::app_error::AppCommandError;
-use crate::models::pet::{PetManifest, PetSummary, PET_MANIFEST_FILENAME, SPRITESHEET_FILENAME};
+use crate::models::pet::{PetManifest, PetRenderMode, PetSummary, PET_MANIFEST_FILENAME, SPRITESHEET_FILENAME};
 use crate::pets::{
     ensure_pets_root_or_create, list_existing_ids, validate_pet_id, validate_spritesheet,
 };
@@ -497,7 +497,9 @@ fn install_from_zip_bytes(
         id: manifest.id,
         display_name: manifest.display_name,
         description: manifest.description,
-        spritesheet_path: target.join(SPRITESHEET_FILENAME),
+        spritesheet_path: Some(target.join(SPRITESHEET_FILENAME)),
+        render_mode: PetRenderMode::Spritesheet,
+        built_in: false,
     })
 }
 

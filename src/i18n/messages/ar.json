@@ -3118,9 +3118,17 @@
       "statusError": "خطأ"
     },
     "menu": {
-      "scale": "الحجم",
-      "openManager": "إدارة الحيوانات الأليفة",
-      "close": "إغلاق"
+      "quit": "إنهاء",
+      "hidePet": "إخفاء الحيوان الأليف"
+    },
+    "panel": {
+      "title": "الجلسات النشطة",
+      "empty": "لا توجد جلسات نشطة",
+      "emptyHint": "تظهر هنا الوكلاء قيد التشغيل وتلك التي تحتاج إليك.",
+      "close": "إغلاق",
+      "statusRunning": "قيد التشغيل",
+      "statusWaiting": "في الانتظار",
+      "statusError": "خطأ"
     },
     "loadError": "فشل تحميل الحيوان الأليف",
     "missingPetIdParam": "لم يتم اختيار حيوان أليف",
@@ -3161,7 +3169,8 @@
         "loadFailed": "فشل تحميل قائمة الحيوانات",
         "setActiveFailed": "فشل تعيين الحيوان النشط",
         "summonFailed": "فشل فتح نافذة الحيوان"
-      }
+      },
+      "builtIn": "مدمج"
     },
     "import": {
       "title": "استيراد من Codex",

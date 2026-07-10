@@ -4,21 +4,12 @@ import { useEffect, useRef } from "react"
 import { useTranslations } from "next-intl"
 import {
   closePetWindow,
-  savePetWindowState,
   showPetContextMenu,
 } from "@/lib/pet/api"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import { isDesktop } from "@/lib/transport"
 
-export interface PetMenuProps {
-  onScaleChange: (scale: number) => void
-  onOpenSettings: () => void
-}
-
-type MenuAction =
-  | { type: "scale"; value: number }
-  | { type: "open_manager" }
-  | { type: "close" }
+type MenuAction = { type: "hide" }
 
 /**
  * Right-click controller. Renders no UI of its own — the menu itself is
@@ -26,22 +17,15 @@ type MenuAction =
  * Tauri's menu-event bus). HTML popups got clipped to the tiny pet window
  * and were unclosable when they overflowed; the OS-level menu sidesteps
  * both problems and gives us free Escape/click-outside dismiss.
+ *
+ * Menu items:
+ *  - "Quit" — exits the entire application (handled in Rust directly).
+ *  - "Hide pet" — closes the pet window (handled via JS → closePetWindow).
  */
-export function PetMenu({ onScaleChange, onOpenSettings }: PetMenuProps) {
+export function PetMenu() {
   const t = useTranslations("Pet")
 
-  // Stash the latest callbacks in a ref so the menu-action listener (set up
-  // once at mount) always calls into the current closures without having
-  // to re-subscribe on every render. PetWindow rerenders on each animation
-  // tick and recreates `openManager` inline, so a deps-based effect would
-  // tear down and rebuild the Tauri listener constantly — a window during
-  // which a menu-action event would be silently dropped.
-  const callbacksRef = useRef({ onScaleChange, onOpenSettings })
-  useEffect(() => {
-    callbacksRef.current = { onScaleChange, onOpenSettings }
-  }, [onScaleChange, onOpenSettings])
-
-  // Stash translations the same way: the right-click listener pulls fresh
+  // Stash translations in a ref so the right-click listener pulls fresh
   // labels at popup time without needing to rebind.
   const tRef = useRef(t)
   useEffect(() => {
@@ -58,9 +42,8 @@ export function PetMenu({ onScaleChange, onOpenSettings }: PetMenuProps) {
       const tNow = tRef.current
       void showPetContextMenu(
         {
-          scale: tNow("menu.scale"),
-          openManager: tNow("menu.openManager"),
-          close: tNow("menu.close"),
+          quit: tNow("menu.quit"),
+          hidePet: tNow("menu.hidePet"),
         },
         x,
         y
@@ -74,8 +57,8 @@ export function PetMenu({ onScaleChange, onOpenSettings }: PetMenuProps) {
     }
   }, [])
 
-  // 2) Listen for actions emitted by the native menu's event handler.
-  //    Mount-once subscription — see callbacksRef rationale above.
+  // 2) Listen for "hide" action emitted by the native menu's event handler.
+  //    Mount-once subscription — see tRef rationale above.
   useEffect(() => {
     if (!isDesktop()) return
     let unlisten: (() => void) | null = null
@@ -86,19 +69,9 @@ export function PetMenu({ onScaleChange, onOpenSettings }: PetMenuProps) {
         const off = await listen<MenuAction>("pet://menu-action", (event) => {
           const action = event.payload
           if (!action) return
-          const { onScaleChange, onOpenSettings } = callbacksRef.current
-          if (action.type === "scale") {
-            const next = action.value
-            void savePetWindowState({ scale: next })
-              .then(() => onScaleChange(next))
-              .catch((err) => {
-                console.warn("[Pet] scale change failed:", err)
-              })
-          } else if (action.type === "open_manager") {
-            onOpenSettings()
-          } else if (action.type === "close") {
+          if (action.type === "hide") {
             void closePetWindow().catch((err) => {
-              console.warn("[Pet] close failed:", err)
+              console.warn("[Pet] hide failed:", err)
             })
           }
         })

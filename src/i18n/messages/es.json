@@ -3118,9 +3118,17 @@
       "statusError": "Error"
     },
     "menu": {
-      "scale": "Escala",
-      "openManager": "Gestionar mascotas",
-      "close": "Cerrar"
+      "quit": "Salir",
+      "hidePet": "Ocultar mascota"
+    },
+    "panel": {
+      "title": "Sesiones activas",
+      "empty": "No hay sesiones activas",
+      "emptyHint": "Aquí aparecen los agentes en ejecución y los que te necesitan.",
+      "close": "Cerrar",
+      "statusRunning": "En ejecución",
+      "statusWaiting": "En espera",
+      "statusError": "Error"
     },
     "loadError": "No se pudo cargar la mascota",
     "missingPetIdParam": "No hay mascota seleccionada",
@@ -3161,7 +3169,8 @@
         "loadFailed": "Error al cargar mascotas",
         "setActiveFailed": "Error al activar mascota",
         "summonFailed": "Error al invocar la ventana de mascota"
-      }
+      },
+      "builtIn": "Integrado"
     },
     "import": {
       "title": "Importar desde Codex",

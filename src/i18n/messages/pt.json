@@ -3118,9 +3118,17 @@
       "statusError": "Erro"
     },
     "menu": {
-      "scale": "Escala",
-      "openManager": "Gerenciar pets",
-      "close": "Fechar"
+      "quit": "Sair",
+      "hidePet": "Ocultar pet"
+    },
+    "panel": {
+      "title": "Sessões ativas",
+      "empty": "Nenhuma sessão ativa",
+      "emptyHint": "Agentes em execução e os que precisam de você aparecem aqui.",
+      "close": "Fechar",
+      "statusRunning": "Em execução",
+      "statusWaiting": "Aguardando",
+      "statusError": "Erro"
     },
     "loadError": "Falha ao carregar pet",
     "missingPetIdParam": "Nenhum pet selecionado",
@@ -3161,7 +3169,8 @@
         "loadFailed": "Falha ao carregar pets",
         "setActiveFailed": "Falha ao ativar pet",
         "summonFailed": "Falha ao abrir a janela do pet"
-      }
+      },
+      "builtIn": "Integrado"
     },
     "import": {
       "title": "Importar do Codex",

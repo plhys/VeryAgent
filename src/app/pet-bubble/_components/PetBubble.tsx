@@ -82,7 +82,7 @@ export function PetBubble() {
   const [renderKey, setRenderKey] = useState(0)
   const [cardData, setCardData] = useState<WeatherData | null>(null)
 
-  const bubbleRef = useRef<HTMLDivElement>(null)
+  const [bubbleEl, setBubbleEl] = useState<HTMLDivElement | null>(null)
   const textRef = useRef("")
   // Only process chunk/tool/done events after an ai-run-start has been
   // received. This prevents stale events from already-running sessions
@@ -114,10 +114,63 @@ export function PetBubble() {
 
   // Auto-scroll bubble to bottom when content changes
   useEffect(() => {
-    if (bubbleRef.current) {
-      bubbleRef.current.scrollTop = bubbleRef.current.scrollHeight
+    if (bubbleEl) {
+      bubbleEl.scrollTop = bubbleEl.scrollHeight
     }
-  }, [text, chips, isThinking, errorMsg, cardData])
+  }, [text, chips, isThinking, errorMsg, cardData, bubbleEl])
+
+  // ── Dynamically resize the bubble window to match content ──
+  // This eliminates the large transparent gap above the card. The
+  // window height is set to content height + padding, then the
+  // Rust-side reposition_pet_bubble recalculates the anchor.
+  //
+  // IMPORTANT: `bubbleEl` is a *state* ref (not a useRef). When the
+  // .bubble div mounts, React calls setBubbleEl(el) → state update →
+  // this effect re-runs and attaches the ResizeObserver. When the div
+  // unmounts (content disappears), React calls setBubbleEl(null) →
+  // the cleanup disconnects the observer. This is the only pattern
+  // that guarantees the observer is actually set up, because a plain
+  // useRef never triggers a re-run and the initial mount finds
+  // bubbleRef.current === null.
+  useEffect(() => {
+    if (typeof window === "undefined" || !bubbleEl) return
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    function resize() {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        void (async () => {
+          try {
+            const curEl = bubbleEl
+            if (!curEl) return
+            const { LogicalSize } = await import("@tauri-apps/api/dpi")
+            const { getCurrentWindow } = await import("@tauri-apps/api/window")
+            const win = getCurrentWindow()
+            // contentHeight in logical px; add padding from .bubble-root
+            const contentH = curEl.getBoundingClientRect().height + 8 // 4px top + 4px bottom margin
+            const width = 180.0
+            await win.setSize(new LogicalSize(width, contentH))
+            // Trigger Rust-side reposition after resize completes
+            const { emit } = await import("@tauri-apps/api/event")
+            await emit("pet://bubble-resized")
+          } catch {
+            // Tauri not available — ignore
+          }
+        })()
+      }, 50) // 50ms debounce to coalesce rapid layout changes
+    }
+
+    const observer = new ResizeObserver(resize)
+    observer.observe(bubbleEl)
+    // Initial resize on mount
+    resize()
+
+    return () => {
+      observer.disconnect()
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
+  }, [bubbleEl])
 
   // ── Subscribe to Tauri events ──
   useEffect(() => {
@@ -295,8 +348,8 @@ export function PetBubble() {
         html, body { background: transparent !important; overflow: hidden; }
         *:focus, *:focus-visible { outline: none !important; }
         .bubble-root {
-          position: fixed; inset: 0; display: flex; align-items: flex-end;
-          padding: 0 0 4px 8px; pointer-events: none;
+          position: fixed; inset: 0; display: flex; align-items: flex-start;
+          padding: 4px 0 0 8px; pointer-events: none;
         }
         .bubble {
           display: inline-block; max-width: 170px; max-height: 180px; min-height: 28px; overflow-y: auto;
@@ -385,23 +438,25 @@ export function PetBubble() {
       `}</style>
       <div className="bubble-root">
         {errorMsg && (
-          <div className="bubble bubble--error">
+          <div className="bubble bubble--error" ref={setBubbleEl}>
             <span className="bubble-error-text">{escapeHtml(errorMsg)}</span>
             <div className="bubble-tail" />
           </div>
         )}
         {!errorMsg && visible && cardData ? (
-          <WeatherCard
-            data={cardData}
-            onDismiss={() => {
-              setCardData(null)
-              clearTimeout(cardTimerRef.current!)
-            }}
-          />
+          <div ref={setBubbleEl}>
+            <WeatherCard
+              data={cardData}
+              onDismiss={() => {
+                setCardData(null)
+                clearTimeout(cardTimerRef.current!)
+              }}
+            />
+          </div>
         ) : (
           !errorMsg &&
           visible && (
-            <div className="bubble" key={renderKey} ref={bubbleRef}>
+            <div className="bubble" key={renderKey} ref={setBubbleEl}>
               {chips.length > 0 && !text.includes('data-type="card"') && (
                 <div className="bubble-tools">
                   {chips.slice(-5).map((chip) => {

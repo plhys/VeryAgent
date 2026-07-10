@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   ChevronDown,
+  Film,
   Import,
   Loader2,
   PawPrint,
@@ -177,7 +178,7 @@ export function PetManagerSection() {
     }
   }, [t])
 
-  const summonDisabled = !isDesktop() || !activeId
+  const summonDisabled = !isDesktop() || !activeId && pets.length === 0
 
   const installedIds = useMemo(() => new Set(pets.map((p) => p.id)), [pets])
 
@@ -280,8 +281,10 @@ export function PetManagerSection() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {pets.map((pet) => {
                 const active = pet.id === activeId
-                const sheetUrl = sheetUrls[pet.id] ?? ""
-                const previewOpen = previewPetId === pet.id && Boolean(sheetUrl)
+                const isBuiltIn = pet.builtIn
+                const isWebm = pet.renderMode === "webm"
+                const sheetUrl = isWebm ? "" : sheetUrls[pet.id] ?? ""
+                const previewOpen = !isWebm && previewPetId === pet.id && Boolean(sheetUrl)
                 return (
                   <Popover
                     key={pet.id}
@@ -304,7 +307,7 @@ export function PetManagerSection() {
                       >
                         <button
                           type="button"
-                          disabled={!sheetUrl}
+                          disabled={!sheetUrl && !isWebm}
                           aria-expanded={previewOpen}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -314,6 +317,9 @@ export function PetManagerSection() {
                           className="flex w-full items-start gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default"
                         >
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-background p-1.5">
+                            {isWebm ? (
+                              <Film className="h-6 w-6 text-muted-foreground" />
+                            ) : (
                             <div
                               className="h-full"
                               style={{
@@ -327,13 +333,21 @@ export function PetManagerSection() {
                                 imageRendering: "pixelated",
                               }}
                             />
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div
-                              className="truncate text-sm font-medium"
-                              title={pet.displayName}
-                            >
-                              {pet.displayName}
+                            <div className="flex items-center gap-1.5">
+                              <div
+                                className="truncate text-sm font-medium"
+                                title={pet.displayName}
+                              >
+                                {pet.displayName}
+                              </div>
+                              {isBuiltIn ? (
+                                <span className="inline-flex items-center rounded border px-1 py-0 text-[10px] font-medium text-muted-foreground">
+                                  {t("builtIn")}
+                                </span>
+                              ) : null}
                             </div>
                             {pet.description ? (
                               <div
@@ -361,6 +375,7 @@ export function PetManagerSection() {
                               {active ? t("active") : t("setActive")}
                             </span>
                           </Button>
+                          {!isBuiltIn ? (
                           <Button
                             size="icon-sm"
                             variant="ghost"
@@ -371,6 +386,8 @@ export function PetManagerSection() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                          ) : null}
+                          {!isBuiltIn ? (
                           <Button
                             size="icon-sm"
                             variant="ghost"
@@ -383,6 +400,7 @@ export function PetManagerSection() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+                          ) : null}
                         </div>
                       </div>
                     </PopoverAnchor>
@@ -492,6 +510,10 @@ async function loadSpritePreviews(
 async function loadSpritePreview(
   pet: PetSummary
 ): Promise<readonly [string, string]> {
+  // Webm pets don't have spritesheet assets — skip the API call entirely.
+  if (pet.renderMode === "webm") {
+    return [pet.id, ""] as const
+  }
   try {
     const asset = await readPetSpritesheet(pet.id)
     return [pet.id, createPetSpriteObjectUrl(asset)] as const

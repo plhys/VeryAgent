@@ -3118,9 +3118,17 @@
       "statusError": "Fehler"
     },
     "menu": {
-      "scale": "Skalierung",
-      "openManager": "Pets verwalten",
-      "close": "Schließen"
+      "quit": "Beenden",
+      "hidePet": "Pet verstecken"
+    },
+    "panel": {
+      "title": "Aktive Sitzungen",
+      "empty": "Keine aktiven Sitzungen",
+      "emptyHint": "Laufende Agenten und solche, die dich brauchen, erscheinen hier.",
+      "close": "Schließen",
+      "statusRunning": "Läuft",
+      "statusWaiting": "Wartet",
+      "statusError": "Fehler"
     },
     "loadError": "Pet konnte nicht geladen werden",
     "missingPetIdParam": "Kein Pet ausgewählt",
@@ -3161,7 +3169,8 @@
         "loadFailed": "Pet-Liste konnte nicht geladen werden",
         "setActiveFailed": "Aktivieren fehlgeschlagen",
         "summonFailed": "Pet-Fenster konnte nicht geöffnet werden"
-      }
+      },
+      "builtIn": "Integriert"
     },
     "import": {
       "title": "Aus Codex importieren",

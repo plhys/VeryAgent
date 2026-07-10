@@ -90,7 +90,7 @@ export function PetPanel() {
         </div>
         <button
           type="button"
-          aria-label={t("menu.close")}
+          aria-label={t("panel.close")}
           onClick={() => void closePetPanel().catch(() => {})}
           className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >

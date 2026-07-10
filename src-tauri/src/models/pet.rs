@@ -73,16 +73,32 @@ pub struct PetManifest {
     pub spritesheet_path: String,
 }
 
+/// Rendering mode for a pet. Built-in webm pets use video files from
+/// `public/pet-assets/`; spritesheet pets use the on-disk Codex-format sheet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PetRenderMode {
+    Spritesheet,
+    Webm,
+}
+
 /// Flattened summary returned to the frontend's pet list / picker.
 /// `spritesheet_path` is an *absolute* filesystem path so the frontend can
 /// pass it back to a `read_pet_spritesheet` command without re-resolving.
+/// `render_mode` tells the frontend which renderer to use; `built_in` marks
+/// pets that ship with the app and cannot be deleted.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PetSummary {
     pub id: String,
     pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    pub spritesheet_path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spritesheet_path: Option<PathBuf>,
+    pub render_mode: PetRenderMode,
+    #[serde(default)]
+    pub built_in: bool,
 }
 
 /// Full pet metadata + asset path, returned by `pet_get`.
@@ -91,8 +107,13 @@ pub struct PetSummary {
 pub struct PetDetail {
     pub id: String,
     pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    pub spritesheet_path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spritesheet_path: Option<PathBuf>,
+    pub render_mode: PetRenderMode,
+    #[serde(default)]
+    pub built_in: bool,
 }
 
 /// Asset payload streamed to the renderer. WebP is preferred; PNG is
@@ -126,6 +147,34 @@ pub struct PetMetaPatch {
     pub display_name: Option<String>,
     #[serde(default)]
     pub description: Option<Option<String>>,
+}
+
+/// Built-in default webm pet — the "black cat" rendered from `public/pet-assets/*.webm`.
+/// This entry does not exist on disk as a Codex-format pet; the webm renderer
+/// doesn't need a spritesheet or manifest. It is injected into `pet_list` and
+/// `pet_get` responses so the frontend pet-picker can see, select, and manage it.
+pub const BUILTIN_PET_ID: &str = "default";
+
+pub fn builtin_default_pet_summary() -> PetSummary {
+    PetSummary {
+        id: BUILTIN_PET_ID.to_string(),
+        display_name: "VeryAgent 黑猫".to_string(),
+        description: Some("内置桌面宠物 (Webm 动画)".to_string()),
+        spritesheet_path: None,
+        render_mode: PetRenderMode::Webm,
+        built_in: true,
+    }
+}
+
+pub fn builtin_default_pet_detail() -> PetDetail {
+    PetDetail {
+        id: BUILTIN_PET_ID.to_string(),
+        display_name: "VeryAgent 黑猫".to_string(),
+        description: Some("内置桌面宠物 (Webm 动画)".to_string()),
+        spritesheet_path: None,
+        render_mode: PetRenderMode::Webm,
+        built_in: true,
+    }
 }
 
 /// One importable Codex pet seen on disk under `~/.codex/pets/`.

@@ -8,18 +8,24 @@ import type {
   PermissionOptionInfo,
 } from "@/lib/types"
 
+export type PetRenderMode = "spritesheet" | "webm"
+
 export interface PetSummary {
   id: string
   displayName: string
   description: string | null
-  spritesheetPath: string
+  spritesheetPath: string | null
+  renderMode: PetRenderMode
+  builtIn: boolean
 }
 
 export interface PetDetail {
   id: string
   displayName: string
   description: string | null
-  spritesheetPath: string
+  spritesheetPath: string | null
+  renderMode: PetRenderMode
+  builtIn: boolean
 }
 
 export interface PetSpriteAsset {

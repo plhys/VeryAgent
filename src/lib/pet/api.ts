@@ -182,13 +182,14 @@ export async function focusConversation(
 }
 
 export interface PetMenuLabels {
-  scale: string
-  openManager: string
-  close: string
+  quit: string
+  hidePet: string
 }
 
 /** Pop up the native right-click context menu. Tauri-only; in web mode the
- * pet route doesn't render a context menu at all (no window to manage). */
+ * pet route doesn't render a context menu at all (no window to manage).
+ * Menu items: "Quit" (exit app, handled in Rust) and "Hide pet" (close
+ * pet window, handled in JS via closePetWindow). */
 export async function showPetContextMenu(
   labels: PetMenuLabels,
   x: number,

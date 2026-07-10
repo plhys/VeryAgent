@@ -28,9 +28,9 @@ use image::{ImageFormat, ImageReader};
 
 use crate::app_error::AppCommandError;
 use crate::models::pet::{
-    NewPetInput, PetDetail, PetManifest, PetMetaPatch, PetSpriteAsset, PetSummary,
-    PET_MANIFEST_FILENAME, SPRITESHEET_FILENAME, SPRITE_SHEET_HEIGHT, SPRITE_SHEET_WIDTH,
-};
+	    NewPetInput, PetDetail, PetManifest, PetMetaPatch, PetRenderMode, PetSpriteAsset, PetSummary,
+	    PET_MANIFEST_FILENAME, SPRITESHEET_FILENAME, SPRITE_SHEET_HEIGHT, SPRITE_SHEET_WIDTH,
+	};
 use crate::paths::veryagent_pets_root;
 
 /// Smallest plausible sprite-sheet payload; rejecting tiny inputs early
@@ -255,11 +255,13 @@ pub fn list_pets() -> Result<Vec<PetSummary>, AppCommandError> {
             continue;
         }
         out.push(PetSummary {
-            id: manifest.id,
-            display_name: manifest.display_name,
-            description: manifest.description,
-            spritesheet_path: spritesheet,
-        });
+	            id: manifest.id,
+	            display_name: manifest.display_name,
+	            description: manifest.description,
+	            spritesheet_path: Some(spritesheet),
+	            render_mode: PetRenderMode::Spritesheet,
+	            built_in: false,
+	        });
     }
     out.sort_by(|a, b| {
         a.display_name
@@ -282,11 +284,13 @@ pub fn get_pet(id: &str) -> Result<PetDetail, AppCommandError> {
         )));
     }
     Ok(PetDetail {
-        id: manifest.id,
-        display_name: manifest.display_name,
-        description: manifest.description,
-        spritesheet_path: spritesheet,
-    })
+	    id: manifest.id,
+	    display_name: manifest.display_name,
+	    description: manifest.description,
+	    spritesheet_path: Some(spritesheet),
+	    render_mode: PetRenderMode::Spritesheet,
+	    built_in: false,
+	})
 }
 
 pub fn read_pet_spritesheet(id: &str) -> Result<PetSpriteAsset, AppCommandError> {
@@ -364,11 +368,13 @@ pub fn add_pet(input: NewPetInput) -> Result<PetSummary, AppCommandError> {
     }
 
     Ok(PetSummary {
-        id: manifest.id,
-        display_name: manifest.display_name,
-        description: manifest.description,
-        spritesheet_path: target.join(SPRITESHEET_FILENAME),
-    })
+	    id: manifest.id,
+	    display_name: manifest.display_name,
+	    description: manifest.description,
+	    spritesheet_path: Some(target.join(SPRITESHEET_FILENAME)),
+	    render_mode: PetRenderMode::Spritesheet,
+	    built_in: false,
+	})
 }
 
 pub fn update_pet_meta(id: &str, patch: PetMetaPatch) -> Result<PetSummary, AppCommandError> {
@@ -393,11 +399,13 @@ pub fn update_pet_meta(id: &str, patch: PetMetaPatch) -> Result<PetSummary, AppC
 
     write_manifest_atomic(&dir, &manifest)?;
     Ok(PetSummary {
-        id: manifest.id,
-        display_name: manifest.display_name,
-        description: manifest.description,
-        spritesheet_path: dir.join(SPRITESHEET_FILENAME),
-    })
+	    id: manifest.id,
+	    display_name: manifest.display_name,
+	    description: manifest.description,
+	    spritesheet_path: Some(dir.join(SPRITESHEET_FILENAME)),
+	    render_mode: PetRenderMode::Spritesheet,
+	    built_in: false,
+	})
 }
 
 pub fn replace_pet_sprite(id: &str, spritesheet_base64: &str) -> Result<(), AppCommandError> {

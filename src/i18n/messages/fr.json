@@ -3118,9 +3118,17 @@
       "statusError": "Erreur"
     },
     "menu": {
-      "scale": "Échelle",
-      "openManager": "Gérer les mascottes",
-      "close": "Fermer"
+      "quit": "Quitter",
+      "hidePet": "Masquer la mascotte"
+    },
+    "panel": {
+      "title": "Sessions actives",
+      "empty": "Aucune session active",
+      "emptyHint": "Les agents en cours et ceux qui vous attendent apparaissent ici.",
+      "close": "Fermer",
+      "statusRunning": "En cours",
+      "statusWaiting": "En attente",
+      "statusError": "Erreur"
     },
     "loadError": "Échec du chargement de la mascotte",
     "missingPetIdParam": "Aucune mascotte sélectionnée",
@@ -3161,7 +3169,8 @@
         "loadFailed": "Chargement impossible",
         "setActiveFailed": "Activation impossible",
         "summonFailed": "Ouverture de la fenêtre impossible"
-      }
+      },
+      "builtIn": "Intégré"
     },
     "import": {
       "title": "Importer depuis Codex",

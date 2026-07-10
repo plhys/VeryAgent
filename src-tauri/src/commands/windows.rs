@@ -1049,8 +1049,11 @@ const PET_HOVER_LEAVE_EVENT: &str = "pet://hover-leave";
 pub const PET_BASE_WIDTH: f64 = 320.0;
 pub const PET_BASE_HEIGHT: f64 = 320.0;
 /// Bubble window dimensions (shown next to the pet when AI is responding).
+/// The width is fixed; the height is a small default that gets resized
+/// dynamically by the frontend once the content is measured, eliminating
+/// the large transparent gap above the card.
 pub const PET_BUBBLE_WIDTH: f64 = 180.0;
-pub const PET_BUBBLE_HEIGHT: f64 = 200.0;
+pub const PET_BUBBLE_HEIGHT: f64 = 50.0;
 
 /// Process-global "cursor is currently inside the pet window" flag, owned by
 /// the hover watcher but readable/writable by the context-menu command so
@@ -1150,7 +1153,12 @@ pub async fn open_pet_window(
             monitor.work_area().position.to_logical(sf);
         let area_size: tauri::LogicalSize<f64> =
             monitor.work_area().size.to_logical(sf);
-        let margin = 24.0;
+        // work_area() already excludes the taskbar; place the pet flush
+        // against the bottom-right corner. On Windows, even decorations-less
+        // windows have an invisible ~7px resize border (Aero Snap), so a
+        // small negative margin compensates and makes the visible content
+        // area truly flush with the screen edge.
+        let margin = -7.0;
         pos_x = area_pos.x + area_size.width - win_w - margin;
         pos_y = area_pos.y + area_size.height - win_h - margin;
     }
@@ -1466,6 +1474,114 @@ fn read_pet_anchor_geometry(app: &AppHandle) -> Option<PetAnchorGeometry> {
     Some((px, py, pw, ph, mon_x, mon_y, mon_w, mon_h))
 }
 
+// ─── Pet-bubble anchoring (follows the pet during drag) ──────────────────
+
+/// Gap between the bubble bottom and the pet top (logical px). A small
+/// overlap makes the card look "attached" to the pet rather than floating.
+const PET_BUBBLE_OVERLAY: f64 = 8.0;
+/// Horizontal offset that shifts the bubble rightward relative to a simple
+/// right-alignment with the pet, so the bubble's left edge doesn't overlap
+/// the sprite too much.
+const PET_BUBBLE_H_OFFSET: f64 = 120.0;
+
+/// Compute the bubble's top-left origin (logical px) from the pet window's
+/// logical rect, the current monitor's logical rect, and the bubble size.
+///
+/// Strategy:
+/// - **Vertical**: anchor the bubble's top edge just above the pet's top
+///   edge (`PET_BUBBLE_OVERLAY` px overlap). Content grows downward. If
+///   clipped by the monitor top, clamp to the monitor edge.
+/// - **Horizontal**: right-align with the pet, then shift right by the
+///   `PET_BUBBLE_H_OFFSET`. Clamp into the monitor.
+///
+/// Pure function — no Tauri handles — so it is unit-testable and produces
+/// identical results whether called from the `Moved` event handler, the
+/// `pet://set-bubble-visible` listener, or `reposition_pet_bubble`.
+#[allow(clippy::too_many_arguments)]
+fn compute_pet_bubble_origin(
+    px: f64,
+    py: f64,
+    _ph: f64,
+    pw: f64,
+    mon_x: f64,
+    mon_y: f64,
+    mon_w: f64,
+    mon_h: f64,
+    bubble_w: f64,
+    bubble_h: f64,
+) -> (f64, f64) {
+    // Anchor the TOP of the bubble just above the pet's top edge so the
+    // card always starts near the pet. As content grows the bubble
+    // extends *downward* rather than pushing upward toward the monitor
+    // top. A small overlap (PET_BUBBLE_OVERLAY) creates a visual
+    // "attachment" between the card and the pet.
+    let mut bubble_y = py - PET_BUBBLE_OVERLAY;
+    if bubble_y < mon_y {
+        // If clipped by the monitor top, start from the monitor top edge
+        // instead so the bubble stays visible.
+        bubble_y = mon_y;
+    }
+    // If the bottom of the bubble would extend past the monitor bottom
+    // (e.g. very tall content), clamp so the last visible line is at
+    // the monitor edge.
+    let max_y = mon_y + mon_h - bubble_h;
+    if bubble_y > max_y {
+        bubble_y = max_y.max(mon_y);
+    }
+
+    // Right-align with the pet, then shift right by the offset. Clamp
+    // horizontally into the monitor.
+    let mut bubble_x = (px + pw) - bubble_w + PET_BUBBLE_H_OFFSET;
+    let max_x = mon_x + mon_w - bubble_w;
+    if bubble_x > max_x {
+        bubble_x = max_x;
+    }
+    if bubble_x < mon_x {
+        bubble_x = mon_x;
+    }
+
+    (bubble_x, bubble_y)
+}
+
+/// Read the pet window's anchor geometry and reposition the bubble window
+/// accordingly. Skipped when the bubble is hidden (positioning an invisible
+/// window is wasteful and can produce stale offsets on HiDPI displays after
+/// cross-monitor moves). When visible, the bubble is anchored relative to the
+/// pet and clamped into the pet's current monitor so cross-screen dragging
+/// works correctly.
+///
+/// Returns `true` if the bubble was actually repositioned, `false` if it was
+/// skipped (hidden or missing geometry).
+#[cfg(feature = "tauri-runtime")]
+pub fn reposition_pet_bubble(app: &tauri::AppHandle) -> bool {
+    let Some(bubble) = app.get_webview_window(PET_BUBBLE_WINDOW_LABEL) else {
+        return false;
+    };
+    // Skip repositioning when the bubble is hidden — position will be
+    // computed fresh when `pet://set-bubble-visible(true)` fires next.
+    if !bubble.is_visible().unwrap_or(false) {
+        return false;
+    }
+    let Some((px, py, pw, ph, mon_x, mon_y, mon_w, mon_h)) = read_pet_anchor_geometry(app) else {
+        return false;
+    };
+
+    let bubble_sf = bubble.scale_factor().unwrap_or(1.0);
+    let bubble_size: tauri::LogicalSize<f64> = bubble
+        .inner_size()
+        .unwrap_or_default()
+        .to_logical(bubble_sf);
+    let bw = bubble_size.width;
+    let bh = bubble_size.height;
+
+    let (bx, by) = compute_pet_bubble_origin(
+        px, py, pw, ph, mon_x, mon_y, mon_w, mon_h, bw, bh,
+    );
+
+    let _ = bubble.set_position(tauri::LogicalPosition::new(bx, by));
+    true
+}
+
 /// Create the panel anchored to the sprite at the default (empty-state) height.
 /// The renderer measures its real content and calls `resize_pet_panel` to fit.
 #[cfg(feature = "tauri-runtime")]
@@ -1585,102 +1701,40 @@ pub async fn focus_conversation(
 
 /// Stable id namespace for pet menu items.
 pub const PET_MENU_ID_PREFIX: &str = "pet:";
-pub const PET_MENU_ID_OPEN_MANAGER: &str = "pet:open_manager";
-pub const PET_MENU_ID_CLOSE: &str = "pet:close";
-pub const PET_MENU_SCALE_PREFIX: &str = "pet:scale:";
-/// Selectable scale steps. Display label is locale-independent (just digits +
-/// "×"), so we don't translate it. The id `suffix` survives a round-trip
-/// through the OS menu and back into our event dispatcher.
-const PET_MENU_SCALE_STEPS: &[(f64, &str, &str)] = &[
-    (0.5, "0.5×", "05"),
-    (0.75, "0.75×", "075"),
-    (1.0, "1×", "1"),
-    (1.5, "1.5×", "15"),
-    (2.0, "2×", "2"),
-];
+pub const PET_MENU_ID_QUIT: &str = "pet:quit";
+pub const PET_MENU_ID_HIDE: &str = "pet:hide";
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PetMenuLabels {
-    pub scale: String,
-    pub open_manager: String,
-    pub close: String,
-}
-
-/// Map a menu item id back to its scale value. Used by the global menu event
-/// dispatcher in `lib.rs` so the suffix→value table lives in one place.
-pub fn pet_menu_scale_from_id(id: &str) -> Option<f64> {
-    let suffix = id.strip_prefix(PET_MENU_SCALE_PREFIX)?;
-    PET_MENU_SCALE_STEPS
-        .iter()
-        .find_map(|(value, _, s)| if *s == suffix { Some(*value) } else { None })
+    pub quit: String,
+    pub hide_pet: String,
 }
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn pet_show_context_menu(
     app: AppHandle,
-    db: tauri::State<'_, AppDatabase>,
     labels: PetMenuLabels,
     x: f64,
     y: f64,
 ) -> Result<(), AppCommandError> {
-    use tauri::menu::{CheckMenuItem, MenuBuilder, MenuItem, PredefinedMenuItem};
+    use tauri::menu::{MenuBuilder, MenuItem};
 
     let pet_window = app
         .get_webview_window(PET_WINDOW_LABEL)
         .ok_or_else(|| AppCommandError::window("Pet window not open", String::new()))?;
 
-    let config = crate::commands::pet::pet_get_settings_core(&db.conn).await?;
-    let current = config.scale;
-
     let menu_err = |stage: &str, e: tauri::Error| AppCommandError::window(stage, e.to_string());
 
-    // Disabled header acts as a "Scale" section label. macOS renders this as
-    // dimmed gray text, Linux/Windows as a non-clickable item — close enough
-    // to a section heading without depending on platform-specific section
-    // APIs that don't exist in Tauri's cross-platform menu wrapper.
-    let header = MenuItem::with_id(
-        &app,
-        format!("{PET_MENU_ID_PREFIX}header"),
-        &labels.scale,
-        false,
-        None::<&str>,
-    )
-    .map_err(|e| menu_err("Failed to build pet menu header", e))?;
-    let sep1 = PredefinedMenuItem::separator(&app)
-        .map_err(|e| menu_err("Failed to build pet menu separator", e))?;
-    let sep2 = PredefinedMenuItem::separator(&app)
-        .map_err(|e| menu_err("Failed to build pet menu separator", e))?;
+    let quit_item = MenuItem::with_id(&app, PET_MENU_ID_QUIT, &labels.quit, true, None::<&str>)
+        .map_err(|e| menu_err("Failed to build pet menu quit item", e))?;
+    let hide_item = MenuItem::with_id(&app, PET_MENU_ID_HIDE, &labels.hide_pet, true, None::<&str>)
+        .map_err(|e| menu_err("Failed to build pet menu hide item", e))?;
 
-    let mut scale_items = Vec::with_capacity(PET_MENU_SCALE_STEPS.len());
-    for (value, label, suffix) in PET_MENU_SCALE_STEPS {
-        let id = format!("{PET_MENU_SCALE_PREFIX}{suffix}");
-        let checked = (current - *value).abs() < 0.01;
-        let item = CheckMenuItem::with_id(&app, id, *label, true, checked, None::<&str>)
-            .map_err(|e| menu_err("Failed to build pet menu scale item", e))?;
-        scale_items.push(item);
-    }
-
-    let open_mgr = MenuItem::with_id(
-        &app,
-        PET_MENU_ID_OPEN_MANAGER,
-        &labels.open_manager,
-        true,
-        None::<&str>,
-    )
-    .map_err(|e| menu_err("Failed to build pet menu manager item", e))?;
-    let close_item = MenuItem::with_id(&app, PET_MENU_ID_CLOSE, &labels.close, true, None::<&str>)
-        .map_err(|e| menu_err("Failed to build pet menu close item", e))?;
-
-    let mut builder = MenuBuilder::new(&app).item(&header).item(&sep1);
-    for item in &scale_items {
-        builder = builder.item(item);
-    }
-    let menu = builder
-        .item(&sep2)
-        .item(&open_mgr)
-        .item(&close_item)
+    let menu = MenuBuilder::new(&app)
+        .item(&quit_item)
+        .item(&hide_item)
         .build()
         .map_err(|e| menu_err("Failed to build pet menu", e))?;
 

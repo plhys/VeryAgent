@@ -688,7 +688,14 @@ mod tauri_app {
                                 monitor.work_area().position.to_logical(sf);
                             let area_size: tauri::LogicalSize<f64> =
                                 monitor.work_area().size.to_logical(sf);
-                            let margin = 24.0;
+                            // On Windows, even decorations-less windows have an invisible
+                            // ~7px resize border (Aero Snap), so a small negative margin
+                            // compensates and makes the visible content truly flush with
+                            // the screen edge.
+                            #[cfg(target_os = "windows")]
+                            let margin = -7.0;
+                            #[cfg(not(target_os = "windows"))]
+                            let margin = 0.0;
                             pos_x = area_pos.x + area_size.width - win_w - margin;
                             pos_y = area_pos.y + area_size.height - win_h - margin;
                         }
@@ -742,7 +749,10 @@ mod tauri_app {
                 // Listen for bubble window visibility requests from the
                 // pet-bubble frontend. The bubble page emits
                 // `pet://set-bubble-visible` to show/hide itself based on
-                // whether it has content to display.
+                // whether it has content to display. Positioning is delegated
+                // to `reposition_pet_bubble` which shares the same anchoring
+                // logic used by the `Moved` event handler, so the bubble stays
+                // attached regardless of how it becomes visible.
                 {
                     use tauri::Listener;
                     let bubble_app = app.handle().clone();
@@ -751,36 +761,18 @@ mod tauri_app {
                         if let Some(bubble) = bubble_app.get_webview_window("pet-bubble") {
                             if visible {
                                 let _ = bubble.show();
-                                // Position bubble above the pet window.
-                                if let Some(pet) = bubble_app.get_webview_window("pet") {
-                                    if let Ok(pet_pos) = pet.outer_position() {
-                                        // All size/position APIs return physical pixels
-                                        // on Tauri 2. Convert to logical via scale
-                                        // factor so set_position(LogicalPosition) is
-                                        // correct on HiDPI displays.
-                                        let scale = bubble.scale_factor().unwrap_or(1.0);
-                                        let bubble_size: tauri::LogicalSize<f64> = bubble.inner_size()
-                                            .unwrap_or_default()
-                                            .to_logical(scale);
-                                        let pet_size: tauri::LogicalSize<f64> = pet.inner_size()
-                                            .unwrap_or_default()
-                                            .to_logical(scale);
-                                        let pet_pos_logical: tauri::LogicalPosition<f64> = pet_pos.to_logical(scale);
-                                        // Horizontally: right-align with the pet, then shift right
-                                        let bx = pet_pos_logical.x + pet_size.width - bubble_size.width + 120.0;
-                                        // Vertically: bubble bottom overlaps the top 40% of the pet,
-                                        // shifted 20px upward
-                                        let by = pet_pos_logical.y - bubble_size.height + pet_size.height * 0.4 - 20.0;
-                                        let _ = bubble.set_position(tauri::LogicalPosition::new(
-                                            bx,
-                                            by.max(0.0),
-                                        ));
-                                    }
-                                }
+                                windows::reposition_pet_bubble(&bubble_app);
                             } else {
                                 let _ = bubble.hide();
                             }
                         }
+                    });
+
+                    // The bubble frontend resizes its window to match content height
+                    // and emits this event so Rust can re-anchor it to the pet.
+                    let resize_app = app.handle().clone();
+                    let _ = app.listen("pet://bubble-resized", move |_event| {
+                        windows::reposition_pet_bubble(&resize_app);
                     });
                 }
 
@@ -801,29 +793,25 @@ mod tauri_app {
                     return;
                 }
 
-                // Dispatch native pet context-menu actions. Items live under
-                // the `pet:` id namespace; everything else (future app
-                // menus) flows past untouched. We re-emit a webview event
-                // rather than acting in Rust so the existing frontend
-                // commands (pet_save_window_state, open_settings_window,
-                // close_pet_window) stay the single source of truth — the
-                // native menu is just a different *trigger*.
-                if !id.starts_with(windows::PET_MENU_ID_PREFIX) {
-                    return;
+                // Dispatch native pet context-menu actions.
+                // "Quit" is handled entirely in Rust (same as tray quit).
+                // "Hide pet" is re-emitted as a webview event so the
+                // frontend can call the existing `closePetWindow` command,
+                // which persists `enabled = false` to the database.
+                if id.starts_with(windows::PET_MENU_ID_PREFIX) {
+                    match id.as_str() {
+                        windows::PET_MENU_ID_QUIT => app.exit(0),
+                        windows::PET_MENU_ID_HIDE => {
+                            use tauri::Emitter;
+                            let _ = app.emit_to(
+                                "pet",
+                                "pet://menu-action",
+                                serde_json::json!({ "type": "hide" }),
+                            );
+                        }
+                        _ => {}
+                    }
                 }
-                let payload: serde_json::Value =
-                    if let Some(scale) = windows::pet_menu_scale_from_id(&id) {
-                        serde_json::json!({ "type": "scale", "value": scale })
-                    } else if id == windows::PET_MENU_ID_OPEN_MANAGER {
-                        serde_json::json!({ "type": "open_manager" })
-                    } else if id == windows::PET_MENU_ID_CLOSE {
-                        serde_json::json!({ "type": "close" })
-                    } else {
-                        // Header / unknown — nothing to do.
-                        return;
-                    };
-                use tauri::Emitter;
-                let _ = app.emit_to("pet", "pet://menu-action", payload);
             })
             .on_window_event(|window, event| {
                 let label = window.label().to_string();
@@ -838,6 +826,15 @@ mod tauri_app {
                     if let Some(state) = app.try_state::<windows::SettingsWindowState>() {
                         windows::restore_windows_after_settings(app, &state, &label);
                     }
+                }
+
+                // Reposition the pet-bubble when the pet window moves so the
+                // bubble follows the pet during drag (and any other position
+                // change). The `Moved` event fires after every `setPosition`
+                // call from the JS drag hook, so this hooks into the existing
+                // drag cycle without any frontend changes.
+                if label == "pet" && matches!(event, tauri::WindowEvent::Moved(_)) {
+                    windows::reposition_pet_bubble(window.app_handle());
                 }
 
                 if (label.starts_with("commit-") || label.starts_with("remote-commit-"))

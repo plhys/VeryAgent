@@ -3132,9 +3132,17 @@
       "statusError": "出错"
     },
     "menu": {
-      "scale": "缩放",
-      "openManager": "管理宠物",
-      "close": "关闭"
+      "quit": "退出",
+      "hidePet": "隐藏宠物"
+    },
+    "panel": {
+      "title": "活动会话",
+      "empty": "没有活动会话",
+      "emptyHint": "正在运行或需要你处理的会话会显示在这里。",
+      "close": "关闭",
+      "statusRunning": "运行中",
+      "statusWaiting": "等待中",
+      "statusError": "出错"
     },
     "loadError": "加载宠物失败",
     "missingPetIdParam": "未选中任何宠物",
@@ -3175,7 +3183,8 @@
         "loadFailed": "加载宠物列表失败",
         "setActiveFailed": "设置活跃宠物失败",
         "summonFailed": "召唤宠物窗口失败"
-      }
+      },
+      "builtIn": "内置"
     },
     "import": {
       "title": "从 Codex 导入",

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import { getPet, getPetSettings, readPetSpritesheet } from "@/lib/pet/api"
-import type { PetDetail, PetWindowConfig } from "@/lib/pet/types"
+import type { PetDetail, PetRenderMode, PetWindowConfig } from "@/lib/pet/types"
 import {
   createPetSpriteObjectUrl,
   revokePetSpriteObjectUrl,
@@ -51,6 +51,7 @@ export function PetWindow({ petId }: PetWindowProps) {
   const t = useTranslations("Pet")
   const [pet, setPet] = useState<PetDetail | null>(null)
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null)
+  const [renderMode, setRenderMode] = useState<PetRenderMode>("webm")
   const [scale, setScale] = useState<number>(1)
   const [error, setError] = useState<string | null>(null)
   // The URL only carries the *initial* pet id (the active one when the
@@ -231,26 +232,36 @@ export function PetWindow({ petId }: PetWindowProps) {
 
     async function load() {
       try {
-        const [detail, sprite, config] = await Promise.all([
+        const [detail, config] = await Promise.all([
           getPet(activePetId),
-          readPetSpritesheet(activePetId),
           getPetSettings(),
         ])
-        objectUrl = createPetSpriteObjectUrl(sprite)
-        if (cancelled) {
-          revokePetSpriteObjectUrl(objectUrl)
-          return
-        }
+        if (cancelled) return
+
         setPet(detail)
-        setSpritesheetUrl(objectUrl)
+        setRenderMode(detail.renderMode)
         setScale(config.scale ?? 1)
+
+        // Only load spritesheet for spritesheet-mode pets.
+        if (detail.renderMode === "spritesheet" && detail.spritesheetPath) {
+          const sprite = await readPetSpritesheet(activePetId)
+          objectUrl = createPetSpriteObjectUrl(sprite)
+          if (cancelled) {
+            revokePetSpriteObjectUrl(objectUrl)
+            return
+          }
+          setSpritesheetUrl(objectUrl)
+        } else {
+          setSpritesheetUrl(null)
+        }
       } catch {
-        // Pet data (spritesheet/manifest) may not exist when using the
-        // webm video renderer.  The webm PetSprite doesn't need these
-        // assets at all, so swallow the error and render with defaults.
+        // Pet data may not exist when using the webm video renderer.
+        // The webm PetSprite doesn't need these assets at all, so
+        // swallow the error and render with defaults.
         if (!cancelled) {
           setPet(null)
           setSpritesheetUrl(null)
+          setRenderMode("webm")
           try {
             const config = await getPetSettings()
             if (!cancelled) setScale(config.scale ?? 1)
@@ -324,18 +335,6 @@ export function PetWindow({ petId }: PetWindowProps) {
     }
   }, [])
 
-  const openManager = () => {
-    if (!isDesktop()) return
-    void (async () => {
-      try {
-        const { openSettingsWindow } = await import("@/lib/api")
-        await openSettingsWindow("appearance")
-      } catch (err) {
-        console.warn("[Pet] failed to open manager:", err)
-      }
-    })()
-  }
-
   if (error) {
     return (
       <div
@@ -348,24 +347,26 @@ export function PetWindow({ petId }: PetWindowProps) {
     )
   }
 
-  // Render the pet sprite immediately — the webm video renderer does not
+  // Render the pet sprite immediately. The webm video renderer does not
   // need a spritesheet or pet manifest, so we don't gate on `pet` or
-  // `spritesheetUrl` being loaded.  The old spritesheet-based path still
-  // works when those assets are available.
+  // `spritesheetUrl` being loaded for webm pets. When renderMode is
+  // "spritesheet", the spritesheetUrl must be present; PetSprite currently
+  // always uses webm rendering (the spritesheetUrl prop is ignored), but the
+  // renderMode field is tracked for future spritesheet renderer integration.
   return (
     <div
-      className="relative flex h-screen w-screen select-none items-center justify-center"
+      className="relative flex h-screen w-screen select-none items-center justify-center cursor-grab active:cursor-grabbing"
       style={{ background: "transparent" }}
       onPointerDown={drag.onPointerDown}
     >
       <PetSprite
-        spritesheetUrl={spritesheetUrl}
+        spritesheetUrl={renderMode === "spritesheet" ? spritesheetUrl : null}
         state={renderState}
         scale={scale}
         label={pet?.displayName ?? "VeryAgent Pet"}
       />
       <PetBadge />
-      <PetMenu onScaleChange={setScale} onOpenSettings={openManager} />
+      <PetMenu />
     </div>
   )
 }
