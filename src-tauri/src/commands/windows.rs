@@ -1479,10 +1479,13 @@ fn read_pet_anchor_geometry(app: &AppHandle) -> Option<PetAnchorGeometry> {
 /// Gap between the bubble bottom and the pet top (logical px). A small
 /// overlap makes the card look "attached" to the pet rather than floating.
 const PET_BUBBLE_OVERLAY: f64 = 8.0;
+/// Vertical offset that shifts the bubble downward (logical px). Positive
+/// values move the card further down from the pet's top edge.
+const PET_BUBBLE_V_OFFSET: f64 = 30.0;
 /// Horizontal offset that shifts the bubble rightward relative to a simple
 /// right-alignment with the pet, so the bubble's left edge doesn't overlap
 /// the sprite too much.
-const PET_BUBBLE_H_OFFSET: f64 = 120.0;
+const PET_BUBBLE_H_OFFSET: f64 = 20.0;
 
 /// Compute the bubble's top-left origin (logical px) from the pet window's
 /// logical rect, the current monitor's logical rect, and the bubble size.
@@ -1515,7 +1518,7 @@ fn compute_pet_bubble_origin(
     // extends *downward* rather than pushing upward toward the monitor
     // top. A small overlap (PET_BUBBLE_OVERLAY) creates a visual
     // "attachment" between the card and the pet.
-    let mut bubble_y = py - PET_BUBBLE_OVERLAY;
+    let mut bubble_y = py - PET_BUBBLE_OVERLAY + PET_BUBBLE_V_OFFSET;
     if bubble_y < mon_y {
         // If clipped by the monitor top, start from the monitor top edge
         // instead so the bubble stays visible.

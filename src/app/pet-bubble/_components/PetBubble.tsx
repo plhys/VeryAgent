@@ -148,7 +148,7 @@ export function PetBubble() {
             const { getCurrentWindow } = await import("@tauri-apps/api/window")
             const win = getCurrentWindow()
             // contentHeight in logical px; add padding from .bubble-root
-            const contentH = curEl.getBoundingClientRect().height + 8 // 4px top + 4px bottom margin
+            const contentH = curEl.getBoundingClientRect().height + 12 // 6px top + 6px bottom padding from .bubble-root
             const width = 180.0
             await win.setSize(new LogicalSize(width, contentH))
             // Trigger Rust-side reposition after resize completes
@@ -349,21 +349,27 @@ export function PetBubble() {
         *:focus, *:focus-visible { outline: none !important; }
         .bubble-root {
           position: fixed; inset: 0; display: flex; align-items: flex-start;
-          padding: 4px 0 0 8px; pointer-events: none;
+          padding: 6px; pointer-events: none;
         }
         .bubble {
-          display: inline-block; max-width: 170px; max-height: 180px; min-height: 28px; overflow-y: auto;
+          display: inline-block; max-width: 164px; min-height: 28px; overflow: visible;
           background: linear-gradient(160deg, #2a2a2a 0%, #1e1e1e 40%, #181818 100%);
           border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 10px; padding: 4px 6px 6px 6px;
+          border-radius: 10px; padding: 0;
           backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
           box-shadow: none;
           pointer-events: auto; position: relative;
           animation: bubbleIn 0.3s cubic-bezier(0.16,1,0.3,1);
         }
-        .bubble::-webkit-scrollbar { width: 3px; }
-        .bubble::-webkit-scrollbar-track { background: transparent; }
-        .bubble::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+        .bubble-content {
+          max-width: 164px;
+          max-height: 180px;
+          overflow-y: auto;
+          padding: 8px;
+        }
+        .bubble-content::-webkit-scrollbar { width: 3px; }
+        .bubble-content::-webkit-scrollbar-track { background: transparent; }
+        .bubble-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
         @keyframes bubbleIn {
           from { opacity: 0; transform: translateY(5px); }
           to { opacity: 1; transform: translateY(0); }
@@ -376,7 +382,7 @@ export function PetBubble() {
           border-top: 5px solid #1e1e1e;
           background: none;
         }
-        .bubble-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-bottom: 2px; flex-shrink: 0; }
+        .bubble-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-bottom: 2px; flex-shrink: 0; width: 100%; }
         .bubble-chip {
           display: inline-flex; align-items: center; gap: 1px;
           font-size: 6px; font-weight: 500; padding: 0px 2px;
@@ -390,12 +396,20 @@ export function PetBubble() {
         .bubble-chip.running { background: rgba(96,165,250,0.08); color: rgba(96,165,250,0.85); border-color: rgba(96,165,250,0.12); animation: chipBlink 0.8s steps(1) infinite; }
         .bubble-chip.running .bubble-chip-dot { background: rgba(96,165,250,0.7); }
         @keyframes chipBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-        .bubble-dots { display: flex; gap: 4px; padding: 4px 2px; }
+        .bubble-dots {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 4px;
+          min-height: 16px;
+          width: 100%;
+          margin: 0;
+        }
         .bubble-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.3); animation: dotPulse 1.2s ease-in-out infinite; }
         .bubble-dots span:nth-child(2) { animation-delay: 0.2s; }
         .bubble-dots span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes dotPulse { 0%,80%,100% { opacity: 0.2; transform: scale(0.75); } 40% { opacity: 1; transform: scale(1); } }
-        .bubble-text { font-size: 11.5px; line-height: 1.5; color: rgba(255,255,255,0.92); word-break: break-word; font-family: inherit; }
+        .bubble-text { font-size: 11.5px; line-height: 1.5; color: rgba(255,255,255,0.92); word-break: break-word; font-family: inherit; width: 100%; }
         .bubble-text p { margin: 0 0 4px; }
         .bubble-text p:last-child { margin: 0; }
         .bubble-text strong { color: #fff; font-weight: 600; }
@@ -438,10 +452,12 @@ export function PetBubble() {
       `}</style>
       <div className="bubble-root">
         {errorMsg && (
-          <div className="bubble bubble--error" ref={setBubbleEl}>
-            <span className="bubble-error-text">{escapeHtml(errorMsg)}</span>
-            <div className="bubble-tail" />
-          </div>
+            <div className="bubble bubble--error" ref={setBubbleEl}>
+              <div className="bubble-content">
+                <span className="bubble-error-text">{escapeHtml(errorMsg)}</span>
+              </div>
+              <div className="bubble-tail" />
+            </div>
         )}
         {!errorMsg && visible && cardData ? (
           <div ref={setBubbleEl}>
@@ -457,43 +473,45 @@ export function PetBubble() {
           !errorMsg &&
           visible && (
             <div className="bubble" key={renderKey} ref={setBubbleEl}>
-              {chips.length > 0 && !text.includes('data-type="card"') && (
-                <div className="bubble-tools">
-                  {chips.slice(-5).map((chip) => {
-                    const isDone =
-                      chip.phase === "done" ||
-                      chip.phase === "end" ||
-                      !!chip.result
-                    // Truncate chip text to keep chips uniform size
-                    const label = (chip.actionText || chip.name || "tool").length > 10
-                      ? (chip.actionText || chip.name || "tool").slice(0, 9) + "…"
-                      : (chip.actionText || chip.name || "tool")
-                    return (
-                      <span
-                        key={chip.id}
-                        className={`bubble-chip ${isDone ? "done" : "running"}`}
-                      >
-                        <span className="bubble-chip-dot" />
-                        {escapeHtml(label)}
-                      </span>
-                    )
-                  })}
-                </div>
-              )}
-              {isThinking && !text ? (
-                <div className="bubble-dots">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              ) : text ? (
-                <div
-                  className="bubble-text"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeHtml(text),
-                  }}
-                />
-              ) : null}
+              <div className="bubble-content">
+                {chips.length > 0 && !text.includes('data-type="card"') && (
+                  <div className="bubble-tools">
+                    {chips.slice(-5).map((chip) => {
+                      const isDone =
+                        chip.phase === "done" ||
+                        chip.phase === "end" ||
+                        !!chip.result
+                      // Truncate chip text to keep chips uniform size
+                      const label = (chip.actionText || chip.name || "tool").length > 10
+                        ? (chip.actionText || chip.name || "tool").slice(0, 9) + "…"
+                        : (chip.actionText || chip.name || "tool")
+                      return (
+                        <span
+                          key={chip.id}
+                          className={`bubble-chip ${isDone ? "done" : "running"}`}
+                        >
+                          <span className="bubble-chip-dot" />
+                          {escapeHtml(label)}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+                {isThinking && !text ? (
+                  <div className="bubble-dots">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                ) : text ? (
+                  <div
+                    className="bubble-text"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeHtml(text),
+                    }}
+                  />
+                ) : null}
+              </div>
               <div className="bubble-tail" />
             </div>
           )
