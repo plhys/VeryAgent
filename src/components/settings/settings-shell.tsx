@@ -11,7 +11,6 @@ import {
   Bot,
   BookOpenText,
   FileSpreadsheet,
-  FileStack,
   GitBranch,
   Globe,
   Keyboard,
@@ -23,7 +22,6 @@ import {
   Server,
   Settings,
   SlidersHorizontal,
-  Sparkles,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { usePathname } from "next/navigation"
@@ -78,16 +76,6 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/skills",
     labelKey: "skills",
     icon: BookOpenText,
-  },
-  {
-    href: "/settings/experts",
-    labelKey: "experts",
-    icon: Sparkles,
-  },
-  {
-    href: "/settings/office-tools",
-    labelKey: "office_tools",
-    icon: FileStack,
   },
   {
     href: "/settings/agents",

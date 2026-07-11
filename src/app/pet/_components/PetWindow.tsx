@@ -93,7 +93,7 @@ export function PetWindow({ petId }: PetWindowProps) {
   }, [])
 
   const cancelInteraction = useCallback(() => {
-    handleDragDirection(null)
+    handleDragDirection()
   }, [handleDragDirection])
 
   // Single click does nothing. Double-click toggles the main window visibility.

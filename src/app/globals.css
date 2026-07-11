@@ -1523,10 +1523,25 @@
    intended: clicking a disabled control still focuses the editor. */
 .veryagent-composer-chrome {
   cursor: text;
+  /* Light-theme defaults: #FFFFFF background + #E6E6E6 border. */
+  background: #FFFFFF;
+  border-color: #E6E6E6;
 }
 .veryagent-composer-chrome:focus-within {
-  border-color: color-mix(in oklab, var(--ring) 42%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--ring) 28%, transparent);
+  /* Light-theme focused: #DBDBDB border. */
+  border-color: #DBDBDB;
+  box-shadow: none;
+  outline: none;
+}
+/* Dark-theme composer: unfocused uses #414141 border + #2B2B2B background;
+   focused keeps the same #2B2B2B background but switches border to #4B4B4B. */
+.dark .veryagent-composer-chrome {
+  border-color: #414141;
+  background: #2B2B2B;
+}
+.dark .veryagent-composer-chrome:focus-within {
+  border-color: #4B4B4B;
+  box-shadow: none;
   outline: none;
 }
 .veryagent-composer-chrome
