@@ -1525,8 +1525,8 @@
   cursor: text;
 }
 .veryagent-composer-chrome:focus-within {
-  border-color: rgba(255,255,255,0.15);
-  box-shadow: none;
+  border-color: color-mix(in oklab, var(--ring) 42%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--ring) 28%, transparent);
   outline: none;
 }
 .veryagent-composer-chrome

@@ -232,53 +232,57 @@ export function SidebarProjectList() {
                       {folderConvs.map((conv, idx) => {
                         const isConvActive = idx === activeIdx
                         const isLast = idx === folderConvs.length - 1
-                        // 竖线：选中项以上(含)实线，以下虚线
-                        const trunkSolid = activeIdx >= 0 && idx <= activeIdx
-                        // 下方竖线：选中项以上实线，以下虚线
-                        const belowSolid = activeIdx >= 0 && idx < activeIdx
-                        // 水平分支：仅选中项实线
-                        const branchSolid = isConvActive
+                        // 竖线：选中项以上(含)白色，以下浅灰色
+                        const trunkActive = activeIdx >= 0 && idx <= activeIdx
+                        // 下方竖线：选中项以上白色，以下浅灰色
+                        const belowActive = activeIdx >= 0 && idx < activeIdx
+                        // 水平分支：仅选中项白色
+                        const branchActive = isConvActive
+                        const trunkColor = trunkActive
+                          ? "var(--color-primary, var(--primary))"
+                          : "var(--color-sidebar-border, #e5e5e5)"
+                        const branchColor = branchActive
+                          ? "var(--color-primary, var(--primary))"
+                          : "var(--color-sidebar-border, #e5e5e5)"
+                        const belowColor = belowActive
+                          ? "var(--color-primary, var(--primary))"
+                          : "var(--color-sidebar-border, #e5e5e5)"
                         return (
                           <div key={conv.id} className="relative mb-1.5">
-                            {/* 上方竖线 */}
+                            {/* 细连接线：回到更干净的小细线，统一 1px，降低存在感。 */}
+                            {/* 纯细线：不用 border、不用 scale、不要装饰，直接画 1px 背景线。 */}
                             <div
                               className="absolute"
                               style={{
-                                left: "-1rem",
+                                left: "calc(-1rem - 0.5px)",
                                 top: 0,
                                 height: "50%",
-                                width: 0,
-                                borderLeft: trunkSolid
-                                  ? "1.5px solid var(--color-primary, var(--primary))"
-                                  : "1px dashed var(--color-sidebar-border, #e5e5e5)",
+                                width: "1px",
+                                opacity: 0.8,
+                                backgroundColor: trunkColor,
                               }}
                             />
-                            {/* 水平分支线 */}
                             <div
                               className="absolute"
                               style={{
                                 left: "-1rem",
-                                top: "50%",
+                                top: "calc(50% - 0.5px)",
                                 width: "1rem",
-                                height: 0,
-                                borderTop: branchSolid
-                                  ? "1.5px solid var(--color-primary, var(--primary))"
-                                  : "1px dashed var(--color-sidebar-border, #e5e5e5)",
-                                transform: "translateY(-0.5px)",
+                                height: "1px",
+                                opacity: 0.8,
+                                backgroundColor: branchColor,
                               }}
                             />
-                            {/* 下方竖线（最后一项不画） */}
                             {!isLast && (
                               <div
                                 className="absolute"
                                 style={{
-                                  left: "-1rem",
+                                  left: "calc(-1rem - 0.5px)",
                                   top: "50%",
-                                  bottom: 0,
-                                  width: 0,
-                                  borderLeft: belowSolid
-                                    ? "1.5px solid var(--color-primary, var(--primary))"
-                                    : "1px dashed var(--color-sidebar-border, #e5e5e5)",
+                                  bottom: "-0.375rem",
+                                  width: "1px",
+                                  opacity: 0.8,
+                                  backgroundColor: belowColor,
                                 }}
                               />
                             )}

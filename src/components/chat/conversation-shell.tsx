@@ -214,8 +214,9 @@ export function ConversationShell({
       {/* Composer dock. The ask-question card sits in normal flow just above the
           feedback list and input — like the permission/question dialogs — so it
           shrinks the message list instead of covering it, while staying aligned
-          to the input width. */}
-      <div>
+          to the input width. `translate-y-2.5` keeps the dock 10px below its
+          original position. */}
+      <div className="translate-y-2.5">
         {pendingAskQuestion && pendingAskQuestion.questions.length > 0 && (
           <div className="mx-auto w-full max-w-3xl px-4">
             <AskQuestionCard

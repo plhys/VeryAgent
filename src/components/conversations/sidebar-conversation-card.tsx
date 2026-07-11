@@ -236,12 +236,12 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           >
             <div
               className={cn(
-	                "group relative flex h-[2.0625rem] w-full items-center",
+                "group relative flex h-[2.0625rem] w-full items-center",
                 "rounded-full text-sidebar-foreground",
                 "transition-colors duration-[120ms]",
                 isSelected
-                  ? "bg-sidebar-primary/8"
-	                  : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
+                  ? "bg-sidebar-border dark:bg-[#3D3D3D]"
+                  : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
               )}
             >
               <button
@@ -266,7 +266,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     left rail aligns under the parent's. */}
                 <SubsessionAncestorRails depth={depth} />
                 {/* This row's OWN rail, through its agent icon, at the (depth-
-                    shifted) rail axis. */}
+                    shifted) rail axis. Only drawn for nested sub-sessions
+                    (depth ≥ 1); root conversations omit the rail for a
+                    cleaner flat list appearance. */}
+                {depth > 0 && (
                 <span
                   aria-hidden
                   className={cn(
@@ -280,6 +283,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     transform: "translateX(-50%)",
                   }}
                 />
+                )}
                 <div
                   className={cn(
                     "pointer-events-none absolute top-1/2 z-10 flex items-center justify-center",
@@ -312,7 +316,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
 
                 <span
                   className={cn(
-                    "relative min-w-0 flex-1 truncate text-[0.875rem] font-normal",
+                    "relative min-w-0 flex-1 truncate text-[0.875rem]",
+                    isSelected
+                      ? "font-medium text-sidebar-foreground"
+                      : "font-normal",
                     isOpenInTab && "text-primary"
                   )}
                 >

@@ -235,10 +235,11 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
             order={1}
             defaultSize={56}
             minSize={mode === "fusion" ? 25 : 0}
+            className="outline-none"
           >
             <section
               className={cn(
-                "flex h-full min-h-0 flex-col overflow-hidden",
+                "flex h-full min-h-0 flex-col overflow-hidden outline-none",
                 mode === "conversation" && "absolute inset-0 z-30 bg-background"
               )}
               onPointerDownCapture={markConversationActive}

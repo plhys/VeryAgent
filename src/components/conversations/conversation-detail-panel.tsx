@@ -1970,7 +1970,7 @@ export function ConversationDetailPanel() {
       <ContextMenu onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger asChild>
           <div
-            className="relative h-full min-h-0 overflow-hidden"
+            className="relative h-full min-h-0 overflow-hidden outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0"
             onPointerDown={handleContextMenuTriggerPointerDown}
           >
             {/* Stable wrapper across canTile flip — otherwise sibling tabs remount and a live streaming response is torn down. */}

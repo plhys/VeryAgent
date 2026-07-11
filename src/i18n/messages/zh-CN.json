@@ -2577,7 +2577,7 @@
       "noFolders": "暂无文件夹",
       "noBranches": "暂无分支",
       "noBranch": "（无分支）",
-      "chatModeLabel": "无文件夹模式",
+      "chatModeLabel": "无工作区模式",
       "commit": "提交",
       "push": "推送",
       "merge": "合并",
