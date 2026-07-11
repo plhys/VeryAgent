@@ -1116,6 +1116,8 @@ pub async fn open_pet_window(
     }
 
     if let Some(existing) = app.get_webview_window(PET_WINDOW_LABEL) {
+        use tauri::Emitter;
+        let _ = app.emit("pet://active-changed", &config);
         let _ = existing.unminimize();
         existing
             .set_focus()

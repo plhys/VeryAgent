@@ -79,7 +79,7 @@ export function PetWindow({ petId }: PetWindowProps) {
   // Drag direction changes are ignored for the webm sprite — there are no
   // dedicated running-right/left video files. The sprite stays in its
   // current agent-driven state during drag.
-  const handleDragDirection = useCallback((_s: PetState | null) => {
+  const handleDragDirection = useCallback(() => {
     // No-op: webm pet does not change animation on drag direction
   }, [])
 
@@ -312,7 +312,9 @@ export function PetWindow({ petId }: PetWindowProps) {
   // Keep the document title clean. macOS hides it via title_bar_style anyway,
   // but server-mode preview shows it.
   useEffect(() => {
-    document.title = pet ? `${pet.displayName} - veryAgent pet` : "veryagent pet"
+    document.title = pet
+      ? `${pet.displayName} - veryAgent pet`
+      : "veryagent pet"
   }, [pet])
 
   // Fully transparent body so the OS chrome is invisible. Done in JS to keep
@@ -347,12 +349,9 @@ export function PetWindow({ petId }: PetWindowProps) {
     )
   }
 
-  // Render the pet sprite immediately. The webm video renderer does not
-  // need a spritesheet or pet manifest, so we don't gate on `pet` or
-  // `spritesheetUrl` being loaded for webm pets. When renderMode is
-  // "spritesheet", the spritesheetUrl must be present; PetSprite currently
-  // always uses webm rendering (the spritesheetUrl prop is ignored), but the
-  // renderMode field is tracked for future spritesheet renderer integration.
+  // Render the pet immediately. Built-in `default` stays on the webm path,
+  // while imported pets pass a spritesheet URL and animate through the
+  // Codex-style frame renderer in `PetSprite`.
   return (
     <div
       className="relative flex h-screen w-screen select-none items-center justify-center cursor-grab active:cursor-grabbing"

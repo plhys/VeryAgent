@@ -23,6 +23,7 @@ import {
 } from "@/components/conversations/sidebar-conversation-list"
 import { SidebarProjectList } from "@/components/conversations/sidebar-project-list"
 import { NewFolderDropdown } from "./new-folder-dropdown"
+import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useIsMac } from "@/hooks/use-is-mac"
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
@@ -218,7 +219,8 @@ export function Sidebar() {
             {t("projects")}
           </button>
         </div>
-        <div className="ml-auto pr-1.5">
+        <div className="ml-auto pr-1.5 flex items-center gap-1">
+          <RemoteWorkspaceDropdown />
           <NewFolderDropdown />
         </div>
       </div>

@@ -46,10 +46,10 @@ export function RemoteWorkspaceDropdown() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 hover:text-foreground/80 border border-border rounded-md p-0.5 mt-2.5"
+            className="h-6 w-6 hover:text-foreground/80"
             title={t("openRemoteWorkspace")}
           >
-            <MonitorCloud className="h-5 w-5" />
+            <MonitorCloud className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">

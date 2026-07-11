@@ -1,10 +1,17 @@
 "use client"
 
 import { useEffect, useRef, useCallback } from "react"
-import type { PetState } from "@/lib/pet/animation"
+import {
+  backgroundPositionFor,
+  SPRITE_BACKGROUND_SIZE,
+  SPRITE_FRAME_HEIGHT,
+  SPRITE_FRAME_WIDTH,
+  type PetState,
+} from "@/lib/pet/animation"
+import { usePetAnimator } from "../_hooks/usePetAnimator"
 
 export interface PetSpriteProps {
-  /** Ignored for webm mode — the state is handled by PetVideo internally. */
+  /** When present, render the custom Codex-style spritesheet instead of webm. */
   spritesheetUrl?: string | null
   state: PetState
   scale: number
@@ -39,19 +46,20 @@ const STATE_ENTER_VIDEO: Partial<Record<PetState, string>> = {
   failed: "sleep-start.webm",
 }
 
-// Base size of the pet sprite (logical px before scaling).
-const PET_WIDTH = 320
-const PET_HEIGHT = 320
+// Base size of the pet sprite (logical px before scaling). The Codex
+// spritesheets use 192×208 logical frames; webm keeps the legacy 320 square.
+const PET_WEBM_WIDTH = 320
+const PET_WEBM_HEIGHT = 320
 
 /**
- * Webm-based pet sprite renderer.
+ * Pet sprite renderer.
  *
- * Replaces the original spritesheet-based PetSprite with video playback.
- * Each PetState maps to a specific .webm file. States that have an "enter"
- * animation (e.g. running → task-start → task-loop) will play the enter video
- * once, then seamlessly switch to the loop video.
+ * Built-in "default" pets still use the webm pipeline, while imported pets
+ * keep the original Codex spritesheet animation so custom active pets really
+ * show their own artwork instead of falling back to the black cat videos.
  */
 export function PetSprite({
+  spritesheetUrl,
   state,
   scale,
   label,
@@ -60,6 +68,8 @@ export function PetSprite({
   const currentStateRef = useRef<PetState>(state)
   const enterPlayedRef = useRef(false)
   const enterEndedHandlerRef = useRef<(() => void) | null>(null)
+  const tick = usePetAnimator(state)
+  const useSpritesheet = Boolean(spritesheetUrl)
 
   // When state changes, decide whether to play an enter animation first.
   const playState = useCallback((newState: PetState) => {
@@ -112,19 +122,40 @@ export function PetSprite({
 
   // Reset enter tracking when state changes to a different state.
   useEffect(() => {
+    if (useSpritesheet) return
     if (currentStateRef.current !== state) {
       enterPlayedRef.current = false
     }
     playState(state)
-  }, [state, playState])
+  }, [playState, state, useSpritesheet])
+
+  if (useSpritesheet && spritesheetUrl) {
+    return (
+      <div
+        role="img"
+        aria-label={label}
+        style={{
+          width: `${SPRITE_FRAME_WIDTH * scale}px`,
+          height: `${SPRITE_FRAME_HEIGHT * scale}px`,
+          overflow: "hidden",
+          pointerEvents: "none",
+          backgroundImage: `url("${spritesheetUrl}")`,
+          backgroundRepeat: "no-repeat",
+          backgroundSize: SPRITE_BACKGROUND_SIZE,
+          backgroundPosition: backgroundPositionFor(tick.row, tick.col),
+          imageRendering: "auto",
+        }}
+      />
+    )
+  }
 
   return (
     <div
       role="img"
       aria-label={label}
       style={{
-        width: `${PET_WIDTH * scale}px`,
-        height: `${PET_HEIGHT * scale}px`,
+        width: `${PET_WEBM_WIDTH * scale}px`,
+        height: `${PET_WEBM_HEIGHT * scale}px`,
         overflow: "hidden",
         pointerEvents: "none",
       }}

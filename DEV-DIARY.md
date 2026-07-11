@@ -2,6 +2,65 @@
 
 ---
 
+## 2026-07-11 远程工作区按钮位置迁移
+
+### 需求
+将"打开远程工作区"按钮从标题栏左侧移到侧边栏 Tab 行（聊天/项目）的右侧，放在"打开文件夹"按钮前面。
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/components/layout/sidebar.tsx` | 导入并插入 `<RemoteWorkspaceDropdown />`，放在 `<NewFolderDropdown />` 前面 |
+| `src/components/layout/remote-workspace-dropdown.tsx` | 按钮样式从标题栏（h-7 w-7 border rounded-md mt-2.5）改为侧边栏风格（h-6 w-6），图标从 h-5 w-5 改为 h-3.5 w-3.5 |
+| `src/components/layout/folder-title-bar.tsx` | 删除 `RemoteWorkspaceDropdown` 导入及桌面端/移动端两处使用 |
+
+### 布局变化
+
+**侧边栏 Tab 行（修改后）：**
+```
+[ 聊天 | 项目 ]     [ ☁远程工作区 ] [ +打开文件夹 ]
+```
+
+**标题栏左侧（修改后）：**
+```
+[ Logo/侧边栏开关 ] [ 🐾宠物 ]
+```
+（远程工作区按钮已移走，标题栏更简洁）
+
+### 按钮样式参考
+
+侧边栏 Tab 行右侧按钮统一风格：
+- 尺寸：`h-6 w-6`
+- 样式：`variant="ghost" size="icon" className="h-6 w-6 hover:text-foreground/80"`
+- 图标：`h-3.5 w-3.5`
+- 容器：`ml-auto pr-1.5 flex items-center gap-1`
+
+---
+
+## 2026-07-11 桌面宠物活跃选择修复
+
+### 问题
+后台把自定义宠物设为活跃后，重新召唤出来仍然是黑猫。
+
+### 根因
+- `pet_set_active` 和 `open_pet_window` 的配置流其实已经能拿到正确的 `activePetId`
+- 但前端 `src/app/pet/_components/PetSprite.tsx` 被整体切到了 webm 渲染
+- 自定义宠物虽然已经成功加载出 spritesheet URL，`PetSprite` 却一直忽略它，只播放内置黑猫视频
+
+### 修改文件
+
+| 文件 | 改动 |
+|------|------|
+| `src/app/pet/_components/PetSprite.tsx` | 恢复双路径渲染：有 `spritesheetUrl` 时走 spritesheet 帧动画；否则继续走内置 webm |
+| `src/app/pet/_components/PetWindow.tsx` | 更新注释，说明内置宠物走 webm、自定义宠物走 spritesheet |
+
+### 修复结果
+- 内置 `default` 宠物：保持原来的 webm 黑猫逻辑
+- 自定义活跃宠物：召唤时会按自己的 spritesheet 正常显示，不再被黑猫覆盖
+
+---
+
 ## 2026-07-11 桌面宠物卡片位置调整
 
 ### 需求1：向左移动50，向下移动50

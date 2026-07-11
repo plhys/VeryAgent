@@ -33,7 +33,6 @@ import {
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
 import { CommandDropdown } from "./command-dropdown"
-import { RemoteWorkspaceDropdown } from "./remote-workspace-dropdown"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -181,7 +180,6 @@ export function FolderTitleBar() {
               >
                 <Menu className="h-4 w-4" />
               </Button>
-              <RemoteWorkspaceDropdown />
             </div>
           ) : (
             <div className="flex h-8 flex-1 items-center gap-6">
@@ -206,7 +204,6 @@ export function FolderTitleBar() {
                   />
                   <PanelLeft className="hidden h-5 w-5 group-hover/logo:block mt-1" />
                 </Button>
-                <RemoteWorkspaceDropdown />
                 <Button
                   variant="ghost"
                   size="icon"
