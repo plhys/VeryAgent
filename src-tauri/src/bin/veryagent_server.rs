@@ -264,10 +264,17 @@ async fn async_main() -> ExitCode {
         feedback_config,
         question_config,
         session_info_config,
+        vision_bridge_config,
+        _vision_bridge_access,
     ) = veryagent_lib::app_state::build_delegation_stack(
         &connection_manager,
         db.conn.clone(),
         data_dir.clone(),
+        Arc::new(veryagent_lib::acp::vision_bridge::VisionBridgeService::new(
+            veryagent_lib::db::AppDatabase {
+                conn: db.conn.clone(),
+            },
+        )),
     );
     let state = Arc::new(AppState {
         db,
@@ -289,6 +296,7 @@ async fn async_main() -> ExitCode {
         feedback_config: feedback_config.clone(),
         question_config: question_config.clone(),
         session_info_config: session_info_config.clone(),
+        vision_bridge_config: vision_bridge_config.clone(),
         system_op_lock: veryagent_lib::app_state::default_system_op_lock(),
         update_state: veryagent_lib::app_state::default_update_state(),
     });
@@ -325,6 +333,12 @@ async fn async_main() -> ExitCode {
         &session_info_config,
     )
     .await;
+    // Same for the vision-bridge enable flag + agent-types filter.
+    veryagent_lib::commands::vision_bridge::apply_persisted_vision_bridge_config(
+        &state.db.conn,
+        &vision_bridge_config,
+    )
+    .await;
 
     // Spawn the delegation listener so companion processes can round-trip
     // through the broker. Path is PID-scoped, so the listener owns it for
@@ -346,6 +360,11 @@ async fn async_main() -> ExitCode {
                 Arc::new(veryagent_lib::db::AppDatabase {
                     conn: state.db.conn.clone(),
                 }),
+            )),
+            Arc::new(veryagent_lib::acp::vision_bridge::VisionBridgeService::new(
+                veryagent_lib::db::AppDatabase {
+                    conn: state.db.conn.clone(),
+                },
             )),
         );
         let socket = delegation_socket_path.clone();

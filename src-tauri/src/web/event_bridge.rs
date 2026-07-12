@@ -170,6 +170,12 @@ pub const QUESTION_SETTINGS_CHANGED_EVENT: &str = "question-settings://changed";
 /// backend broadcast. Payload: `SessionInfoSettings` (`{ "enabled": bool }`).
 pub const SESSION_INFO_SETTINGS_CHANGED_EVENT: &str = "session-info-settings://changed";
 
+/// Global side-channel announcing a vision-bridge config save. Same cross-window
+/// rationale as [`FEEDBACK_SETTINGS_CHANGED_EVENT`]: the settings UI runs in a
+/// separate window, so conversation views learn the config changed only via this
+/// backend broadcast. Payload: `VisionBridgeConfig`.
+pub const VISION_BRIDGE_SETTINGS_CHANGED_EVENT: &str = "vision-bridge-settings://changed";
+
 /// Payload for the global [`CONVERSATION_CHANGED_EVENT`] side-channel. Drives
 /// cross-client sidebar sync (membership + status) independent of the
 /// per-connection ACP attach protocol, so clients that are NOT attached to a

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { ShieldAlert, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { acpRespondPermission } from "@/lib/api"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import { parsePermissionToolCall } from "@/lib/permission-request"
 import type { PetPermissionSummary } from "@/lib/pet/types"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,7 @@ export function PanelPermissionCard({
   connectionId,
   permission,
 }: PanelPermissionCardProps) {
+  const localizer = useConfigOptionLocalizer()
   const [busy, setBusy] = useState(false)
   const parsed = parsePermissionToolCall(permission.toolCall)
 
@@ -80,17 +82,20 @@ export function PanelPermissionCard({
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {permission.options.map((opt) => {
-          const isReject = opt.kind.startsWith("reject")
+          const k = opt.kind.toLowerCase().replace(/_/g, "")
+          const reject =
+            k.includes("reject") || k.includes("deny") || k.includes("dont")
+          const label = localizer.localizePermissionKind(opt.kind, opt.name)
           return (
             <Button
               key={opt.option_id}
               size="sm"
-              variant={isReject ? "outline" : "default"}
+              variant={reject ? "outline" : "default"}
               disabled={busy}
               className={cn("h-6 px-2 text-[11px]")}
               onClick={() => respond(opt.option_id)}
             >
-              {opt.name}
+              {label}
             </Button>
           )
         })}

@@ -167,8 +167,8 @@ pub struct BrokerAskRequest {
 
 /// Resolve a session the user referenced (`veryagent://session/<id>`) into its
 /// metadata + stats, optionally with its recent messages. Backs the
-/// `get_session_info` MCP tool. Authenticated by the same per-launch `token`; the
-/// lookup is by veryagent's internal conversation id (the number in the reference),
+/// `get_session_info` MCP tool. Authenticated by the same per-launch
+/// `token`; the lookup is by veryagent's internal conversation id (the number in the reference),
 /// so — unlike the delegation arms — it is NOT scoped to the parent connection
 /// (any non-deleted session the user references can be read).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +181,63 @@ pub struct BrokerSessionRequest {
     /// [`crate::acp::session_info::MAX_SESSION_MESSAGES`] by the resolver.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_messages: Option<u32>,
+}
+
+/// Analyze an image using a vision-capable AI model. Backs the
+/// `vision_analyze` MCP tool. The companion forwards image data (base64 or
+/// file path) plus a text prompt, and the main process calls the configured
+/// vision model API and returns the text description.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerVisionAnalyzeRequest {
+    pub token: String,
+    /// Base64-encoded image data (already encoded; not a raw byte array).
+    /// `None` when `image_path` is used instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_data: Option<String>,
+    /// Absolute file path to a local image. `None` when `image_data` is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_path: Option<String>,
+    /// MIME type (e.g. "image/png"). Required when image_data is set; inferred
+    /// from file extension when image_path is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// What the caller wants to know about the image.
+    pub prompt: String,
+}
+
+/// Generate an image using the Gemini image generation API. Backs the
+/// `generate_image` MCP tool. The companion forwards the user's prompt and
+/// optional parameters, and the main process calls the Gemini API and returns
+/// the image URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerGenerateImageRequest {
+    pub token: String,
+    /// The user's original prompt text (must be passed verbatim).
+    pub prompt: String,
+    /// Image resolution: "1K", "2K", "4K". Default "2K".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_size: Option<String>,
+    /// Image aspect ratio: "1:1", "4:3", "16:9", "9:16", "3:4". Default "16:9".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aspect_ratio: Option<String>,
+    /// Reference image URLs for image-to-image generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ref_urls: Option<Vec<String>>,
+    /// Session ID for iterative editing. Same session_id shares history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+/// Iteratively modify a previously generated image. Backs the `modify_image`
+/// MCP tool. Requires the same session_id as the previous generate_image call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerModifyImageRequest {
+    pub token: String,
+    /// The user's modification request text (must be passed verbatim).
+    pub prompt: String,
+    /// Session ID from the previous generate_image call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// Tagged top-level message dispatched by the listener. Adding new variants
@@ -197,6 +254,9 @@ pub enum BrokerMessage {
     CommitFeedback(BrokerCommitFeedbackRequest),
     Ask(BrokerAskRequest),
     SessionInfo(BrokerSessionRequest),
+    VisionAnalyze(BrokerVisionAnalyzeRequest),
+    GenerateImage(BrokerGenerateImageRequest),
+    ModifyImage(BrokerModifyImageRequest),
 }
 
 /// The wrapped outcome the main process returns over the same socket.
@@ -344,6 +404,35 @@ pub async fn client_session_round_trip(
     req: &BrokerSessionRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::SessionInfo(req.clone())).await
+}
+
+/// Dispatch a `vision_analyze` request and read back the description or error
+/// envelope from the listener. One-shot API call with no long-poll or cancel
+/// semantics.
+pub async fn client_vision_round_trip(
+    socket_path: &str,
+    req: &BrokerVisionAnalyzeRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::VisionAnalyze(req.clone())).await
+}
+
+/// Dispatch a `generate_image` request and read back the image URL or error
+/// envelope from the listener. One-shot API call — image generation may take
+/// 30-60 seconds.
+pub async fn client_generate_image_round_trip(
+    socket_path: &str,
+    req: &BrokerGenerateImageRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::GenerateImage(req.clone())).await
+}
+
+/// Dispatch a `modify_image` request and read back the modified image URL or
+/// error envelope from the listener. One-shot API call.
+pub async fn client_modify_image_round_trip(
+    socket_path: &str,
+    req: &BrokerModifyImageRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::ModifyImage(req.clone())).await
 }
 
 /// Total budget for `open()` retries on Windows named pipes. Has to be

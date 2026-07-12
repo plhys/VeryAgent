@@ -38,6 +38,7 @@ import { FeedbackNotesDisplay } from "@/components/chat/feedback-notes-display"
 import { FeedbackDialog } from "@/components/chat/feedback-dialog"
 import { useFeedbackEnabled } from "@/hooks/use-feedback-enabled"
 import { useSessionFeedback } from "@/hooks/use-session-feedback"
+import { useVisionBridgeEnabledForAgent } from "@/hooks/use-vision-bridge-enabled"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
 import { WelcomeHero, WelcomeTip } from "@/components/chat/welcome-hero"
@@ -283,6 +284,12 @@ const ConversationTabView = memo(function ConversationTabView({
   const [hasSentMessage, setHasSentMessage] = useState(false)
   const [quickActionInject, setQuickActionInject] =
     useState<ComposerInjectContent | null>(null)
+  const configVisionEnabled = useVisionBridgeEnabledForAgent(selectedAgent)
+  const [visionEnabled, setVisionEnabled] = useState(configVisionEnabled)
+  const handleToggleVision = useCallback(
+    () => setVisionEnabled((v) => !v),
+    []
+  )
   const pendingSkillInject = useConversationSkillInjectStore((s) => s.request)
   const clearPendingSkillInject = useConversationSkillInjectStore(
     (s) => s.clearRequest
@@ -1427,6 +1434,8 @@ const ConversationTabView = memo(function ConversationTabView({
       }
       injectContent={quickActionInject}
       onInjectConsumed={handleQuickActionConsumed}
+      visionEnabled={visionEnabled}
+      onToggleVision={configVisionEnabled ? handleToggleVision : undefined}
     >
       {isWelcomeMode ? (
         <div className="relative isolate flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto">
@@ -1504,6 +1513,10 @@ const ConversationTabView = memo(function ConversationTabView({
               feedbackAddDisabled={!feedback.canSubmit}
               injectContent={quickActionInject}
               onInjectConsumed={handleQuickActionConsumed}
+              visionEnabled={visionEnabled}
+              onToggleVision={
+                configVisionEnabled ? handleToggleVision : undefined
+              }
               flush
               tall
             />

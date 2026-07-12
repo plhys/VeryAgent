@@ -5,6 +5,7 @@ import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
 import { ModelOptionList } from "@/components/chat/model-option-list"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 
 // One selectable value within a setting (e.g. a single model or mode).
 export interface SessionSelectorOption {
@@ -66,8 +67,7 @@ export function SessionSelectorsPanel({
   settingsLabel,
   onAfterSelect,
 }: SessionSelectorsPanelProps) {
-  // `activeKey` is only a hint — the active setting is always resolved against
-  // the current `settings`, so it stays valid if the list changes underneath.
+  const localizer = useConfigOptionLocalizer()
   const [activeKey, setActiveKey] = useState<string | null>(null)
 
   if (settings.length === 0) return null
@@ -88,7 +88,7 @@ export function SessionSelectorsPanel({
               key={setting.key}
               type="button"
               aria-current={isActive ? "true" : undefined}
-              title={setting.title}
+              title={localizer.localize(setting.title)}
               onClick={() => setActiveKey(setting.key)}
               className={cn(
                 "flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors",
@@ -97,7 +97,7 @@ export function SessionSelectorsPanel({
               )}
             >
               <span className="w-full truncate text-sm font-medium">
-                {setting.title}
+                {localizer.localize(setting.title)}
               </span>
               <span
                 className={cn(
@@ -107,7 +107,7 @@ export function SessionSelectorsPanel({
                     : "text-muted-foreground"
                 )}
               >
-                {setting.currentLabel}
+                {localizer.localize(setting.currentLabel)}
               </span>
             </button>
           )
@@ -155,7 +155,7 @@ export function SessionSelectorsPanel({
                     groupIndex === 0 ? "pt-1" : "mt-1 border-t pt-2"
                   )}
                 >
-                  {group.name}
+                  {localizer.localize(group.name)}
                 </div>
               ) : null}
               {group.options.map((opt) => {
@@ -165,7 +165,7 @@ export function SessionSelectorsPanel({
                     key={`${group.key}-${opt.value}`}
                     type="button"
                     aria-current={selected ? "true" : undefined}
-                    title={opt.name}
+                    title={localizer.localize(opt.name)}
                     onClick={() => {
                       active.onSelect(opt.value)
                       onAfterSelect?.()
@@ -180,8 +180,8 @@ export function SessionSelectorsPanel({
                       {selected ? <Check className="size-4" /> : null}
                     </span>
                     <DropdownRadioItemContent
-                      label={opt.name}
-                      description={opt.description}
+                      label={localizer.localize(opt.name)}
+                      description={opt.description ? localizer.localize(opt.description) : opt.description}
                     />
                   </button>
                 )

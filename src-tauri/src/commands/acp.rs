@@ -2267,7 +2267,7 @@ async fn clear_kimi_model_env(db: &AppDatabase) -> Result<(), AcpError> {
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
     let enabled = setting.as_ref().map(|m| m.enabled).unwrap_or(true);
-    let model_provider_id = setting.as_ref().and_then(|m| m.model_provider_id);
+    let _model_provider_id = setting.as_ref().and_then(|m| m.model_provider_id);
     let mut env: BTreeMap<String, String> = setting
         .and_then(|m| m.env_json)
         .and_then(|raw| serde_json::from_str(&raw).ok())
@@ -2280,13 +2280,15 @@ async fn clear_kimi_model_env(db: &AppDatabase) -> Result<(), AcpError> {
     }
     let env_json = serde_json::to_string(&env)
         .map_err(|e| AcpError::protocol(format!("serialize kimi env failed: {e}")))?;
+    // When saving apikey/login config, clear model_provider_id so the UI
+    // doesn't revert to model_provider mode on refresh.
     agent_setting_service::update(
         &db.conn,
         AgentType::KimiCode,
         agent_setting_service::AgentSettingsUpdate {
             enabled,
             env_json: Some(env_json),
-            model_provider_id,
+            model_provider_id: None,
         },
     )
     .await
@@ -4969,8 +4971,49 @@ fn cascade_update_agent_config(
             // agent_local_config_path returns None for OpenClaw — no-op
         }
         AgentType::Hermes => {
-            // Hermes self-manages credentials in ~/.hermes/.env via
-            // `hermes model` / `hermes setup`; veryagent writes no provider creds.
+            // When a model_provider_id is set, cascade the provider's credentials
+            // into Hermes's config.yaml and .env using the existing structured
+            // write path. Use "custom" as the provider id (model providers expose
+            // OpenAI-compatible endpoints).
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::clone)
+                .unwrap_or_default();
+            // Hermes' custom provider treats model.base_url as an OpenAI-style base
+            // and appends /chat/completions itself. The base_url therefore needs
+            // the /v1 suffix so the final URL is …/v1/chat/completions. If the
+            // model_provider's api_url already ends with /v1 (or /v1/), leave it;
+            // otherwise append /v1.
+            let hermes_base_url = {
+                let trimmed = api_url.trim_end_matches('/');
+                if trimmed.ends_with("/v1") {
+                    trimmed.to_string()
+                } else {
+                    format!("{}/v1", trimmed)
+                }
+            };
+            let home = hermes_home_dir();
+            ensure_hermes_home_secure(&home)?;
+            let config_path = hermes_config_yaml_path();
+            let existing = fs::read_to_string(&config_path).ok();
+            let (config_yaml, env_updates) = plan_hermes_write(
+                "custom",
+                Some(api_key),
+                &model_name,
+                Some(&hermes_base_url),
+                None, // not raw mode
+                existing.as_deref(),
+            )?;
+            write_hermes_secret_file(&config_path, &config_yaml, "config.yaml")?;
+            if !env_updates.is_empty() {
+                let env_path = hermes_env_path();
+                let existing_env = fs::read_to_string(&env_path).unwrap_or_default();
+                let updates: Vec<(&str, &str)> =
+                    env_updates.iter().map(|(k, v)| (*k, v.as_str())).collect();
+                let patched = patch_env_text(&existing_env, &updates);
+                write_hermes_secret_file(&env_path, &patched, ".env")?;
+            }
         }
         AgentType::Codex => {
             let auth_path = codex_auth_json_path();
@@ -5090,7 +5133,25 @@ fn cascade_update_agent_config(
                 serde_json::to_string(&patch).map_err(|e| AcpError::protocol(e.to_string()))?;
             persist_agent_local_config_json(agent_type, Some(&patch_str))?;
         }
-        AgentType::Cline => {}
+        AgentType::Cline => {
+            // When a model_provider_id is set, cascade the provider's credentials
+            // into Cline's globalState.json and secrets.json. Use "openai" as the
+            // apiProvider (model providers expose OpenAI-compatible endpoints).
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::clone)
+                .unwrap_or_default();
+            let config_patch = serde_json::json!({
+                "apiProvider": "openai",
+                "apiBaseUrl": api_url,
+                "apiKey": api_key,
+                "model": model_name,
+            });
+            let patch_str = serde_json::to_string(&config_patch)
+                .map_err(|e| AcpError::protocol(e.to_string()))?;
+            persist_cline_local_config(Some(&patch_str))?;
+        }
         AgentType::CodeBuddy => {
             // CodeBuddy authenticates via env vars (CODEBUDDY_API_KEY /
             // CODEBUDDY_INTERNET_ENVIRONMENT) managed by its dedicated settings
@@ -5098,10 +5159,34 @@ fn cascade_update_agent_config(
             // model-provider credential cascade.
         }
         AgentType::KimiCode => {
-            // Kimi Code authenticates via the `KIMI_MODEL_*` env family
-            // (KIMI_MODEL_API_KEY / KIMI_MODEL_BASE_URL / KIMI_MODEL_NAME)
-            // managed by its dedicated settings panel through `acpUpdateAgentEnv`;
-            // it does not participate in the model-provider credential cascade.
+            // When a model_provider_id is set, the cascade injects provider
+            // credentials into kimi's config.toml using the veryagent-managed
+            // provider block. The interface is `openai` (model providers expose
+            // OpenAI-compatible endpoints). Also seed a synthetic gate token
+            // so `kimi acp` can authenticate.
+            let model_name = model_env
+                .get("KIMI_MODEL_NAME")
+                .and_then(|v| v.as_ref())
+                .map(String::clone)
+                .unwrap_or_default();
+            let spec = KimiManagedSpec {
+                interface_type: "openai".to_string(),
+                base_url: if api_url.trim().is_empty() {
+                    None
+                } else {
+                    Some(api_url.to_string())
+                },
+                api_key: if api_key.trim().is_empty() {
+                    None
+                } else {
+                    Some(api_key.to_string())
+                },
+                env: BTreeMap::new(),
+                model: model_name,
+                max_context_size: Some(KIMI_DEFAULT_MAX_CONTEXT_SIZE),
+            };
+            mutate_kimi_config_toml(Some(&spec))?;
+            seed_kimi_synthetic_credential()?;
         }
         AgentType::Pi => {
             // Pi authenticates via its own `~/.pi/agent/auth.json` + model
@@ -5133,7 +5218,15 @@ pub(crate) fn extract_agent_model(
         if let Some(obj) = val.as_object() {
             // If the top-level key matches an agent_type, it's the multi-agent format.
             if let Some(entry) = obj.get(agent_type_str) {
-                return Some(entry.to_string());
+                // Use as_str() for string values to avoid JSON quoting (e.g.
+                // "glm-5.1" should stay "glm-5.1", not become '"glm-5.1"').
+                // Non-string values (numbers, etc.) fall back to to_string().
+                return Some(
+                    entry
+                        .as_str()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| entry.to_string()),
+                );
             }
             // If the object contains known agent_type keys but not ours, we have no model.
             // Heuristic: check if any key looks like an agent_type (contains underscore
@@ -6249,8 +6342,15 @@ pub(crate) async fn acp_update_agent_env_core(
         codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         // Codex's on-disk config is handled by `apply_codex_root_model_action`
         // below; Gemini's analogous config.env gap is pre-existing and out of
-        // scope here. Only Claude needs the local-config cascade on bind.
-        if agent_type == AgentType::ClaudeCode {
+        // scope here. Claude, KimiCode, Hermes, and Cline need the local-config
+        // cascade on bind so that their on-disk config files are updated immediately.
+        if matches!(
+            agent_type,
+            AgentType::ClaudeCode
+                | AgentType::KimiCode
+                | AgentType::Hermes
+                | AgentType::Cline
+        ) {
             claude_local_cascade = Some((provider.api_url.clone(), provider.api_key.clone(), model_env));
         }
     }

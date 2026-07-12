@@ -51,7 +51,8 @@
       "experts": "전문가",
       "office_tools": "오피스 도구",
       "quick_messages": "빠른 메시지",
-      "logs": "실행 로그"
+      "logs": "실행 로그",
+      "vision_bridge": "Vision Bridge"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "API URL, API Key, 모델 이름, reasoning effort를 빠르게 설정하고 `auth.json` / `config.toml`과 동기화합니다.",
-      "authMode": "인증 방식",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "공식 구독",
       "chatgptSubscriptionHint": "ChatGPT 공식 구독으로 로그인, API Key 불필요",
       "apiKeyHint": "API Key로 OpenAI 또는 호환 API 서비스에 연결",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "Gemini 인증 설정",
       "authConfigDescription": "Gemini CLI 인증 문서와 정렬되며, 커스텀 엔드포인트, Google 로그인, Gemini API Key, Vertex AI(ADC / 서비스 계정 / API Key)를 지원합니다.",
-      "authMode": "인증 모드",
+      "authMode": "Auth Mode",
       "selectAuthMode": "인증 모드 선택",
       "viewAuthDoc": "인증 문서 보기",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "비워두면 로컬 openclaw 설정의 gateway.remote.url을 사용합니다.",
       "gatewayTokenPlaceholder": "Gateway 인증 토큰",
       "gatewayTokenHint": "가능하면 평문 토큰 대신 token-file을 사용하세요. openclaw CLI로 설정하세요.",
-      "sessionKeyHint": "선택 사항입니다. gateway 세션 키를 지정합니다. 비워두면 격리된 세션이 자동 할당됩니다."
+      "sessionKeyHint": "선택 사항입니다. gateway 세션 키를 지정합니다. 비워두면 격리된 세션이 자동 할당됩니다.",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "Hermes 구성",
@@ -745,7 +751,12 @@
       "commandCopied": "명령을 클립보드에 복사했습니다",
       "advancedTitle": "고급: config.yaml 편집",
       "rawConfigHint": "~/.hermes/config.yaml을 직접 편집합니다. 여기서 저장하면 파일이 그대로 덮어쓰여집니다.",
-      "saveRawConfig": "config.yaml 저장"
+      "saveRawConfig": "config.yaml 저장",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "CodeBuddy 구성",
@@ -805,7 +816,8 @@
       "loginHint": "Run `kimi login` in a terminal to sign in with a Kimi subscription account (device-code OAuth). veryagent stores nothing and reuses Kimi’s own login. Saving here removes veryagent’s API-key gate token.",
       "rawEditorLabel": "Advanced: edit config.toml directly",
       "rawEditorHint": "Written verbatim (comments preserved) and validated as TOML. veryagent also seeds the gate token so the session opens.",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "공식 구독",
     "authModeCustomEndpoint": "사용자 정의 엔드포인트",
@@ -816,7 +828,7 @@
     "selectModelProvider": "모델 공급자 선택",
     "noModelProviderAvailable": "이 에이전트에 구성된 모델 공급자가 없습니다. 모델 공급자 설정에서 추가하세요.",
     "claude": {
-      "authMode": "인증 방식",
+      "authMode": "Auth Mode",
       "officialSubscription": "공식 구독",
       "officialSubscriptionHint": "Anthropic 공식 구독 사용, API Key 불필요.",
       "mainModel": "메인 모델",
@@ -833,7 +845,8 @@
       "effortLevel_low": "낮음",
       "effortLevel_medium": "중간",
       "effortLevel_high": "높음",
-      "effortLevel_xhigh": "매우 높음"
+      "effortLevel_xhigh": "매우 높음",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId}를 삭제하시겠습니까?",
@@ -931,7 +944,12 @@
       "latest": "{versionText}. 이미 최신입니다."
     },
     "cline": {
-      "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다."
+      "configDescription": "Cline API 제공자와 자격 증명을 구성합니다. 설정은 ~/.cline/data/에 저장됩니다.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "OpenCode 플러그인",
@@ -2099,7 +2117,11 @@
         "mentionGroupAgent": "에이전트",
         "mentionGroupSession": "세션",
         "mentionGroupCommit": "커밋",
-        "mentionGroupSkill": "스킬"
+        "mentionGroupSkill": "스킬",
+        "mentionGroupImage": "이미지",
+        "vision": "Vision",
+        "visionOn": "Multimodal vision on",
+        "visionOff": "Multimodal vision off"
       },
       "messageQueue": {
         "addToQueue": "대기열에 추가",
@@ -2220,7 +2242,43 @@
         "moreFiles": "+{count}개 파일 더",
         "plan": "계획",
         "allowedActions": "허용된 작업",
-        "targetMode": "대상 모드: {mode}"
+        "targetMode": "대상 모드: {mode}",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask"
+      },
+      "configOptions": {
+        "approvalPreset": "Approval Preset",
+        "defaultThinkingMode": "Default thinking mode",
+        "thinkingLevel": "Thinking level",
+        "bypass": "Bypass",
+        "reasoningEffort": "Reasoning effort",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask",
+        "readOnly": "Read-only",
+        "agentMode": "Agent",
+        "agentFullAccess": "Agent (full access)",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "thinkingExtraHigh": "Extra high",
+        "modeDefault": "Default",
+        "modeAcceptEdits": "Accept Edits",
+        "modeAuto": "Auto",
+        "modePlanMode": "Plan Mode",
+        "modeBypassPermissions": "Bypass Permissions",
+        "modeDefaultDesc": "Ask before edits.",
+        "modeAcceptEditsDesc": "Auto-allow workspace and /tmp edits; still asks for sensitive paths.",
+        "modeDontAskDesc": "Auto-allow file edits for this session except sensitive paths.",
+        "modeAutoDesc": "Use a model classifier to approve/deny permission prompts",
+        "modeDefaultBehaviorDesc": "Standard behavior, prompts for dangerous operations",
+        "modeAcceptEditsBehaviorDesc": "Auto-accept file edit operations",
+        "modePlanModeDesc": "Planning mode, no actual tool execution",
+        "modeBypassPermissionsDesc": "Bypass all permission checks"
       },
       "questionDialog": {
         "title": "에이전트가 질문하고 있습니다",
@@ -2980,7 +3038,8 @@
       "quality": "품질 및 테스트",
       "debugging": "디버깅",
       "review": "검토 및 통합",
-      "meta": "메타"
+      "meta": "메타",
+      "creative": "크리에이티브 & 이미징"
     },
     "states": {
       "not_linked": "활성화되지 않음",
@@ -3113,6 +3172,7 @@
       "title": "활성 세션",
       "empty": "활성 세션 없음",
       "emptyHint": "실행 중이거나 사용자의 조치가 필요한 세션이 여기에 표시됩니다.",
+      "close": "닫기",
       "statusRunning": "실행 중",
       "statusWaiting": "대기 중",
       "statusError": "오류"
@@ -3120,15 +3180,6 @@
     "menu": {
       "quit": "종료",
       "hidePet": "펫 숨기기"
-    },
-    "panel": {
-      "title": "활성 세션",
-      "empty": "활성 세션 없음",
-      "emptyHint": "실행 중이거나 사용자의 조치가 필요한 세션이 여기에 표시됩니다.",
-      "close": "닫기",
-      "statusRunning": "실행 중",
-      "statusWaiting": "대기 중",
-      "statusError": "오류"
     },
     "loadError": "펫을 불러오지 못했습니다",
     "missingPetIdParam": "선택된 펫이 없습니다",
@@ -3617,5 +3668,36 @@
     "uninstallSuccess": "제거 완료",
     "installFailed": "설치 실패: {error}",
     "uninstallFailed": "제거 실패: {error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "Vision Bridge",
+    "description": "Let text-only agents understand images by routing image analysis through a vision-capable model.",
+    "requiredField": "This field is required",
+    "selectAtLeastOne": "Select at least one agent",
+    "validationFailed": "Please complete the required fields",
+    "saved": "Vision Bridge settings saved",
+    "saveFailed": "Failed to save Vision Bridge settings",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable Vision Bridge",
+    "enableHint": "When enabled, selected text-only agents can analyze images through the configured vision model.",
+    "modelConfig": "Vision model",
+    "apiUrl": "API URL",
+    "apiUrlHint": "Enter the base URL for the vision model API endpoint.",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "Model name",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "MarkdownImage": {
+    "copyImage": "Copy Image",
+    "copyingImage": "Copying...",
+    "copyUrl": "Copy Image URL",
+    "referenceToChat": "Reference for Re-creation"
   }
 }

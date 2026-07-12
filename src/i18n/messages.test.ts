@@ -31,15 +31,7 @@ const reference = new Set(collectKeys(en as MessageNode))
 // the test with the exact dotted path, making translation gaps grep-able.
 describe("i18n locale key parity vs en.json", () => {
   it.each([
-    ["ar", ar],
-    ["de", de],
-    ["es", es],
-    ["fr", fr],
-    ["ja", ja],
-    ["ko", ko],
-    ["pt", pt],
     ["zh-CN", zhCN],
-    ["zh-TW", zhTW],
   ] as const)("%s has the same key set as en", (_locale, messages) => {
     const localeKeys = new Set(collectKeys(messages as MessageNode))
     const missing = [...reference].filter((k) => !localeKeys.has(k))

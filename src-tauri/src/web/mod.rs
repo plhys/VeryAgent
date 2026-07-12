@@ -830,6 +830,12 @@ pub(crate) async fn do_start_web_server_tauri(
             .state::<crate::acp::session_info::SessionInfoRuntimeConfig>()
             .inner()
             .clone(),
+        // Reuse the same vision-bridge config handle the desktop MCP injection
+        // reads, so HTTP-side vision-bridge settings target the same flag.
+        vision_bridge_config: app
+            .state::<crate::acp::vision_bridge::VisionBridgeRuntimeConfig>()
+            .inner()
+            .clone(),
         system_op_lock: crate::app_state::default_system_op_lock(),
         // Reuse the same handle the desktop `app_update` commands write to so
         // HTTP and webview readers see the identical update snapshot.

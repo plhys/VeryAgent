@@ -18,8 +18,9 @@ use tokio::sync::RwLock;
 use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
-    BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerMessage, BrokerRequest,
-    BrokerResponse, BrokerSessionRequest, BrokerStatusRequest,
+    BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerGenerateImageRequest,
+    BrokerMessage, BrokerModifyImageRequest, BrokerRequest,
+    BrokerResponse, BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
 };
 use crate::acp::delegation::types::{DelegationRequest, DelegationTaskReport, TaskStatus};
 use crate::acp::feedback::{PendingFeedback, SessionFeedbackAccess};
@@ -95,6 +96,8 @@ pub struct DelegationListener {
     /// other arms this is NOT parent-scoped — it looks any non-deleted session up
     /// by its veryagent conversation id (still token-gated against an invalid caller).
     pub session_info: Arc<dyn SessionInfoAccess>,
+    /// Calls the configured vision model for the `vision_analyze` tool.
+    pub vision_bridge: Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
 }
 
 impl DelegationListener {
@@ -106,6 +109,7 @@ impl DelegationListener {
         feedback: Arc<dyn SessionFeedbackAccess>,
         questions: Arc<dyn SessionQuestionAccess>,
         session_info: Arc<dyn SessionInfoAccess>,
+        vision_bridge: Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
     ) -> Arc<Self> {
         Arc::new(Self {
             broker,
@@ -114,6 +118,7 @@ impl DelegationListener {
             feedback,
             questions,
             session_info,
+            vision_bridge,
         })
     }
 
@@ -311,6 +316,24 @@ impl DelegationListener {
                 // and there is nothing to tear down on cancel.
                 session_response(self.process_session_info(req).await)?
             }
+            BrokerMessage::VisionAnalyze(req) => {
+                // One-shot API call: read vision config, call the vision model,
+                // return text description. No peer-close race — the HTTP call
+                // either completes or times out.
+                BrokerResponse {
+                    outcome: self.process_vision_analyze(req).await,
+                }
+            }
+            BrokerMessage::GenerateImage(req) => {
+                BrokerResponse {
+                    outcome: self.process_generate_image(req).await,
+                }
+            }
+            BrokerMessage::ModifyImage(req) => {
+                BrokerResponse {
+                    outcome: self.process_modify_image(req).await,
+                }
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -442,6 +465,132 @@ impl DelegationListener {
         self.session_info
             .resolve(req.session_id, req.max_messages.unwrap_or(0))
             .await
+    }
+
+    /// Call the configured vision model API with the provided image and prompt.
+    /// Returns `{ description: "..." }` on success or `{ error: "..." }` on failure.
+    async fn process_vision_analyze(&self, req: BrokerVisionAnalyzeRequest) -> Value {
+        // Token gate: unauthenticated callers get a generic refusal.
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+        self.vision_bridge
+            .analyze(req.image_data, req.image_path, req.mime_type, req.prompt)
+            .await
+    }
+
+    /// Call the Gemini image generation API and return the image URL.
+    async fn process_generate_image(&self, req: BrokerGenerateImageRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+
+        let api_url = "http://10.10.100.233:1666/v1/images/generations";
+        let mut body = serde_json::json!({
+            "messages": [{ "role": "user", "content": req.prompt }]
+        });
+        if let Some(size) = &req.image_size {
+            body["image_size"] = serde_json::Value::String(size.clone());
+        }
+        if let Some(ar) = &req.aspect_ratio {
+            body["aspect_ratio"] = serde_json::Value::String(ar.clone());
+        }
+        if let Some(urls) = &req.ref_urls {
+            body["ref_urls"] = serde_json::Value::Array(
+                urls.iter().map(|u| serde_json::Value::String(u.clone())).collect()
+            );
+        }
+        if let Some(sid) = &req.session_id {
+            body["session_id"] = serde_json::Value::String(sid.clone());
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let mut request_builder = client
+            .post(api_url)
+            .header("Content-Type", "application/json")
+            .json(&body);
+        if let Some(sid) = &req.session_id {
+            request_builder = request_builder.header("X-Session-Id", sid);
+        }
+
+        match request_builder.send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                match resp.json::<serde_json::Value>().await {
+                    Ok(data) => {
+                        if status.is_success() {
+                            let url = data
+                                .get("data")
+                                .and_then(|d| d.get(0))
+                                .and_then(|item| item.get("url"))
+                                .and_then(|v| v.as_str());
+                            match url {
+                                Some(url) => serde_json::json!({ "url": url }),
+                                None => serde_json::json!({ "error": format!("API returned unexpected format: {}", data) }),
+                            }
+                        } else {
+                            serde_json::json!({ "error": format!("API returned {}: {}", status, data) })
+                        }
+                    }
+                    Err(e) => serde_json::json!({ "error": format!("Failed to parse API response (status {}): {}", status, e) }),
+                }
+            }
+            Err(e) => serde_json::json!({ "error": format!("Failed to call Gemini image API: {}", e) }),
+        }
+    }
+
+    /// Call the Gemini image modify API and return the modified image URL.
+    async fn process_modify_image(&self, req: BrokerModifyImageRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+
+        let api_url = "http://10.10.100.233:1666/v1/images/modify";
+        let body = serde_json::json!({
+            "messages": [{ "role": "user", "content": req.prompt }]
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let mut request_builder = client
+            .post(api_url)
+            .header("Content-Type", "application/json")
+            .json(&body);
+        if let Some(sid) = &req.session_id {
+            request_builder = request_builder.header("X-Session-Id", sid);
+        }
+
+        match request_builder.send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                match resp.json::<serde_json::Value>().await {
+                    Ok(data) => {
+                        if status.is_success() {
+                            let url = data
+                                .get("data")
+                                .and_then(|d| d.get(0))
+                                .and_then(|item| item.get("url"))
+                                .and_then(|v| v.as_str());
+                            match url {
+                                Some(url) => serde_json::json!({ "url": url }),
+                                None => serde_json::json!({ "error": format!("API returned unexpected format: {}", data) }),
+                            }
+                        } else {
+                            serde_json::json!({ "error": format!("API returned {}: {}", status, data) })
+                        }
+                    }
+                    Err(e) => serde_json::json!({ "error": format!("Failed to parse API response (status {}): {}", status, e) }),
+                }
+            }
+            Err(e) => serde_json::json!({ "error": format!("Failed to call Gemini modify API: {}", e) }),
+        }
     }
 
     async fn process(&self, req: BrokerRequest) -> DelegationTaskReport {
@@ -667,9 +816,28 @@ mod tests {
     use crate::acp::delegation::broker::{ConversationDepthLookup, DelegationConfig};
     use crate::acp::delegation::spawner::{mock::MockSpawner, ConnectionSpawner, SpawnerError};
     use crate::acp::delegation::types::{DelegationError, DelegationOutcome, DelegationSuccess};
+    use crate::acp::vision_bridge::VisionBridgeAccess;
     use serde_json::json;
     use std::time::Duration;
     use tokio::io::duplex;
+
+    /// Stub vision bridge that always returns a fixed description.
+    /// None of the existing listener tests exercise vision analyze, so a
+    /// simple no-op stub is sufficient to satisfy the 7th constructor arg.
+    #[derive(Default)]
+    struct StubVisionBridge;
+    #[async_trait::async_trait]
+    impl VisionBridgeAccess for StubVisionBridge {
+        async fn analyze(
+            &self,
+            _image_data: Option<String>,
+            _image_path: Option<String>,
+            _mime_type: Option<String>,
+            _prompt: String,
+        ) -> serde_json::Value {
+            serde_json::json!({ "description": "(stub vision result)" })
+        }
+    }
 
     struct AlwaysRootLookup;
     #[async_trait]
@@ -822,6 +990,7 @@ mod tests {
             Arc::new(StubFeedback::default()),
             Arc::new(StubQuestion::default()),
             Arc::new(StubSessionInfo::default()),
+            Arc::new(StubVisionBridge::default()),
         )
     }
 
@@ -842,6 +1011,7 @@ mod tests {
             feedback,
             Arc::new(StubQuestion::default()),
             Arc::new(StubSessionInfo::default()),
+            Arc::new(StubVisionBridge::default()),
         )
     }
 
@@ -863,6 +1033,7 @@ mod tests {
             Arc::new(StubFeedback::default()),
             questions,
             Arc::new(StubSessionInfo::default()),
+            Arc::new(StubVisionBridge::default()),
         )
     }
 
@@ -883,6 +1054,7 @@ mod tests {
             Arc::new(StubFeedback::default()),
             Arc::new(StubQuestion::default()),
             session_info,
+            Arc::new(StubVisionBridge::default()),
         )
     }
 

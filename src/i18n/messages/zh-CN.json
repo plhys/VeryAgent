@@ -51,7 +51,8 @@
       "experts": "专家",
       "office_tools": "办公工具",
       "quick_messages": "快捷消息",
-      "logs": "运行日志"
+      "logs": "运行日志",
+      "vision_bridge": "多模态路由"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "支持 API URL、API Key、模型名称、Reasoning Effort 快捷配置，并与 `auth.json` / `config.toml` 双向联动。",
-      "authMode": "认证方式",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "官网订阅",
       "chatgptSubscriptionHint": "使用 ChatGPT 官网订阅登录，无需配置 API Key",
       "apiKeyHint": "使用 API Key 连接 OpenAI 或兼容的 API 服务",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "Gemini 认证配置",
       "authConfigDescription": "对齐 Gemini CLI 认证文档，支持自定义、Google 登录、Gemini API Key、Vertex AI（ADC / 服务账号 / API Key）。",
-      "authMode": "认证方式",
+      "authMode": "Auth Mode",
       "selectAuthMode": "选择认证方式",
       "viewAuthDoc": "查看认证文档",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "留空则使用 openclaw 本地配置的 gateway.remote.url。",
       "gatewayTokenPlaceholder": "Gateway 认证 Token",
       "gatewayTokenHint": "建议使用 token-file 替代明文 Token，可通过 openclaw 命令行配置。",
-      "sessionKeyHint": "可选。指定 Gateway Session Key，留空则自动分配隔离会话。"
+      "sessionKeyHint": "可选。指定 Gateway Session Key，留空则自动分配隔离会话。",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "Hermes 配置",
@@ -745,7 +751,12 @@
       "commandCopied": "命令已复制到剪贴板",
       "advancedTitle": "高级：编辑 config.yaml",
       "rawConfigHint": "直接编辑 ~/.hermes/config.yaml。在此保存将原样覆盖该文件。",
-      "saveRawConfig": "保存 config.yaml"
+      "saveRawConfig": "保存 config.yaml",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "CodeBuddy 配置",
@@ -805,7 +816,8 @@
       "loginHint": "在终端运行 `kimi login`，用 Kimi 订阅账号登录（设备码 OAuth）。veryagent 不存储任何凭据，复用 Kimi 自己的登录。在此保存会移除 veryagent 的 API Key 门控令牌。",
       "rawEditorLabel": "高级：直接编辑 config.toml",
       "rawEditorHint": "逐字写入（保留注释）并按 TOML 校验。veryagent 同时会播种门控令牌以打开会话。",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "官网订阅",
     "authModeCustomEndpoint": "自定义接口",
@@ -816,7 +828,7 @@
     "selectModelProvider": "选择模型供应商",
     "noModelProviderAvailable": "该代理未配置模型供应商。请前往模型供应商设置添加。",
     "claude": {
-      "authMode": "认证方式",
+      "authMode": "Auth Mode",
       "officialSubscription": "官方订阅",
       "officialSubscriptionHint": "使用 Anthropic 官方订阅，无需 API Key。",
       "mainModel": "主模型",
@@ -833,7 +845,8 @@
       "effortLevel_low": "低",
       "effortLevel_medium": "中",
       "effortLevel_high": "高",
-      "effortLevel_xhigh": "超高"
+      "effortLevel_xhigh": "超高",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "确认删除 Provider {providerId}？",
@@ -931,7 +944,12 @@
       "latest": "{versionText}。已是最新版本。"
     },
     "cline": {
-      "configDescription": "配置 Cline API 提供商和凭证。设置将保存到 ~/.cline/data/。"
+      "configDescription": "配置 Cline API 提供商和凭证。设置将保存到 ~/.cline/data/。",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "OpenCode 插件",
@@ -2101,7 +2119,11 @@
         "mentionGroupAgent": "智能体",
         "mentionGroupSession": "会话",
         "mentionGroupCommit": "提交",
-        "mentionGroupSkill": "技能"
+        "mentionGroupSkill": "技能",
+        "mentionGroupImage": "图片",
+        "vision": "多模态",
+        "visionOn": "多模态视觉已开启",
+        "visionOff": "多模态视觉已关闭"
       },
       "messageQueue": {
         "addToQueue": "加入队列",
@@ -2222,7 +2244,43 @@
         "moreFiles": "+{count} 个更多文件",
         "plan": "计划",
         "allowedActions": "允许的操作",
-        "targetMode": "目标模式：{mode}"
+        "targetMode": "目标模式：{mode}",
+        "allowOnce": "允许本次",
+        "allowAlways": "始终允许",
+        "deny": "拒绝",
+        "dontAsk": "不再询问"
+      },
+      "configOptions": {
+        "approvalPreset": "审批预设",
+        "defaultThinkingMode": "默认思考模式",
+        "thinkingLevel": "思考级别",
+        "bypass": "绕过",
+        "reasoningEffort": "推理力度",
+        "allowOnce": "允许本次",
+        "allowAlways": "始终允许",
+        "deny": "拒绝",
+        "dontAsk": "不再询问",
+        "readOnly": "只读",
+        "agentMode": "智能体",
+        "agentFullAccess": "智能体（完全访问）",
+        "thinkingOff": "关闭",
+        "thinkingLow": "低",
+        "thinkingMedium": "中等",
+        "thinkingHigh": "高",
+        "thinkingExtraHigh": "极高",
+        "modeDefault": "默认",
+        "modeAcceptEdits": "接受编辑",
+        "modeAuto": "自动",
+        "modePlanMode": "规划模式",
+        "modeBypassPermissions": "绕过权限",
+        "modeDefaultDesc": "编辑前先询问。",
+        "modeAcceptEditsDesc": "自动允许工作区和 /tmp 编辑；敏感路径仍会询问。",
+        "modeDontAskDesc": "本会话自动允许文件编辑，但敏感路径除外。",
+        "modeAutoDesc": "使用模型分类器来批准或拒绝权限请求",
+        "modeDefaultBehaviorDesc": "标准行为：危险操作时会提示确认",
+        "modeAcceptEditsBehaviorDesc": "自动接受文件编辑操作",
+        "modePlanModeDesc": "仅进行规划，不实际执行工具",
+        "modeBypassPermissionsDesc": "绕过所有权限检查"
       },
       "questionDialog": {
         "title": "代理正在提问",
@@ -2994,7 +3052,8 @@
       "quality": "质量与测试",
       "debugging": "调试",
       "review": "评审与集成",
-      "meta": "元技能"
+      "meta": "元技能",
+      "creative": "创意与出图"
     },
     "states": {
       "not_linked": "未启用",
@@ -3127,6 +3186,7 @@
       "title": "活动会话",
       "empty": "没有活动会话",
       "emptyHint": "正在运行或需要你处理的会话会显示在这里。",
+      "close": "关闭",
       "statusRunning": "运行中",
       "statusWaiting": "等待中",
       "statusError": "出错"
@@ -3134,15 +3194,6 @@
     "menu": {
       "quit": "退出",
       "hidePet": "隐藏宠物"
-    },
-    "panel": {
-      "title": "活动会话",
-      "empty": "没有活动会话",
-      "emptyHint": "正在运行或需要你处理的会话会显示在这里。",
-      "close": "关闭",
-      "statusRunning": "运行中",
-      "statusWaiting": "等待中",
-      "statusError": "出错"
     },
     "loadError": "加载宠物失败",
     "missingPetIdParam": "未选中任何宠物",
@@ -3635,5 +3686,39 @@
     "installFailed": "安装失败：{error}",
     "addToAgentFailed": "添加技能到 Agent 失败：{error}",
     "uninstallFailed": "卸载失败：{error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "多模态路由",
+    "description": "让纯文本智能体通过视觉模型中转理解图片内容。",
+    "requiredField": "此字段为必填项",
+    "selectAtLeastOne": "请至少选择一个智能体",
+    "validationFailed": "请先补全必填项",
+    "saved": "多模态路由设置已保存",
+    "saveFailed": "保存多模态路由设置失败",
+    "loading": "加载中…",
+    "loadFailed": "加载失败：{detail}",
+    "enable": "启用多模态路由",
+    "enableHint": "开启后，所选纯文本智能体可通过配置的视觉模型分析图片。",
+    "modelConfig": "视觉模型",
+    "apiUrl": "API 地址",
+    "apiUrlHint": "填写视觉模型接口的基础 URL。",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "模型名称",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "对以下智能体生效",
+    "agentSelectionHint": "选择哪些智能体可以通过多模态路由理解图片。",
+    "saving": "保存中…",
+    "save": "保存"
+  },
+  "MarkdownImage": {
+    "copyImage": "复制图片",
+    "copyingImage": "正在复制...",
+    "copyUrl": "复制地址",
+    "referenceToChat": "引用二次创作",
+    "downloadImage": "下载图片",
+    "downloadDialogTitle": "保存图片",
+    "downloadFilterAll": "所有文件"
   }
 }

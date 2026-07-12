@@ -51,7 +51,8 @@
       "experts": "エキスパート",
       "office_tools": "Officeツール",
       "quick_messages": "クイックメッセージ",
-      "logs": "実行ログ"
+      "logs": "実行ログ",
+      "vision_bridge": "Vision Bridge"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "API URL、API Key、モデル名、reasoning effort を素早く設定でき、`auth.json` / `config.toml` と同期します。",
-      "authMode": "認証方式",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "公式サブスクリプション",
       "chatgptSubscriptionHint": "ChatGPT 公式サブスクリプションでログイン、API Key 不要",
       "apiKeyHint": "API Key で OpenAI または互換 API サービスに接続",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "Gemini 認証設定",
       "authConfigDescription": "Gemini CLI の認証ドキュメントに準拠し、カスタムエンドポイント、Google ログイン、Gemini API Key、Vertex AI（ADC / サービスアカウント / API Key）をサポートします。",
-      "authMode": "認証モード",
+      "authMode": "Auth Mode",
       "selectAuthMode": "認証モードを選択",
       "viewAuthDoc": "認証ドキュメントを見る",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "空欄の場合はローカル openclaw 設定の gateway.remote.url を使用します。",
       "gatewayTokenPlaceholder": "Gateway 認証トークン",
       "gatewayTokenHint": "可能な場合は平文トークンではなく token-file の使用を推奨します。openclaw CLI で設定してください。",
-      "sessionKeyHint": "任意。gateway の session key を指定します。空欄の場合は分離されたセッションが自動割り当てされます。"
+      "sessionKeyHint": "任意。gateway の session key を指定します。空欄の場合は分離されたセッションが自動割り当てされます。",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "Hermes 設定",
@@ -745,7 +751,12 @@
       "commandCopied": "コマンドをクリップボードにコピーしました",
       "advancedTitle": "詳細: config.yaml を編集",
       "rawConfigHint": "~/.hermes/config.yaml を直接編集します。ここで保存すると、ファイルがそのまま上書きされます。",
-      "saveRawConfig": "config.yaml を保存"
+      "saveRawConfig": "config.yaml を保存",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "CodeBuddy の設定",
@@ -805,7 +816,8 @@
       "loginHint": "Run `kimi login` in a terminal to sign in with a Kimi subscription account (device-code OAuth). veryagent stores nothing and reuses Kimi’s own login. Saving here removes veryagent’s API-key gate token.",
       "rawEditorLabel": "Advanced: edit config.toml directly",
       "rawEditorHint": "Written verbatim (comments preserved) and validated as TOML. veryagent also seeds the gate token so the session opens.",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "公式サブスクリプション",
     "authModeCustomEndpoint": "カスタムエンドポイント",
@@ -816,7 +828,7 @@
     "selectModelProvider": "モデルプロバイダーを選択",
     "noModelProviderAvailable": "このエージェントにはモデルプロバイダーが設定されていません。モデルプロバイダー設定で追加してください。",
     "claude": {
-      "authMode": "認証方式",
+      "authMode": "Auth Mode",
       "officialSubscription": "公式サブスクリプション",
       "officialSubscriptionHint": "Anthropic 公式サブスクリプションを使用、API Key 不要。",
       "mainModel": "メインモデル",
@@ -833,7 +845,8 @@
       "effortLevel_low": "低",
       "effortLevel_medium": "中",
       "effortLevel_high": "高",
-      "effortLevel_xhigh": "超高"
+      "effortLevel_xhigh": "超高",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "Provider {providerId} を削除しますか？",
@@ -931,7 +944,12 @@
       "latest": "{versionText}。すでに最新です。"
     },
     "cline": {
-      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。"
+      "configDescription": "Cline API プロバイダーと認証情報を設定します。設定は ~/.cline/data/ に保存されます。",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "OpenCode プラグイン",
@@ -2099,7 +2117,11 @@
         "mentionGroupAgent": "エージェント",
         "mentionGroupSession": "セッション",
         "mentionGroupCommit": "コミット",
-        "mentionGroupSkill": "スキル"
+        "mentionGroupSkill": "スキル",
+        "mentionGroupImage": "画像",
+        "vision": "Vision",
+        "visionOn": "Multimodal vision on",
+        "visionOff": "Multimodal vision off"
       },
       "messageQueue": {
         "addToQueue": "キューに追加",
@@ -2220,7 +2242,43 @@
         "moreFiles": "+{count} 件の追加ファイル",
         "plan": "計画",
         "allowedActions": "許可されたアクション",
-        "targetMode": "対象モード: {mode}"
+        "targetMode": "対象モード: {mode}",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask"
+      },
+      "configOptions": {
+        "approvalPreset": "Approval Preset",
+        "defaultThinkingMode": "Default thinking mode",
+        "thinkingLevel": "Thinking level",
+        "bypass": "Bypass",
+        "reasoningEffort": "Reasoning effort",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask",
+        "readOnly": "Read-only",
+        "agentMode": "Agent",
+        "agentFullAccess": "Agent (full access)",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "thinkingExtraHigh": "Extra high",
+        "modeDefault": "Default",
+        "modeAcceptEdits": "Accept Edits",
+        "modeAuto": "Auto",
+        "modePlanMode": "Plan Mode",
+        "modeBypassPermissions": "Bypass Permissions",
+        "modeDefaultDesc": "Ask before edits.",
+        "modeAcceptEditsDesc": "Auto-allow workspace and /tmp edits; still asks for sensitive paths.",
+        "modeDontAskDesc": "Auto-allow file edits for this session except sensitive paths.",
+        "modeAutoDesc": "Use a model classifier to approve/deny permission prompts",
+        "modeDefaultBehaviorDesc": "Standard behavior, prompts for dangerous operations",
+        "modeAcceptEditsBehaviorDesc": "Auto-accept file edit operations",
+        "modePlanModeDesc": "Planning mode, no actual tool execution",
+        "modeBypassPermissionsDesc": "Bypass all permission checks"
       },
       "questionDialog": {
         "title": "エージェントが質問しています",
@@ -2980,7 +3038,8 @@
       "quality": "品質とテスト",
       "debugging": "デバッグ",
       "review": "レビューと統合",
-      "meta": "メタ"
+      "meta": "メタ",
+      "creative": "クリエイティブと画像"
     },
     "states": {
       "not_linked": "未有効",
@@ -3113,6 +3172,7 @@
       "title": "アクティブなセッション",
       "empty": "アクティブなセッションはありません",
       "emptyHint": "実行中、または対応が必要なセッションがここに表示されます。",
+      "close": "閉じる",
       "statusRunning": "実行中",
       "statusWaiting": "待機中",
       "statusError": "エラー"
@@ -3120,15 +3180,6 @@
     "menu": {
       "quit": "終了",
       "hidePet": "ペットを非表示"
-    },
-    "panel": {
-      "title": "アクティブなセッション",
-      "empty": "アクティブなセッションはありません",
-      "emptyHint": "実行中、または対応が必要なセッションがここに表示されます。",
-      "close": "閉じる",
-      "statusRunning": "実行中",
-      "statusWaiting": "待機中",
-      "statusError": "エラー"
     },
     "loadError": "ペットの読み込みに失敗",
     "missingPetIdParam": "ペットが選択されていません",
@@ -3617,5 +3668,36 @@
     "uninstallSuccess": "アンインストールしました",
     "installFailed": "インストール失敗：{error}",
     "uninstallFailed": "アンインストール失敗：{error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "Vision Bridge",
+    "description": "Let text-only agents understand images by routing image analysis through a vision-capable model.",
+    "requiredField": "This field is required",
+    "selectAtLeastOne": "Select at least one agent",
+    "validationFailed": "Please complete the required fields",
+    "saved": "Vision Bridge settings saved",
+    "saveFailed": "Failed to save Vision Bridge settings",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable Vision Bridge",
+    "enableHint": "When enabled, selected text-only agents can analyze images through the configured vision model.",
+    "modelConfig": "Vision model",
+    "apiUrl": "API URL",
+    "apiUrlHint": "Enter the base URL for the vision model API endpoint.",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "Model name",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "MarkdownImage": {
+    "copyImage": "Copy Image",
+    "copyingImage": "Copying...",
+    "copyUrl": "Copy Image URL",
+    "referenceToChat": "Reference for Re-creation"
   }
 }

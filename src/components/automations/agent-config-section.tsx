@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import type { AgentOptionsSnapshot, SessionConfigOptionInfo } from "@/lib/types"
 
 // Picking this clears the override (inherit the agent's own default). Mirrors
@@ -56,6 +57,7 @@ export function AgentConfigSection({
   layout = "stacked",
 }: AgentConfigSectionProps) {
   const t = useTranslations("Automations")
+  const localizer = useConfigOptionLocalizer()
   const inline = layout === "inline"
 
   if (loading) {
@@ -109,7 +111,7 @@ export function AgentConfigSection({
           onChange={onModeChange}
           items={snapshot.modes.available_modes.map((m) => ({
             value: m.id,
-            name: m.name,
+            name: localizer.localize(m.name),
           }))}
         />
       ) : null}
@@ -337,11 +339,12 @@ function ConfigOptionRow({
   allowInherit: boolean
   onChange: (v: string | null) => void
 }) {
+  const localizer = useConfigOptionLocalizer()
   if (option.kind.type !== "select") return null
   const groups = option.kind.groups
   return (
     <FieldRow
-      label={option.name}
+      label={localizer.localize(option.name)}
       value={value}
       inline={inline}
       allowInherit={allowInherit}
@@ -355,17 +358,17 @@ function ConfigOptionRow({
         {groups.length > 0
           ? groups.map((g) => (
               <SelectGroup key={g.group}>
-                <SelectLabel>{g.name}</SelectLabel>
+                <SelectLabel>{localizer.localize(g.name)}</SelectLabel>
                 {g.options.map((it) => (
                   <SelectItem key={`${g.group}-${it.value}`} value={it.value}>
-                    {it.name}
+                    {localizer.localize(it.name)}
                   </SelectItem>
                 ))}
               </SelectGroup>
             ))
           : option.kind.options.map((it) => (
               <SelectItem key={it.value} value={it.value}>
-                {it.name}
+                {localizer.localize(it.name)}
               </SelectItem>
             ))}
       </SelectContent>

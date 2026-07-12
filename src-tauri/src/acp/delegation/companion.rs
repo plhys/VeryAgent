@@ -43,10 +43,13 @@ use tokio::sync::{oneshot, Mutex};
 
 use crate::acp::delegation::transport::{
     client_ask_round_trip, client_cancel, client_cancel_task_round_trip, client_commit_feedback,
-    client_feedback_round_trip, client_round_trip, client_session_round_trip,
-    client_status_round_trip, BrokerAskRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
-    BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerRequest, BrokerResponse,
-    BrokerSessionRequest, BrokerStatusRequest,
+    client_feedback_round_trip, client_generate_image_round_trip, client_modify_image_round_trip,
+    client_round_trip, client_session_round_trip,
+    client_status_round_trip, client_vision_round_trip, BrokerAskRequest, BrokerCancelRequest,
+    BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerFeedbackRequest,
+    BrokerGenerateImageRequest, BrokerModifyImageRequest, BrokerRequest,
+    BrokerResponse,
+    BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
 };
 use crate::acp::question::parse_questions;
 use crate::acp::session_info::MAX_SESSION_MESSAGES;
@@ -138,6 +141,8 @@ pub struct CompanionFeatures {
     pub feedback: bool,
     pub ask: bool,
     pub sessions: bool,
+    pub vision: bool,
+    pub image: bool,
 }
 
 impl CompanionFeatures {
@@ -153,6 +158,8 @@ impl CompanionFeatures {
                 feedback: false,
                 ask: false,
                 sessions: false,
+                vision: false,
+                image: false,
             };
         };
         let mut f = Self {
@@ -160,6 +167,8 @@ impl CompanionFeatures {
             feedback: false,
             ask: false,
             sessions: false,
+            vision: false,
+            image: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
@@ -167,6 +176,8 @@ impl CompanionFeatures {
                 "feedback" => f.feedback = true,
                 "ask" => f.ask = true,
                 "sessions" => f.sessions = true,
+                "vision" => f.vision = true,
+                "image" => f.image = true,
                 _ => {}
             }
         }
@@ -180,7 +191,9 @@ impl CompanionFeatures {
             "ask_user_question" => self.ask,
             "get_session_info" => self.sessions,
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation" => self.delegation,
-            _ => false,
+            "vision_analyze" => self.vision,
+            "generate_image" | "modify_image" => self.image,
+                _ => false,
         }
     }
 }
@@ -538,6 +551,89 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_session_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
+        }
+        "vision_analyze" => {
+            let prompt = arguments
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let image_data = arguments
+                .get("image_data")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let image_path = arguments
+                .get("image_path")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let mime_type = arguments
+                .get("mime_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let req = BrokerVisionAnalyzeRequest {
+                token: ctx.token.clone(),
+                image_data,
+                image_path,
+                mime_type,
+                prompt,
+            };
+            // No external_handle: a one-shot API call has nothing to cancel.
+            let round_trip =
+                Box::pin(async move { client_vision_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_vision_result).await
+        }
+        "generate_image" => {
+            let prompt = arguments
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let image_size = arguments
+                .get("image_size")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let aspect_ratio = arguments
+                .get("aspect_ratio")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let ref_urls = arguments
+                .get("ref_urls")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+            let session_id = arguments
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let req = BrokerGenerateImageRequest {
+                token: ctx.token.clone(),
+                prompt,
+                image_size,
+                aspect_ratio,
+                ref_urls,
+                session_id,
+            };
+            let round_trip =
+                Box::pin(async move { client_generate_image_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_generate_image_result).await
+        }
+        "modify_image" => {
+            let prompt = arguments
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let session_id = arguments
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let req = BrokerModifyImageRequest {
+                token: ctx.token.clone(),
+                prompt,
+                session_id,
+            };
+            let round_trip =
+                Box::pin(async move { client_modify_image_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_modify_image_result).await
         }
         other => LineAction::Respond(err(id, -32602, format!("unknown tool: {other}"))),
     }
@@ -1021,6 +1117,72 @@ fn parse_max_messages(arguments: &Value) -> u32 {
 /// not-found result is surfaced as readable text with `isError: false` (the LLM
 /// reads it and proceeds), never as a tool error. The full structured envelope
 /// rides along in `structuredContent` for hosts that keep it.
+/// Render the vision_analyze broker outcome into an MCP `tools/call` result.
+/// The broker returns `{ description: "...", error: "..." }`; `description` is
+/// the vision model's text analysis, `error` is set on failure.
+pub fn render_vision_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
+        json!({
+            "content": [{ "type": "text", "text": format!("Vision analysis failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        })
+    } else {
+        let description = outcome
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no description returned)");
+        json!({
+            "content": [{ "type": "text", "text": description }],
+            "isError": false,
+            "structuredContent": outcome.clone(),
+        })
+    }
+}
+
+pub fn render_generate_image_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
+        json!({
+            "content": [{ "type": "text", "text": format!("Image generation failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        })
+    } else {
+        let url = outcome
+            .get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no URL returned)");
+        json!({
+            "content": [{ "type": "text", "text": format!("![生成图片]({url})") }],
+            "isError": false,
+            "structuredContent": outcome.clone(),
+        })
+    }
+}
+
+pub fn render_modify_image_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
+        json!({
+            "content": [{ "type": "text", "text": format!("Image modification failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        })
+    } else {
+        let url = outcome
+            .get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no URL returned)");
+        json!({
+            "content": [{ "type": "text", "text": format!("![修改后的图片]({url})") }],
+            "isError": false,
+            "structuredContent": outcome.clone(),
+        })
+    }
+}
+
 pub fn render_session_result(outcome: &Value) -> Value {
     let found = outcome
         .get("found")

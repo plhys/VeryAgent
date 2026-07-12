@@ -35,6 +35,7 @@ const CATEGORY_SORT: Record<string, number> = {
   debugging: 5,
   review: 6,
   meta: 7,
+  creative: 8,
 }
 
 export function ExpertsSettings() {
@@ -92,6 +93,8 @@ export function ExpertsSettings() {
           return t("categories.review")
         case "meta":
           return t("categories.meta")
+        case "creative":
+          return t("categories.creative")
         default:
           return category
       }

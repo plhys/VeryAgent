@@ -15,6 +15,7 @@ import {
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
 import type { ModelOptionGroup } from "@/lib/model-config-groups"
 import type { SessionConfigOptionInfo } from "@/lib/types"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 
 interface SessionConfigSelectorProps {
   option: SessionConfigOptionInfo
@@ -33,6 +34,7 @@ export function InlineSessionConfigSelector({
   onSelect,
   derivedGroups,
 }: SessionConfigSelectorProps) {
+  const localizer = useConfigOptionLocalizer()
   if (option.kind.type !== "select") return null
 
   // Unified group list rendered in the dropdown body. Derived (model) groups
@@ -58,7 +60,9 @@ export function InlineSessionConfigSelector({
   const selected = renderedOptions.find(
     (item) => item.value === option.kind.current_value
   )
-  const currentLabel = selected?.name ?? option.kind.current_value
+  const rawLabel = selected?.name ?? option.kind.current_value
+  const currentLabel = localizer.localize(rawLabel)
+  const optionName = localizer.localize(option.name)
 
   return (
     <DropdownMenu>
@@ -66,9 +70,9 @@ export function InlineSessionConfigSelector({
         <Button
           variant="ghost"
           size="xs"
-          title={option.name}
+          title={optionName}
           aria-label={
-            currentLabel ? `${option.name}: ${currentLabel}` : option.name
+            currentLabel ? `${optionName}: ${currentLabel}` : optionName
           }
           className="min-w-0 gap-0.5 px-1 text-muted-foreground"
         >
@@ -101,11 +105,11 @@ export function InlineSessionConfigSelector({
                     <DropdownMenuRadioItem
                       key={`${group.key}-${item.value}`}
                       value={item.value}
-                      title={item.name}
+                      title={localizer.localize(item.name)}
                     >
                       <DropdownRadioItemContent
-                        label={item.name}
-                        description={item.description}
+                        label={localizer.localize(item.name)}
+                        description={item.description ? localizer.localize(item.description) : item.description}
                       />
                     </DropdownMenuRadioItem>
                   ))}
@@ -115,10 +119,10 @@ export function InlineSessionConfigSelector({
                 <DropdownMenuRadioItem
                   key={item.value}
                   value={item.value}
-                  title={item.name}
+                  title={localizer.localize(item.name)}
                 >
                   <DropdownRadioItemContent
-                    label={item.name}
+                    label={localizer.localize(item.name)}
                     description={item.description}
                   />
                 </DropdownMenuRadioItem>

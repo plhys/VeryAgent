@@ -359,6 +359,11 @@ export const FOLDER_CHANGED_EVENT = "folder://changed"
  *  frontend-only cache. Mirrors the Rust `FEEDBACK_SETTINGS_CHANGED_EVENT`. */
 export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
 
+/** Global side-channel announcing a vision-bridge config save (payload is
+ *  `VisionBridgeConfig`). Same cross-window rationale as
+ *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
+export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a

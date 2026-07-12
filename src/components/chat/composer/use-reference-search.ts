@@ -43,6 +43,7 @@ export interface ReferenceGroupLabels {
   session: string
   commit: string
   skill: string
+  image: string
 }
 
 /**
@@ -55,6 +56,7 @@ export const DEFAULT_GROUP_LABELS: ReferenceGroupLabels = {
   session: "Sessions",
   commit: "Commits",
   skill: "Skills",
+  image: "Images",
 }
 
 /** Raw, already-loaded data the pure group builder turns into suggestions. */

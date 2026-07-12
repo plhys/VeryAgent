@@ -104,7 +104,7 @@ import type {
   OpenCodeCatalogProvider,
   PreflightResult,
 } from "@/lib/types"
-import { HERMES_PROVIDERS, parseClaudeProviderModel } from "@/lib/types"
+import { HERMES_PROVIDERS, parseClaudeProviderModel, extractAgentModel } from "@/lib/types"
 import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
@@ -179,6 +179,9 @@ interface AgentDraft {
   clineApiKey: string
   clineModel: string
   clineBaseUrl: string
+  hermesAuthMode: HermesAuthMode
+  openClawAuthMode: OpenClawAuthMode
+  clineAuthMode: ClineAuthMode
   // Hermes — `apiKey`/`model`/`apiBaseUrl` are reused for the active provider's
   // key, model.default, and model.base_url. These carry the rest.
   hermesProvider: string
@@ -2646,6 +2649,18 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     codexAuthJsonText,
     codexConfigTomlText,
     openCodeAuthJsonText,
+    hermesAuthMode:
+      agent.agent_type === "hermes" && agent.model_provider_id != null
+        ? ("model_provider" as HermesAuthMode)
+        : "native",
+    openClawAuthMode:
+      agent.agent_type === "open_claw" && agent.model_provider_id != null
+        ? ("model_provider" as OpenClawAuthMode)
+        : "gateway",
+    clineAuthMode:
+      agent.agent_type === "cline" && agent.model_provider_id != null
+        ? ("model_provider" as ClineAuthMode)
+        : "native",
     openClawGatewayUrl: openClawImportant.gatewayUrl,
     openClawGatewayToken: openClawImportant.gatewayToken,
     openClawSessionKey: openClawImportant.sessionKey,
@@ -3017,7 +3032,13 @@ const KIMI_MODEL_PLACEHOLDER = "kimi-k2.7-code"
  * Exactly one is authoritative — saving clears the rest. A raw config.toml editor
  * is the escape hatch.
  */
-export type KimiAuthMode = "apikey" | "login"
+export type KimiAuthMode = "apikey" | "login" | "model_provider"
+/** Hermes credential mode. `native` = existing HERMES_PROVIDERS system; `model_provider` = veryAgent unified model provider. */
+export type HermesAuthMode = "native" | "model_provider"
+/** Open Claw credential mode. `gateway` = existing gateway URL/token; `model_provider` = veryAgent unified model provider. */
+export type OpenClawAuthMode = "gateway" | "model_provider"
+/** Cline credential mode. `native` = existing CLINE_PROVIDERS system; `model_provider` = veryAgent unified model provider. */
+export type ClineAuthMode = "native" | "model_provider"
 /** The six provider `type` values Kimi's config.toml `[providers]` accepts. */
 export type KimiInterfaceType =
   | "kimi"
@@ -3177,9 +3198,17 @@ export function kimiInitialMode(config: KimiManagedConfig): KimiAuthMode {
 function KimiCodeConfigPanel({
   agent,
   onSaved,
+  modelProviders,
+  onSaveModelProvider,
 }: {
   agent: AcpAgentInfo
   onSaved: () => Promise<void>
+  modelProviders: ModelProviderInfo[]
+  onSaveModelProvider: (
+    env: Record<string, string>,
+    enabled: boolean,
+    modelProviderId: number | null
+  ) => Promise<void>
 }) {
   const t = useTranslations("AcpAgentSettings")
   const config = useMemo(
@@ -3187,8 +3216,23 @@ function KimiCodeConfigPanel({
     [agent.config_json]
   )
 
-  const [mode, setMode] = useState<KimiAuthMode>(() => kimiInitialMode(config))
+  // Determine initial auth mode: if model_provider_id is set, start in
+  // model_provider mode; otherwise, infer from the config credentials.
+  const [mode, setMode] = useState<KimiAuthMode>(() =>
+    agent.model_provider_id != null
+      ? "model_provider"
+      : kimiInitialMode(config)
+  )
+  const [selectedProviderId, setSelectedProviderId] = useState<number | null>(
+    () => agent.model_provider_id ?? null
+  )
   const [saving, setSaving] = useState(false)
+
+  // Filter model providers that serve kimi_code.
+  const kimiModelProviders = useMemo(
+    () => modelProviders.filter((p) => p.agent_types.includes("kimi_code")),
+    [modelProviders]
+  )
   const [showKey, setShowKey] = useState(false)
 
   // api-key mode (veryagent-managed config.toml provider + model)
@@ -3266,6 +3310,38 @@ function KimiCodeConfigPanel({
   )
 
   const handleSave = useCallback(() => {
+    if (mode === "model_provider") {
+      // Save via the model-provider path: persist env vars + modelProviderId.
+      if (selectedProviderId == null) {
+        toast.error(t("toasts.modelProviderRequired"))
+        return
+      }
+      const provider = kimiModelProviders.find(
+        (p) => p.id === selectedProviderId
+      )
+      if (!provider) return
+      setSaving(true)
+      onSaveModelProvider(
+        {
+          KIMI_MODEL_BASE_URL: provider.api_url,
+          KIMI_MODEL_API_KEY: provider.api_key,
+          KIMI_MODEL_NAME: extractAgentModel(provider.model, "kimi_code") ?? "",
+        },
+        true,
+        selectedProviderId
+      )
+        .then(() => {
+          toast.success(t("toasts.kimiCodeSaved"))
+        })
+        .catch((error) => {
+          console.error("[KimiCode] save model-provider failed", error)
+          toast.error(t("toasts.saveKimiCodeFailed"))
+        })
+        .finally(() => {
+          setSaving(false)
+        })
+      return
+    }
     if (mode === "login") {
       void runSave({ mode: "login" })
       return
@@ -3283,6 +3359,9 @@ function KimiCodeConfigPanel({
     })
   }, [
     mode,
+    selectedProviderId,
+    kimiModelProviders,
+    onSaveModelProvider,
     interfaceType,
     meta,
     authType,
@@ -3294,6 +3373,7 @@ function KimiCodeConfigPanel({
     vertexProject,
     vertexLocation,
     runSave,
+    t,
   ])
 
   const handleSaveRaw = useCallback(() => {
@@ -3372,7 +3452,11 @@ function KimiCodeConfigPanel({
         </label>
         <Select
           value={mode}
-          onValueChange={(value) => setMode(value as KimiAuthMode)}
+          onValueChange={(value) => {
+            const next = value as KimiAuthMode
+            setMode(next)
+            if (next !== "model_provider") setSelectedProviderId(null)
+          }}
           disabled={saving}
         >
           <SelectTrigger className="w-full">
@@ -3383,12 +3467,53 @@ function KimiCodeConfigPanel({
               {t("kimiCode.authModeApiKey")}
             </SelectItem>
             <SelectItem value="login">{t("kimiCode.authModeLogin")}</SelectItem>
+            <SelectItem value="model_provider">
+              {t("kimiCode.authModeModelProvider")}
+            </SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[11px] text-muted-foreground">
-          {t("kimiCode.authModeHint")}
+          {mode === "model_provider"
+            ? t("kimiCode.authModeModelProviderHint")
+            : t("kimiCode.authModeHint")}
         </p>
       </div>
+
+      {mode === "model_provider" && (
+        <div className="space-y-1.5">
+          <label className="text-[11px] text-muted-foreground">
+            {t("selectModelProvider")}
+          </label>
+          {kimiModelProviders.length > 0 ? (
+            <Select
+              value={
+                selectedProviderId != null
+                  ? String(selectedProviderId)
+                  : ""
+              }
+              onValueChange={(value) =>
+                setSelectedProviderId(value ? Number(value) : null)
+              }
+              disabled={saving}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("selectModelProvider")} />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {kimiModelProviders.map((provider) => (
+                  <SelectItem key={provider.id} value={String(provider.id)}>
+                    {provider.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              {t("noModelProviderAvailable")}
+            </p>
+          )}
+        </div>
+      )}
 
       {mode === "apikey" && (
         <>
@@ -4716,6 +4841,19 @@ export function AcpAgentSettings() {
     if (at === "codex") return selectedDraft.codexAuthMode === "model_provider"
     if (at === "gemini")
       return selectedDraft.geminiAuthMode === "model_provider"
+    // kimi_code uses a self-contained panel; its model_provider state is
+    // tracked inside KimiCodeConfigPanel, not in AgentDraft. When the parent
+    // needs to know (e.g. to hide the generic env-editor), check the agent's
+    // persisted model_provider_id or the panel-internal mode — for now, just
+    // check the agent's model_provider_id.
+    if (at === "kimi_code")
+      return selectedAgent.model_provider_id != null
+    if (at === "hermes")
+      return selectedDraft.hermesAuthMode === "model_provider"
+    if (at === "open_claw")
+      return selectedDraft.openClawAuthMode === "model_provider"
+    if (at === "cline")
+      return selectedDraft.clineAuthMode === "model_provider"
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -5294,6 +5432,45 @@ export function AcpAgentSettings() {
             configText: nextConfigJson.configText,
           }
         })
+      } else if (agentType === "hermes") {
+        const hermesModel = extractAgentModel(provider?.model ?? null, "hermes") ?? ""
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: hermesModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: hermesModel,
+          }),
+        }))
+      } else if (agentType === "open_claw") {
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: extractAgentModel(provider?.model ?? null, "open_claw") ?? "",
+          }),
+        }))
+      } else if (agentType === "cline") {
+        const clineModel = extractAgentModel(provider?.model ?? null, "cline") ?? ""
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          clineApiKey: apiKey,
+          model: clineModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: clineModel,
+          }),
+        }))
       } else {
         updateSelectedDraft((current) => ({
           ...current,
@@ -5552,6 +5729,24 @@ export function AcpAgentSettings() {
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
 
+  const handleHermesAuthModeChange = useCallback(
+    (nextMode: HermesAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "hermes"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        hermesAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
   const handleSaveHermesConfig = useCallback(
     async (mode: "structured" | "raw") => {
       if (
@@ -5559,7 +5754,7 @@ export function AcpAgentSettings() {
         !selectedDraft ||
         selectedAgent.agent_type !== "hermes"
       )
-        return
+      return
       const agentType = selectedAgent.agent_type
       const draft = selectedDraft
       const providerOption = HERMES_PROVIDERS.find(
@@ -5586,6 +5781,15 @@ export function AcpAgentSettings() {
                 baseUrl: providerOption?.needsBaseUrl ? draft.apiBaseUrl : null,
               }
         )
+        // When saving native config, also clear model_provider_id from the DB
+        // so the UI doesn't revert to model_provider mode on refresh.
+        if (draft.hermesAuthMode === "native") {
+          await acpUpdateAgentEnv(agentType, {
+            enabled: selectedAgent.enabled,
+            env: parseEnvText(draft.envText),
+            modelProviderId: null,
+          })
+        }
         await refreshAgents()
         // Drop the draft so it rebuilds from the freshly-persisted projection —
         // otherwise the *other* mode (structured fields vs. raw config.yaml)
@@ -5669,6 +5873,24 @@ export function AcpAgentSettings() {
         next.configText = JSON.stringify(config, null, 2)
         return next
       })
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleClineAuthModeChange = useCallback(
+    (nextMode: ClineAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "cline"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        clineAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
@@ -8703,6 +8925,101 @@ supports_websockets = true`}
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
+                        {t("cline.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.clineAuthMode}
+                        onValueChange={(value) =>
+                          handleClineAuthModeChange(value as ClineAuthMode)
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("cline.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("cline.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.clineAuthMode === "model_provider"
+                          ? t("cline.authModeModelProviderHint")
+                          : t("cline.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.clineAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={t("selectModelProvider")} />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.clineAuthMode === "model_provider" && (
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "cline",
+                              selectedDraft.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={selectedIsSavingEnv || selectedMissingModelProvider}
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.clineAuthMode === "native" && (
+                    <>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
                         Provider
                       </label>
                       <Select
@@ -8829,10 +9146,21 @@ supports_websockets = true`}
                       <Button
                         size="sm"
                         onClick={() => {
-                          persistConfig(
-                            selectedAgent.agent_type,
-                            selectedDraft.configText
-                          )
+                          Promise.all([
+                            persistConfig(
+                              selectedAgent.agent_type,
+                              selectedDraft.configText
+                            ),
+                            // When saving native config, clear model_provider_id
+                            // from DB so the UI doesn't revert on refresh.
+                            selectedDraft.clineAuthMode === "native"
+                              ? acpUpdateAgentEnv("cline", {
+                                  enabled: selectedAgent.enabled,
+                                  env: parseEnvText(selectedDraft.envText),
+                                  modelProviderId: null,
+                                })
+                              : Promise.resolve(),
+                          ])
                             .then(() => {
                               toast.success(t("toasts.clineSaved"), {
                                 description: t("toasts.configSavedHint"),
@@ -8864,6 +9192,8 @@ supports_websockets = true`}
                         )}
                       </Button>
                     </div>
+                    </>
+                    )}
                   </div>
                 ) : selectedAgent.agent_type === "open_claw" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
@@ -8876,6 +9206,107 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("openClaw.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.openClawAuthMode}
+                        onValueChange={(value) => {
+                          const next = value as OpenClawAuthMode
+                          updateSelectedDraft((current) => ({
+                            ...current,
+                            openClawAuthMode: next,
+                            modelProviderId:
+                              next === "model_provider" ? current.modelProviderId : null,
+                          }))
+                        }}
+                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="gateway">
+                            {t("openClaw.authModeGateway")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("openClaw.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.openClawAuthMode === "model_provider"
+                          ? t("openClaw.authModeModelProviderHint")
+                          : t("openClaw.authModeGatewayHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.openClawAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingEnv || selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={t("selectModelProvider")} />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.openClawAuthMode === "model_provider" && (
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "open_claw",
+                              selectedDraft.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={selectedIsSavingEnv || selectedMissingModelProvider}
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.openClawAuthMode === "gateway" && (
+                    <>
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         Gateway URL
@@ -9010,6 +9441,8 @@ supports_websockets = true`}
                         )}
                       </Button>
                     </div>
+                    </>
+                    )}
                   </div>
                 ) : selectedAgent.agent_type === "hermes" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
@@ -9022,6 +9455,104 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("hermes.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.hermesAuthMode}
+                        onValueChange={(value) =>
+                          handleHermesAuthModeChange(value as HermesAuthMode)
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("hermes.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("hermes.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.hermesAuthMode === "model_provider"
+                          ? t("hermes.authModeModelProviderHint")
+                          : t("hermes.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.hermesAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={t("selectModelProvider")} />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.hermesAuthMode === "model_provider" && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "hermes",
+                              selectedAgent.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={
+                            selectedIsSavingEnv ||
+                            selectedMissingModelProvider
+                          }
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.hermesAuthMode === "native" && (
+                    <>
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         {t("hermes.providerLabel")}
@@ -9318,6 +9849,8 @@ supports_websockets = true`}
                         </div>
                       </div>
                     </details>
+                    </>
+                    )}
                   </div>
                 ) : selectedAgent.agent_type === "code_buddy" ? (
                   <CodeBuddyConfigPanel
@@ -9336,6 +9869,21 @@ supports_websockets = true`}
                   <KimiCodeConfigPanel
                     agent={selectedAgent}
                     onSaved={refreshAgents}
+                    modelProviders={modelProviders}
+                    onSaveModelProvider={(env, enabled, modelProviderId) =>
+                      persistEnv(
+                        "kimi_code",
+                        enabled,
+                        envMapToText(
+                          Object.fromEntries(
+                            Object.entries(env).filter(
+                              ([, v]) => v.trim() !== ""
+                            )
+                          )
+                        ),
+                        modelProviderId
+                      )
+                    }
                   />
                 ) : selectedAgent.agent_type === "pi" ? (
                   <PiConfigPanel
@@ -9566,135 +10114,147 @@ supports_websockets = true`}
                               placeholder="claude-opus-4-8"
                             />
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              {t("claude.haikuDefaultModel")}
-                            </label>
-                            <Input
-                              value={selectedDraft.claudeDefaultHaikuModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
-                              onChange={(event) => {
-                                handleImportantConfigChange(
-                                  "claudeDefaultHaikuModel",
-                                  event.target.value
-                                )
-                              }}
-                              placeholder="claude-haiku-4-5"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              {t("claude.sonnetDefaultModel")}
-                            </label>
-                            <Input
-                              value={selectedDraft.claudeDefaultSonnetModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
-                              onChange={(event) => {
-                                handleImportantConfigChange(
-                                  "claudeDefaultSonnetModel",
-                                  event.target.value
-                                )
-                              }}
-                              placeholder="claude-sonnet-5"
-                            />
-                          </div>
-                          <div className="space-y-1.5 md:col-span-2">
-                            <label className="text-[11px] text-muted-foreground">
-                              {t("claude.opusDefaultModel")}
-                            </label>
-                            <Input
-                              value={selectedDraft.claudeDefaultOpusModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
-                              onChange={(event) => {
-                                handleImportantConfigChange(
-                                  "claudeDefaultOpusModel",
-                                  event.target.value
-                                )
-                              }}
-                              placeholder="claude-opus-4-8"
-                            />
-                          </div>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
                           {t("modelHintDefault")}
                         </p>
-                        <div className="space-y-2 border-t border-border/60 pt-3">
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <div className="space-y-1.5 md:col-span-2">
-                              <label className="text-[11px] text-muted-foreground">
-                                {t("claude.customModelOption")}
-                              </label>
-                              <Input
-                                value={selectedDraft.claudeCustomModelOption}
-                                readOnly={
-                                  selectedDraft.claudeAuthMode ===
-                                  "model_provider"
-                                }
-                                onChange={(event) => {
-                                  handleImportantConfigChange(
-                                    "claudeCustomModelOption",
-                                    event.target.value
-                                  )
-                                }}
-                                placeholder="my-gateway/claude-opus-4-8"
-                              />
+                        <details className="group border-t border-border/60 pt-3">
+                          <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors list-none">
+                            <svg className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 2l4 4-4 4" />
+                            </svg>
+                            {t("claude.advancedModelSettings")}
+                          </summary>
+                          <div className="mt-3 space-y-3">
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] text-muted-foreground">
+                                  {t("claude.haikuDefaultModel")}
+                                </label>
+                                <Input
+                                  value={selectedDraft.claudeDefaultHaikuModel}
+                                  readOnly={
+                                    selectedDraft.claudeAuthMode ===
+                                    "model_provider"
+                                  }
+                                  onChange={(event) => {
+                                    handleImportantConfigChange(
+                                      "claudeDefaultHaikuModel",
+                                      event.target.value
+                                    )
+                                  }}
+                                  placeholder="claude-haiku-4-5"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] text-muted-foreground">
+                                  {t("claude.sonnetDefaultModel")}
+                                </label>
+                                <Input
+                                  value={selectedDraft.claudeDefaultSonnetModel}
+                                  readOnly={
+                                    selectedDraft.claudeAuthMode ===
+                                    "model_provider"
+                                  }
+                                  onChange={(event) => {
+                                    handleImportantConfigChange(
+                                      "claudeDefaultSonnetModel",
+                                      event.target.value
+                                    )
+                                  }}
+                                  placeholder="claude-sonnet-5"
+                                />
+                              </div>
+                              <div className="space-y-1.5 md:col-span-2">
+                                <label className="text-[11px] text-muted-foreground">
+                                  {t("claude.opusDefaultModel")}
+                                </label>
+                                <Input
+                                  value={selectedDraft.claudeDefaultOpusModel}
+                                  readOnly={
+                                    selectedDraft.claudeAuthMode ===
+                                    "model_provider"
+                                  }
+                                  onChange={(event) => {
+                                    handleImportantConfigChange(
+                                      "claudeDefaultOpusModel",
+                                      event.target.value
+                                    )
+                                  }}
+                                  placeholder="claude-opus-4-8"
+                                />
+                              </div>
                             </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[11px] text-muted-foreground">
-                                {t("claude.customModelOptionName")}
-                              </label>
-                              <Input
-                                value={
-                                  selectedDraft.claudeCustomModelOptionName
-                                }
-                                readOnly={
-                                  selectedDraft.claudeAuthMode ===
-                                  "model_provider"
-                                }
-                                onChange={(event) => {
-                                  handleImportantConfigChange(
-                                    "claudeCustomModelOptionName",
-                                    event.target.value
-                                  )
-                                }}
-                                placeholder="Gateway Opus"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[11px] text-muted-foreground">
-                                {t("claude.customModelOptionDescription")}
-                              </label>
-                              <Input
-                                value={
-                                  selectedDraft.claudeCustomModelOptionDescription
-                                }
-                                readOnly={
-                                  selectedDraft.claudeAuthMode ===
-                                  "model_provider"
-                                }
-                                onChange={(event) => {
-                                  handleImportantConfigChange(
-                                    "claudeCustomModelOptionDescription",
-                                    event.target.value
-                                  )
-                                }}
-                                placeholder="Routed via custom gateway"
-                              />
+                            <div className="border-t border-border/40 pt-3">
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1.5 md:col-span-2">
+                                  <label className="text-[11px] text-muted-foreground">
+                                    {t("claude.customModelOption")}
+                                  </label>
+                                  <Input
+                                    value={selectedDraft.claudeCustomModelOption}
+                                    readOnly={
+                                      selectedDraft.claudeAuthMode ===
+                                      "model_provider"
+                                    }
+                                    onChange={(event) => {
+                                      handleImportantConfigChange(
+                                        "claudeCustomModelOption",
+                                        event.target.value
+                                      )
+                                    }}
+                                    placeholder="my-gateway/claude-opus-4-8"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[11px] text-muted-foreground">
+                                    {t("claude.customModelOptionName")}
+                                  </label>
+                                  <Input
+                                    value={
+                                      selectedDraft.claudeCustomModelOptionName
+                                    }
+                                    readOnly={
+                                      selectedDraft.claudeAuthMode ===
+                                      "model_provider"
+                                    }
+                                    onChange={(event) => {
+                                      handleImportantConfigChange(
+                                        "claudeCustomModelOptionName",
+                                        event.target.value
+                                      )
+                                    }}
+                                    placeholder="Gateway Opus"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[11px] text-muted-foreground">
+                                    {t("claude.customModelOptionDescription")}
+                                  </label>
+                                  <Input
+                                    value={
+                                      selectedDraft.claudeCustomModelOptionDescription
+                                    }
+                                    readOnly={
+                                      selectedDraft.claudeAuthMode ===
+                                      "model_provider"
+                                    }
+                                    onChange={(event) => {
+                                      handleImportantConfigChange(
+                                        "claudeCustomModelOptionDescription",
+                                        event.target.value
+                                      )
+                                    }}
+                                    placeholder="Routed via custom gateway"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-2">
+                                {t("claude.customModelOptionHint")}
+                              </p>
                             </div>
                           </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {t("claude.customModelOptionHint")}
-                          </p>
-                        </div>
+                        </details>
                         <div className="space-y-1.5">
                           <label className="text-[11px] text-muted-foreground">
                             {t("claude.effortLevel")}

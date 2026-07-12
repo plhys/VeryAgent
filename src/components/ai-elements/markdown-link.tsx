@@ -11,6 +11,7 @@ import type { ReferenceAttrs } from "@/components/chat/composer/types"
 import { classifyResourceKind, type ResourceKind } from "@/lib/resource-kind"
 import { cn } from "@/lib/utils"
 import { useStreamdownLinkSafety } from "./link-safety"
+import { MarkdownImage } from "./markdown-image"
 
 const RESOURCE_KIND_ICON: Record<ResourceKind, LucideIcon> = {
   file: FileText,
@@ -193,6 +194,10 @@ export function MarkdownLink({
 // every element override to accept `Record<string, unknown>` props, which is
 // incompatible with MarkdownLink's precise anchor props. The cast bridges that
 // gap — MarkdownLink receives exactly the props react-markdown passes for `a`.
-export const markdownLinkComponents: Components = {
+export const markdownComponents: Components = {
   a: MarkdownLink as Components["a"],
+  img: MarkdownImage as Components["img"],
 }
+
+/** @deprecated Use {@link markdownComponents} instead — now includes img override. */
+export const markdownLinkComponents = markdownComponents

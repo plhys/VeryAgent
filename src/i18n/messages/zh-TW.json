@@ -51,7 +51,8 @@
       "experts": "專家",
       "office_tools": "辦公工具",
       "quick_messages": "快捷訊息",
-      "logs": "執行日誌"
+      "logs": "執行日誌",
+      "vision_bridge": "Vision Bridge"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "支援 API URL、API Key、模型名稱、Reasoning Effort 快捷配置，並與 `auth.json` / `config.toml` 雙向聯動。",
-      "authMode": "認證方式",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "官網訂閱",
       "chatgptSubscriptionHint": "使用 ChatGPT 官網訂閱登入，無需配置 API Key",
       "apiKeyHint": "使用 API Key 連接 OpenAI 或相容的 API 服務",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "Gemini 認證配置",
       "authConfigDescription": "對齊 Gemini CLI 認證文件，支援自訂、Google 登入、Gemini API Key、Vertex AI（ADC / 服務帳號 / API Key）。",
-      "authMode": "認證方式",
+      "authMode": "Auth Mode",
       "selectAuthMode": "選擇認證方式",
       "viewAuthDoc": "查看認證文件",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "留空則使用 openclaw 本地配置的 gateway.remote.url。",
       "gatewayTokenPlaceholder": "Gateway 認證 Token",
       "gatewayTokenHint": "建議使用 token-file 取代明文 Token，可透過 openclaw 命令列配置。",
-      "sessionKeyHint": "可選。指定 Gateway Session Key，留空則自動分配隔離會話。"
+      "sessionKeyHint": "可選。指定 Gateway Session Key，留空則自動分配隔離會話。",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "Hermes 配置",
@@ -745,7 +751,12 @@
       "commandCopied": "指令已複製到剪貼簿",
       "advancedTitle": "進階：編輯 config.yaml",
       "rawConfigHint": "直接編輯 ~/.hermes/config.yaml。在此儲存將原樣覆寫該檔案。",
-      "saveRawConfig": "儲存 config.yaml"
+      "saveRawConfig": "儲存 config.yaml",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "CodeBuddy 設定",
@@ -805,7 +816,8 @@
       "loginHint": "在終端機執行 `kimi login`，用 Kimi 訂閱帳號登入（裝置碼 OAuth）。veryagent 不儲存任何憑證，重用 Kimi 自己的登入。在此儲存會移除 veryagent 的 API Key 閘道權杖。",
       "rawEditorLabel": "進階：直接編輯 config.toml",
       "rawEditorHint": "逐字寫入（保留註解）並依 TOML 驗證。veryagent 同時會播種閘道權杖以開啟工作階段。",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "官網訂閱",
     "authModeCustomEndpoint": "自定義介面",
@@ -816,7 +828,7 @@
     "selectModelProvider": "選擇模型供應商",
     "noModelProviderAvailable": "該代理未配置模型供應商。請前往模型供應商設定添加。",
     "claude": {
-      "authMode": "認證方式",
+      "authMode": "Auth Mode",
       "officialSubscription": "官方訂閱",
       "officialSubscriptionHint": "使用 Anthropic 官方訂閱，無需 API Key。",
       "mainModel": "主模型",
@@ -833,7 +845,8 @@
       "effortLevel_low": "低",
       "effortLevel_medium": "中",
       "effortLevel_high": "高",
-      "effortLevel_xhigh": "超高"
+      "effortLevel_xhigh": "超高",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "確認刪除 Provider {providerId}？",
@@ -931,7 +944,12 @@
       "latest": "{versionText}。已是最新版本。"
     },
     "cline": {
-      "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。"
+      "configDescription": "配置 Cline API 提供商和憑證。設定將儲存到 ~/.cline/data/。",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "OpenCode 外掛",
@@ -2099,7 +2117,11 @@
         "mentionGroupAgent": "智能體",
         "mentionGroupSession": "工作階段",
         "mentionGroupCommit": "提交",
-        "mentionGroupSkill": "技能"
+        "mentionGroupSkill": "技能",
+        "mentionGroupImage": "圖片",
+        "vision": "Vision",
+        "visionOn": "Multimodal vision on",
+        "visionOff": "Multimodal vision off"
       },
       "messageQueue": {
         "addToQueue": "加入佇列",
@@ -2220,7 +2242,43 @@
         "moreFiles": "+{count} 個更多檔案",
         "plan": "計畫",
         "allowedActions": "允許的操作",
-        "targetMode": "目標模式：{mode}"
+        "targetMode": "目標模式：{mode}",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask"
+      },
+      "configOptions": {
+        "approvalPreset": "Approval Preset",
+        "defaultThinkingMode": "Default thinking mode",
+        "thinkingLevel": "Thinking level",
+        "bypass": "Bypass",
+        "reasoningEffort": "Reasoning effort",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask",
+        "readOnly": "Read-only",
+        "agentMode": "Agent",
+        "agentFullAccess": "Agent (full access)",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "thinkingExtraHigh": "Extra high",
+        "modeDefault": "Default",
+        "modeAcceptEdits": "Accept Edits",
+        "modeAuto": "Auto",
+        "modePlanMode": "Plan Mode",
+        "modeBypassPermissions": "Bypass Permissions",
+        "modeDefaultDesc": "Ask before edits.",
+        "modeAcceptEditsDesc": "Auto-allow workspace and /tmp edits; still asks for sensitive paths.",
+        "modeDontAskDesc": "Auto-allow file edits for this session except sensitive paths.",
+        "modeAutoDesc": "Use a model classifier to approve/deny permission prompts",
+        "modeDefaultBehaviorDesc": "Standard behavior, prompts for dangerous operations",
+        "modeAcceptEditsBehaviorDesc": "Auto-accept file edit operations",
+        "modePlanModeDesc": "Planning mode, no actual tool execution",
+        "modeBypassPermissionsDesc": "Bypass all permission checks"
       },
       "questionDialog": {
         "title": "代理正在提問",
@@ -2980,7 +3038,8 @@
       "quality": "品質與測試",
       "debugging": "除錯",
       "review": "審查與整合",
-      "meta": "後設技能"
+      "meta": "後設技能",
+      "creative": "創意與出圖"
     },
     "states": {
       "not_linked": "未啟用",
@@ -3113,6 +3172,7 @@
       "title": "活動工作階段",
       "empty": "沒有活動工作階段",
       "emptyHint": "正在執行或需要你處理的工作階段會顯示在這裡。",
+      "close": "關閉",
       "statusRunning": "執行中",
       "statusWaiting": "等待中",
       "statusError": "發生錯誤"
@@ -3120,15 +3180,6 @@
     "menu": {
       "quit": "退出",
       "hidePet": "隱藏寵物"
-    },
-    "panel": {
-      "title": "活動工作階段",
-      "empty": "沒有活動工作階段",
-      "emptyHint": "正在執行或需要你處理的工作階段會顯示在這裡。",
-      "close": "關閉",
-      "statusRunning": "執行中",
-      "statusWaiting": "等待中",
-      "statusError": "發生錯誤"
     },
     "loadError": "載入寵物失敗",
     "missingPetIdParam": "未選中任何寵物",
@@ -3617,5 +3668,36 @@
     "uninstallSuccess": "解除安裝成功",
     "installFailed": "安裝失敗：{error}",
     "uninstallFailed": "解除安裝失敗：{error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "Vision Bridge",
+    "description": "Let text-only agents understand images by routing image analysis through a vision-capable model.",
+    "requiredField": "This field is required",
+    "selectAtLeastOne": "Select at least one agent",
+    "validationFailed": "Please complete the required fields",
+    "saved": "Vision Bridge settings saved",
+    "saveFailed": "Failed to save Vision Bridge settings",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable Vision Bridge",
+    "enableHint": "When enabled, selected text-only agents can analyze images through the configured vision model.",
+    "modelConfig": "Vision model",
+    "apiUrl": "API URL",
+    "apiUrlHint": "Enter the base URL for the vision model API endpoint.",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "Model name",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "MarkdownImage": {
+    "copyImage": "Copy Image",
+    "copyingImage": "Copying...",
+    "copyUrl": "Copy Image URL",
+    "referenceToChat": "Reference for Re-creation"
   }
 }

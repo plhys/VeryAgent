@@ -10,6 +10,7 @@ import {
 import {
   Bot,
   BookOpenText,
+  Eye,
   FileSpreadsheet,
   GitBranch,
   Globe,
@@ -53,6 +54,7 @@ interface SettingsNavItem {
     | "system"
     | "web_service"
     | "logs"
+    | "vision_bridge"
   icon: ComponentType<{ className?: string }>
 }
 
@@ -71,6 +73,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/mcp",
     labelKey: "mcp",
     icon: PlugZap,
+  },
+  {
+    href: "/settings/vision-bridge",
+    labelKey: "vision_bridge",
+    icon: Eye,
   },
   {
     href: "/settings/skills",

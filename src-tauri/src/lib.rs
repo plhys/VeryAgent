@@ -58,6 +58,8 @@ mod tauri_app {
         remote_workspace as remote_workspace_commands, session_info as session_info_commands,
         system_settings, terminal as terminal_commands,
         version_control, windows, workspace_state as workspace_state_commands,
+        vision_bridge as vision_bridge_commands,
+        image_proxy,
     };
     use crate::terminal::manager::TerminalManager;
     use crate::{db, git_credential, network, paths, process, web};
@@ -151,19 +153,6 @@ mod tauri_app {
         process::ensure_user_npm_prefix_in_path();
 
         let builder = tauri::Builder::default();
-
-        // Must be the first plugin: it short-circuits second launches by
-        // signalling the running instance and exiting before any other
-        // initialization. The callback runs in the *original* process.
-        //
-        // Skipped in debug builds so a locally-built `cargo run` instance
-        // can run alongside an installed release build of veryagent during
-        // development. Debug desktop builds use an isolated SQLite file, but
-        // they still share other `app.veryagent` data-dir artifacts with release.
-        #[cfg(not(debug_assertions))]
-        let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            windows::show_main_window(app);
-        }));
 
         builder
             // Persist every window flag EXCEPT decorations. Decorations are a
@@ -482,16 +471,26 @@ mod tauri_app {
                         feedback_config,
                         question_config,
                         session_info_config,
+                        vision_bridge_config,
+                        _vision_bridge_access,
                     ) = crate::app_state::build_delegation_stack(
                         &cm_state,
                         db_conn.clone(),
                         effective_data_dir.clone(),
+                        std::sync::Arc::new(
+                            crate::acp::vision_bridge::VisionBridgeService::new(
+                                crate::db::AppDatabase {
+                                    conn: db_conn.clone(),
+                                },
+                            ),
+                        ),
                     );
                     app.manage(broker.clone());
                     app.manage(tokens.clone());
                     app.manage(feedback_config.clone());
                     app.manage(question_config.clone());
                     app.manage(session_info_config.clone());
+                    app.manage(vision_bridge_config.clone());
                     app.manage(crate::commands::delegation::DelegationSocketPath(
                         socket_path.clone(),
                     ));
@@ -503,6 +502,7 @@ mod tauri_app {
                     let feedback_for_init = feedback_config.clone();
                     let question_for_init = question_config.clone();
                     let session_info_for_init = session_info_config.clone();
+                    let vision_bridge_for_init = vision_bridge_config.clone();
                     tauri::async_runtime::block_on(async move {
                         delegation_commands::apply_persisted_config(
                             &db_for_init,
@@ -522,6 +522,11 @@ mod tauri_app {
                         crate::commands::session_info::apply_persisted_session_info_config(
                             &db_for_init,
                             &session_info_for_init,
+                        )
+                        .await;
+                        crate::commands::vision_bridge::apply_persisted_vision_bridge_config(
+                            &db_for_init,
+                            &vision_bridge_for_init,
                         )
                         .await;
                     });
@@ -550,6 +555,13 @@ mod tauri_app {
                                 std::sync::Arc::new(db::AppDatabase {
                                     conn: db_conn.clone(),
                                 }),
+                            ),
+                        ),
+                        std::sync::Arc::new(
+                            crate::acp::vision_bridge::VisionBridgeService::new(
+                                crate::db::AppDatabase {
+                                    conn: db_conn.clone(),
+                                },
                             ),
                         ),
                     );
@@ -1263,6 +1275,8 @@ mod tauri_app {
                 notification::send_notification,
                 file_io::save_binary_file,
                 file_io::save_text_file,
+                image_proxy::fetch_image_as_base64,
+                image_proxy::write_image_to_clipboard,
                 backup::backup_create,
                 backup::backup_inspect,
                 backup::backup_scan_external_conflicts,
@@ -1300,6 +1314,8 @@ mod tauri_app {
                 web::get_web_service_config,
                 web::update_web_service_config,
                 web::probe_web_service_port,
+                vision_bridge_commands::vision_bridge_get_config,
+                vision_bridge_commands::vision_bridge_save_config,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

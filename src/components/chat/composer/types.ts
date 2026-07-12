@@ -1,7 +1,7 @@
 import type { AgentType } from "@/lib/types"
 
-/** The five kinds of inline reference the composer can embed. */
-export type ReferenceKind = "file" | "agent" | "session" | "commit" | "skill"
+/** The six kinds of inline reference the composer can embed. */
+export type ReferenceKind = "file" | "agent" | "session" | "commit" | "skill" | "image"
 
 export const REFERENCE_KINDS: readonly ReferenceKind[] = [
   "file",
@@ -9,6 +9,7 @@ export const REFERENCE_KINDS: readonly ReferenceKind[] = [
   "session",
   "commit",
   "skill",
+  "image",
 ]
 
 /**
@@ -20,6 +21,8 @@ export const REFERENCE_KINDS: readonly ReferenceKind[] = [
 export interface ReferenceMeta {
   /** file: whether the entry is a directory. */
   fileKind?: "file" | "dir"
+  /** image: the original HTTP URL of the referenced image. */
+  imageUrl?: string
   /**
    * agent: drives the badge icon. session: the owning agent — used only for the
    * `@`-panel option-row icon; the inline session badge shows a neutral

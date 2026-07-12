@@ -51,7 +51,8 @@
       "experts": "Experts",
       "office_tools": "Outils bureautiques",
       "quick_messages": "Messages rapides",
-      "logs": "Journaux d'exécution"
+      "logs": "Journaux d'exécution",
+      "vision_bridge": "Vision Bridge"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "Prend en charge la configuration rapide de l’URL API, de la clé API, du nom du modèle et du reasoning effort, avec synchronisation vers `auth.json` / `config.toml`.",
-      "authMode": "Mode d’authentification",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "Abonnement officiel",
       "chatgptSubscriptionHint": "Connectez-vous avec l’abonnement officiel ChatGPT, pas besoin d’API Key",
       "apiKeyHint": "Connectez-vous avec une API Key à OpenAI ou aux services API compatibles",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "Configuration d’authentification Gemini",
       "authConfigDescription": "Alignée sur la documentation d’authentification Gemini CLI, avec prise en charge d’un endpoint personnalisé, connexion Google, Gemini API Key et Vertex AI (ADC / compte de service / API Key).",
-      "authMode": "Mode d’authentification",
+      "authMode": "Auth Mode",
       "selectAuthMode": "Sélectionner un mode d’authentification",
       "viewAuthDoc": "Voir la documentation d’authentification",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "Laisser vide pour utiliser gateway.remote.url depuis la configuration locale openclaw.",
       "gatewayTokenPlaceholder": "Token d’authentification Gateway",
       "gatewayTokenHint": "Utilisez token-file plutôt qu’un token en clair si possible ; configurez-le via le CLI openclaw.",
-      "sessionKeyHint": "Optionnel. Spécifie la session key de la gateway ; laisser vide pour auto-attribuer une session isolée."
+      "sessionKeyHint": "Optionnel. Spécifie la session key de la gateway ; laisser vide pour auto-attribuer une session isolée.",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "Configuration de Hermes",
@@ -745,7 +751,12 @@
       "commandCopied": "Commande copiée dans le presse-papiers",
       "advancedTitle": "Avancé : modifier config.yaml",
       "rawConfigHint": "Modifiez directement ~/.hermes/config.yaml. Enregistrer ici écrase le fichier tel quel.",
-      "saveRawConfig": "Enregistrer config.yaml"
+      "saveRawConfig": "Enregistrer config.yaml",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "Configuration de CodeBuddy",
@@ -805,7 +816,8 @@
       "loginHint": "Run `kimi login` in a terminal to sign in with a Kimi subscription account (device-code OAuth). veryagent stores nothing and reuses Kimi’s own login. Saving here removes veryagent’s API-key gate token.",
       "rawEditorLabel": "Advanced: edit config.toml directly",
       "rawEditorHint": "Written verbatim (comments preserved) and validated as TOML. veryagent also seeds the gate token so the session opens.",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "Abonnement officiel",
     "authModeCustomEndpoint": "Endpoint personnalisé",
@@ -816,7 +828,7 @@
     "selectModelProvider": "Sélectionner un fournisseur de modèle",
     "noModelProviderAvailable": "Aucun fournisseur de modèle configuré pour cet agent. Allez dans les paramètres des fournisseurs de modèle pour en ajouter un.",
     "claude": {
-      "authMode": "Mode d'authentification",
+      "authMode": "Auth Mode",
       "officialSubscription": "Abonnement officiel",
       "officialSubscriptionHint": "Utiliser l'abonnement officiel Anthropic, pas de clé API requise.",
       "mainModel": "Modèle principal",
@@ -833,7 +845,8 @@
       "effortLevel_low": "Bas",
       "effortLevel_medium": "Moyen",
       "effortLevel_high": "Élevé",
-      "effortLevel_xhigh": "Très Élevé"
+      "effortLevel_xhigh": "Très Élevé",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "Supprimer le provider {providerId} ?",
@@ -931,7 +944,12 @@
       "latest": "{versionText}. Déjà à jour."
     },
     "cline": {
-      "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/."
+      "configDescription": "Configurez le fournisseur API et les identifiants Cline. Les paramètres sont enregistrés dans ~/.cline/data/.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "Plugins OpenCode",
@@ -2099,7 +2117,11 @@
         "mentionGroupAgent": "Agents",
         "mentionGroupSession": "Sessions",
         "mentionGroupCommit": "Commits",
-        "mentionGroupSkill": "Compétences"
+        "mentionGroupSkill": "Compétences",
+        "mentionGroupImage": "Images",
+        "vision": "Vision",
+        "visionOn": "Multimodal vision on",
+        "visionOff": "Multimodal vision off"
       },
       "messageQueue": {
         "addToQueue": "Mettre en file",
@@ -2220,7 +2242,43 @@
         "moreFiles": "+{count} fichiers supplémentaires",
         "plan": "Plan de travail",
         "allowedActions": "Actions autorisées",
-        "targetMode": "Mode cible : {mode}"
+        "targetMode": "Mode cible : {mode}",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask"
+      },
+      "configOptions": {
+        "approvalPreset": "Approval Preset",
+        "defaultThinkingMode": "Default thinking mode",
+        "thinkingLevel": "Thinking level",
+        "bypass": "Bypass",
+        "reasoningEffort": "Reasoning effort",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask",
+        "readOnly": "Read-only",
+        "agentMode": "Agent",
+        "agentFullAccess": "Agent (full access)",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "thinkingExtraHigh": "Extra high",
+        "modeDefault": "Default",
+        "modeAcceptEdits": "Accept Edits",
+        "modeAuto": "Auto",
+        "modePlanMode": "Plan Mode",
+        "modeBypassPermissions": "Bypass Permissions",
+        "modeDefaultDesc": "Ask before edits.",
+        "modeAcceptEditsDesc": "Auto-allow workspace and /tmp edits; still asks for sensitive paths.",
+        "modeDontAskDesc": "Auto-allow file edits for this session except sensitive paths.",
+        "modeAutoDesc": "Use a model classifier to approve/deny permission prompts",
+        "modeDefaultBehaviorDesc": "Standard behavior, prompts for dangerous operations",
+        "modeAcceptEditsBehaviorDesc": "Auto-accept file edit operations",
+        "modePlanModeDesc": "Planning mode, no actual tool execution",
+        "modeBypassPermissionsDesc": "Bypass all permission checks"
       },
       "questionDialog": {
         "title": "L'agent pose une question",
@@ -2980,7 +3038,8 @@
       "quality": "Qualité et tests",
       "debugging": "Débogage",
       "review": "Révision et intégration",
-      "meta": "Meta"
+      "meta": "Meta",
+      "creative": "Créatif & Imagerie"
     },
     "states": {
       "not_linked": "Non activé",
@@ -3113,6 +3172,7 @@
       "title": "Sessions actives",
       "empty": "Aucune session active",
       "emptyHint": "Les agents en cours et ceux qui vous attendent apparaissent ici.",
+      "close": "Fermer",
       "statusRunning": "En cours",
       "statusWaiting": "En attente",
       "statusError": "Erreur"
@@ -3120,15 +3180,6 @@
     "menu": {
       "quit": "Quitter",
       "hidePet": "Masquer la mascotte"
-    },
-    "panel": {
-      "title": "Sessions actives",
-      "empty": "Aucune session active",
-      "emptyHint": "Les agents en cours et ceux qui vous attendent apparaissent ici.",
-      "close": "Fermer",
-      "statusRunning": "En cours",
-      "statusWaiting": "En attente",
-      "statusError": "Erreur"
     },
     "loadError": "Échec du chargement de la mascotte",
     "missingPetIdParam": "Aucune mascotte sélectionnée",
@@ -3617,5 +3668,39 @@
     "uninstallSuccess": "Désinstallé avec succès",
     "installFailed": "Échec de l'installation : {error}",
     "uninstallFailed": "Échec de la désinstallation : {error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "Vision Bridge",
+    "description": "Let text-only agents understand images by routing image analysis through a vision-capable model.",
+    "requiredField": "This field is required",
+    "selectAtLeastOne": "Select at least one agent",
+    "validationFailed": "Please complete the required fields",
+    "saved": "Vision Bridge settings saved",
+    "saveFailed": "Failed to save Vision Bridge settings",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable Vision Bridge",
+    "enableHint": "When enabled, selected text-only agents can analyze images through the configured vision model.",
+    "modelConfig": "Vision model",
+    "apiUrl": "API URL",
+    "apiUrlHint": "Enter the base URL for the vision model API endpoint.",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "Model name",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "MarkdownImage": {
+    "copyImage": "Copy Image",
+    "copyingImage": "Copying...",
+    "copyUrl": "Copy Image URL",
+    "referenceToChat": "Reference for Re-creation",
+    "downloadImage": "Download Image",
+    "downloadDialogTitle": "Save Image",
+    "downloadFilterAll": "All Files"
   }
 }

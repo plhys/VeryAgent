@@ -13,5 +13,10 @@ fn main() {
         return;
     }
 
+    // Kill any existing veryagent.exe processes so only one instance runs.
+    // Uses the same identifier as the single-instance plugin so it covers
+    // both debug and release builds launched from any path.
+    veryagent_lib::process::kill_other_instances();
+
     veryagent_lib::run()
 }

@@ -10,7 +10,6 @@ import {
 import { resolveDefaultAgent } from "@/lib/resolve-default-agent"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import {
-  loadLastActiveContext,
   saveLastActiveContext,
   clearLastActiveContext,
 } from "@/lib/last-active-context-storage"
@@ -984,46 +983,21 @@ export const useTabStore = create<TabStoreState>()((set, get) => ({
     let cancelled = false
     void (async () => {
       try {
+        // Fetch the server version so remote snapshots can gate correctly,
+        // but do NOT restore persisted conversation tabs on cold start —
+        // the app always opens to the welcome page instead.
         const snap = await listOpenedTabs()
         if (cancelled) return
         version = snap.version
-        const restored: TabItemInternal[] = snap.items.map((it) => ({
-          id:
-            it.conversation_id != null
-              ? makeConversationTabId(
-                  it.folder_id,
-                  it.agent_type,
-                  it.conversation_id
-                )
-              : makeNewConversationTabId(),
-          kind: "conversation",
-          folderId: it.folder_id,
-          conversationId: it.conversation_id,
-          agentType: it.agent_type,
-          title:
-            it.conversation_id != null
-              ? runtime.labels.loadingConversation
-              : runtime.labels.newConversation,
-          isPinned: it.is_pinned,
-        }))
-        const activeItem = snap.items.find(
-          (it) => it.is_active && it.conversation_id != null
-        )
-        let restoredActive: string | null = activeItem
-          ? makeConversationTabId(
-              activeItem.folder_id,
-              activeItem.agent_type,
-              activeItem.conversation_id as number
-            )
-          : null
-        if (!restoredActive && restored.length > 0) {
-          restoredActive = restored[0].id
-        }
-        set({ rawTabs: restored, activeTabId: restoredActive })
+        // Clear the last-active-context hint so recovery always opens a
+        // fresh welcome draft rather than re-opening a stale folder draft.
+        clearLastActiveContext()
+        // Intentionally leave rawTabs empty — the post-hydration recovery
+        // effect in TabProvider will call runRecoveryOnce() which opens a
+        // welcome-page draft tab.
+        set({ rawTabs: [], activeTabId: null })
         recomputeTabs()
-        lastSavedPayload = JSON.stringify(
-          buildPersistItems(restored, restoredActive)
-        )
+        lastSavedPayload = JSON.stringify(buildPersistItems([], null))
       } catch (err) {
         console.error("[TabStore] listOpenedTabs failed:", err)
       } finally {
@@ -1335,20 +1309,9 @@ export const useTabStore = create<TabStoreState>()((set, get) => ({
   },
 
   recoverActiveContext: () => {
-    const hint = loadLastActiveContext()
-    if (hint?.isChat) {
-      get().openChatModeTab()
-      return
-    }
-    const folders = useAppWorkspaceStore.getState().folders
-    if (hint) {
-      const f = folders.find((x) => x.id === hint.folderId)
-      if (f) {
-        get().openNewConversationTab(f.id, f.path)
-        return
-      }
-    }
-    // No saved context — default to free workspace instead of the first folder.
+    // Always open the welcome page (a fresh chat-mode draft) on cold start.
+    // The last-active-context hint is already cleared in hydrate(), but we
+    // ignore it entirely here to guarantee the welcome experience.
     get().openChatModeTab()
   },
 

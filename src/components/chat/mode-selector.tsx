@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import type { SessionModeInfo } from "@/lib/types"
 
 interface ModeSelectorProps {
@@ -25,8 +26,9 @@ export function InlineModeSelector({
   onSelect,
   label,
 }: ModeSelectorProps) {
+  const localizer = useConfigOptionLocalizer()
   const selected = modes.find((mode) => mode.id === selectedModeId)
-  const currentLabel = selected?.name ?? selectedModeId ?? ""
+  const currentLabel = localizer.localize(selected?.name ?? selectedModeId ?? "")
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -56,8 +58,8 @@ export function InlineModeSelector({
           {modes.map((mode) => (
             <DropdownMenuRadioItem key={mode.id} value={mode.id}>
               <DropdownRadioItemContent
-                label={mode.name}
-                description={mode.description}
+                label={localizer.localize(mode.name)}
+                description={mode.description ? localizer.localize(mode.description) : mode.description}
               />
             </DropdownMenuRadioItem>
           ))}

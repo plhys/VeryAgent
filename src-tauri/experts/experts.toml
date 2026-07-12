@@ -1,5 +1,6 @@
 # Expert skills metadata. Bundled alongside skills/ and loaded at runtime.
 # Category values must match ExpertCategory enum in commands/experts.rs.
+# Available categories: discovery, planning, execution, quality, debugging, review, meta, creative
 # Icons are lucide-react icon names referenced by the frontend.
 # display_name and description fall back to "en" when a locale is missing.
 # Supported locales match the frontend i18n set:
@@ -409,6 +410,37 @@ ar = "يحدد كيفية اكتشاف واستخدام المهارات في ب
 
 
 [[expert]]
+id = "multimodal-vision"
+category = "meta"
+icon = "Eye"
+sort_order = 220
+
+[expert.display_name]
+en = "Multimodal Vision"
+"zh-CN" = "多模态视觉"
+"zh-TW" = "多模態視覺"
+ja = "マルチモーダル視覚"
+ko = "멀티모달 시각"
+es = "Visión multimodal"
+de = "Multimodale Vision"
+fr = "Vision multimodale"
+pt = "Visão multimodal"
+ar = "الرؤية متعددة الوسائط"
+
+[expert.description]
+en = "Analyze images and visual content via a vision model — lets text-only agents \"see\" screenshots, diagrams, charts, and UI layouts."
+"zh-CN" = "通过视觉模型分析图片和视觉内容——让纯文字智能体也能\"看\"截图、图表、图示和 UI 界面。"
+"zh-TW" = "透過視覺模型分析圖片和視覺內容——讓純文字智能體也能「看」截圖、圖表、圖示和 UI 界面。"
+ja = "視覚モデルで画像や視覚コンテンツを分析 — テキストのみのエージェントもスクリーンショット、図表、UIレイアウトを「見る」ことができます。"
+ko = "시각 모델로 이미지와 시각 콘텐츠를 분석 — 텍스트 전용 에이전트도 스크린샷, 다이어그램, 차트, UI 레이아웃을 \"볼\" 수 있습니다."
+es = "Analiza imágenes y contenido visual mediante un modelo de visión — permite a los agentes de solo texto \"ver\" capturas, diagramas, gráficos y layouts UI."
+de = "Analysiert Bilder und visuelle Inhalte über ein Vision-Modell — ermöglicht text-only-Agenten \"Sehen\" von Screenshots, Diagrammen, Charts und UI-Layouts."
+fr = "Analyse les images et contenus visuels via un modèle de vision — permet aux agents textuels de \"voir\" captures, diagrammes, graphiques et layouts UI."
+pt = "Analisa imagens e conteúdo visual via um modelo de visão — permite que agentes textuais \"vejam\" capturas, diagramas, gráficos e layouts UI."
+ar = "يحلل الصور والمحتوى البصري عبر نموذج رؤية — يتيح للعملاء النصيين فقط \"رؤية\" لقطات الشاشة والمخططات والرسوم البيانية وتخطيطات واجهة المستخدم."
+
+
+[[expert]]
 id = "writing-skills"
 category = "meta"
 icon = "FileCode2"
@@ -437,3 +469,34 @@ de = "Skill-Dokumente vor dem Deployment mittels TDD erstellen, bearbeiten und v
 fr = "Créer, éditer et vérifier les documents de compétences via TDD avant le déploiement."
 pt = "Cria, edita e verifica documentos de habilidades via TDD antes do deploy."
 ar = "إنشاء وتحرير والتحقق من مستندات المهارات عبر التطوير الموجه بالاختبارات قبل النشر."
+
+
+[[expert]]
+id = "gemini-image"
+category = "creative"
+icon = "ImagePlus"
+sort_order = 300
+
+[expert.display_name]
+en = "Gemini Image Generation"
+"zh-CN" = "Gemini 图片生成"
+"zh-TW" = "Gemini 圖片生成"
+ja = "Gemini 画像生成"
+ko = "Gemini 이미지 생성"
+es = "Generación de imágenes Gemini"
+de = "Gemini Bildgenerierung"
+fr = "Génération d'images Gemini"
+pt = "Geração de imagens Gemini"
+ar = "إنشاء صور Gemini"
+
+[expert.description]
+en = "Generate, modify, and compose images via Gemini — text-to-image, image-to-image, and iterative editing with transparent prompt pass-through."
+"zh-CN" = "通过 Gemini 生成、修改和合成图片——文生图、图生图、迭代改图，用户原话透传不经润色。"
+"zh-TW" = "透過 Gemini 生成、修改和合成圖片——文生圖、圖生圖、迭代改圖，使用者原話透傳不經潤色。"
+ja = "Gemini で画像を生成・変更・合成 — テキストから画像、画像から画像、反復編集。ユーザーの言葉を直接透過。"
+ko = "Gemini로 이미지 생성, 수정, 합성 — 텍스트→이미지, 이미지→이미지, 반복 편집. 사용자 원문 투과 전달."
+es = "Genera, modifica y compone imágenes vía Gemini — texto-a-imagen, imagen-a-imagen, edición iterativa con transmisión transparente del prompt."
+de = "Bilder via Gemini generieren, modifizieren und komponieren — Text-zu-Bild, Bild-zu-Bild, iteratives Bearbeiten mit transparentem Prompt-Passthrough."
+fr = "Génère, modifie et compose des images via Gemini — texte-vers-image, image-vers-image, édition itérative avec transmission transparente du prompt."
+pt = "Gera, modifica e compõe imagens via Gemini — texto-para-imagem, imagem-para-imagem, edição iterativa com pass-through transparente do prompt."
+ar = "إنشاء وتعديل وتجميع الصور عبر Gemini — من نص إلى صورة، من صورة إلى صورة، تعديل تكراري مع تمرير شفاف للمستخدم."

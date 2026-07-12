@@ -5,6 +5,7 @@ import {
   Folder,
   GitCommit,
   Hash,
+  ImageIcon,
   MessageSquare,
 } from "lucide-react"
 import type { ReactNode } from "react"
@@ -76,6 +77,9 @@ export function ReferenceIcon({
       // the editor's expert-replace logic, not the icon).
       icon = <Command className={ICON_CLASS} />
       break
+    case "image":
+      icon = <ImageIcon className={ICON_CLASS} />
+      break
     default:
       return null
   }
@@ -110,6 +114,8 @@ function badgeColorClass(data: ReferenceAttrs): string {
       return "text-amber-700 dark:text-amber-400"
     case "skill":
       return "text-rose-700 dark:text-rose-400"
+    case "image":
+      return "text-cyan-700 dark:text-cyan-400"
   }
 }
 

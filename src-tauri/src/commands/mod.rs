@@ -33,3 +33,6 @@ pub mod version_control;
 #[cfg(feature = "tauri-runtime")]
 pub mod windows;
 pub mod workspace_state;
+pub mod vision_bridge;
+#[cfg(feature = "tauri-runtime")]
+pub mod image_proxy;

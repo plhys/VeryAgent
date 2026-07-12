@@ -1230,6 +1230,20 @@ pub struct DelegationInjection {
     /// is on, and the companion's `--features` lists `sessions` to expose the
     /// `get_session_info` tool. No teardown handle (the lookup is stateless).
     pub sessions: crate::acp::session_info::SessionInfoRuntimeConfig,
+    /// Hot-swappable "is vision_bridge enabled for this agent?" config.
+    /// Read at injection time alongside the other four so `veryagent-mcp` is
+    /// injected when ANY of the five is on, and the companion's `--features`
+    /// lists `vision` to expose the `vision_analyze` tool.
+    pub vision: crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
+    /// The actual vision model API client. Used to preprocess images in user
+    /// prompts before they reach the text-only agent: images are sent to the
+    /// vision model, the resulting text description replaces the image block,
+    /// so the text model never sees raw image data in its context.
+    pub vision_bridge: Option<Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>>,
+    /// Hot-swappable "is image generation enabled?" flag. When enabled, the
+    /// companion's `--features` lists `image` to expose the `generate_image`
+    /// and `modify_image` tools.
+    pub image_enabled: bool,
     /// Question registry handle for the teardown cascade. The `run_connection`
     /// cleanup guard calls `cancel_questions_by_parent` through this so a pending
     /// `ask_user_question` is reclaimed synchronously on disconnect, mirroring
@@ -1327,8 +1341,10 @@ fn companion_features_arg(
     feedback_enabled: bool,
     ask_enabled: bool,
     sessions_enabled: bool,
+    vision_enabled: bool,
+    image_enabled: bool,
 ) -> Option<String> {
-    if !delegation_enabled && !feedback_enabled && !ask_enabled && !sessions_enabled {
+    if !delegation_enabled && !feedback_enabled && !ask_enabled && !sessions_enabled && !vision_enabled && !image_enabled {
         return None;
     }
     let mut features: Vec<&str> = Vec::new();
@@ -1343,6 +1359,12 @@ fn companion_features_arg(
     }
     if sessions_enabled {
         features.push("sessions");
+    }
+    if vision_enabled {
+        features.push("vision");
+    }
+    if image_enabled {
+        features.push("image");
     }
     Some(features.join(","))
 }
@@ -1360,6 +1382,7 @@ async fn inject_veryagent_mcp(
     injection: &DelegationInjection,
     parent_connection_id: &str,
     working_dir: &Path,
+    agent_type: AgentType,
 ) -> Option<CompanionInjection> {
     // veryagent-mcp carries BOTH the delegation tools and the live-feedback tool.
     // Inject it when EITHER feature is enabled; the `--features` arg tells the
@@ -1369,12 +1392,24 @@ async fn inject_veryagent_mcp(
     let feedback_enabled = injection.feedback.is_enabled().await;
     let ask_enabled = injection.ask.is_enabled().await;
     let sessions_enabled = injection.sessions.is_enabled().await;
+    // Vision is scoped per agent type: only expose the tool to agents the operator
+    // has selected, not globally. Use the serde snake_case format so the match
+    // aligns with the frontend's agent_types_list entries.
+    let agent_type_snake = serde_json::to_string(&agent_type)
+        .unwrap_or_else(|_| agent_type.to_string());
+    // Strip the surrounding quotes from the JSON string literal.
+    let agent_type_key = agent_type_snake.trim_matches('"');
+    let vision_enabled = injection.vision.is_enabled_for_agent(agent_type_key).await;
+    // Image generation is always enabled — it's a core capability.
+    let image_enabled = injection.image_enabled;
     // `None` (no feature enabled) short-circuits the whole injection.
     let features_arg = companion_features_arg(
         delegation_enabled,
         feedback_enabled,
         ask_enabled,
         sessions_enabled,
+        vision_enabled,
+        image_enabled,
     )?;
     let Some(binary_path) = locate_veryagent_mcp_binary() else {
         tracing::warn!(
@@ -1813,7 +1848,7 @@ async fn run_connection(
             // for agents that don't accept MCP over the wire (above).
             let delegate_injection = if agent_supports_mcp && agent_delivers_wire_mcp(agent_type) {
                 if let Some(inj) = delegation_injection.as_ref() {
-                    inject_veryagent_mcp(&mut mcp_servers, inj, &conn_id, &cwd).await
+                    inject_veryagent_mcp(&mut mcp_servers, inj, &conn_id, &cwd, agent_type).await
                 } else {
                     None
                 }
@@ -3077,16 +3112,61 @@ async fn poll_tracked_terminal_tool_calls(
     }
 }
 
-fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
-    blocks
-        .into_iter()
-        .map(|block| match block {
-            PromptInputBlock::Text { text } => ContentBlock::Text(TextContent::new(text)),
+/// Convert user prompt input blocks to ACP content blocks, preprocessing
+/// images through the vision bridge when enabled. Image blocks are sent to
+/// the vision model and replaced with a text description so the text-only
+/// agent never receives raw image data.
+async fn map_prompt_blocks(
+    blocks: Vec<PromptInputBlock>,
+    vision_bridge: Option<&dyn crate::acp::vision_bridge::VisionBridgeAccess>,
+    _agent_type: AgentType,
+) -> Vec<ContentBlock> {
+    let mut out = Vec::with_capacity(blocks.len());
+    for block in blocks {
+        match block {
+            PromptInputBlock::Text { text } => {
+                out.push(ContentBlock::Text(TextContent::new(text)));
+            }
             PromptInputBlock::Image {
                 data,
                 mime_type,
                 uri,
-            } => ContentBlock::Image(ImageContent::new(data, mime_type).uri(uri)),
+            } => {
+                // If vision bridge is available, preprocess the image.
+                if let Some(vb) = vision_bridge {
+                    let image_path = uri.clone();
+                    let prompt = format!(
+                        "Describe this image in detail. Include all visible text, UI elements, \
+                         diagrams, charts, error messages, code snippets, and any other \
+                         information that would help a text-only AI understand what is shown. \
+                         Be thorough and specific."
+                    );
+                    let result = vb
+                        .analyze(Some(data.clone()), image_path, Some(mime_type), prompt)
+                        .await;
+                    let description = result
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_else(|| {
+                            result
+                                .get("error")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("(vision analysis unavailable)")
+                        });
+                    let placeholder = format!(
+                        "[Image: {}] — Vision analysis: {}",
+                        uri.as_deref().unwrap_or("attached image"),
+                        description
+                    );
+                    out.push(ContentBlock::Text(TextContent::new(placeholder)));
+                } else {
+                    // No vision bridge — pass the image through (native vision
+                    // agents like Gemini CLI can handle it).
+                    out.push(ContentBlock::Image(
+                        ImageContent::new(data, mime_type).uri(uri),
+                    ));
+                }
+            }
             PromptInputBlock::Resource {
                 uri,
                 mime_type,
@@ -3110,7 +3190,7 @@ fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
                         EmbeddedResourceResource::TextResourceContents(content)
                     }
                 };
-                ContentBlock::Resource(EmbeddedResource::new(resource))
+                out.push(ContentBlock::Resource(EmbeddedResource::new(resource)));
             }
             PromptInputBlock::ResourceLink {
                 uri,
@@ -3121,10 +3201,11 @@ fn map_prompt_blocks(blocks: Vec<PromptInputBlock>) -> Vec<ContentBlock> {
                 let mut link = ResourceLink::new(name, uri);
                 link.mime_type = mime_type;
                 link.description = description;
-                ContentBlock::ResourceLink(link)
+                out.push(ContentBlock::ResourceLink(link));
             }
-        })
-        .collect()
+        }
+    }
+    out
 }
 
 /// Result when the conversation loop exits due to a fork request.
@@ -3401,7 +3482,9 @@ async fn run_conversation_loop<'a>(
                 blocks,
                 user_message,
             }) => {
-                let prompt_blocks = map_prompt_blocks(blocks);
+                let vision_bridge = delegation_injection
+                    .and_then(|di| di.vision_bridge.as_deref());
+                let prompt_blocks = map_prompt_blocks(blocks, vision_bridge, agent_type).await;
                 if prompt_blocks.is_empty() {
                     // Defensive: the manager rejects empty prompts before the
                     // concurrency gate is set / the command is enqueued (see
@@ -6218,6 +6301,9 @@ mod tests {
             feedback: crate::acp::feedback::FeedbackRuntimeConfig::new(),
             ask: crate::acp::question::QuestionRuntimeConfig::new(),
             sessions: crate::acp::session_info::SessionInfoRuntimeConfig::new(),
+            vision: crate::acp::vision_bridge::VisionBridgeRuntimeConfig::new(),
+            vision_bridge: None,
+            image_enabled: false,
             questions: Arc::new(NoQuestions)
                 as Arc<dyn crate::acp::question::SessionQuestionAccess>,
         };
@@ -6228,6 +6314,7 @@ mod tests {
             &injection,
             "parent-conn",
             std::path::Path::new("/tmp"),
+            AgentType::ClaudeCode,
         )
         .await;
 
@@ -6254,32 +6341,42 @@ mod tests {
     #[test]
     fn companion_features_arg_inject_skip_decision() {
         // All off → no companion at all.
-        assert_eq!(companion_features_arg(false, false, false, false), None);
+        assert_eq!(companion_features_arg(false, false, false, false, false, false), None);
         // Delegation only.
         assert_eq!(
-            companion_features_arg(true, false, false, false),
+            companion_features_arg(true, false, false, false, false, false),
             Some("delegation".to_string())
         );
         // Feedback only — the decoupling: companion injected for feedback even
         // when delegation is off.
         assert_eq!(
-            companion_features_arg(false, true, false, false),
+            companion_features_arg(false, true, false, false, false, false),
             Some("feedback".to_string())
         );
         // Ask only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, true, false),
+            companion_features_arg(false, false, true, false, false, false),
             Some("ask".to_string())
         );
         // Sessions only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, false, true),
+            companion_features_arg(false, false, false, true, false, false),
             Some("sessions".to_string())
+        );
+        // Vision only — likewise injects the companion on its own.
+        assert_eq!(
+            companion_features_arg(false, false, false, false, true, false),
+            Some("vision".to_string())
+        );
+        // Image only — likewise injects the companion on its own.
+        assert_eq!(
+            companion_features_arg(false, false, false, false, false, true),
+            Some("image".to_string())
         );
         // All on → comma-joined, in declaration order.
         assert_eq!(
-            companion_features_arg(true, true, true, true),
-            Some("delegation,feedback,ask,sessions".to_string())
+            companion_features_arg(true, true, true, true, true, true),
+            Some("delegation,feedback,ask,sessions,vision,image".to_string())
         );
     }
 }

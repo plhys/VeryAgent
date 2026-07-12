@@ -149,5 +149,86 @@
         }
       }
     }
+  },
+  {
+    "name": "vision_analyze",
+    "description": "Analyze an image using a vision-capable AI model. Send an image (as base64 data or a local file path) and a text prompt describing what you want to know about the image. The vision model returns a detailed text description you can use in your work.\n\nWhen to use:\n- Understand a screenshot or image the user sent\n- Read UI elements, error messages, or dialog boxes from a screenshot\n- Analyze charts, diagrams, or visual data\n- Identify what is shown on the desktop, a browser page, or application window\n- Interpret any visual content your text-only model cannot directly process\n\nThe tool handles image loading for you — pass either base64-encoded bytes (image_data) or a local file path (image_path). If you can capture a screenshot via shell commands (e.g. `screencapture` on macOS, `cmd /c ...` on Windows), pass the resulting file path.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["prompt"],
+      "properties": {
+        "image_data": {
+          "type": "string",
+          "description": "Base64-encoded image data. Use this when you already have the image bytes (e.g. from another tool's output). Omit if using image_path instead."
+        },
+        "image_path": {
+          "type": "string",
+          "description": "Absolute file path to a local image file. Use this when the image is on disk (e.g. a screenshot you just captured). Omit if using image_data instead."
+        },
+        "mime_type": {
+          "type": "string",
+          "description": "MIME type of the image (e.g. image/png, image/jpeg). Required when using image_data; inferred from the file extension when using image_path.",
+          "default": "image/png"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "What you want to know about the image. Be specific: 'Describe the UI elements and their layout', 'What error message is shown in this dialog?', 'Identify the data in this chart', 'What does this screenshot show?'."
+        }
+      }
+    }
+  },
+  {
+    "name": "generate_image",
+    "description": "Generate an image using the Gemini image generation API. Pass the user's original prompt text — do NOT translate, rephrase, or optimize it. The tool returns the URL of the generated image. For image-to-image, pass reference image URLs in ref_urls. Supports text-to-image and image-to-image. Use this tool directly — do NOT write Python/curl scripts to call the API.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["prompt"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "The user's original request text. MUST be passed verbatim — never translate, rephrase, or optimize. The Gemini model understands the intent directly."
+        },
+        "image_size": {
+          "type": "string",
+          "enum": ["1K", "2K", "4K"],
+          "description": "Output image resolution. Default is 2K.",
+          "default": "2K"
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "enum": ["1:1", "4:3", "16:9", "9:16", "3:4"],
+          "description": "Output image aspect ratio. Default is 16:9.",
+          "default": "16:9"
+        },
+        "ref_urls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Reference image URLs for image-to-image generation. Prefer public internet URLs (Gemini can download directly). Internal URLs (10.x.x.x) are auto-uploaded to image hosting. Pass the user's reference image URL here."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Session ID for iterative editing. Same session_id shares generation history so you can iteratively modify the image. Omit for one-shot generation."
+        }
+      }
+    }
+  },
+  {
+    "name": "modify_image",
+    "description": "Iteratively modify a previously generated image. Must be called after generate_image with the same session_id to continue editing. Pass the user's modification request — do NOT translate or rephrase. The tool returns the URL of the modified image. Use this tool directly — do NOT write Python/curl scripts.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["prompt"],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "The user's modification request text. MUST be passed verbatim — never translate, rephrase, or optimize."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "The session_id from the previous generate_image call. Same session shares iterative history.",
+          "default": "default"
+        }
+      }
+    }
   }
 ]

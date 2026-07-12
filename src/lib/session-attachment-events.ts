@@ -40,3 +40,27 @@ export function emitAppendTextToSession(
     })
   )
 }
+
+export const ATTACH_IMAGE_REFERENCE_TO_SESSION_EVENT =
+  "veryagent:attach-image-reference-to-session"
+
+export interface AttachImageReferenceToSessionDetail {
+  tabId: string
+  imageUrl: string
+  alt: string
+  /** Skill id to pair with the image reference (e.g. "gemini-image"). */
+  skillId?: string
+  skillLabel?: string
+}
+
+export function emitAttachImageReferenceToSession(
+  detail: AttachImageReferenceToSessionDetail
+): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<AttachImageReferenceToSessionDetail>(
+      ATTACH_IMAGE_REFERENCE_TO_SESSION_EVENT,
+      { detail }
+    )
+  )
+}

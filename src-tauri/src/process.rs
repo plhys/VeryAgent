@@ -515,3 +515,30 @@ pub fn ensure_user_npm_prefix_in_path() {
         }
     }
 }
+
+/// Kill any running veryagent.exe processes other than the current one.
+/// Called at startup to enforce single-instance: the new launch always wins
+/// and the old instance is terminated.
+pub fn kill_other_instances() {
+    let current_pid = std::process::id();
+
+    #[cfg(windows)]
+    {
+        // PowerShell Get-Process is more reliable than WMIC (deprecated) or
+        // tasklist /FI (filter may fail on some Windows builds).
+        let script = format!(
+            "Get-Process -Name veryagent -ErrorAction SilentlyContinue | Where-Object {{ $_.Id -ne {} }} | Stop-Process -Force",
+            current_pid
+        );
+        let _ = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-Command", &script])
+            .output();
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("pkill")
+            .args(["-f", "veryagent"])
+            .output();
+    }
+}

@@ -59,6 +59,10 @@ interface ConversationShellProps {
   attachmentTabId?: string | null
   draftStorageKey?: string | null
   hideInput?: boolean
+  /** Whether multimodal vision preprocessing is enabled. */
+  visionEnabled?: boolean
+  /** Toggle multimodal vision preprocessing. */
+  onToggleVision?: () => void
   /** Optional read-only live-feedback notes list rendered just above the
    *  composer (see `FeedbackNotesDisplay`). Renders nothing when there are no
    *  notes for the current turn. */
@@ -142,6 +146,8 @@ export function ConversationShell({
   injectContent,
   onInjectConsumed,
   topBanner,
+  visionEnabled,
+  onToggleVision,
 }: ConversationShellProps) {
   const tAcp = useTranslations("Folder.chat.acpConnections")
   const retryLineText = useMemo(() => {
@@ -270,6 +276,8 @@ export function ConversationShell({
               feedbackAddDisabled={feedbackAddDisabled}
               injectContent={injectContent}
               onInjectConsumed={onInjectConsumed}
+              visionEnabled={visionEnabled}
+              onToggleVision={onToggleVision}
             />
           </div>
         )}

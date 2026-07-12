@@ -94,6 +94,14 @@ pub fn build_router(
             post(handlers::session_info::set_session_info_settings),
         )
         .route(
+            "/vision_bridge_get_config",
+            post(handlers::vision_bridge::get_vision_bridge_settings),
+        )
+        .route(
+            "/vision_bridge_save_config",
+            post(handlers::vision_bridge::set_vision_bridge_settings),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )

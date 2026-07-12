@@ -18,6 +18,7 @@ import { UnifiedDiffPreview } from "@/components/diff/unified-diff-preview"
 import { MessageResponse } from "@/components/ai-elements/message"
 import type { PendingPermission } from "@/contexts/acp-connections-context"
 import { parsePermissionToolCall } from "@/lib/permission-request"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 
 interface PermissionDialogProps {
   permission: PendingPermission | null
@@ -29,11 +30,17 @@ function formatKindLabel(kind: string, fallbackLabel: string): string {
   return normalized.length > 0 ? normalized : fallbackLabel
 }
 
+function isRejectKind(kind: string): boolean {
+  const k = kind.toLowerCase()
+  return k.includes("reject") || k.includes("deny") || k.includes("dont") || k.includes("don't")
+}
+
 export function PermissionDialog({
   permission,
   onRespond,
 }: PermissionDialogProps) {
   const t = useTranslations("Folder.chat.permissionDialog")
+  const localizer = useConfigOptionLocalizer()
   const parsed = useMemo(
     () => parsePermissionToolCall(permission?.tool_call),
     [permission?.tool_call]
@@ -210,15 +217,16 @@ export function PermissionDialog({
 
       <div className="mt-3 flex flex-wrap gap-2">
         {permission.options.map((opt) => {
-          const isReject = opt.kind.startsWith("reject")
+          const reject = isRejectKind(opt.kind)
+          const label = localizer.localizePermissionKind(opt.kind, opt.name)
           return (
             <Button
               key={opt.option_id}
-              variant={isReject ? "outline" : "default"}
+              variant={reject ? "destructive" : "default"}
               className="h-auto min-h-9 whitespace-normal break-words text-left"
               onClick={() => onRespond(permission.request_id, opt.option_id)}
             >
-              {opt.name}
+              {label}
             </Button>
           )
         })}

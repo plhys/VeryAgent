@@ -25,6 +25,7 @@ pub mod quick_messages;
 pub mod session_info;
 pub mod system_settings;
 pub mod terminal;
+pub mod vision_bridge;
 mod upload_jail;
 pub mod version_control;
 pub mod web_server;

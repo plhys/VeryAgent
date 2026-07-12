@@ -51,7 +51,8 @@
       "experts": "الخبراء",
       "office_tools": "أدوات المكتب",
       "quick_messages": "رسائل سريعة",
-      "logs": "سجلات التشغيل"
+      "logs": "سجلات التشغيل",
+      "vision_bridge": "Vision Bridge"
     }
   },
   "AppearanceSettings": {
@@ -600,7 +601,7 @@
     },
     "codex": {
       "configDescription": "يدعم الإعداد السريع لعنوان API ومفتاح API واسم النموذج وجهد الاستدلال، مع المزامنة مع `auth.json` / `config.toml`.",
-      "authMode": "طريقة المصادقة",
+      "authMode": "Auth Mode",
       "chatgptSubscription": "اشتراك رسمي",
       "chatgptSubscriptionHint": "تسجيل الدخول باشتراك ChatGPT الرسمي، لا حاجة لـ API Key",
       "apiKeyHint": "الاتصال باستخدام API Key بخدمات OpenAI أو الخدمات المتوافقة",
@@ -633,7 +634,7 @@
     "gemini": {
       "authConfig": "إعداد مصادقة Gemini",
       "authConfigDescription": "متوافق مع وثائق مصادقة Gemini CLI، ويدعم endpoint مخصص وتسجيل دخول Google وGemini API Key وVertex AI ‏(ADC / حساب خدمة / API Key).",
-      "authMode": "وضع المصادقة",
+      "authMode": "Auth Mode",
       "selectAuthMode": "اختر وضع المصادقة",
       "viewAuthDoc": "عرض وثائق المصادقة",
       "mode": {
@@ -721,7 +722,12 @@
       "gatewayUrlHint": "اتركه فارغًا لاستخدام gateway.remote.url من إعداد openclaw المحلي.",
       "gatewayTokenPlaceholder": "رمز مصادقة Gateway",
       "gatewayTokenHint": "يُفضّل استخدام token-file بدل الرمز النصي متى أمكن؛ قم بالإعداد عبر openclaw CLI.",
-      "sessionKeyHint": "اختياري. حدّد مفتاح جلسة gateway؛ واتركه فارغًا للتعيين التلقائي لجلسة معزولة."
+      "sessionKeyHint": "اختياري. حدّد مفتاح جلسة gateway؛ واتركه فارغًا للتعيين التلقائي لجلسة معزولة.",
+      "authModeLabel": "Authentication method",
+      "authModeGateway": "Gateway",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
     },
     "hermes": {
       "configManagement": "تكوين Hermes",
@@ -745,7 +751,12 @@
       "commandCopied": "تم نسخ الأمر إلى الحافظة",
       "advancedTitle": "متقدّم: تحرير config.yaml",
       "rawConfigHint": "حرّر ~/.hermes/config.yaml مباشرةً. الحفظ هنا يستبدل الملف حرفيًا.",
-      "saveRawConfig": "حفظ config.yaml"
+      "saveRawConfig": "حفظ config.yaml",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (hermes login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native hermes authentication flow."
     },
     "codebuddy": {
       "configManagement": "تكوين CodeBuddy",
@@ -805,7 +816,8 @@
       "loginHint": "Run `kimi login` in a terminal to sign in with a Kimi subscription account (device-code OAuth). veryagent stores nothing and reuses Kimi’s own login. Saving here removes veryagent’s API-key gate token.",
       "rawEditorLabel": "Advanced: edit config.toml directly",
       "rawEditorHint": "Written verbatim (comments preserved) and validated as TOML. veryagent also seeds the gate token so the session opens.",
-      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\""
+      "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
     },
     "authModeOfficialSubscription": "الاشتراك الرسمي",
     "authModeCustomEndpoint": "نقطة نهاية مخصصة",
@@ -816,7 +828,7 @@
     "selectModelProvider": "اختر مزود النموذج",
     "noModelProviderAvailable": "لا يوجد مزود نموذج مُعدّ لهذا الوكيل. انتقل إلى إعدادات مزود النموذج لإضافة واحد.",
     "claude": {
-      "authMode": "وضع المصادقة",
+      "authMode": "Auth Mode",
       "officialSubscription": "الاشتراك الرسمي",
       "officialSubscriptionHint": "استخدم اشتراك Anthropic الرسمي، لا حاجة لمفتاح API.",
       "mainModel": "النموذج الرئيسي",
@@ -833,7 +845,8 @@
       "effortLevel_low": "منخفض",
       "effortLevel_medium": "متوسط",
       "effortLevel_high": "مرتفع",
-      "effortLevel_xhigh": "مرتفع جداً"
+      "effortLevel_xhigh": "مرتفع جداً",
+      "advancedModelSettings": "Advanced model settings"
     },
     "dialogs": {
       "confirmDeleteProvider": "حذف المزود {providerId}؟",
@@ -931,7 +944,12 @@
       "latest": "{versionText}. أنت على أحدث إصدار."
     },
     "cline": {
-      "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/."
+      "configDescription": "تكوين مزود واجهة برمجة التطبيقات وبيانات اعتماد Cline. يتم حفظ الإعدادات في ~/.cline/data/.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native (cline login)",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use the native cline authentication flow."
     },
     "opencodePlugins": {
       "title": "إضافات OpenCode",
@@ -2099,7 +2117,11 @@
         "mentionGroupAgent": "الوكلاء",
         "mentionGroupSession": "الجلسات",
         "mentionGroupCommit": "عمليات الإيداع",
-        "mentionGroupSkill": "المهارات"
+        "mentionGroupSkill": "المهارات",
+        "mentionGroupImage": "صور",
+        "vision": "Vision",
+        "visionOn": "Multimodal vision on",
+        "visionOff": "Multimodal vision off"
       },
       "messageQueue": {
         "addToQueue": "إضافة للقائمة",
@@ -2220,7 +2242,43 @@
         "moreFiles": "+{count} ملف إضافي",
         "plan": "الخطة",
         "allowedActions": "الإجراءات المسموح بها",
-        "targetMode": "وضع الهدف: {mode}"
+        "targetMode": "وضع الهدف: {mode}",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask"
+      },
+      "configOptions": {
+        "approvalPreset": "Approval Preset",
+        "defaultThinkingMode": "Default thinking mode",
+        "thinkingLevel": "Thinking level",
+        "bypass": "Bypass",
+        "reasoningEffort": "Reasoning effort",
+        "allowOnce": "Allow once",
+        "allowAlways": "Always allow",
+        "deny": "Deny",
+        "dontAsk": "Don't ask",
+        "readOnly": "Read-only",
+        "agentMode": "Agent",
+        "agentFullAccess": "Agent (full access)",
+        "thinkingOff": "Off",
+        "thinkingLow": "Low",
+        "thinkingMedium": "Medium",
+        "thinkingHigh": "High",
+        "thinkingExtraHigh": "Extra high",
+        "modeDefault": "Default",
+        "modeAcceptEdits": "Accept Edits",
+        "modeAuto": "Auto",
+        "modePlanMode": "Plan Mode",
+        "modeBypassPermissions": "Bypass Permissions",
+        "modeDefaultDesc": "Ask before edits.",
+        "modeAcceptEditsDesc": "Auto-allow workspace and /tmp edits; still asks for sensitive paths.",
+        "modeDontAskDesc": "Auto-allow file edits for this session except sensitive paths.",
+        "modeAutoDesc": "Use a model classifier to approve/deny permission prompts",
+        "modeDefaultBehaviorDesc": "Standard behavior, prompts for dangerous operations",
+        "modeAcceptEditsBehaviorDesc": "Auto-accept file edit operations",
+        "modePlanModeDesc": "Planning mode, no actual tool execution",
+        "modeBypassPermissionsDesc": "Bypass all permission checks"
       },
       "questionDialog": {
         "title": "الوكيل يطرح سؤالاً",
@@ -2980,7 +3038,8 @@
       "quality": "الجودة والاختبار",
       "debugging": "التصحيح",
       "review": "المراجعة والدمج",
-      "meta": "ميتا"
+      "meta": "ميتا",
+      "creative": "الإبداع والتصوير"
     },
     "states": {
       "not_linked": "غير مُفعَّل",
@@ -3113,6 +3172,7 @@
       "title": "الجلسات النشطة",
       "empty": "لا توجد جلسات نشطة",
       "emptyHint": "تظهر هنا الوكلاء قيد التشغيل وتلك التي تحتاج إليك.",
+      "close": "إغلاق",
       "statusRunning": "قيد التشغيل",
       "statusWaiting": "في الانتظار",
       "statusError": "خطأ"
@@ -3120,15 +3180,6 @@
     "menu": {
       "quit": "إنهاء",
       "hidePet": "إخفاء الحيوان الأليف"
-    },
-    "panel": {
-      "title": "الجلسات النشطة",
-      "empty": "لا توجد جلسات نشطة",
-      "emptyHint": "تظهر هنا الوكلاء قيد التشغيل وتلك التي تحتاج إليك.",
-      "close": "إغلاق",
-      "statusRunning": "قيد التشغيل",
-      "statusWaiting": "في الانتظار",
-      "statusError": "خطأ"
     },
     "loadError": "فشل تحميل الحيوان الأليف",
     "missingPetIdParam": "لم يتم اختيار حيوان أليف",
@@ -3617,5 +3668,39 @@
     "uninstallSuccess": "تمت الإزالة بنجاح",
     "installFailed": "فشل التثبيت: {error}",
     "uninstallFailed": "فشل الإزالة: {error}"
+  },
+  "VisionBridgeSettings": {
+    "title": "Vision Bridge",
+    "description": "Let text-only agents understand images by routing image analysis through a vision-capable model.",
+    "requiredField": "This field is required",
+    "selectAtLeastOne": "Select at least one agent",
+    "validationFailed": "Please complete the required fields",
+    "saved": "Vision Bridge settings saved",
+    "saveFailed": "Failed to save Vision Bridge settings",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable Vision Bridge",
+    "enableHint": "When enabled, selected text-only agents can analyze images through the configured vision model.",
+    "modelConfig": "Vision model",
+    "apiUrl": "API URL",
+    "apiUrlHint": "Enter the base URL for the vision model API endpoint.",
+    "apiUrlPlaceholder": "https://api.example.com/v1",
+    "modelName": "Model name",
+    "modelNamePlaceholder": "gemini-2.5-flash",
+    "apiKey": "API key",
+    "apiKeyPlaceholder": "sk-...",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "MarkdownImage": {
+    "copyImage": "Copy Image",
+    "copyingImage": "Copying...",
+    "copyUrl": "Copy Image URL",
+    "referenceToChat": "Reference for Re-creation",
+    "downloadImage": "Download Image",
+    "downloadDialogTitle": "Save Image",
+    "downloadFilterAll": "All Files"
   }
 }

@@ -59,6 +59,11 @@ pub struct AppState {
     /// the session-info settings command on save. Populated at startup by
     /// `apply_persisted_session_info_config`.
     pub session_info_config: crate::acp::session_info::SessionInfoRuntimeConfig,
+    /// Hot-swappable vision-bridge (`vision_analyze`) enable flag + agent-types
+    /// filter. Shared with `DelegationInjection` so MCP injection reads it, and
+    /// updated by the vision bridge settings command on save. Populated at
+    /// startup by `apply_persisted_vision_bridge_config`.
+    pub vision_bridge_config: crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
     /// Serializes mutually-exclusive system operations — in-place
     /// self-update, restart, rollback — so a second click can't race a
     /// download/swap already in flight. Handlers `try_lock` and reject when
@@ -102,6 +107,7 @@ pub fn build_delegation_stack(
     connection_manager: &ConnectionManager,
     db_conn: sea_orm::DatabaseConnection,
     data_dir: PathBuf,
+    vision_bridge_access: Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
 ) -> (
     Arc<DelegationBroker>,
     Arc<TokenRegistry>,
@@ -109,6 +115,8 @@ pub fn build_delegation_stack(
     crate::acp::feedback::FeedbackRuntimeConfig,
     crate::acp::question::QuestionRuntimeConfig,
     crate::acp::session_info::SessionInfoRuntimeConfig,
+    crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
+    Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
 ) {
     use crate::acp::connection::DelegationInjection;
     use crate::acp::delegation::broker::{
@@ -155,6 +163,7 @@ pub fn build_delegation_stack(
     let feedback = crate::acp::feedback::FeedbackRuntimeConfig::new();
     let ask = crate::acp::question::QuestionRuntimeConfig::new();
     let sessions = crate::acp::session_info::SessionInfoRuntimeConfig::new();
+    let vision = crate::acp::vision_bridge::VisionBridgeRuntimeConfig::new();
 
     // Install the injection on the manager so spawn_agent picks it up
     // without an extra parameter at every call site.
@@ -165,6 +174,11 @@ pub fn build_delegation_stack(
         feedback: feedback.clone(),
         ask: ask.clone(),
         sessions: sessions.clone(),
+        vision: vision.clone(),
+        vision_bridge: Some(vision_bridge_access.clone()),
+        // Image generation is always enabled — the Gemini API is available on
+        // the internal network and requires no per-agent opt-in.
+        image_enabled: true,
         // Same backing manager as the listener's question lookup; used only by
         // the run_connection teardown guard to reclaim a parked ask.
         questions: Arc::new(crate::acp::manager::ConnectionManagerQuestionLookup {
@@ -172,7 +186,23 @@ pub fn build_delegation_stack(
         }) as Arc<dyn crate::acp::question::SessionQuestionAccess>,
     });
 
-    (broker, tokens, socket_path, feedback, ask, sessions)
+    (broker, tokens, socket_path, feedback, ask, sessions, vision, vision_bridge_access)
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+struct StubVisionBridge;
+#[cfg(any(test, feature = "test-utils"))]
+#[async_trait::async_trait]
+impl crate::acp::vision_bridge::VisionBridgeAccess for StubVisionBridge {
+    async fn analyze(
+        &self,
+        _image_data: Option<String>,
+        _image_path: Option<String>,
+        _mime_type: Option<String>,
+        _prompt: String,
+    ) -> serde_json::Value {
+        serde_json::json!({ "description": "(stub vision)" })
+    }
 }
 
 impl AppState {
@@ -200,7 +230,14 @@ impl AppState {
             feedback_config,
             question_config,
             session_info_config,
-        ) = build_delegation_stack(&connection_manager, db.conn.clone(), data_dir.clone());
+            vision_bridge_config,
+            vision_bridge_access,
+        ) = build_delegation_stack(
+            &connection_manager,
+            db.conn.clone(),
+            data_dir.clone(),
+            Arc::new(StubVisionBridge),
+        );
 
         Self {
             db,
@@ -224,6 +261,7 @@ impl AppState {
             feedback_config,
             question_config,
             session_info_config,
+            vision_bridge_config,
             system_op_lock: default_system_op_lock(),
             update_state: default_update_state(),
         }

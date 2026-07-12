@@ -22,6 +22,7 @@ import {
   Search,
   Send,
   Command,
+  Eye,
   Sparkles,
   Square,
   TextSelect,
@@ -101,8 +102,10 @@ import type {
 import {
   ATTACH_FILE_TO_SESSION_EVENT,
   APPEND_TEXT_TO_SESSION_EVENT,
+  ATTACH_IMAGE_REFERENCE_TO_SESSION_EVENT,
   type AttachFileToSessionDetail,
   type AppendTextToSessionDetail,
+  type AttachImageReferenceToSessionDetail,
 } from "@/lib/session-attachment-events"
 import {
   ConversationContextBar,
@@ -125,6 +128,7 @@ import {
   type ModelOptionGroup,
 } from "@/lib/model-config-groups"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import { useAgentSkills } from "@/hooks/use-agent-skills"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
 import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
@@ -234,6 +238,10 @@ interface MessageInputProps {
   feedbackAddDisabled?: boolean
   injectContent?: ComposerInjectContent | null
   onInjectConsumed?: () => void
+  /** Whether multimodal vision preprocessing is enabled for this session. */
+  visionEnabled?: boolean
+  /** Toggle multimodal vision preprocessing on/off. */
+  onToggleVision?: () => void
 }
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -503,8 +511,11 @@ export function MessageInput({
   feedbackAddDisabled,
   injectContent,
   onInjectConsumed,
+  visionEnabled = false,
+  onToggleVision,
 }: MessageInputProps) {
   const t = useTranslations("Folder.chat.messageInput")
+  const localizer = useConfigOptionLocalizer()
   const tQueue = useTranslations("Folder.chat.messageQueue")
   // Kept as a separate binding from `t` so its call sites — exclusively
   // upload / attachment toasts — read as a single coherent group when
@@ -631,6 +642,7 @@ export function MessageInput({
       session: t("mentionGroupSession"),
       commit: t("mentionGroupCommit"),
       skill: t("mentionGroupSkill"),
+      image: t("mentionGroupImage"),
     }),
     [t]
   )
@@ -2166,6 +2178,62 @@ export function MessageInput({
     }
   }, [attachmentTabId])
 
+  // ── Image reference attachment (right-click → "引用二次创作" on transcript images) ──
+  useEffect(() => {
+    if (!attachmentTabId) return
+
+    const handleAttachImageRef = (event: Event) => {
+      const customEvent = event as CustomEvent<AttachImageReferenceToSessionDetail>
+      if (!customEvent.detail) return
+      if (customEvent.detail.tabId !== attachmentTabId) return
+      const { imageUrl, alt, skillId, skillLabel } = customEvent.detail
+      const editor = editorRef.current?.getEditor()
+      if (!editor) return
+
+      // Build the image reference badge attrs.
+      const imageRef: ReferenceAttrs = {
+        refType: "image",
+        id: imageUrl,
+        label: alt || imageUrl.split("/").pop() || "参考图片",
+        uri: imageUrl,
+        meta: { imageUrl },
+      }
+
+      let chain = editor.chain().focus("end")
+
+      // Insert the image reference badge.
+      const needsSpace = !editor.isEmpty
+      if (needsSpace) chain = chain.insertContent(" ")
+      chain = chain.insertReference(imageRef).insertContent(" ")
+
+      // If a skillId was provided, also insert a skill reference badge so the
+      // agent picks up the right skill for the image reference.
+      if (skillId) {
+        const skillRef: ReferenceAttrs = {
+          refType: "skill",
+          id: skillId,
+          label: skillLabel || skillId,
+          uri: null,
+          meta: { invocationPrefix: "/" },
+        }
+        chain = chain.insertReference(skillRef).insertContent(" ")
+      }
+
+      chain.run()
+    }
+
+    window.addEventListener(
+      ATTACH_IMAGE_REFERENCE_TO_SESSION_EVENT,
+      handleAttachImageRef
+    )
+    return () => {
+      window.removeEventListener(
+        ATTACH_IMAGE_REFERENCE_TO_SESSION_EVENT,
+        handleAttachImageRef
+      )
+    }
+  }, [attachmentTabId])
+
   useEffect(() => {
     let cancelled = false
     const unlisteners: Array<() => void | Promise<void>> = []
@@ -2646,9 +2714,9 @@ export function MessageInput({
           kind.options.length > MODEL_LIST_VIRTUALIZE_THRESHOLD
         result.push({
           key: `config:${option.id}`,
-          title: option.name,
+          title: localizer.localize(option.name),
           currentValue: kind.current_value,
-          currentLabel: current?.name ?? kind.current_value,
+          currentLabel: localizer.localize(current?.name ?? kind.current_value),
           groups,
           onSelect: (value) => onConfigOptionChange?.(option.id, value),
           ...(searchable && {
@@ -2670,7 +2738,7 @@ export function MessageInput({
         key: "mode",
         title: t("modeLabel"),
         currentValue: effectiveModeId ?? "",
-        currentLabel: selected?.name ?? effectiveModeId ?? "",
+        currentLabel: localizer.localize(selected?.name ?? effectiveModeId ?? ""),
         groups: [
           {
             key: "__modes__",
@@ -2694,6 +2762,7 @@ export function MessageInput({
     effectiveModeId,
     onConfigOptionChange,
     handleModeSelect,
+    localizer,
     t,
   ])
 
@@ -3217,6 +3286,22 @@ export function MessageInput({
                         })()}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {onToggleVision && (
+                    <button
+                      type="button"
+                      onClick={onToggleVision}
+                      className={cn(
+                        "flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors",
+                        visionEnabled
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      title={visionEnabled ? t("visionOn") : t("visionOff")}
+                    >
+                      <Eye className="size-3" />
+                      <span className="hidden @[24rem]:inline">{t("vision")}</span>
+                    </button>
+                  )}
                   {hasInlineSelectors && (
                     <div className="hidden min-w-0 items-end gap-1 @[30rem]:flex">
                       {inlineSelectorItems}

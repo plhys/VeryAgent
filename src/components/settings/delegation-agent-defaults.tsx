@@ -39,6 +39,7 @@ import {
 } from "@/lib/types"
 import { describeAgentOptions } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
+import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 
 // Sentinel `value` slot used by the top "Default" Select item in mode +
 // config-option rows. Picking it clears the override (sets it back to
@@ -335,6 +336,7 @@ function ModeRow({
   disabled,
 }: ModeRowProps) {
   const t = useTranslations("AcpAgentSettings.multiAgent")
+  const localizer = useConfigOptionLocalizer()
   const agentDefaultName =
     modes.find((m) => m.id === agentDefaultModeId)?.name ?? agentDefaultModeId
   // When no override exists, show the Default sentinel so the user can
@@ -346,7 +348,9 @@ function ModeRow({
       <div className="space-y-0.5 min-w-0">
         <label className="text-sm font-medium">{t("modeLabel")}</label>
         <p className="text-xs text-muted-foreground">
-          {t("agentDefaultHint", { value: agentDefaultName })}
+          {t("agentDefaultHint", {
+            value: localizer.localize(agentDefaultName),
+          })}
         </p>
       </div>
       <Select
@@ -359,12 +363,14 @@ function ModeRow({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={DEFAULT_SENTINEL}>
-            {t("defaultOptionLabel", { value: agentDefaultName })}
+            {t("defaultOptionLabel", {
+              value: localizer.localize(agentDefaultName),
+            })}
           </SelectItem>
           {modes.map((mode) => (
-            <SelectItem key={mode.id} value={mode.id}>
-              {mode.name}
-            </SelectItem>
+              <SelectItem key={mode.id} value={mode.id}>
+                {localizer.localize(mode.name)}
+              </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -386,6 +392,7 @@ function ConfigOptionRow({
   disabled,
 }: ConfigOptionRowProps) {
   const t = useTranslations("AcpAgentSettings.multiAgent")
+  const localizer = useConfigOptionLocalizer()
   if (option.kind.type !== "select") return null
 
   const allOptions =
@@ -393,8 +400,9 @@ function ConfigOptionRow({
       ? option.kind.groups.flatMap((g) => g.options)
       : option.kind.options
   const agentDefault = option.kind.current_value
-  const agentDefaultLabel =
+  const agentDefaultName =
     allOptions.find((o) => o.value === agentDefault)?.name ?? agentDefault
+  const agentDefaultLabel = localizer.localize(agentDefaultName)
   // When no override exists, the trigger shows the Default sentinel item
   // so the user can tell "I'm inheriting" apart from "I picked the
   // agent's current default explicitly" — the latter would stick to that
@@ -404,7 +412,7 @@ function ConfigOptionRow({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-0.5 min-w-0">
-        <label className="text-sm font-medium">{option.name}</label>
+        <label className="text-sm font-medium">{localizer.localize(option.name)}</label>
         <p className="text-xs text-muted-foreground">
           {t("agentDefaultHint", { value: agentDefaultLabel })}
         </p>
@@ -424,20 +432,20 @@ function ConfigOptionRow({
           {option.kind.groups.length > 0
             ? option.kind.groups.map((group) => (
                 <SelectGroup key={group.group}>
-                  <SelectLabel>{group.name}</SelectLabel>
+                  <SelectLabel>{localizer.localize(group.name)}</SelectLabel>
                   {group.options.map((item) => (
                     <SelectItem
                       key={`${group.group}-${item.value}`}
                       value={item.value}
                     >
-                      {item.name}
+                      {localizer.localize(item.name)}
                     </SelectItem>
                   ))}
                 </SelectGroup>
               ))
             : option.kind.options.map((item) => (
                 <SelectItem key={item.value} value={item.value}>
-                  {item.name}
+                  {localizer.localize(item.name)}
                 </SelectItem>
               ))}
         </SelectContent>

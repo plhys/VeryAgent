@@ -75,6 +75,10 @@ interface ChatInputProps {
    *  (new-conversation) composer, which sits in a roomy empty state; active and
    *  historical conversations keep the compact default. */
   tall?: boolean
+  /** Whether multimodal vision preprocessing is enabled for this session. */
+  visionEnabled?: boolean
+  /** Toggle multimodal vision preprocessing on/off. */
+  onToggleVision?: () => void
 }
 
 export const ChatInput = memo(function ChatInput({
@@ -118,6 +122,8 @@ export const ChatInput = memo(function ChatInput({
   onInjectConsumed,
   flush = false,
   tall = false,
+  visionEnabled = false,
+  onToggleVision,
 }: ChatInputProps) {
   const t = useTranslations("Folder.chat.chatInput")
   const isConnected = status === "connected"
@@ -177,9 +183,11 @@ export const ChatInput = memo(function ChatInput({
         onForkSend={onForkSend}
         onAddFeedback={onAddFeedback}
         feedbackAddDisabled={feedbackAddDisabled}
-        injectContent={injectContent}
-        onInjectConsumed={onInjectConsumed}
-        placeholder={
+injectContent={injectContent}
+          onInjectConsumed={onInjectConsumed}
+          visionEnabled={visionEnabled}
+          onToggleVision={onToggleVision}
+          placeholder={
           isConnecting
             ? t("connecting")
             : isPrompting

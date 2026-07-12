@@ -3223,6 +3223,30 @@ export async function setSessionInfoSettings(
   return getTransport().call("set_session_info_settings", { settings })
 }
 
+/** Mirror of Rust `VisionBridgeConfigUpdate`. */
+export interface VisionBridgeSettings {
+  enabled: boolean
+  api_url: string
+  api_key: string
+  model_name: string
+  agent_types_list: string[]
+}
+
+/** Mirror of Rust `VisionBridgeConfig` (the full row, including `updated_at`). */
+export interface VisionBridgeConfig extends VisionBridgeSettings {
+  updated_at: string
+}
+
+export async function visionBridgeGetConfig(): Promise<VisionBridgeConfig> {
+  return getTransport().call("vision_bridge_get_config")
+}
+
+export async function visionBridgeSaveConfig(
+  settings: VisionBridgeSettings
+): Promise<VisionBridgeConfig> {
+  return getTransport().call("vision_bridge_save_config", { settings })
+}
+
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what
  * it advertises (modes / config_options), and tears down. Used by the
  * delegation-settings UI so the option set on screen matches exactly what

@@ -131,6 +131,14 @@ export function referenceToMarkdown(attrs: ReferenceAttrs): string {
         ? `[${escapeMarkdownText(text)}](${escapeLinkDestination(attrs.uri)})`
         : inlineText(text)
     }
+    case "image": {
+      // Image references serialize as a Markdown image (`![label](url)`) so
+      // the agent can see the image content via vision or use the URL as a
+      // reference parameter.
+      const text = collapseNewlines(attrs.label || attrs.id)
+      const url = attrs.meta?.imageUrl || attrs.uri || attrs.id
+      return `![${escapeMarkdownText(text)}](${escapeLinkDestination(url)})`
+    }
     default:
       return inlineText(attrs.label || attrs.id)
   }
