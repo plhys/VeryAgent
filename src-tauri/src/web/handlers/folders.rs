@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
 use crate::commands::folders as folder_commands;
+use crate::commands::git;
 use crate::models::*;
 
 #[derive(Deserialize)]
@@ -213,14 +214,14 @@ pub struct PathParams {
 pub async fn get_git_branch(
     Json(params): Json<PathParams>,
 ) -> Result<Json<Option<String>>, AppCommandError> {
-    let result = folder_commands::get_git_branch(params.path).await?;
+    let result = git::get_git_branch(params.path).await?;
     Ok(Json(result))
 }
 
 pub async fn get_git_head(
     Json(params): Json<PathParams>,
-) -> Result<Json<folder_commands::GitHeadInfo>, AppCommandError> {
-    let result = folder_commands::get_git_head(params.path).await?;
+) -> Result<Json<git::GitHeadInfo>, AppCommandError> {
+    let result = git::get_git_head(params.path).await?;
     Ok(Json(result))
 }
 

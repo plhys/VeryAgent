@@ -28,8 +28,10 @@ use crate::acp::InternalEventBus;
 use crate::commands::acp::{build_session_runtime_env, verify_agent_installed};
 use crate::commands::conversations::{create_conversation_core, emit_conversation_upsert};
 use crate::commands::folders::{
-    emit_folder_upsert, get_folder_core, git_checkout, git_is_clean, git_list_branches,
-    git_worktree_add, open_worktree_folder_core, resolve_worktree_folder_core,
+    emit_folder_upsert, get_folder_core, open_worktree_folder_core, resolve_worktree_folder_core,
+};
+use crate::commands::git::{
+    git_checkout, git_is_clean, git_list_branches, git_worktree_add,
 };
 use crate::db::entities::conversation::{self, ConversationStatus};
 use crate::db::service::automation_service;

@@ -10,6 +10,9 @@ use serde_json::{json, Map, Value};
 
 use crate::app_error::AppCommandError;
 
+pub mod adapters;
+use adapters::AgentConfigAdapter;
+
 const MARKETPLACE_OFFICIAL: &str = "official_registry";
 const MARKETPLACE_SMITHERY: &str = "smithery";
 static MARKETPLACE_HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
@@ -598,11 +601,11 @@ fn codex_home_dir() -> PathBuf {
     }
 }
 
-fn claude_config_path() -> PathBuf {
+pub(crate) fn claude_config_path() -> PathBuf {
     home_dir_or_default().join(".claude.json")
 }
 
-fn claude_settings_path() -> PathBuf {
+pub(crate) fn claude_settings_path() -> PathBuf {
     home_dir_or_default().join(".claude").join("settings.json")
 }
 
@@ -611,9 +614,9 @@ fn claude_settings_path() -> PathBuf {
 /// activates a user-scope MCP, `figma@user` does not. The suffix is treated
 /// by Claude Code CLI as a free-form tag identifying the source — `local`
 /// is the conventional value for user-managed entries.
-const CLAUDE_LOCAL_PLUGIN_MARKETPLACE: &str = "local";
+pub(crate) const CLAUDE_LOCAL_PLUGIN_MARKETPLACE: &str = "local";
 
-fn claude_local_plugin_key(id: &str) -> String {
+pub(crate) fn claude_local_plugin_key(id: &str) -> String {
     format!("{id}@{CLAUDE_LOCAL_PLUGIN_MARKETPLACE}")
 }
 
@@ -1419,7 +1422,7 @@ fn canonical_to_codex_entry(spec: &Value) -> Result<toml::Value, AppCommandError
     Ok(toml::Value::Table(table))
 }
 
-fn read_claude_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_claude_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = claude_config_path();
     let root = read_json_file(&path)?;
     let mut out = BTreeMap::new();
@@ -1442,7 +1445,7 @@ fn read_claude_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_claude_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_claude_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = claude_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1470,7 +1473,7 @@ fn upsert_claude_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     enable_claude_local_plugin(id)
 }
 
-fn remove_claude_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_claude_server(id: &str) -> Result<bool, AppCommandError> {
     let path = claude_config_path();
     if !path.exists() {
         // Even if `~/.claude.json` is missing, `enabledPlugins` could still
@@ -1503,7 +1506,7 @@ fn remove_claude_server(id: &str) -> Result<bool, AppCommandError> {
 /// servers from `~/.claude.json.mcpServers` (a server can be defined but
 /// will not load until it appears in this list). Existing fields in the
 /// settings file (env, model, other plugin entries) are preserved.
-fn enable_claude_local_plugin(id: &str) -> Result<(), AppCommandError> {
+pub(crate) fn enable_claude_local_plugin(id: &str) -> Result<(), AppCommandError> {
     let path = claude_settings_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1539,7 +1542,7 @@ fn enable_claude_local_plugin(id: &str) -> Result<(), AppCommandError> {
 /// Remove `<id>@local` from `~/.claude/settings.json.enabledPlugins` if
 /// present. Other entries (including any `<id>@<other-marketplace>` that
 /// the user manages manually) are intentionally left untouched.
-fn disable_claude_local_plugin(id: &str) -> Result<(), AppCommandError> {
+pub(crate) fn disable_claude_local_plugin(id: &str) -> Result<(), AppCommandError> {
     let path = claude_settings_path();
     if !path.exists() {
         return Ok(());
@@ -1576,7 +1579,7 @@ fn codebuddy_settings_path() -> PathBuf {
     home_dir_or_default().join(".codebuddy").join("settings.json")
 }
 
-fn read_codebuddy_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_codebuddy_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = codebuddy_config_path();
     let root = read_json_file(&path)?;
     let mut out = BTreeMap::new();
@@ -1599,7 +1602,7 @@ fn read_codebuddy_servers() -> Result<BTreeMap<String, Value>, AppCommandError> 
     Ok(out)
 }
 
-fn upsert_codebuddy_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_codebuddy_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = codebuddy_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1627,7 +1630,7 @@ fn upsert_codebuddy_server(id: &str, spec: &Value) -> Result<(), AppCommandError
     enable_codebuddy_local_plugin(id)
 }
 
-fn remove_codebuddy_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_codebuddy_server(id: &str) -> Result<bool, AppCommandError> {
     let path = codebuddy_config_path();
     if !path.exists() {
         disable_codebuddy_local_plugin(id)?;
@@ -1654,7 +1657,7 @@ fn remove_codebuddy_server(id: &str) -> Result<bool, AppCommandError> {
 
 /// Add `<id>@local: true` to `~/.codebuddy/settings.json.enabledPlugins`,
 /// mirroring the Claude Code plugin-activation gate that CodeBuddy inherits.
-fn enable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
+pub(crate) fn enable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
     let path = codebuddy_settings_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1686,7 +1689,7 @@ fn enable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
 
 /// Remove `<id>@local` from `~/.codebuddy/settings.json.enabledPlugins` if
 /// present. Other entries are intentionally left untouched.
-fn disable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
+pub(crate) fn disable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
     let path = codebuddy_settings_path();
     if !path.exists() {
         return Ok(());
@@ -1705,7 +1708,7 @@ fn disable_codebuddy_local_plugin(id: &str) -> Result<(), AppCommandError> {
     Ok(())
 }
 
-fn read_codex_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_codex_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let root = read_codex_root_toml()?;
     let Some(table) = root.as_table() else {
         return Ok(BTreeMap::new());
@@ -1747,7 +1750,7 @@ fn read_codex_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_codex_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_codex_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let mut root = read_codex_root_toml()?;
     let table = root
         .as_table_mut()
@@ -1790,7 +1793,7 @@ fn upsert_codex_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     write_codex_root_toml(&root)
 }
 
-fn remove_codex_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_codex_server(id: &str) -> Result<bool, AppCommandError> {
     let path = codex_config_toml_path();
     if !path.exists() {
         return Ok(false);
@@ -1835,7 +1838,7 @@ fn remove_codex_server(id: &str) -> Result<bool, AppCommandError> {
     Ok(removed)
 }
 
-fn read_opencode_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_opencode_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = opencode_config_path();
     let root = read_json_file(&path)?;
 
@@ -1873,7 +1876,7 @@ fn read_opencode_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_opencode_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_opencode_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = opencode_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1910,7 +1913,7 @@ fn upsert_opencode_server(id: &str, spec: &Value) -> Result<(), AppCommandError>
     write_json_file(&path, &root)
 }
 
-fn remove_opencode_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_opencode_server(id: &str) -> Result<bool, AppCommandError> {
     let path = opencode_config_path();
     if !path.exists() {
         return Ok(false);
@@ -1942,7 +1945,7 @@ fn remove_opencode_server(id: &str) -> Result<bool, AppCommandError> {
 // Gemini CLI  (~/.gemini/settings.json  →  mcpServers)
 // ---------------------------------------------------------------------------
 
-fn read_gemini_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_gemini_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = gemini_config_path();
     let root = read_json_file(&path)?;
     let mut out = BTreeMap::new();
@@ -1965,7 +1968,7 @@ fn read_gemini_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_gemini_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_gemini_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = gemini_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -1992,7 +1995,7 @@ fn upsert_gemini_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     write_json_file(&path, &root)
 }
 
-fn remove_gemini_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_gemini_server(id: &str) -> Result<bool, AppCommandError> {
     let path = gemini_config_path();
     if !path.exists() {
         return Ok(false);
@@ -2017,7 +2020,7 @@ fn remove_gemini_server(id: &str) -> Result<bool, AppCommandError> {
 // OpenClaw  (~/.openclaw/openclaw.json  →  mcp.servers)
 // ---------------------------------------------------------------------------
 
-fn read_openclaw_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_openclaw_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = openclaw_config_path();
     let root = read_json_file(&path)?;
     let mut out = BTreeMap::new();
@@ -2043,7 +2046,7 @@ fn read_openclaw_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_openclaw_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_openclaw_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = openclaw_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -2078,7 +2081,7 @@ fn upsert_openclaw_server(id: &str, spec: &Value) -> Result<(), AppCommandError>
     write_json_file(&path, &root)
 }
 
-fn remove_openclaw_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_openclaw_server(id: &str) -> Result<bool, AppCommandError> {
     let path = openclaw_config_path();
     if !path.exists() {
         return Ok(false);
@@ -2112,7 +2115,7 @@ fn remove_openclaw_server(id: &str) -> Result<bool, AppCommandError> {
 // Cline  (~/.cline/data/settings/cline_mcp_settings.json  →  mcpServers)
 // ---------------------------------------------------------------------------
 
-fn read_cline_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_cline_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = cline_config_path();
     let root = read_json_file(&path)?;
     let mut out = BTreeMap::new();
@@ -2135,7 +2138,7 @@ fn read_cline_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     Ok(out)
 }
 
-fn upsert_cline_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_cline_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     let path = cline_config_path();
     let mut root = read_json_file(&path)?;
     if !root.is_object() {
@@ -2162,7 +2165,7 @@ fn upsert_cline_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     write_json_file(&path, &root)
 }
 
-fn remove_cline_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_cline_server(id: &str) -> Result<bool, AppCommandError> {
     let path = cline_config_path();
     if !path.exists() {
         return Ok(false);
@@ -2266,15 +2269,15 @@ fn find_local_server(server_id: &str) -> Result<Option<LocalMcpServer>, AppComma
 
 fn upsert_server_for_app(app: McpAppType, id: &str, spec: &Value) -> Result<(), AppCommandError> {
     match app {
-        McpAppType::ClaudeCode => upsert_claude_server(id, spec),
-        McpAppType::Codex => upsert_codex_server(id, spec),
-        McpAppType::OpenCode => upsert_opencode_server(id, spec),
-        McpAppType::Gemini => upsert_gemini_server(id, spec),
-        McpAppType::OpenClaw => upsert_openclaw_server(id, spec),
-        McpAppType::Cline => upsert_cline_server(id, spec),
-        McpAppType::Hermes => upsert_hermes_server(id, spec),
-        McpAppType::CodeBuddy => upsert_codebuddy_server(id, spec),
-        McpAppType::KimiCode => upsert_kimi_code_server(id, spec),
+        McpAppType::ClaudeCode => adapters::claude::ClaudeAdapter.upsert_server(id, spec),
+        McpAppType::Codex => adapters::codex::CodexAdapter.upsert_server(id, spec),
+        McpAppType::OpenCode => adapters::opencode::OpenCodeAdapter.upsert_server(id, spec),
+        McpAppType::Gemini => adapters::gemini::GeminiAdapter.upsert_server(id, spec),
+        McpAppType::OpenClaw => adapters::openclaw::OpenClawAdapter.upsert_server(id, spec),
+        McpAppType::Cline => adapters::cline::ClineAdapter.upsert_server(id, spec),
+        McpAppType::Hermes => adapters::hermes::HermesAdapter.upsert_server(id, spec),
+        McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.upsert_server(id, spec),
+        McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.upsert_server(id, spec),
     }
 }
 
@@ -2283,15 +2286,15 @@ pub fn read_servers_for_agent_type(
 ) -> Result<BTreeMap<String, Value>, AppCommandError> {
     use crate::models::agent::AgentType;
     match agent_type {
-        AgentType::ClaudeCode => read_claude_servers(),
-        AgentType::Codex => read_codex_servers(),
-        AgentType::OpenCode => read_opencode_servers(),
-        AgentType::Gemini => read_gemini_servers(),
-        AgentType::OpenClaw => read_openclaw_servers(),
-        AgentType::Cline => read_cline_servers(),
-        AgentType::Hermes => read_hermes_servers(),
-        AgentType::CodeBuddy => read_codebuddy_servers(),
-        AgentType::KimiCode => read_kimi_code_servers(),
+        AgentType::ClaudeCode => adapters::claude::ClaudeAdapter.read_servers(),
+        AgentType::Codex => adapters::codex::CodexAdapter.read_servers(),
+        AgentType::OpenCode => adapters::opencode::OpenCodeAdapter.read_servers(),
+        AgentType::Gemini => adapters::gemini::GeminiAdapter.read_servers(),
+        AgentType::OpenClaw => adapters::openclaw::OpenClawAdapter.read_servers(),
+        AgentType::Cline => adapters::cline::ClineAdapter.read_servers(),
+        AgentType::Hermes => adapters::hermes::HermesAdapter.read_servers(),
+        AgentType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.read_servers(),
+        AgentType::KimiCode => adapters::kimi_code::KimiCodeAdapter.read_servers(),
         // pi-acp drops ACP-wire MCP and pi has no native MCP (it needs a
         // third-party extension), so veryagent manages no MCP servers for pi (v1).
         AgentType::Pi => Ok(BTreeMap::new()),
@@ -2317,7 +2320,7 @@ fn kimi_code_mcp_json_path() -> PathBuf {
     crate::parsers::kimi_code::resolve_kimi_code_home_dir().join("mcp.json")
 }
 
-fn read_kimi_code_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_kimi_code_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     read_kimi_code_servers_at(&kimi_code_mcp_json_path())
 }
 
@@ -2343,7 +2346,7 @@ fn read_kimi_code_servers_at(path: &Path) -> Result<BTreeMap<String, Value>, App
     Ok(out)
 }
 
-fn upsert_kimi_code_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_kimi_code_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     upsert_kimi_code_server_at(&kimi_code_mcp_json_path(), id, spec)
 }
 
@@ -2377,7 +2380,7 @@ fn upsert_kimi_code_server_at(
     write_json_file(path, &root)
 }
 
-fn remove_kimi_code_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_kimi_code_server(id: &str) -> Result<bool, AppCommandError> {
     remove_kimi_code_server_at(&kimi_code_mcp_json_path(), id)
 }
 
@@ -2517,7 +2520,7 @@ fn canonical_to_hermes_entry(spec: &Value) -> Result<serde_yaml::Value, AppComma
 /// Read Hermes' MCP servers from `~/.hermes/config.yaml` (`mcp_servers`). A
 /// missing or unparseable config.yaml surfaces no servers rather than failing
 /// the whole MCP scan — the file is large and user-owned.
-fn read_hermes_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+pub(crate) fn read_hermes_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
     let path = crate::commands::acp::hermes_config_yaml_path();
     let Ok(raw) = fs::read_to_string(&path) else {
         return Ok(BTreeMap::new());
@@ -2557,7 +2560,7 @@ fn read_hermes_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
 /// Note: like the structured model save, this round-trips config.yaml through
 /// serde_yaml and so drops comments — consistent with veryagent's existing Hermes
 /// config edits.
-fn upsert_hermes_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+pub(crate) fn upsert_hermes_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
     use serde_yaml::{Mapping, Value as Yaml};
     let entry = canonical_to_hermes_entry(spec)?;
     let path = crate::commands::acp::hermes_config_yaml_path();
@@ -2605,7 +2608,7 @@ fn upsert_hermes_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
 }
 
 /// Remove a Hermes MCP server from `~/.hermes/config.yaml` (`mcp_servers`).
-fn remove_hermes_server(id: &str) -> Result<bool, AppCommandError> {
+pub(crate) fn remove_hermes_server(id: &str) -> Result<bool, AppCommandError> {
     use serde_yaml::Value as Yaml;
     let path = crate::commands::acp::hermes_config_yaml_path();
     let raw = match fs::read_to_string(&path) {
@@ -2646,15 +2649,15 @@ fn remove_hermes_server(id: &str) -> Result<bool, AppCommandError> {
 
 fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, AppCommandError> {
     match app {
-        McpAppType::ClaudeCode => remove_claude_server(id),
-        McpAppType::Codex => remove_codex_server(id),
-        McpAppType::OpenCode => remove_opencode_server(id),
-        McpAppType::Gemini => remove_gemini_server(id),
-        McpAppType::OpenClaw => remove_openclaw_server(id),
-        McpAppType::Cline => remove_cline_server(id),
-        McpAppType::Hermes => remove_hermes_server(id),
-        McpAppType::CodeBuddy => remove_codebuddy_server(id),
-        McpAppType::KimiCode => remove_kimi_code_server(id),
+        McpAppType::ClaudeCode => adapters::claude::ClaudeAdapter.remove_server(id),
+        McpAppType::Codex => adapters::codex::CodexAdapter.remove_server(id),
+        McpAppType::OpenCode => adapters::opencode::OpenCodeAdapter.remove_server(id),
+        McpAppType::Gemini => adapters::gemini::GeminiAdapter.remove_server(id),
+        McpAppType::OpenClaw => adapters::openclaw::OpenClawAdapter.remove_server(id),
+        McpAppType::Cline => adapters::cline::ClineAdapter.remove_server(id),
+        McpAppType::Hermes => adapters::hermes::HermesAdapter.remove_server(id),
+        McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.remove_server(id),
+        McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.remove_server(id),
     }
 }
 

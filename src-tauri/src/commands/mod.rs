@@ -12,6 +12,7 @@ pub mod feedback;
 pub mod file_io;
 pub mod folder_commands;
 pub mod folders;
+pub mod git;
 pub mod logging;
 pub mod mcp;
 pub mod model_provider;
