@@ -2,13 +2,13 @@
 #
 # VeryAgent Server installer
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash -s -- --version v0.5.0
+#   curl -fsSL https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.sh | bash -s -- --version v0.5.0
 #
 
 set -euo pipefail
 
-REPO="plhys/veryagent-plus"
+REPO="veryagent-plus/veryagent"
 INSTALL_DIR="${VERYAGENT_INSTALL_DIR:-/usr/local/bin}"
 WEB_DIR="${VERYAGENT_WEB_DIR:-/usr/local/share/veryagent/web}"
 VERSION=""

@@ -5,14 +5,6 @@ declare module "next-intl" {
     Locale:
       | "en"
       | "zh-CN"
-      | "zh-TW"
-      | "ja"
-      | "ko"
-      | "es"
-      | "de"
-      | "fr"
-      | "pt"
-      | "ar"
     Messages: typeof enMessages
   }
 }

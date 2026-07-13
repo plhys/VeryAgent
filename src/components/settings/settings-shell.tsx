@@ -9,7 +9,6 @@ import {
 } from "react"
 import {
   Bot,
-  BookOpenText,
   Eye,
   FileSpreadsheet,
   GitBranch,
@@ -43,8 +42,7 @@ interface SettingsNavItem {
     | "appearance"
     | "agents"
     | "model_providers"
-    | "mcp"
-    | "skills"
+    | "plugin_config"
     | "experts"
     | "office_tools"
     | "quick_messages"
@@ -71,18 +69,13 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   },
   {
     href: "/settings/mcp",
-    labelKey: "mcp",
+    labelKey: "plugin_config",
     icon: PlugZap,
   },
   {
     href: "/settings/vision-bridge",
     labelKey: "vision_bridge",
     icon: Eye,
-  },
-  {
-    href: "/settings/skills",
-    labelKey: "skills",
-    icon: BookOpenText,
   },
   {
     href: "/settings/agents",

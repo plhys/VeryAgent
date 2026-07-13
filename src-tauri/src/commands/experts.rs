@@ -99,7 +99,7 @@ pub struct ExpertListItem {
 #[serde(rename_all = "snake_case")]
 pub enum ExpertLinkState {
     NotLinked,
-    LinkedToCodeg,
+    LinkedToApp,
     LinkedElsewhere,
     BlockedByRealDirectory,
     Broken,
@@ -517,7 +517,7 @@ pub(crate) fn classify_link(link_path: &Path, expected_target: &Path) -> ExpertL
 
     match (resolved_link, resolved_expected) {
         (None, _) => ExpertLinkState::Broken,
-        (Some(l), Some(e)) if paths_equivalent(&l, &e) => ExpertLinkState::LinkedToCodeg,
+        (Some(l), Some(e)) if paths_equivalent(&l, &e) => ExpertLinkState::LinkedToApp,
         _ => ExpertLinkState::LinkedElsewhere,
     }
 }
@@ -822,7 +822,7 @@ fn link_one_locked(
         Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
             // Already exists — figure out what kind.
             match classify_link(&link_path, &central) {
-                ExpertLinkState::LinkedToCodeg => {
+                ExpertLinkState::LinkedToApp => {
                     // Idempotent success.
                 }
                 ExpertLinkState::BlockedByRealDirectory => {
@@ -910,7 +910,7 @@ fn unlink_one_locked(expert_id: &str, agent_type: AgentType) -> Result<(), Exper
         let state = classify_link(&candidate, &central);
         if matches!(
             state,
-            ExpertLinkState::LinkedToCodeg
+            ExpertLinkState::LinkedToApp
                 | ExpertLinkState::Broken
                 | ExpertLinkState::LinkedElsewhere
         ) {

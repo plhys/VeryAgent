@@ -968,7 +968,7 @@ pub async fn officecli_uninstall() -> Result<OfficecliInfo, OfficeToolsError> {
                 }
                 let state = classify_link(&candidate, &central);
                 let should_remove = match state {
-                    ExpertLinkState::LinkedToCodeg => true,
+                    ExpertLinkState::LinkedToApp => true,
                     ExpertLinkState::Broken => {
                         // Only remove broken links whose target was our
                         // central skill dir (not user-owned danglers).
@@ -1142,7 +1142,7 @@ fn link_one_locked(
         }
         Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
             match classify_link(&link_path, &central) {
-                ExpertLinkState::LinkedToCodeg => {}
+                ExpertLinkState::LinkedToApp => {}
                 ExpertLinkState::BlockedByRealDirectory => {
                     return Err(OfficeToolsError::NameCollision {
                         path: link_path.to_string_lossy().to_string(),
@@ -1221,7 +1221,7 @@ fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), Office
         }
         let state = classify_link(&candidate, &central);
         let should_remove = match state {
-            ExpertLinkState::LinkedToCodeg
+            ExpertLinkState::LinkedToApp
             | ExpertLinkState::Broken
             | ExpertLinkState::LinkedElsewhere => {
                 // Remove links to our central store, dangling links, and stale

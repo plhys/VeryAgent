@@ -1,7 +1,7 @@
 #
 # VeryAgent Server installer for Windows
 # Usage:
-#   irm https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.ps1 | iex
 #   .\install.ps1 -Version v0.5.0
 #
 
@@ -12,7 +12,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "plhys/veryagent-plus"
+$Repo = "veryagent-plus/veryagent"
 $Artifact = "veryagent-server-windows-x64"
 
 # Names of binaries this installer manages. veryagent-server is the user-facing

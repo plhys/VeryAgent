@@ -1,7 +1,7 @@
 # VeryAgent
 
-[![Release](https://img.shields.io/github/v/release/plhys/veryagent-plus)](https://github.com/plhys/veryagent-plus/releases)
-[![License](https://img.shields.io/github/license/plhys/veryagent-plus)](../../LICENSE)
+[![Release](https://img.shields.io/github/v/release/veryagent-plus/veryagent)](https://github.com/veryagent-plus/veryagent/releases)
+[![License](https://img.shields.io/github/license/veryagent-plus/veryagent)](../../LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED)](../../Dockerfile)
@@ -254,13 +254,13 @@ VeryAgent 可以作为独立 Web 服务器运行，无需桌面环境。
 #### 方式一：一键安装（Linux / macOS）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.sh | bash
 ```
 
 安装指定版本或到自定义目录：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.sh | bash -s -- --version v0.5.2 --dir ~/.local/bin
 ```
 
 然后运行：
@@ -272,7 +272,7 @@ veryagent-server
 #### 方式二：一键安装（Windows PowerShell）
 
 ```powershell
-irm https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/veryagent-plus/veryagent/main/install.ps1 | iex
 ```
 
 或安装指定版本：
@@ -283,7 +283,7 @@ irm https://raw.githubusercontent.com/plhys/veryagent-plus/main/install.ps1 | ie
 
 #### 方式三：从 GitHub Releases 下载
 
-预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/plhys/veryagent-plus/releases) 页面下载：
+预构建二进制文件（已打包 Web 前端资源）可在 [Releases](https://github.com/veryagent-plus/veryagent/releases) 页面下载：
 
 | 平台        | 文件                               |
 | ----------- | ---------------------------------- |
@@ -307,14 +307,14 @@ VERYAGENT_STATIC_DIR=./web ./veryagent-server
 docker compose up -d
 
 # 或直接使用 Docker 运行
-docker run -d -p 3080:3080 -v veryagent-data:/data ghcr.io/plhys/veryagent-plus:latest
+docker run -d -p 3080:3080 -v veryagent-data:/data ghcr.io/veryagent-plus/veryagent:latest
 
 # 自定义令牌并挂载项目目录
 docker run -d -p 3080:3080 \
   -v veryagent-data:/data \
   -v /path/to/projects:/projects \
   -e VERYAGENT_TOKEN=your-secret-token \
-  ghcr.io/plhys/veryagent-plus:latest
+  ghcr.io/veryagent-plus/veryagent:latest
 ```
 
 Docker 镜像采用多阶段构建（Node.js + Rust → 精简 Debian 运行时），内置 `git` 和 `ssh` 以支持仓库操作。数据持久化存储在 `/data` 卷中。可选挂载项目目录以从容器内访问本地仓库。

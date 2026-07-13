@@ -344,7 +344,7 @@ hideFolderSections?: boolean
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/plhys/veryagent-plus.git
+git clone https://github.com/veryagent-plus/veryagent.git
 cd veryagent-plus
 ```
 

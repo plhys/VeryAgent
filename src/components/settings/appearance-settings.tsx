@@ -13,17 +13,12 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  useThemeColor,
   useZoomLevel,
   useWelcomeQuickActions,
 } from "@/hooks/use-appearance"
-import { cn } from "@/lib/utils"
 import {
   DEFAULT_ZOOM_LEVEL,
-  THEME_COLOR_PREVIEW,
-  THEME_COLORS,
   ZOOM_LEVELS,
-  type ThemeColor,
   type ZoomLevel,
 } from "@/lib/theme-presets"
 import { PetManagerSection } from "./pet-manager-section"
@@ -34,7 +29,7 @@ type ThemeMode = "system" | "light" | "dark"
 export function AppearanceSettings() {
   const t = useTranslations("AppearanceSettings")
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const { themeColor, setThemeColor } = useThemeColor()
+  // Theme color is fixed to "neutral" — no UI picker needed
   const { zoomLevel, setZoomLevel } = useZoomLevel()
   const { showWelcomeQuickActions, setShowWelcomeQuickActions } =
     useWelcomeQuickActions()
@@ -109,58 +104,6 @@ export function AppearanceSettings() {
               {t("currentTheme", { theme: resolvedThemeLabel })}
             </p>
           </div>
-        </section>
-
-        {/* ===== Theme Color ===== */}
-        <section className="rounded-xl border bg-card p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <span
-              className="size-4 rounded-full border"
-              style={{ backgroundColor: THEME_COLOR_PREVIEW[themeColor] }}
-              aria-hidden
-            />
-            <h2 className="text-sm font-semibold">
-              {t("themeColor.sectionTitle")}
-            </h2>
-          </div>
-
-          <p className="text-xs text-muted-foreground leading-5">
-            {t("themeColor.sectionDescription")}
-          </p>
-
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            {THEME_COLORS.map((color) => {
-              const isActive = themeColor === color
-              return (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setThemeColor(color as ThemeColor)}
-                  aria-pressed={isActive}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    isActive && "border-primary ring-2 ring-primary/30"
-                  )}
-                >
-                  <span
-                    className="size-4 shrink-0 rounded-full border"
-                    style={{ backgroundColor: THEME_COLOR_PREVIEW[color] }}
-                    aria-hidden
-                  />
-                  <span className="truncate">
-                    {t(`themeColor.options.${color}`)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          <p className="text-[11px] text-muted-foreground">
-            {t("themeColor.current", {
-              color: t(`themeColor.options.${themeColor}`),
-            })}
-          </p>
         </section>
 
         {/* ===== Zoom Level ===== */}

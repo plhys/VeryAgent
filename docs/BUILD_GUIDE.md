@@ -318,7 +318,7 @@ docker run -d -p 3080:3080 \
   -v veryagent-data:/data \
   -v /path/to/projects:/projects \
   -e VERYAGENT_TOKEN=your-secret-token \
-  ghcr.io/plhys/veryagent-plus:latest
+  ghcr.io/veryagent-plus/veryagent:latest
 ```
 
 ---

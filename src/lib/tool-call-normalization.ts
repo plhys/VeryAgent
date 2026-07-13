@@ -65,14 +65,17 @@ const EXACT_TOOL_NAME_ALIASES: Record<string, string> = {
   delegate_to_agent: "delegate_to_agent",
   "mcp__veryagent-mcp__delegate_to_agent": "delegate_to_agent",
   "mcp__veryagent-delegate__delegate_to_agent": "delegate_to_agent",
+  // Legacy codeg namespace (backward compat for older sidecar builds)
   mcp__codeg__delegate_to_agent: "delegate_to_agent",
   get_delegation_status: "get_delegation_status",
   cancel_delegation: "cancel_delegation",
   // veryagent-mcp live-feedback poll (server prefix varies by host; the suffix rule
   // in `normalizeToolName` covers the other separators). Codex persists it under
-  // the bare `check_user_feedback` name, dropping the `mcp__codeg_mcp` namespace.
+  // the bare `check_user_feedback` name, dropping the `mcp__veryagent_mcp` namespace
+  // (legacy builds used `mcp__codeg_mcp`).
   check_user_feedback: "check_user_feedback",
   "mcp__veryagent-mcp__check_user_feedback": "check_user_feedback",
+  // Legacy codeg namespace (backward compat for older sidecar builds)
   mcp__codeg__check_user_feedback: "check_user_feedback",
   // OpenCode
   delegate_task: "task",

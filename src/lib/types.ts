@@ -1632,14 +1632,6 @@ export interface SystemProxySettings {
 export type AppLocale =
   | "en"
   | "zh_cn"
-  | "zh_tw"
-  | "ja"
-  | "ko"
-  | "es"
-  | "de"
-  | "fr"
-  | "pt"
-  | "ar"
 export type LanguageMode = "system" | "manual"
 
 export interface SystemLanguageSettings {

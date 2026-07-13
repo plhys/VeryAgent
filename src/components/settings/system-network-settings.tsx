@@ -107,6 +107,7 @@ export function SystemNetworkSettings() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [sourceUnreachable, setSourceUnreachable] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null)
   // Server/Docker self-update capability reported by `check_app_update`
   // (absent in desktop mode). Drives whether the upgrade button performs a
@@ -183,14 +184,6 @@ export function SystemNetworkSettings() {
     () => ({
       en: tLanguage("english"),
       zh_cn: tLanguage("simplifiedChinese"),
-      zh_tw: tLanguage("traditionalChinese"),
-      ja: tLanguage("japanese"),
-      ko: tLanguage("korean"),
-      es: tLanguage("spanish"),
-      de: tLanguage("german"),
-      fr: tLanguage("french"),
-      pt: tLanguage("portuguese"),
-      ar: tLanguage("arabic"),
     }),
     [tLanguage]
   )
@@ -342,14 +335,22 @@ export function SystemNetworkSettings() {
   // A failure inside the detached backend download/install task lands in the
   // shared update state rather than as a thrown error here, so surface it the
   // same way as a check error — and it stays visible after navigating back.
+  // source_unreachable errors are shown as a gentle hint, not a red error.
   const lifecycleError =
     updateState.status === "error" && updateState.error
-      ? formatUpdateError(updateState.error, "install")
+      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
+        ? null
+        : formatUpdateError(updateState.error, "install")
       : null
+  const lifecycleSourceUnreachable =
+    updateState.status === "error" && updateState.error
+      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
+      : false
 
   const checkForUpdates = useCallback(async () => {
     setCheckingUpdate(true)
     setUpdateError(null)
+    setSourceUnreachable(false)
 
     try {
       const previousUpdate = availableUpdate
@@ -374,10 +375,21 @@ export function SystemNetworkSettings() {
         await closeAppUpdate(previousUpdate)
       }
     } catch (err) {
-      const message = formatUpdateError(err, "check")
-      setUpdateError(message)
-      toast.error(t("checkUpdateFailed", { message }))
-      console.error("[Settings] check app update failed:", err)
+      const { kind } = normalizeAppUpdateError(err)
+      // "source_unreachable" means the update server has no published
+      // release yet (or the endpoint is misconfigured). This is expected
+      // before the first release is published — surface it as a gentle
+      // inline hint instead of a red error block.
+      if (kind === "source_unreachable") {
+        setUpdateError(null)
+        setSourceUnreachable(true)
+        console.info("[Settings] update source unreachable (no release published yet)")
+      } else {
+        const message = formatUpdateError(err, "check")
+        setUpdateError(message)
+        toast.error(t("checkUpdateFailed", { message }))
+        console.error("[Settings] check app update failed:", err)
+      }
     } finally {
       setCheckingUpdate(false)
     }
@@ -447,7 +459,7 @@ export function SystemNetworkSettings() {
             <Button
               variant="ghost"
               className="size-5 rounded-full"
-              onClick={() => openUrl("https://github.com/plhys/veryagent-plus")}
+              onClick={() => openUrl("https://github.com/veryagent-plus/veryagent")}
             >
               <GithubMarkIcon className="size-5" />
             </Button>
@@ -528,7 +540,7 @@ export function SystemNetworkSettings() {
                     size="sm"
                     onClick={() =>
                       openUrl(
-                        "https://github.com/plhys/veryagent-plus/releases/latest"
+                        "https://github.com/veryagent-plus/veryagent/releases/latest"
                       )
                     }
                   >
@@ -683,6 +695,11 @@ export function SystemNetworkSettings() {
               })}
             </div>
           )}
+          {(sourceUnreachable || lifecycleSourceUnreachable) && !updateError && !lifecycleError && (
+            <p className="text-xs text-muted-foreground">
+              {t("updateErrors.sourceUnavailable")}
+            </p>
+          )}
         </section>
 
         <section className="rounded-xl border bg-card p-4 space-y-4">
@@ -790,14 +807,6 @@ export function SystemNetworkSettings() {
                 </SelectItem>
                 <SelectItem value="en">{languageLabels.en}</SelectItem>
                 <SelectItem value="zh_cn">{languageLabels.zh_cn}</SelectItem>
-                <SelectItem value="zh_tw">{languageLabels.zh_tw}</SelectItem>
-                <SelectItem value="ja">{languageLabels.ja}</SelectItem>
-                <SelectItem value="ko">{languageLabels.ko}</SelectItem>
-                <SelectItem value="es">{languageLabels.es}</SelectItem>
-                <SelectItem value="de">{languageLabels.de}</SelectItem>
-                <SelectItem value="fr">{languageLabels.fr}</SelectItem>
-                <SelectItem value="pt">{languageLabels.pt}</SelectItem>
-                <SelectItem value="ar">{languageLabels.ar}</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -2,7 +2,7 @@ services:
   veryagent:
     build: .
     # Or use a pre-built image:
-    # image: plhys/veryagent-plus:latest
+    # image: veryagent-plus/veryagent:latest
     ports:
       - "3080:3080"
     volumes:
