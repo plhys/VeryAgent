@@ -32,6 +32,10 @@ import {
   acpFindConnectionForConversation,
 } from "@/lib/api"
 import { denormalizeSnapshot } from "@/lib/snapshot-denormalize"
+import {
+  getConversationIdByExternalIdFromStore,
+  useConversationRuntimeStore,
+} from "@/stores/conversation-runtime-store"
 import { buildDelegationSeedEnvelopes } from "@/lib/delegation-seed"
 import type {
   AgentType,
@@ -253,6 +257,14 @@ export interface ConnectionState {
    * the snapshot — dismissal is per-client UI state.
    */
   configStaleDismissed: boolean
+  /** Launched-but-unresolved background tasks (async sub-agents + background
+   *  shell tasks), accounted from transcript acks by the backend watcher.
+   *  Mirrored into `SessionState` to exempt the connection from idle sweeps
+   *  while work is pending. */
+  backgroundOutstanding: number
+  /** Timestamp (epoch ms) when the outstanding count last dropped to zero with
+   *  settle-syncing still in progress. Drives the "syncing results" chip. */
+  backgroundSettleSyncingSince: number | null
 }
 
 type ConnectRequest = {
@@ -460,6 +472,13 @@ type Action =
       type: "USAGE_UPDATE"
       contextKey: string
       usage: SessionUsageUpdateInfo
+    }
+  | {
+      type: "SET_BACKGROUND_OUTSTANDING"
+      contextKey: string
+      outstanding: number
+      settledCount: number
+      turnsCount: number
     }
   | {
       type: "EVENT_APPLIED"
@@ -988,6 +1007,14 @@ function applyStreamingAction(
   }
 }
 
+/// Overlay fold constants: when background overlay turns exceed the threshold,
+/// refetch detail to fold them into persisted turns (the watermark rule retires
+/// covered entries). Guarded by interval so a failing backend can't turn this
+/// into a 1Hz fetch loop.
+const OVERLAY_FOLD_THRESHOLD = 60
+const OVERLAY_FOLD_MIN_INTERVAL_MS = 30_000
+const overlayFoldRefetchAt = new Map<number, number>()
+
 function connectionsReducer(
   state: ConnectionsMap,
   action: Action
@@ -1029,6 +1056,8 @@ function connectionsReducer(
         configStale: false,
         configStaleKind: null,
         configStaleDismissed: false,
+        backgroundOutstanding: 0,
+        backgroundSettleSyncingSince: null,
       })
       return next
     }
@@ -1082,6 +1111,8 @@ function connectionsReducer(
         configStale: false,
         configStaleKind: null,
         configStaleDismissed: false,
+        backgroundOutstanding: 0,
+        backgroundSettleSyncingSince: null,
       })
       return next
     }
@@ -1183,6 +1214,7 @@ function connectionsReducer(
         // preserved via `...current`.
         configStale: action.patch.configStale,
         configStaleKind: action.patch.configStaleKind,
+        backgroundOutstanding: action.patch.backgroundOutstanding,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next
@@ -1720,6 +1752,35 @@ function connectionsReducer(
       next.set(action.contextKey, {
         ...conn,
         configStaleDismissed: true,
+      })
+      return next
+    }
+
+    case "SET_BACKGROUND_OUTSTANDING": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      // Settle-syncing bridge: a settlement means the agent's reaction turn
+      // is being generated (the task-notification always triggers one) — arm
+      // the indicator. The first turns-only event is that reaction arriving —
+      // disarm. An event carrying BOTH (reaction to task A + settlement of
+      // task B) re-arms: another reaction is still pending.
+      const syncingSince =
+        action.settledCount > 0
+          ? Date.now()
+          : action.turnsCount > 0
+            ? null
+            : conn.backgroundSettleSyncingSince
+      if (
+        conn.backgroundOutstanding === action.outstanding &&
+        conn.backgroundSettleSyncingSince === syncingSince
+      ) {
+        return state
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        backgroundOutstanding: action.outstanding,
+        backgroundSettleSyncingSince: syncingSince,
       })
       return next
     }
@@ -2797,6 +2858,97 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           })
           break
         }
+        case "background_activity": {
+          // Out-of-turn transcript activity from the backend watcher: async
+          // task completions, the agent's continued work after them, cron//
+          // loop turns. Three consumers:
+          // 1. the outstanding mirror (idle-sweep exemption + chip) plus the
+          //    settle-syncing bridge inputs;
+          dispatch({
+            type: "SET_BACKGROUND_OUTSTANDING",
+            contextKey,
+            outstanding: e.outstanding,
+            settledCount: e.settled?.length ?? 0,
+            turnsCount: e.turns?.length ?? 0,
+          })
+          // 2. overlay turns → the conversation runtime store (resolved via
+          //    the external-id index; unresolved = this conversation was never
+          //    opened in this client, and its cold detail fetch covers it);
+          if (e.turns && e.turns.length > 0) {
+            const conversationId = getConversationIdByExternalIdFromStore(
+              e.session_id
+            )
+            if (conversationId != null) {
+              const runtime = useConversationRuntimeStore.getState()
+              runtime.actions.applyBackgroundActivity(
+                conversationId,
+                e.turns,
+                e.watermark
+              )
+              // Self-healing bound: cron//loop turns never settle, so nothing
+              // else would ever refetch — the overlay would grow for as long
+              // as the tab stays open. Past the threshold, fold what's
+              // accumulated into persisted turns (the watermark rule retires
+              // covered entries). Guarded by the in-flight flag and a
+              // per-conversation interval so a failing backend can't turn
+              // this into a 1Hz fetch loop.
+              const session = useConversationRuntimeStore
+                .getState()
+                .byConversationId.get(conversationId)
+              const now = Date.now()
+              const lastAt = overlayFoldRefetchAt.get(conversationId) ?? 0
+              if (
+                session &&
+                session.backgroundTurns.length > OVERLAY_FOLD_THRESHOLD &&
+                !session.detailLoading &&
+                now - lastAt > OVERLAY_FOLD_MIN_INTERVAL_MS
+              ) {
+                overlayFoldRefetchAt.set(conversationId, now)
+                const oc = storeRef.current.connections.get(contextKey)
+                runtime.actions.refetchDetail(conversationId, {
+                  preserveLive: oc?.status === "prompting",
+                })
+              }
+            }
+          }
+          // 3. one OS notification per settled task (matches the permission
+          //    notification's shape; `document.hidden` gating lives inside
+          //    sendSystemNotification).
+          if (e.settled && e.settled.length > 0) {
+            const nc = storeRef.current.connections.get(contextKey)
+            const agentLabel = nc ? AGENT_LABELS[nc.agentType] : "Agent"
+            const fn = folderNameRef.current
+            const title = fn ? `${fn} - VeryAgent` : "VeryAgent"
+            for (const settled of e.settled) {
+              const body =
+                settled.summary ??
+                tChat("backgroundTasks.settledFallback", {
+                  status: settled.status,
+                })
+              sendSystemNotification(title, `${agentLabel}: ${body}`).catch(
+                () => {}
+              )
+            }
+            // 4. fold the settlement into persisted turns: a refetch flips
+            //    the launching card from "result pending" to its terminal
+            //    state (the parser joins the ack with the notification) and
+            //    retires covered overlay turns via the watermark rule. Rare
+            //    (once per task settling), so a full detail parse is fine.
+            //    preserveLive while a foreground turn is in flight so the
+            //    refetch can't clobber the streaming buffers it races.
+            const conversationId = getConversationIdByExternalIdFromStore(
+              e.session_id
+            )
+            if (conversationId != null) {
+              useConversationRuntimeStore
+                .getState()
+                .actions.refetchDetail(conversationId, {
+                  preserveLive: nc?.status === "prompting",
+                })
+            }
+          }
+          break
+        }
         case "selectors_ready": {
           flushStreamingQueue()
           dispatch({
@@ -2983,6 +3135,10 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             switch (e.code) {
               case "resource_not_found":
                 return t("backendErrors.sessionLoadResourceNotFound", {
+                  agent: agentLabel,
+                })
+              case "session_unavailable":
+                return t("backendErrors.sessionLoadUnavailable", {
                   agent: agentLabel,
                 })
               default:
@@ -3347,6 +3503,12 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // would kill another client's agent. The viewer is torn down when its
         // tab unmounts (disconnect's isViewer branch detaches it).
         if (conn.isViewer) continue
+        // Launched-but-unresolved background work (async sub-agent /
+        // background shell): disconnecting would kill the agent CLI and the
+        // background task with it. The backend watcher settles or max-age
+        // expires the accounting and emits `outstanding: 0`, which re-arms
+        // this sweep for the connection.
+        if (conn.backgroundOutstanding > 0) continue
         const lastActive = lastActivityRef.current.get(contextKey) ?? 0
         if (now - lastActive > CONNECTION_IDLE_TIMEOUT_MS) {
           toDisconnect.push({

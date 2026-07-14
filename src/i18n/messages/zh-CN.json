@@ -49,6 +49,7 @@
       "model_providers": "模型供应商",
       "experts": "专家",
       "office_tools": "办公工具",
+      "skill_packs": "技能包",
       "quick_messages": "快捷消息",
       "logs": "运行日志",
       "vision_bridge": "多模态路由"
@@ -2018,6 +2019,7 @@
           "spawnFailed": "启动 {agent} 失败：{message}",
           "downloadFailed": "{agent} 下载失败：{message}",
           "sessionLoadResourceNotFound": "{agent} 会话加载失败，可重新加载重试，或开始新会话。",
+          "sessionLoadUnavailable": "{agent} 无法恢复此会话 — 会话可能已结束或 Agent 已停止。可重新加载重试，或开始新会话。",
           "turnFailedRefusal": "{agent} 拒绝继续本轮回复，通常意味着后端或网关出错，请检查代理日志。",
           "turnFailedMaxTokens": "{agent} 已达到本轮回复的最大 Token 限制。",
           "turnFailedMaxTurnRequests": "{agent} 已达到本轮回复允许的最大请求次数。",
@@ -2103,8 +2105,27 @@
         "slashSearchEmpty": "没有匹配的命令",
         "experts": "专家",
         "office": "日常办公",
+        "research": "科学研究",
         "addExpertSkill": "添加专家技能",
         "addOfficeSkill": "添加办公技能",
+        "expertCatDiscovery": "发现与设计",
+        "expertCatPlanning": "规划",
+        "expertCatExecution": "执行",
+        "expertCatQuality": "质量与测试",
+        "expertCatDebugging": "调试",
+        "expertCatReview": "评审与集成",
+        "expertCatMeta": "元技能",
+        "expertCatCreative": "创意与出图",
+        "scienceCatIdeation": "构思",
+        "scienceCatDesign": "研究设计",
+        "scienceCatAnalysis": "分析",
+        "scienceCatVisualization": "可视化",
+        "scienceCatEvaluation": "评估",
+        "scienceCatLiterature": "文献",
+        "officeCatGeneral": "通用",
+        "officeCatPresentations": "演示文稿",
+        "officeCatDocuments": "文档",
+        "officeCatSpreadsheets": "电子表格",
         "attachUploadTooLarge": "{names} 超过 {limit}MB 上传上限，已跳过。",
         "attachUploadFailed": "上传失败：{names}。",
         "attachUploadNotAFile": "{names} 不是常规文件（目录或特殊文件），已跳过。",
@@ -2193,12 +2214,42 @@
           },
           "tabs": {
             "office": "日常办公",
-            "coding": "代码开发"
+            "coding": "代码开发",
+            "research": "科学研究"
           },
           "coding": {
             "brainstormingDesc": "动手前先梳理意图与需求",
             "debuggingDesc": "先定位根因再提出修复",
             "writingSkillsDesc": "创建、编辑并验证可复用技能"
+          },
+          "scientific-brainstorming": "科学头脑风暴",
+          "scientific-brainstormingDesc": "开放式科研构思：探索跨学科联系、挑战假设、发现研究空白。",
+          "hypothesis-generation": "假设生成",
+          "hypothesis-generationDesc": "将观察转化为可检验的假设，给出预测、机制并设计验证实验。",
+          "experimental-design": "实验设计",
+          "experimental-designDesc": "在采集数据前设计严谨研究：随机化、区组、对照与析因/DOE 布局。",
+          "statistical-power": "统计功效",
+          "statistical-powerDesc": "样本量与统计功效分析：所需样本数、最小可检测效应与功效曲线。",
+          "statistical-analysis": "统计分析",
+          "statistical-analysisDesc": "引导式统计分析：检验选择、假设检查、效应量与 APA 格式报告。",
+          "exploratory-data-analysis": "探索性数据分析",
+          "exploratory-data-analysisDesc": "对 200+ 种格式的科学数据文件做自动化探索，输出质量指标与报告。",
+          "scientific-visualization": "科学可视化",
+          "scientific-visualizationDesc": "出版级图表：多面板布局、显著性标注与期刊专属格式。",
+          "scientific-critical-thinking": "批判性思维",
+          "scientific-critical-thinkingDesc": "评估科学主张与证据质量：识别偏倚与混杂，运用 GRADE 与偏倚风险框架。",
+          "paper-lookup": "论文检索",
+          "paper-lookupDesc": "检索 10 个学术 API（PubMed、arXiv、OpenAlex、Crossref…）查找论文、引用与开放获取全文。",
+          "prompts": {
+            "scientific-brainstorming": "帮我进行科研头脑风暴：探索跨学科联系、挑战假设、发现有潜力的研究空白。我正在探索的方向：",
+            "hypothesis-generation": "帮我把这些观察转化为可检验的假设：给出明确预测、合理机制，并设计验证实验。我的观察：",
+            "experimental-design": "在采集数据前帮我设计严谨的实验：设计方案、随机化、对照，以及如何避免混杂。我想研究的问题：",
+            "statistical-power": "帮我确定所需样本量：为我的设计做功效分析（效应量、显著性水平、功效）。具体信息：",
+            "statistical-analysis": "帮我正确分析这份数据：选择合适的检验、检查假设、报告效应量并撰写结论。我的数据与问题：",
+            "exploratory-data-analysis": "对我的数据文件做探索性分析：概述其结构、质量与值得注意的模式，并建议后续步骤。文件是：",
+            "scientific-visualization": "帮我制作出版级图表：清晰布局、真实误差棒、色盲友好配色，以及期刊格式。我想展示的内容：",
+            "scientific-critical-thinking": "帮我批判性评估这项研究或主张：评估证据质量、识别偏倚与混杂，并权衡结论。内容如下：",
+            "paper-lookup": "帮我在学术数据库中查找相关论文与开放获取全文，并提供可复用的引用。我要找的是："
           },
           "notEnabled": {
             "title": "「{skill}」还没有对 {agent} 配置可用",
@@ -2540,6 +2591,16 @@
           "runningInBackground": "后台运行",
           "launchNote": "已在后台运行 · {id}"
         }
+      },
+      "backgroundTasks": {
+        "running": "{count, plural, other {# 个后台任务运行中}}",
+        "settling": "正在同步后台结果…",
+        "settledFallback": "后台任务完成 ({status})",
+        "cardRunning": "后台运行中",
+        "cardLaunchedPending": "已在后台启动",
+        "cardCompleted": "后台任务已完成",
+        "cardFinishedWithStatus": "后台任务完成 ({status})",
+        "cardResultPending": "尚未返回结果"
       },
       "messageNav": {
         "title": "消息导航",
@@ -3075,6 +3136,56 @@
       "enableFailed": "启用专家失败",
       "disableFailed": "禁用专家失败",
       "openFolderFailed": "打开目录失败"
+    }
+  },
+  "ScienceSettings": {
+    "title": "科研技能",
+    "description": "为 AI 编程代理启用精选科研技能 — 假设生成、实验设计、统计分析、可视化、批判性评估和文献检索。VeryAgent 管理中央副本并将技能链接到您选择的代理。",
+    "loading": "加载科研技能…",
+    "emptySkills": "暂无科研技能。请检查应用日志。",
+    "searchPlaceholder": "按名称、ID 或描述搜索科研技能",
+    "categories": {
+      "ideation": "构思",
+      "design": "研究设计",
+      "analysis": "分析",
+      "visualization": "可视化",
+      "evaluation": "评估",
+      "literature": "文献"
+    },
+    "states": {
+      "not_linked": "未启用",
+      "linked_to_veryagent": "已启用",
+      "linked_elsewhere": "被阻止 — 存在另一个链接",
+      "blocked_by_real_directory": "被阻止 — 自定义技能已占用此名称",
+      "broken": "链接损坏"
+    },
+    "badges": {
+      "userModified": "用户已修改",
+      "needsKey": "需要 API 密钥",
+      "needsSetup": "可能需要配置"
+    },
+    "actions": {
+      "openCentralDir": "打开中央文件夹",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "openFolderFailed": "打开文件夹失败"
+    }
+  },
+  "SkillPacksSettings": {
+    "title": "技能包",
+    "description": "为 AI 编程代理启用精选技能包 — 专家工作流、科研工具和办公自动化。VeryAgent 管理中央副本并将技能链接到您选择的代理。",
+    "tabs": {
+      "experts": "专家",
+      "science": "科研",
+      "office": "办公"
+    },
+    "actions": {
+      "openCentralDir": "打开中央文件夹",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "openFolderFailed": "打开文件夹失败"
     }
   },
   "OfficeToolsSettings": {

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { openSettingsWindow, type SettingsSection } from "@/lib/api"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
+import { useBuiltInScience } from "@/hooks/use-built-in-science"
 import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
 import { useWelcomeQuickActions } from "@/hooks/use-appearance"
 import { getExpertIcon, pickLocalized } from "@/lib/expert-presentation"
@@ -25,12 +26,16 @@ import {
   type OfficeAction,
 } from "@/lib/office-actions"
 import {
+  RESEARCH_FEATURED_ACCENTS,
+} from "@/lib/research-actions"
+import { getScienceIcon } from "@/lib/science-presentation"
+import {
   loadQuickActionsTab,
   saveQuickActionsTab,
   type QuickActionsTab,
 } from "@/lib/quick-actions-tab-storage"
 import type { ComposerInjectContent } from "@/components/chat/message-input"
-import { AGENT_LABELS, type AgentType, type ExpertListItem } from "@/lib/types"
+import { AGENT_LABELS, type AgentType, type ExpertListItem, type ScienceListItem } from "@/lib/types"
 
 // Three primary office categories — prominent fixed cards (keep their color).
 const OFFICE_FIXED: (OfficeAction & { accent: string })[] =
@@ -285,6 +290,7 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
   const t = useTranslations("Folder.chat.welcomePanel.quickActions")
   const locale = useLocale()
   const experts = useBuiltInExperts()
+  const science = useBuiltInScience()
   const { enabledIds, ready, supported } = useEnabledSkillIds(agentType)
   const { showWelcomeQuickActions } = useWelcomeQuickActions()
   const lockHint = t("notEnabled.hint")
@@ -329,7 +335,12 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
   // conversation shows the previous choice.
   const [tab, setTab] = useState<QuickActionsTab>(() => loadQuickActionsTab())
   const handleTabChange = useCallback((value: string) => {
-    const next: QuickActionsTab = value === "office" ? "office" : "coding"
+    const next: QuickActionsTab =
+      value === "office"
+        ? "office"
+        : value === "research"
+          ? "research"
+          : "coding"
     setTab(next)
     saveQuickActionsTab(next)
   }, [])
@@ -360,6 +371,19 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
       // Experts are open-ended coding skills: inject just the leading
       // invocation badge (`$id` on Codex, `/id` elsewhere) and let the user
       // describe the task (no canned template like office docs).
+      onSelect({ text: "", skill: { id: item.metadata.id, label } })
+    },
+    [onSelect, locale, isLocked, notifyNotEnabled]
+  )
+
+  const handleResearch = useCallback(
+    (item: ScienceListItem) => {
+      const label =
+        pickLocalized(item.metadata.display_name, locale) || item.metadata.id
+      if (isLocked(item.metadata.id)) {
+        notifyNotEnabled(label, "science")
+        return
+      }
       onSelect({ text: "", skill: { id: item.metadata.id, label } })
     },
     [onSelect, locale, isLocked, notifyNotEnabled]
@@ -408,6 +432,12 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
           className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
         >
           {t("tabs.office")}
+        </TabsTrigger>
+        <TabsTrigger
+          value="research"
+          className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+        >
+          {t("tabs.research")}
         </TabsTrigger>
       </TabsList>
 
@@ -484,6 +514,90 @@ export function QuickActions({ onSelect, agentType }: QuickActionsProps) {
             ))
           }
         </Marquee>
+      </TabsContent>
+
+      <TabsContent value="research" className="flex flex-col gap-2">
+        {(() => {
+          const featuredScience = science
+            .filter((s) => s.metadata.featured && enabledIds.has(s.metadata.id))
+            .slice(0, 3)
+          const restScience = science
+            .filter(
+              (s) =>
+                s.metadata.featured &&
+                enabledIds.has(s.metadata.id) &&
+                !featuredScience.some((f) => f.metadata.id === s.metadata.id)
+            )
+          return (
+            <>
+              {featuredScience.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {featuredScience.map((item) => {
+                    const Icon = getScienceIcon(item.metadata.icon)
+                    const accent =
+                      RESEARCH_FEATURED_ACCENTS[item.metadata.id] ?? "blue"
+                    const label =
+                      pickLocalized(item.metadata.display_name, locale) ||
+                      item.metadata.id
+                    const desc =
+                      pickLocalized(item.metadata.description, locale) ||
+                      t(
+                        `${item.metadata.id}Desc` as Parameters<typeof t>[0]
+                      )
+                    return (
+                      <BigCard
+                        key={item.metadata.id}
+                        icon={Icon}
+                        accent={accent}
+                        title={label}
+                        description={desc}
+                        onClick={() => handleResearch(item)}
+                        locked={isLocked(item.metadata.id)}
+                        lockHint={lockHint}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+              {restScience.length > 0 && (
+                <Marquee itemCount={restScience.length}>
+                  {(clone) =>
+                    restScience.map((item) => {
+                      const Icon = getScienceIcon(item.metadata.icon)
+                      const label =
+                        pickLocalized(item.metadata.display_name, locale) ||
+                        item.metadata.id
+                      const desc =
+                        pickLocalized(item.metadata.description, locale) ||
+                        t(
+                          `${item.metadata.id}Desc` as Parameters<typeof t>[0]
+                        )
+                      return (
+                        <SkillBar
+                          key={`${item.metadata.id}-${clone ? "c" : "r"}`}
+                          clone={clone}
+                          icon={Icon}
+                          label={label}
+                          title={desc}
+                          onClick={() => handleResearch(item)}
+                          locked={isLocked(item.metadata.id)}
+                          lockHint={lockHint}
+                        />
+                      )
+                    })
+                  }
+                </Marquee>
+              )}
+              {featuredScience.length === 0 && restScience.length === 0 && (
+                <div className="flex items-center justify-center text-sm text-muted-foreground py-4">
+                  {locale.toLowerCase().startsWith("zh")
+                    ? "暂无已启用的科研技能"
+                    : "No research skills enabled yet"}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </TabsContent>
     </Tabs>
   )

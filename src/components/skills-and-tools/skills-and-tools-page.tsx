@@ -38,6 +38,9 @@ import {
   expertsList,
   expertsLinkToAgent,
   expertsUnlinkFromAgent,
+  scienceList,
+  scienceLinkToAgent,
+  scienceUnlinkFromAgent,
   officecliListSkills,
   officecliSkillLinkToAgent,
   officecliSkillUnlinkFromAgent,
@@ -48,6 +51,7 @@ import { openSettingsWindow } from "@/lib/api"
 import type {
   AgentType,
   ExpertListItem,
+  ScienceListItem,
   OfficecliSkill,
   LocalMcpServer,
   McpAppType,
@@ -60,20 +64,46 @@ import { useTabStore } from "@/contexts/tab-context"
 /* ------------------------------------------------------------------ */
 
 const SKILL_CATEGORY_LABELS: Record<string, { en: string; zh: string }> = {
-  discovery: { en: "Coding", zh: "编程" },
-  planning: { en: "Coding", zh: "编程" },
-  execution: { en: "Coding", zh: "编程" },
-  quality: { en: "Coding", zh: "编程" },
-  debugging: { en: "Coding", zh: "编程" },
-  review: { en: "Coding", zh: "编程" },
-  meta: { en: "Coding", zh: "编程" },
-  creative: { en: "Creative", zh: "创意" },
+  // Experts
+  discovery: { en: "Discovery & Design", zh: "发现与设计" },
+  planning: { en: "Planning", zh: "规划" },
+  execution: { en: "Execution", zh: "执行" },
+  quality: { en: "Quality & Testing", zh: "质量与测试" },
+  debugging: { en: "Debugging", zh: "调试" },
+  review: { en: "Review & Integration", zh: "评审与集成" },
+  meta: { en: "Meta Skills", zh: "元技能" },
+  creative: { en: "Creative & Graphics", zh: "创意与出图" },
+  // Science
+  ideation: { en: "Ideation", zh: "构思" },
+  design: { en: "Research Design", zh: "研究设计" },
+  analysis: { en: "Analysis", zh: "分析" },
+  visualization: { en: "Visualization", zh: "可视化" },
+  evaluation: { en: "Evaluation", zh: "评估" },
+  literature: { en: "Literature", zh: "文献" },
+  // Office
+  general: { en: "General", zh: "通用" },
+  presentations: { en: "Presentations", zh: "演示文稿" },
+  documents: { en: "Documents", zh: "文档" },
+  spreadsheets: { en: "Spreadsheets", zh: "电子表格" },
+  // Legacy / fallback
   "coding-agent": { en: "Coding", zh: "编程" },
   editor: { en: "Productivity", zh: "效率" },
   productivity: { en: "Office", zh: "办公" },
   "dev-workflow": { en: "Dev Workflow", zh: "开发流程" },
   system: { en: "System", zh: "系统" },
   other: { en: "Other", zh: "其他" },
+}
+
+// Category display order (lower = first). Unlisted categories sort last.
+const CATEGORY_ORDER: Record<string, number> = {
+  // Experts
+  discovery: 1, planning: 2, execution: 3, quality: 4,
+  debugging: 5, review: 6, meta: 7, creative: 8,
+  // Science
+  ideation: 11, design: 12, analysis: 13,
+  visualization: 14, evaluation: 15, literature: 16,
+  // Office
+  general: 21, presentations: 22, documents: 23, spreadsheets: 24,
 }
 
 function getCategoryLabel(category: string, locale: string): string {
@@ -160,7 +190,7 @@ interface UnifiedSkillItem {
   description: Record<string, string>
   category: string
   icon: string
-  source: "expert" | "office"
+  source: "expert" | "science" | "office"
 }
 
 function expertToUnified(expert: ExpertListItem): UnifiedSkillItem {
@@ -185,6 +215,17 @@ function officeSkillToUnified(skill: OfficecliSkill): UnifiedSkillItem {
   }
 }
 
+function scienceToUnified(skill: ScienceListItem): UnifiedSkillItem {
+  return {
+    id: skill.metadata.id,
+    name: skill.metadata.display_name,
+    description: skill.metadata.description,
+    category: skill.metadata.category,
+    icon: skill.metadata.icon ?? "",
+    source: "science",
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Unified Skill Card                                                */
 /* ------------------------------------------------------------------ */
@@ -199,7 +240,7 @@ function SkillCard({
   skill: UnifiedSkillItem
   locale: string
   enabled: boolean
-  onToggle: (id: string, source: "expert" | "office") => void
+  onToggle: (id: string, source: "expert" | "science" | "office") => void
   togglingId: string | null
 }) {
   const name = pickLocalizedText(skill.name, locale, skill.id)
@@ -348,7 +389,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const { fresh, currentAgent, lockedAgentType } = useSkillsPageAgentContext()
   const { enabledIds } = useEnabledSkillIds(lockedAgentType, true)
 
-  // Load unified skill list to know source (expert vs office) for toggle API
+  // Load unified skill list to know source (expert / science / office) for toggle API
   const [allSkills, setAllSkills] = useState<UnifiedSkillItem[]>([])
   const [loadingSkills, setLoadingSkills] = useState(true)
   const [togglingSkillId, setTogglingSkillId] = useState<string | null>(null)
@@ -356,12 +397,14 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const fetchSkills = useCallback(async () => {
     setLoadingSkills(true)
     try {
-      const [experts, officeSkills] = await Promise.all([
+      const [experts, science, officeSkills] = await Promise.all([
         expertsList(),
+        scienceList(),
         officecliListSkills(),
       ])
       const unified: UnifiedSkillItem[] = [
         ...experts.map(expertToUnified),
+        ...science.map(scienceToUnified),
         ...officeSkills.map(officeSkillToUnified),
       ]
       setAllSkills(unified)
@@ -376,14 +419,25 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     fetchSkills()
   }, [fetchSkills, refreshKey])
 
-  // Filter to only enabled skills
+  // Filter to only enabled skills, grouped by category
   const enabledSkills = useMemo(
     () => allSkills.filter((s) => enabledIds.has(s.id)),
     [allSkills, enabledIds]
   )
 
+  const enabledByCategory = useMemo(() => {
+    const groups: Record<string, UnifiedSkillItem[]> = {}
+    for (const skill of enabledSkills) {
+      if (!groups[skill.category]) groups[skill.category] = []
+      groups[skill.category].push(skill)
+    }
+    return Object.entries(groups).sort(([a], [b]) => {
+      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
+    })
+  }, [enabledSkills])
+
   const handleToggleSkill = useCallback(
-    async (skillId: string, source: "expert" | "office") => {
+    async (skillId: string, source: "expert" | "science" | "office") => {
       if (!lockedAgentType) return
       setTogglingSkillId(skillId)
       const currentlyEnabled = enabledIds.has(skillId)
@@ -393,6 +447,12 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
             await expertsUnlinkFromAgent({ expertId: skillId, agentType: lockedAgentType })
           } else {
             await expertsLinkToAgent({ expertId: skillId, agentType: lockedAgentType })
+          }
+        } else if (source === "science") {
+          if (currentlyEnabled) {
+            await scienceUnlinkFromAgent({ skillId, agentType: lockedAgentType })
+          } else {
+            await scienceLinkToAgent({ skillId, agentType: lockedAgentType })
           }
         } else {
           if (currentlyEnabled) {
@@ -536,7 +596,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
           </div>
         )}
 
-        {/* Enabled Skills sub-section */}
+        {/* Enabled Skills sub-section — grouped by category */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {navigatorLocale.toLowerCase().startsWith("zh")
@@ -549,16 +609,25 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
               {t("loading")}
             </div>
           ) : hasEnabledSkills ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {enabledSkills.map((skill) => (
-                <SkillCard
-                  key={skill.id}
-                  skill={skill}
-                  locale={navigatorLocale}
-                  enabled={true}
-                  onToggle={handleToggleSkill}
-                  togglingId={togglingSkillId}
-                />
+            <div className="flex flex-col gap-5">
+              {enabledByCategory.map(([category, items]) => (
+                <div key={category}>
+                  <h5 className="mb-2 text-[11px] font-medium text-muted-foreground">
+                    {getCategoryLabel(category, navigatorLocale)}
+                  </h5>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {items.map((skill) => (
+                      <SkillCard
+                        key={skill.id}
+                        skill={skill}
+                        locale={navigatorLocale}
+                        enabled={true}
+                        onToggle={handleToggleSkill}
+                        togglingId={togglingSkillId}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -606,7 +675,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
 }
 
 /* ------------------------------------------------------------------ */
-/*  Skills Tab (unified expert + office skills)                       */
+/*  Skills Tab (unified expert + science + office, grouped by category) */
 /* ------------------------------------------------------------------ */
 
 function SkillsTab({ onToggled }: { onToggled: () => void }) {
@@ -623,18 +692,21 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [experts, officeSkills] = await Promise.all([
+      const [experts, science, officeSkills] = await Promise.all([
         expertsList(),
+        scienceList(),
         officecliListSkills(),
       ])
       const unified: UnifiedSkillItem[] = [
         ...experts.map(expertToUnified),
+        ...science.map(scienceToUnified),
         ...officeSkills.map(officeSkillToUnified),
       ]
+      // Sort by category order, then by name within category
       unified.sort((a, b) => {
-        const catA = getCategoryLabel(a.category, navigatorLocale)
-        const catB = getCategoryLabel(b.category, navigatorLocale)
-        if (catA !== catB) return catA.localeCompare(catB)
+        const orderA = CATEGORY_ORDER[a.category] ?? 99
+        const orderB = CATEGORY_ORDER[b.category] ?? 99
+        if (orderA !== orderB) return orderA - orderB
         const nameA = pickLocalizedText(a.name, navigatorLocale, a.id)
         const nameB = pickLocalizedText(b.name, navigatorLocale, b.id)
         return nameA.localeCompare(nameB)
@@ -652,7 +724,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   }, [fetchData])
 
   const handleToggle = useCallback(
-    async (skillId: string, source: "expert" | "office") => {
+    async (skillId: string, source: "expert" | "science" | "office") => {
       if (!lockedAgentType) return
       setTogglingId(skillId)
       const currentlyEnabled = enabledIds.has(skillId)
@@ -662,6 +734,12 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             await expertsUnlinkFromAgent({ expertId: skillId, agentType: lockedAgentType })
           } else {
             await expertsLinkToAgent({ expertId: skillId, agentType: lockedAgentType })
+          }
+        } else if (source === "science") {
+          if (currentlyEnabled) {
+            await scienceUnlinkFromAgent({ skillId, agentType: lockedAgentType })
+          } else {
+            await scienceLinkToAgent({ skillId, agentType: lockedAgentType })
           }
         } else {
           if (currentlyEnabled) {
@@ -709,6 +787,27 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     ]
   )
 
+  // Group skills by category, preserving sort order
+  const groupedByCategory = useMemo(() => {
+    const groups: Record<string, UnifiedSkillItem[]> = {}
+    for (const skill of skills) {
+      if (!groups[skill.category]) groups[skill.category] = []
+      groups[skill.category].push(skill)
+    }
+    return Object.entries(groups).sort(([a], [b]) => {
+      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
+    })
+  }, [skills])
+
+  // Category filter state: null = show all
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+
+  // Skills to display (all or filtered by selected category)
+  const displayedSkills = useMemo(() => {
+    if (!selectedCategory) return skills
+    return skills.filter((s) => s.category === selectedCategory)
+  }, [skills, selectedCategory])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -732,22 +831,66 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="px-1 py-4 md:px-2">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {skills.map((skill) => (
-            <SkillCard
-              key={skill.id}
-              skill={skill}
-              locale={navigatorLocale}
-              enabled={enabledIds.has(skill.id)}
-              onToggle={handleToggle}
-              togglingId={togglingId}
-            />
+    <div className="flex flex-1 flex-col min-h-0">
+      {/* Category filter tabs — horizontal scrollable row */}
+      <div className="shrink-0 overflow-x-auto border-b px-1 md:px-2">
+        <div className="flex items-center gap-1 py-2">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory(null)}
+            className={
+              "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+              (selectedCategory === null
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground")
+            }
+          >
+            {navigatorLocale.toLowerCase().startsWith("zh") ? "全部" : "All"}
+          </button>
+          {groupedByCategory.map(([category]) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSelectedCategory(category)}
+              className={
+                "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                (selectedCategory === category
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground")
+              }
+            >
+              {getCategoryLabel(category, navigatorLocale)}
+            </button>
           ))}
         </div>
       </div>
-    </ScrollArea>
+
+      {/* Skill cards grid */}
+      <ScrollArea className="flex-1">
+        <div className="px-1 py-4 md:px-2">
+          {displayedSkills.length === 0 ? (
+            <p className="py-8 text-center text-xs text-muted-foreground">
+              {navigatorLocale.toLowerCase().startsWith("zh")
+                ? "该分类下没有技能"
+                : "No skills in this category"}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {displayedSkills.map((skill) => (
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  locale={navigatorLocale}
+                  enabled={enabledIds.has(skill.id)}
+                  onToggle={handleToggle}
+                  togglingId={togglingId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   )
 }
 

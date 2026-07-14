@@ -1971,6 +1971,9 @@ export function SidebarConversationList({
           sortMode === "updated" ? conv.updated_at : conv.created_at,
           now
         )}
+        rawTimestamp={
+          sortMode === "updated" ? conv.updated_at : conv.created_at
+        }
         onSelect={handleSelect}
         onDoubleClick={handleDoubleClick}
         onRename={handleRename}
@@ -2059,7 +2062,8 @@ export function SidebarConversationList({
                   "[--conv-rail-axis:0.875rem]"
                 )}
               >
-                {dragging !== null ? (
+                <div className="pr-2.5">
+                  {dragging !== null ? (
                   // Drag surface: every folder collapsed to its header so any
                   // folder (even one that was virtualized off-screen) is a valid
                   // drop target. Non-virtualized — folder counts are small.
@@ -2100,6 +2104,7 @@ export function SidebarConversationList({
                     ))}
                   </div>
                 )}
+                </div>
               </ScrollArea>
               {/*
                 Floating sticky folder header. Rendered AFTER ScrollArea so any

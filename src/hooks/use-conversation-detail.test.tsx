@@ -30,6 +30,7 @@ function seedSession(detail: DbConversationDetail | null) {
           liveOwnsActiveTurn: false,
           delegationKickoffText: null,
           sessionStats: null,
+          backgroundTurns: [],
           pendingCleanup: false,
         },
       ],

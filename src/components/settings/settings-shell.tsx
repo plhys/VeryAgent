@@ -9,6 +9,7 @@ import {
 } from "react"
 import {
   Bot,
+  Boxes,
   Eye,
   FileSpreadsheet,
   GitBranch,
@@ -45,6 +46,7 @@ interface SettingsNavItem {
     | "plugin_config"
     | "experts"
     | "office_tools"
+    | "skill_packs"
     | "quick_messages"
     | "shortcuts"
     | "version_control"
@@ -81,6 +83,11 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/agents",
     labelKey: "agents",
     icon: Bot,
+  },
+  {
+    href: "/settings/skill-packs",
+    labelKey: "skill_packs",
+    icon: Boxes,
   },
   {
     href: "/settings/model-providers",

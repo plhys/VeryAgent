@@ -23,6 +23,8 @@ import {
   Send,
   Command,
   Eye,
+  FileSpreadsheet,
+  FlaskConical,
   Sparkles,
   Square,
   TextSelect,
@@ -92,6 +94,7 @@ import type {
   AgentType,
   AvailableCommandInfo,
   ExpertListItem,
+  ScienceListItem,
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
@@ -131,8 +134,10 @@ import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-
 import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import { useAgentSkills } from "@/hooks/use-agent-skills"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
+import { useBuiltInScience } from "@/hooks/use-built-in-science"
 import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
 import { getExpertIcon, pickLocalized } from "@/lib/expert-presentation"
+import { getScienceIcon } from "@/lib/science-presentation"
 import { OFFICE_ACTIONS, type OfficeAction } from "@/lib/office-actions"
 import {
   clearMessageInputDraftV2,
@@ -152,6 +157,7 @@ import {
   applyExpertReference,
   isComposerChromeClick,
   isComposerEmpty,
+  restampSkillPrefixes,
   restoreBlocksIntoEditor,
 } from "@/components/chat/composer/composer-commands"
 import {
@@ -552,11 +558,57 @@ export function MessageInput({
   const locale = useLocale()
   const tQa = useTranslations("Folder.chat.welcomePanel.quickActions")
   const experts = useBuiltInExperts()
+  const science = useBuiltInScience()
   const {
     enabledIds,
     ready: skillStatusReady,
     supported: skillManagementSupported,
   } = useEnabledSkillIds(agentType ?? null, true)
+  // Category label lookups for the "+" menu's nested skill submenus.
+  // Mirrors the category translations from ExpertSettings / ScienceSettings /
+  // OfficeToolsSettings i18n namespaces without pulling in extra hook types.
+  const expertCategoryLabel = useCallback(
+    (cat: string) => {
+      switch (cat) {
+        case "discovery": return t("expertCatDiscovery")
+        case "planning": return t("expertCatPlanning")
+        case "execution": return t("expertCatExecution")
+        case "quality": return t("expertCatQuality")
+        case "debugging": return t("expertCatDebugging")
+        case "review": return t("expertCatReview")
+        case "meta": return t("expertCatMeta")
+        case "creative": return t("expertCatCreative")
+        default: return cat
+      }
+    },
+    [t]
+  )
+  const scienceCategoryLabel = useCallback(
+    (cat: string) => {
+      switch (cat) {
+        case "ideation": return t("scienceCatIdeation")
+        case "design": return t("scienceCatDesign")
+        case "analysis": return t("scienceCatAnalysis")
+        case "visualization": return t("scienceCatVisualization")
+        case "evaluation": return t("scienceCatEvaluation")
+        case "literature": return t("scienceCatLiterature")
+        default: return cat
+      }
+    },
+    [t]
+  )
+  const officeCategoryLabel = useCallback(
+    (cat: string) => {
+      switch (cat) {
+        case "general": return t("officeCatGeneral")
+        case "presentations": return t("officeCatPresentations")
+        case "documents": return t("officeCatDocuments")
+        case "spreadsheets": return t("officeCatSpreadsheets")
+        default: return cat
+      }
+    },
+    [t]
+  )
   const editorRef = useRef<RichComposerHandle>(null)
   // The editor owns the content now; this mirror of its empty state drives the
   // send button and `hasSendableContent`.
@@ -802,6 +854,23 @@ export function MessageInput({
     effectiveDraftStorageKey,
     hydrateFromBlocks,
   ])
+
+  // Re-stamp skill/expert badge prefixes whenever the selected agent changes.
+  // Codex uses `$`, every other agent uses `/`. A badge inserted under one agent
+  // retains its frozen prefix — without this effect, switching to Codex leaves
+  // stale `/skill` prefixes that Codex parses as a slash COMMAND and rejects.
+  // Deferred to rAF because the badge NodeView does a synchronous flushSync()
+  // re-render, which would trip React's "flushSync from inside a lifecycle
+  // method" warning if called during the commit phase.
+  useEffect(() => {
+    if (!composerReady) return
+    const editor = editorRef.current?.getEditor()
+    if (!editor) return
+    requestAnimationFrame(() => {
+      const ed = editorRef.current?.getEditor()
+      if (ed) restampSkillPrefixes(ed, skillPrefix)
+    })
+  }, [skillPrefix, composerReady])
 
   // Re-hydrate when the user (re)edits a *different* queue item after the
   // initial mount hydration above. Keyed on the item id (not display text) so
@@ -1833,6 +1902,16 @@ export function MessageInput({
     [experts]
   )
 
+  const scienceSorted = useMemo(
+    () =>
+      [...science].sort(
+        (a, b) =>
+          (a.metadata.sort_order ?? 0) - (b.metadata.sort_order ?? 0) ||
+          a.metadata.id.localeCompare(b.metadata.id)
+      ),
+    [science]
+  )
+
   const isSkillLocked = useCallback(
     (id: string) => !!agentType && skillStatusReady && !enabledIds.has(id),
     [agentType, skillStatusReady, enabledIds]
@@ -1896,6 +1975,20 @@ export function MessageInput({
         return
       }
       // Experts are open-ended: just the leading badge, no canned template.
+      insertSkillShortcut({ id: item.metadata.id, label }, "")
+    },
+    [locale, isSkillLocked, notifySkillNotEnabled, insertSkillShortcut]
+  )
+
+  const handleScienceShortcut = useCallback(
+    (item: ScienceListItem) => {
+      const label =
+        pickLocalized(item.metadata.display_name, locale) || item.metadata.id
+      if (isSkillLocked(item.metadata.id)) {
+        notifySkillNotEnabled(label, "science")
+        return
+      }
+      // Science skills are open-ended: just the leading badge, no canned template.
       insertSkillShortcut({ id: item.metadata.id, label }, "")
     },
     [locale, isSkillLocked, notifySkillNotEnabled, insertSkillShortcut]
@@ -2362,6 +2455,11 @@ export function MessageInput({
 
   const buildDraft = useCallback((): PromptDraft | null => {
     const editor = editorRef.current?.getEditor()
+    // Send-time normalization: even if the reactive re-stamp effect had a
+    // timing/ordering race, the send boundary guarantees the wire text matches
+    // the current agent's prefix. This is the authoritative guarantee from the
+    // codeg v0.20.2 badge prefix fix.
+    if (editor) restampSkillPrefixes(editor, skillPrefix)
     // Inline badges + prose → text/resource_link blocks (file mentions become
     // first-class ResourceLinks; agent/session/commit/skill stay inline text;
     // embedded badges are dropped here and re-added below from the payload map).
@@ -2404,7 +2502,7 @@ export function MessageInput({
       displayMarkdown ||
       `Attached ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`
     return { blocks, displayText }
-  }, [attachments])
+  }, [attachments, skillPrefix])
 
   // Clear the editor + attachments after a send / enqueue / save.
   const resetComposer = useCallback(() => {
@@ -3220,68 +3318,248 @@ export function MessageInput({
                           Experts/Office matrices also hide for this agent. */}
                       {skillManagementSupported &&
                         (() => {
-                          const enabledExpertItems = expertsSorted
-                            .filter((item) => enabledIds.has(item.metadata.id))
-                            .map((item) => {
-                              const Icon = getExpertIcon(item.metadata.icon)
-                              const label =
-                                pickLocalized(
-                                  item.metadata.display_name,
-                                  locale
-                                ) || item.metadata.id
-                              return (
-                                <DropdownMenuItem
-                                  key={item.metadata.id}
-                                  onClick={() => handleExpertShortcut(item)}
-                                >
-                                  <Icon className="size-4" />
-                                  <span className="flex-1 truncate">
-                                    {label}
-                                  </span>
-                                </DropdownMenuItem>
-                              )
-                            })
+                          // --- Filter enabled items (no .map yet — grouped below) ---
+                          const enabledExpertItems = expertsSorted.filter(
+                            (item) => enabledIds.has(item.metadata.id)
+                          )
+                          const enabledScienceItems = scienceSorted.filter(
+                            (item) => enabledIds.has(item.metadata.id)
+                          )
                           const enabledOfficeItems = OFFICE_ACTIONS.filter(
                             (action) => enabledIds.has(action.skillId)
-                          ).map((action) => {
-                            const Icon = action.icon
-                            const label = tQa(
-                              action.id as Parameters<typeof tQa>[0]
-                            )
-                            return (
-                              <DropdownMenuItem
-                                key={action.id}
-                                onClick={() => handleOfficeShortcut(action)}
-                              >
-                                <Icon className="size-4" />
-                                <span className="flex-1 truncate">{label}</span>
-                              </DropdownMenuItem>
-                            )
-                          })
+                          )
                           const hasEnabledSkills =
                             enabledExpertItems.length > 0 ||
+                            enabledScienceItems.length > 0 ||
                             enabledOfficeItems.length > 0
                           if (!hasEnabledSkills) return null
+
+                          // --- Category sort orders (mirrors each pack's settings page) ---
+                          const EXPERT_CATEGORY_SORT: Record<string, number> = {
+                            discovery: 1, planning: 2, execution: 3, quality: 4,
+                            debugging: 5, review: 6, meta: 7, creative: 8,
+                          }
+                          const SCIENCE_CATEGORY_SORT: Record<string, number> = {
+                            ideation: 1, design: 2, analysis: 3,
+                            visualization: 4, evaluation: 5, literature: 6,
+                          }
+                          const OFFICE_CATEGORY_SORT: Record<string, number> = {
+                            general: 0, presentations: 1, documents: 2,
+                            spreadsheets: 3,
+                          }
+
+                          // --- Group enabled items by category, sorted ---
+                          const groupByCategory = <T,>(
+                            items: T[],
+                            getCat: (item: T) => string,
+                            sort: Record<string, number>
+                          ) => {
+                            const groups: Record<string, T[]> = {}
+                            for (const item of items) {
+                              const cat = getCat(item)
+                              if (!groups[cat]) groups[cat] = []
+                              groups[cat].push(item)
+                            }
+                            return Object.entries(groups).sort(
+                              ([a], [b]) => (sort[a] ?? 99) - (sort[b] ?? 99)
+                            )
+                          }
+
+                          const expertGroups = groupByCategory(
+                            enabledExpertItems,
+                            (item) => item.metadata.category || "discovery",
+                            EXPERT_CATEGORY_SORT
+                          )
+                          const scienceGroups = groupByCategory(
+                            enabledScienceItems,
+                            (item) => item.metadata.category || "ideation",
+                            SCIENCE_CATEGORY_SORT
+                          )
+                          const officeGroups = groupByCategory(
+                            enabledOfficeItems,
+                            (item) => item.category,
+                            OFFICE_CATEGORY_SORT
+                          )
+
                           return (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger>
-                                <Sparkles className="size-4" />
-                                {locale.toLowerCase().startsWith("zh")
-                                  ? "技能"
-                                  : "Skills"}
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent
-                                className="min-w-44 overflow-y-auto"
-                                style={{
-                                  maxWidth: "min(20rem, calc(100vw - 1rem))",
-                                  maxHeight:
-                                    "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                                }}
-                              >
-                                {enabledExpertItems}
-                                {enabledOfficeItems}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
+                            <>
+                              {enabledExpertItems.length > 0 && (
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <Sparkles className="size-4" />
+                                    {t("experts")}
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent
+                                    className="min-w-44 overflow-y-auto"
+                                    style={{
+                                      maxWidth:
+                                        "min(20rem, calc(100vw - 1rem))",
+                                      maxHeight:
+                                        "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                                    }}
+                                  >
+                                    {expertGroups.map(([category, items]) => (
+                                      <DropdownMenuSub key={category}>
+                                        <DropdownMenuSubTrigger>
+                                          {expertCategoryLabel(category)}
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent
+                                          className="min-w-40 overflow-y-auto"
+                                          style={{
+                                            maxWidth:
+                                              "min(18rem, calc(100vw - 1rem))",
+                                            maxHeight:
+                                              "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                                          }}
+                                        >
+                                          {items.map((item) => {
+                                            const Icon = getExpertIcon(
+                                              item.metadata.icon
+                                            )
+                                            const label =
+                                              pickLocalized(
+                                                item.metadata.display_name,
+                                                locale
+                                              ) || item.metadata.id
+                                            return (
+                                              <DropdownMenuItem
+                                                key={item.metadata.id}
+                                                onClick={() =>
+                                                  handleExpertShortcut(item)
+                                                }
+                                              >
+                                                <Icon className="size-4" />
+                                                <span className="flex-1 truncate">
+                                                  {label}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )
+                                          })}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    ))}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                              )}
+                              {enabledScienceItems.length > 0 && (
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <FlaskConical className="size-4" />
+                                    {t("research")}
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent
+                                    className="min-w-44 overflow-y-auto"
+                                    style={{
+                                      maxWidth:
+                                        "min(20rem, calc(100vw - 1rem))",
+                                      maxHeight:
+                                        "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                                    }}
+                                  >
+                                    {scienceGroups.map(
+                                      ([category, items]) => (
+                                        <DropdownMenuSub key={category}>
+                                          <DropdownMenuSubTrigger>
+                                            {scienceCategoryLabel(category)}
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent
+                                            className="min-w-40 overflow-y-auto"
+                                            style={{
+                                              maxWidth:
+                                                "min(18rem, calc(100vw - 1rem))",
+                                              maxHeight:
+                                                "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                                            }}
+                                          >
+                                            {items.map((item) => {
+                                              const Icon = getScienceIcon(
+                                                item.metadata.icon
+                                              )
+                                              const label =
+                                                pickLocalized(
+                                                  item.metadata.display_name,
+                                                  locale
+                                                ) || item.metadata.id
+                                              return (
+                                                <DropdownMenuItem
+                                                  key={item.metadata.id}
+                                                  onClick={() =>
+                                                    handleScienceShortcut(item)
+                                                  }
+                                                >
+                                                  <Icon className="size-4" />
+                                                  <span className="flex-1 truncate">
+                                                    {label}
+                                                  </span>
+                                                </DropdownMenuItem>
+                                              )
+                                            })}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                      )
+                                    )}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                              )}
+                              {enabledOfficeItems.length > 0 && (
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>
+                                    <FileSpreadsheet className="size-4" />
+                                    {t("office")}
+                                  </DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent
+                                    className="min-w-44 overflow-y-auto"
+                                    style={{
+                                      maxWidth:
+                                        "min(20rem, calc(100vw - 1rem))",
+                                      maxHeight:
+                                        "min(32rem, var(--radix-dropdown-menu-content-available-height))",
+                                    }}
+                                  >
+                                    {officeGroups.map(
+                                      ([category, items]) => (
+                                        <DropdownMenuSub key={category}>
+                                          <DropdownMenuSubTrigger>
+                                            {officeCategoryLabel(category)}
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent
+                                            className="min-w-40 overflow-y-auto"
+                                            style={{
+                                              maxWidth:
+                                                "min(18rem, calc(100vw - 1rem))",
+                                              maxHeight:
+                                                "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                                            }}
+                                          >
+                                            {items.map((action) => {
+                                              const Icon = action.icon
+                                              const label = tQa(
+                                                action.id as Parameters<
+                                                  typeof tQa
+                                                >[0]
+                                              )
+                                              return (
+                                                <DropdownMenuItem
+                                                  key={action.id}
+                                                  onClick={() =>
+                                                    handleOfficeShortcut(action)
+                                                  }
+                                                >
+                                                  <Icon className="size-4" />
+                                                  <span className="flex-1 truncate">
+                                                    {label}
+                                                  </span>
+                                                </DropdownMenuItem>
+                                              )
+                                            })}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                      )
+                                    )}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                              )}
+                            </>
                           )
                         })()}
                     </DropdownMenuContent>
