@@ -82,7 +82,7 @@ impl Default for KdfParams {
 }
 
 /// Cleartext header at the front of a `.veryagentbak` file. Carries everything
-/// needed to re-derive the key and decrypt — it is the single source of truth
+/// needed to re-derive the key and decrypt —it is the single source of truth
 /// for crypto parameters (the in-archive manifest stays crypto-agnostic).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvelopeHeader {
@@ -103,7 +103,7 @@ pub fn is_encrypted(path: &Path) -> Result<bool, AppCommandError> {
     if n < ENVELOPE_MAGIC.len() {
         return Ok(false);
     }
-    Ok(&head == ENVELOPE_MAGIC || &head == ENVELOPE_MAGIC_LEGACY)
+    Ok(&head == ENVELOPE_MAGIC || &head == ENVELOPE_MAGIC)
 }
 
 fn derive_key(passphrase: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; 32], AppCommandError> {
@@ -123,7 +123,7 @@ fn derive_key(passphrase: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; 
 }
 
 /// Encrypt the plaintext ZIP at `src` into a `.veryagentbak` envelope at `dest`.
-/// Synchronous — run under `spawn_blocking`.
+/// Synchronous —run under `spawn_blocking`.
 pub fn encrypt_file(
     src: &Path,
     dest: &Path,
@@ -274,7 +274,7 @@ fn validate_header(h: &EnvelopeHeader) -> Result<(), AppCommandError> {
 fn read_header<R: Read>(reader: &mut R) -> Result<EnvelopeHeader, AppCommandError> {
     let mut magic = [0u8; 8];
     read_fill(reader, &mut magic).map_err(AppCommandError::io)?;
-    if &magic != ENVELOPE_MAGIC && &magic != ENVELOPE_MAGIC_LEGACY {
+    if &magic != ENVELOPE_MAGIC && &magic != ENVELOPE_MAGIC {
         return Err(corrupt_header_error());
     }
     let mut ver = [0u8; 1];
@@ -377,11 +377,11 @@ mod tests {
         assert!(validate_header(&base).is_ok());
 
         let mut huge_chunk = base.clone();
-        huge_chunk.chunk_size = 1 << 30; // 1 GiB buffer → reject
+        huge_chunk.chunk_size = 1 << 30; // 1 GiB buffer →reject
         assert!(validate_header(&huge_chunk).is_err());
 
         let mut huge_mem = base.clone();
-        huge_mem.kdf_params.m_cost = 1 << 30; // absurd Argon2 memory → reject
+        huge_mem.kdf_params.m_cost = 1 << 30; // absurd Argon2 memory →reject
         assert!(validate_header(&huge_mem).is_err());
 
         let mut over_envelope = base.clone();

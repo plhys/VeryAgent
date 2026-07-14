@@ -5,6 +5,7 @@ import { OverlayScrollbarsInit } from "@/components/overlay-scrollbars-init"
 import { ClipboardFallbackInit } from "@/components/clipboard-fallback-init"
 import { WebConnectionGuard } from "@/components/connection/web-connection-guard"
 import { WindowResizeGrips } from "@/components/layout/window-resize-grips"
+import { MainReadySignal } from "@/components/main-ready-signal"
 
 export default function MainLayout({
   children,
@@ -34,6 +35,7 @@ export default function MainLayout({
           <ClipboardFallbackInit />
           <WebConnectionGuard />
           <WindowResizeGrips />
+          <MainReadySignal />
           {children}
         </AppearanceProvider>
       </ThemeProvider>

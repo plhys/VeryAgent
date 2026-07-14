@@ -1999,7 +1999,16 @@ pub fn install_tray_icon(
                 ..
             } = event
             {
-                show_main_window(tray.app_handle());
+                // Spawn the window show off the tray callback to avoid
+                // "RefCell already borrowed" panics on Windows — tray-icon
+                // 0.21.x holds an internal RefCell borrow during the
+                // callback, and `show_main_window` can re-enter the tray
+                // (e.g. via `set_tooltip` or `set_icon`), triggering a
+                // double-borrow panic. Spawning breaks the borrow chain.
+                let app = tray.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    show_main_window(&app);
+                });
             }
         })
         .build(app)?;
