@@ -1816,7 +1816,7 @@ mod tests {
         let children = vec![summary_child(42, "tu-1", "completed")];
         inject_delegation_meta(&mut turns, &children);
         let meta = first_block_meta(&turns[0]).expect("meta should be set");
-        let inner = meta.get("veryagent.delegation").expect("codeg.delegation key");
+        let inner = meta.get("veryagent.delegation").expect("veryagent.delegation key");
         assert_eq!(inner["status"], "completed");
         assert_eq!(inner["child_conversation_id"], 42);
         assert!(

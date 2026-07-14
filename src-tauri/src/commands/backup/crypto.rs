@@ -28,7 +28,7 @@ use crate::app_error::{AppCommandError, BACKUP_I18N_KEY_BAD_PASSPHRASE};
 use super::cancelled_error;
 
 /// First 8 bytes of an encrypted backup.
-pub const ENVELOPE_MAGIC: &[u8; 8] = b"CODEGBAK";
+pub const ENVELOPE_MAGIC: &[u8; 8] = b"VERYABAK";
 /// First 4 bytes of a plaintext ZIP (`PK\x03\x04`), used to disambiguate.
 pub const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
 pub const ENVELOPE_HEADER_VERSION: u8 = 1;
@@ -100,7 +100,10 @@ pub fn is_encrypted(path: &Path) -> Result<bool, AppCommandError> {
     let mut f = File::open(path).map_err(AppCommandError::io)?;
     let mut head = [0u8; 8];
     let n = read_fill(&mut f, &mut head).map_err(AppCommandError::io)?;
-    Ok(n >= ENVELOPE_MAGIC.len() && &head[..ENVELOPE_MAGIC.len()] == ENVELOPE_MAGIC)
+    if n < ENVELOPE_MAGIC.len() {
+        return Ok(false);
+    }
+    Ok(&head == ENVELOPE_MAGIC || &head == ENVELOPE_MAGIC_LEGACY)
 }
 
 fn derive_key(passphrase: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; 32], AppCommandError> {
@@ -271,7 +274,7 @@ fn validate_header(h: &EnvelopeHeader) -> Result<(), AppCommandError> {
 fn read_header<R: Read>(reader: &mut R) -> Result<EnvelopeHeader, AppCommandError> {
     let mut magic = [0u8; 8];
     read_fill(reader, &mut magic).map_err(AppCommandError::io)?;
-    if &magic != ENVELOPE_MAGIC {
+    if &magic != ENVELOPE_MAGIC && &magic != ENVELOPE_MAGIC_LEGACY {
         return Err(corrupt_header_error());
     }
     let mut ver = [0u8; 1];

@@ -1150,7 +1150,7 @@ fn link_one_locked(
                 }
                 ExpertLinkState::LinkedElsewhere | ExpertLinkState::Broken => {
                     // A stale or foreign link sits in the way (commonly a
-                    // leftover from the `.codeg` → `.veryagent` rename, or a
+                    // leftover from the `.veryagent` → `.veryagent` rename, or a
                     // dangling junction from a prior session). Remove it and
                     // re-link to our current central store instead of locking
                     // the user out with an unrecoverable ForeignLink error.
@@ -1225,7 +1225,7 @@ fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), Office
             | ExpertLinkState::Broken
             | ExpertLinkState::LinkedElsewhere => {
                 // Remove links to our central store, dangling links, and stale
-                // links left over from a rename (`.codeg` → `.veryagent`). Only
+                // links left over from a rename (`.veryagent` → `.veryagent`). Only
                 // the link itself is removed, never the target's contents.
                 true
             }

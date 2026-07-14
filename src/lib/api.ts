@@ -729,14 +729,14 @@ export async function expertsListAllInstallStatuses(): Promise<
   const result = (await getTransport().call(
     "experts_list_all_install_statuses"
   )) as ExpertInstallStatus[]
-  // 后端序列化为 "linked_to_app"（linked_to_codeg 为旧版兼容名），前端统一用
+  // 后端序列化为 "linked_to_app"（linked_to_veryagent 为旧版兼容名），前端统一用
   // "linked_to_veryagent" —— 保留后端返回的真实状态，不能覆盖成统一的值，
   // 否则矩阵显示与文件系统脱节、toggleCell 会走错启用/禁用分支。
   return result.map((item) => ({
     ...item,
     state:
       item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_codeg" as ExpertLinkState)
+      item.state === ("linked_to_veryagent" as ExpertLinkState)
         ? ("linked_to_veryagent" as const)
         : item.state,
   }))
@@ -837,12 +837,12 @@ export async function officecliSkillListAllInstallStatuses(): Promise<
     "officecli_skill_list_all_install_statuses"
   )) as ExpertInstallStatus[]
   // 同 expertsListAllInstallStatuses：只做命名映射，保留真实状态。
-  // 同时兼容新版 "linked_to_app" 和旧版 "linked_to_codeg" 序列化名。
+  // 同时兼容新版 "linked_to_app" 和旧版 "linked_to_veryagent" 序列化名。
   return result.map((item) => ({
     ...item,
     state:
       item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_codeg" as ExpertLinkState)
+      item.state === ("linked_to_veryagent" as ExpertLinkState)
         ? ("linked_to_veryagent" as const)
         : item.state,
   }))

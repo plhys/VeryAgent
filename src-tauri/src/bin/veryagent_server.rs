@@ -69,7 +69,7 @@ fn main() -> ExitCode {
     //    the credential subprocess — converges on the same root the
     //    server itself chose for the database. Without this, a default
     //    deployment (env var unset) puts the DB under
-    //    `dirs::data_dir()/codeg` but uploads under `~/.veryagent/uploads`,
+    //    `dirs::data_dir()/veryagent` but uploads under `~/.veryagent/uploads`,
     //    splitting the persistent surface across two filesystem roots
     //    and silently breaking single-volume backups, container mounts,
     //    and any `file://` URI in session history that points at an
@@ -92,7 +92,7 @@ fn main() -> ExitCode {
     let _log_guard = veryagent_lib::logging::init::init_server();
 
     // `VERYAGENT_HOME` overrides `VERYAGENT_DATA_DIR` for uploads/pets inside
-    // `paths::codeg_*_root` (legacy `~/.veryagent/` layout). If both are set
+    // `paths::veryagent_*_root` (legacy `~/.veryagent/` layout). If both are set
     // and resolve to different roots, the database and uploads land on
     // different filesystems — a silent split. Warn loudly so the
     // operator notices before relying on a backup or volume mount that

@@ -63,7 +63,7 @@ describe("MessageResponse — veryagent references survive sanitization (real St
     expect(container.textContent).not.toContain("[blocked]")
   })
 
-  it("still renders a plain http link as a button (regression guard for non-codeg links)", async () => {
+  it("still renders a plain http link as a button (regression guard for non-veryagent links)", async () => {
     const { container } = render(
       <MessageResponse>{"[docs](https://example.com)"}</MessageResponse>
     )

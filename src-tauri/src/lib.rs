@@ -641,7 +641,7 @@ mod tauri_app {
 
                 // Automation engine: drives manual + scheduled fires, settles
                 // runs off the event bus, reconciles, and recovers on boot. One
-                // per process; mirrored in `bin/codeg_server.rs`.
+                // per process; mirrored in `bin/veryagent_server.rs`.
                 if let Some(engine) = crate::automation::build_engine(
                     crate::db::AppDatabase {
                         conn: app.state::<crate::db::AppDatabase>().conn.clone(),
