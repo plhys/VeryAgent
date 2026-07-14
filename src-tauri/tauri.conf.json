@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm tauri:before-dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "pnpm tauri:before-build",
+    "beforeBuildCommand": "pnpm tauri:prepare-sidecars",
     "frontendDist": "../out"
   },
   "app": {
