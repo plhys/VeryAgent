@@ -2094,13 +2094,13 @@ function ensureCodexProviderDefaults(
   }
   let next = configTomlText
   const current = extractCodexTomlImportantValues(next)
-  const codegBaseUrl =
+  const veryagentBaseUrl =
     current.providerBaseUrls[CODEX_DEFAULT_MODEL_PROVIDER] ?? ""
   next = patchCodexProviderField(
     next,
     CODEX_DEFAULT_MODEL_PROVIDER,
     "base_url",
-    `base_url = ${JSON.stringify(codegBaseUrl)}`
+    `base_url = ${JSON.stringify(veryagentBaseUrl)}`
   )
   next = patchCodexProviderField(
     next,

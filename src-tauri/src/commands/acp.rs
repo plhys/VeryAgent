@@ -1708,10 +1708,10 @@ fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
 //   2. `credentials/kimi-code.json` — a synthetic gate token veryagent seeds so the
 //      ACP session opens. It is purely local: because `default_model` points at
 //      the API-key provider, the managed/OAuth endpoint is never called and this
-//      token is never transmitted. It carries a `_codeg_synthetic` marker so we
+//      token is never transmitted. It carries a `_veryagent_synthetic` marker so we
 //      only ever remove OUR token, never a real login the user performed.
 //
-// The veryagent-managed block is keyed by the fixed names `codeg` / `veryagent-managed`
+// The veryagent-managed block is keyed by the fixed names `veryagent` / `veryagent-managed`
 // so it is recognizable and removable without disturbing any provider/model the
 // user added by hand. The raw config.toml editor is the comment/format escape
 // hatch. A stale `KIMI_MODEL_*` env override would silently win over config.toml,
@@ -1723,7 +1723,7 @@ const KIMI_MANAGED_MODEL_ALIAS: &str = "veryagent-managed";
 const KIMI_MODEL_API_KEY_ENV: &str = "KIMI_MODEL_API_KEY";
 const KIMI_MODEL_BASE_URL_ENV: &str = "KIMI_MODEL_BASE_URL";
 const KIMI_MODEL_NAME_ENV: &str = "KIMI_MODEL_NAME";
-/// Sentinel `access_token` value (and `_codeg_synthetic` marker) identifying the
+/// Sentinel `access_token` value (and `_veryagent_synthetic` marker) identifying the
 /// gate token veryagent seeds, so we never clobber a real OAuth login.
 const KIMI_SYNTHETIC_TOKEN_ACCESS: &str = "veryagent-local-gate";
 /// Fallback context window for the managed model. Kimi's config schema **requires**
@@ -1935,7 +1935,7 @@ fn read_kimi_token() -> Option<serde_json::Value> {
 
 /// Whether a token document is veryagent's synthetic gate token (vs a real OAuth
 /// login the user performed via `kimi login`). Matches either the sentinel
-/// `access_token` or the explicit `_codeg_synthetic` marker.
+/// `access_token` or the explicit `_veryagent_synthetic` marker.
 fn kimi_token_is_synthetic(token: &serde_json::Value) -> bool {
     token
         .get("_veryagent_synthetic")
@@ -6073,7 +6073,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
         // Hermes is self-managed: project its own ~/.hermes/.env + config.yaml
         // into config_json (read-only) and attach the raw config.yaml for the
         // advanced editor. The env-merge block above is skipped because
-        // `load_agent_local_config_json` returns None for Hermes (no codeg
+        // `load_agent_local_config_json` returns None for Hermes (no veryagent
         // local config path), so no Hermes credential leaks into process env.
         let (config_json, hermes_config_yaml) = if agent_type == AgentType::Hermes {
             (
@@ -8226,11 +8226,11 @@ wire_api = "chat"
             "model_provider = \"other\"",
         );
 
-        let p_codeg = codex_config_projection_from_toml(veryagent);
+        let p_veryagent = codex_config_projection_from_toml(veryagent);
         let p_other = codex_config_projection_from_toml(&other);
 
         assert_eq!(
-            p_codeg.get("modelProvider").and_then(|v| v.as_str()),
+            p_veryagent.get("modelProvider").and_then(|v| v.as_str()),
             Some("veryagent")
         );
         assert_eq!(
@@ -8238,19 +8238,19 @@ wire_api = "chat"
             Some("other")
         );
         // Same endpoint resolved for both providers...
-        assert_eq!(p_codeg.get("apiBaseUrl"), p_other.get("apiBaseUrl"));
+        assert_eq!(p_veryagent.get("apiBaseUrl"), p_other.get("apiBaseUrl"));
         // ...yet the projections differ, so the launch-config fingerprint does too.
-        assert_ne!(p_codeg, p_other);
+        assert_ne!(p_veryagent, p_other);
 
         // Deterministic for identical input.
-        assert_eq!(codex_config_projection_from_toml(veryagent), p_codeg);
+        assert_eq!(codex_config_projection_from_toml(veryagent), p_veryagent);
 
         // `modelProvider` must NOT be an AgentRuntimeConfig key, or
         // build_runtime_env_from_setting would mirror it back into a runtime env
         // var (reintroducing the very MODEL_PROVIDER pin we removed).
         assert!(
             serde_json::from_value::<AgentRuntimeConfig>(serde_json::Value::Object(
-                p_codeg.clone()
+                p_veryagent.clone()
             ))
             .is_ok()
         );

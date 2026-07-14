@@ -88,7 +88,7 @@ const OPEN_SCROLL_REPIN_FRAMES = 6
 const READ_LOG_MAX_BYTES = 16 * 1024 * 1024
 
 // Curated tracing targets offered as autocomplete suggestions for per-module
-// overrides (free text is still allowed). Module paths under `codeg_lib`.
+// overrides (free text is still allowed). Module paths under `veryagent_lib`.
 const CURATED_TARGETS = [
   "veryagent_lib::acp",
   "veryagent_lib::acp::delegation",
