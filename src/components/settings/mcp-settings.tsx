@@ -86,10 +86,10 @@ const APP_OPTIONS: { value: McpAppType; label: string }[] = [
   { value: "claude_code", label: "Claude Code" },
   { value: "codex", label: "Codex CLI" },
   { value: "gemini", label: "Gemini CLI" },
-  // OpenClaw 不接受 ACP 线缆上的 MCP 服务器条目（后端 registry.rs supports_mcp=false
-  // 会让其 mcpServers 恒为空 []，否则带条目时 OpenClaw 会在建会话阶段报错），按产品
-  // 决策不作为可分配目标。McpAppType 仍保留 "open_claw" 以兼容回读存量配置，
-  // saveLocalServer 也会保留既有 open_claw 分配（不静默清除）。
+  // OpenClaw 不接�?ACP 线缆上的 MCP 服务器条目（后端 registry.rs supports_mcp=false
+  // 会让�?mcpServers 恒为�?[]，否则带条目�?OpenClaw 会在建会话阶段报错），按产品
+  // 决策不作为可分配目标。McpAppType 仍保�?"open_claw" 以兼容回读存量配置，
+  // saveLocalServer 也会保留既有 open_claw 分配（不静默清除）�?
   { value: "open_code", label: "OpenCode" },
   { value: "cline", label: "Cline" },
   { value: "hermes", label: "Hermes Agent" },
@@ -599,7 +599,7 @@ export function McpSettings() {
     // Carry forward assignments for agents no longer offered in the UI (e.g.
     // OpenClaw, which no longer accepts MCP over the ACP wire). We never add
     // these, but must not silently strip a legacy assignment from a server the
-    // user is editing — that would destroy existing on-disk config and could
+    // user is editing �?that would destroy existing on-disk config and could
     // wedge an OpenClaw-only server into an unsavable "no apps" state.
     const hiddenLegacyApps = selectedLocal.apps.filter(
       (app) => !APP_OPTIONS.some((option) => option.value === app)
@@ -1046,9 +1046,6 @@ export function McpSettings() {
               <TabsTrigger value="local" className="flex-1">
                 {t("tabs.local")}
               </TabsTrigger>
-              <TabsTrigger value="market" className="flex-1">
-                {t("tabs.market")}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent
@@ -1144,183 +1141,6 @@ export function McpSettings() {
                   <Plus className="h-3.5 w-3.5" />
                   {t("actions.newMcp")}
                 </Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="market" className="h-full min-h-0 pt-2">
-              <div className="space-y-2 pb-2">
-                <Select
-                  value={selectedProvider}
-                  onValueChange={setSelectedProvider}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("market.selectMarketplace")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((provider) => (
-                      <SelectItem key={provider.id} value={provider.id}>
-                        {provider.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <div className="flex gap-2">
-                  <Input
-                    value={marketQuery}
-                    onChange={(event) => setMarketQuery(event.target.value)}
-                    placeholder={t("market.searchPlaceholder")}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return
-                      executeSearch({
-                        providerId: selectedProvider,
-                        query: marketQuery,
-                      }).catch((err) => {
-                        console.error(
-                          "[Settings] search MCP marketplace failed:",
-                          err
-                        )
-                      })
-                    }}
-                  />
-                  <Button
-                    onClick={() => {
-                      executeSearch({
-                        providerId: selectedProvider,
-                        query: marketQuery,
-                      }).catch((err) => {
-                        console.error(
-                          "[Settings] search MCP marketplace failed:",
-                          err
-                        )
-                      })
-                    }}
-                    disabled={searching || !selectedProvider}
-                  >
-                    {searching ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Search className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {searchError ? (
-                <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
-                  {t("market.searchFailed", { message: searchError })}
-                </div>
-              ) : null}
-
-              <div className="h-[calc(100%-106px)] overflow-auto space-y-1">
-                {searching ? (
-                  <div className="h-full min-h-24 rounded-md border border-dashed flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {t("market.loadingList")}
-                  </div>
-                ) : searchResults.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                    {t("market.empty")}
-                  </div>
-                ) : (
-                  searchResults.map((item) => {
-                    const active =
-                      selection?.kind === "market" &&
-                      selection.id === item.server_id
-                    return (
-                      <ContextMenu
-                        key={`${item.provider_id}:${item.server_id}`}
-                      >
-                        <ContextMenuTrigger asChild>
-                          <button
-                            className={cn(
-                              "w-full rounded-md border p-2 text-left transition-colors",
-                              active
-                                ? "border-primary bg-primary/5"
-                                : "hover:bg-muted/60"
-                            )}
-                            onClick={() => {
-                              setSelection({
-                                kind: "market",
-                                id: item.server_id,
-                              })
-                            }}
-                          >
-                            <div className="flex items-start gap-2">
-                              <div className="mt-0.5 h-7 w-7 overflow-hidden rounded-md border bg-muted/40 shrink-0">
-                                {item.icon_url ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={item.icon_url}
-                                    alt={item.name}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-full w-full flex items-center justify-center text-[10px] text-muted-foreground">
-                                    MCP
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium break-all">
-                                  {item.name}
-                                </div>
-                                <div className="text-xs text-muted-foreground break-all">
-                                  {item.server_id}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {item.protocols.map((protocol) => (
-                                <Badge
-                                  key={`${item.server_id}-${protocol}`}
-                                  variant="secondary"
-                                  className="text-[10px]"
-                                >
-                                  {protocolBadgeLabel(protocol, mcpT)}
-                                </Badge>
-                              ))}
-                              {item.latest_version ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px]"
-                                >
-                                  v{item.latest_version}
-                                </Badge>
-                              ) : null}
-                              {item.verified ? (
-                                <Badge className="text-[10px]">
-                                  {t("badges.verified")}
-                                </Badge>
-                              ) : null}
-                              {typeof item.downloads === "number" ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px]"
-                                >
-                                  {t("badges.uses", { count: item.downloads })}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </button>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem
-                            onClick={() => {
-                              setSelection({
-                                kind: "market",
-                                id: item.server_id,
-                              })
-                            }}
-                          >
-                            {t("actions.viewDetails")}
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    )
-                  })
-                )}
               </div>
             </TabsContent>
           </Tabs>

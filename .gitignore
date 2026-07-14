@@ -67,3 +67,4 @@ src-tauri/target/
 
 # sccache local cache (do not commit; migrate manually per BUILD-SPEED.md)
 .sccache/
+tmp-*

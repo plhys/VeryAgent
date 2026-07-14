@@ -196,6 +196,12 @@ export interface SessionStats {
   context_window_usage_percent?: number | null
 }
 
+export interface BackgroundSettledInfo {
+  task_id: string
+  status: string
+  summary?: string | null
+}
+
 export interface MessageTurn {
   id: string
   role: TurnRole
@@ -413,6 +419,15 @@ export interface DbConversationDetail {
    * mid-stream, which would otherwise double-render against the live reply.
    */
   in_flight_user_turn_id?: string | null
+  /** Byte offset the parser had read through when it produced this detail —
+   *  the same offset the backend's `background_activity` watcher uses to stamp
+   *  overlay entries (see `BackgroundOverlayEntry.watermark` in
+   *  conversation-runtime-store). When a refetched detail's watermark has caught
+   *  up to an overlay entry's watermark (`>=`), the detail literally contains
+   *  those bytes, so the overlay entry is retired. Null when the parser doesn't
+   *  expose a byte-offset watermark (non-Claude parsers).
+   */
+  transcript_watermark?: number | null
 }
 
 export type ConversationStatus =
@@ -1182,6 +1197,20 @@ export type AcpEvent =
       size: number
     }
   /**
+   * Out-of-turn activity surfaced from the agent's own session transcript
+   * by the background watcher (`acp::background_watch`; Claude-only today).
+   * Covers everything that happens OUTSIDE a veryAgent-driven prompt turn:
+   * async sub-agent / background-shell completions, cron//loop autonomous turns.
+   */
+  | {
+      type: "background_activity"
+      session_id: string
+      turns?: MessageTurn[]
+      outstanding: number
+      settled?: BackgroundSettledInfo[]
+      watermark: number
+    }
+  /**
    * A `delegate_to_agent` MCP tool call from the parent agent has spawned a
    * child sub-session and the child's prompt is in flight. Emitted as soon as
    * the broker registers the pending call. Frontend uses this to build the
@@ -1459,6 +1488,10 @@ export interface LiveSessionSnapshot {
   config_stale?: boolean
   /** Which settings surface drifted; present only while `config_stale`. */
   config_stale_kind?: ConfigStaleKind | null
+  /** Launched-but-unresolved background tasks (async sub-agents +
+   *  background shell tasks). Mirrored into `SessionState` to exempt the
+   *  connection from idle sweeps while work is pending. Absent → `0`. */
+  background_outstanding?: number
   event_seq: number
 }
 
@@ -1559,6 +1592,38 @@ export interface ExpertMetadata {
 
 export interface ExpertListItem {
   metadata: ExpertMetadata
+  installed_centrally: boolean
+  user_modified: boolean
+  central_path: string
+}
+
+/**
+ * Built-in scientific-research skills, curated from
+ * K-Dense-AI/scientific-agent-skills and bundled into the veryAgent binary. They
+ * share the central store (`~/.veryagent/skills/`) and link primitives with
+ * experts; link statuses reuse `ExpertInstallStatus`/`LinkOp`/`LinkOpResult`
+ * (the `expertId` field carries the science skill id).
+ */
+export interface ScienceMetadata {
+  id: string
+  category: string
+  icon: string | null
+  sort_order: number
+  /** Surface as a card in the new-session "Scientific Research" tab. */
+  featured: boolean
+  /** Color key indexing the ACCENTS map in quick-actions.tsx (featured only). */
+  accent: string | null
+  /** Primary workflow requires an external API key. */
+  needs_key: boolean
+  /** Ships scripts that may need a Python/uv environment. */
+  needs_env: boolean
+  display_name: Record<string, string>
+  description: Record<string, string>
+  bundled_hash: string
+}
+
+export interface ScienceListItem {
+  metadata: ScienceMetadata
   installed_centrally: boolean
   user_modified: boolean
   central_path: string

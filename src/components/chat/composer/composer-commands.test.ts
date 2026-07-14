@@ -7,6 +7,7 @@ import {
   applyExpertReference,
   isComposerChromeClick,
   isComposerEmpty,
+  restampSkillPrefixes,
   restoreBlocksIntoEditor,
 } from "./composer-commands"
 import { buildComposerExtensions } from "./editor-config"
@@ -230,5 +231,89 @@ describe("restoreBlocksIntoEditor", () => {
     const md = editor.getMarkdown()
     expect(md).toContain("fresh")
     expect(md).not.toContain("stale")
+  })
+})
+
+/** A scoped skill reference (refType `skill`, `meta.scope === "skill"`). */
+function skillAttrs(id: string, prefix: "/" | "$" = "/"): ReferenceAttrs {
+  return {
+    refType: "skill",
+    id,
+    label: id,
+    uri: null,
+    meta: { scope: "skill", invocationPrefix: prefix },
+  }
+}
+
+/** A bare ACP slash command (refType `skill`, no `scope` — always `/`). */
+function commandAttrs(id: string): ReferenceAttrs {
+  return {
+    refType: "skill",
+    id,
+    label: id,
+    uri: null,
+    meta: null,
+  }
+}
+
+describe("restampSkillPrefixes", () => {
+  let editor: Editor
+
+  beforeEach(() => {
+    editor = new Editor({ extensions: buildComposerExtensions() })
+  })
+  afterEach(() => editor?.destroy())
+
+  it("rewrites an expert badge's prefix to `$` when switching to Codex", () => {
+    applyExpertReference(editor, expertAttrs("reviewer"))
+    expect(editor.getMarkdown().trimStart()).toMatch(/^\/reviewer\b/)
+    const changed = restampSkillPrefixes(editor, "$")
+    expect(changed).toBe(true)
+    expect(editor.getMarkdown().trimStart()).toMatch(/^\$reviewer\b/)
+  })
+
+  it("rewrites a scoped skill badge and preserves surrounding prose", () => {
+    editor.commands.insertReference(skillAttrs("code-review"))
+    editor.commands.insertContent(" please")
+    expect(editor.getMarkdown()).toContain("/code-review")
+    restampSkillPrefixes(editor, "$")
+    const md = editor.getMarkdown()
+    expect(md).toContain("$code-review")
+    expect(md).not.toContain("/code-review")
+    expect(md).toContain("please")
+  })
+
+  it("switches back to `/` when leaving Codex for another agent", () => {
+    applyExpertReference(editor, expertAttrs("deploy", "$"))
+    expect(editor.getMarkdown().trimStart()).toMatch(/^\$deploy\b/)
+    restampSkillPrefixes(editor, "/")
+    expect(editor.getMarkdown().trimStart()).toMatch(/^\/deploy\b/)
+  })
+
+  it("leaves a bare ACP slash command (no scope) as `/` on Codex", () => {
+    editor.commands.insertReference(commandAttrs("init"))
+    const changed = restampSkillPrefixes(editor, "$")
+    expect(changed).toBe(false)
+    expect(editor.getMarkdown()).toContain("/init")
+    expect(editor.getMarkdown()).not.toContain("$init")
+  })
+
+  it("re-stamps skills/experts but not command badges in one pass", () => {
+    editor.commands.insertReference(commandAttrs("init"))
+    editor.commands.insertReference(skillAttrs("code-review"))
+    applyExpertReference(editor, expertAttrs("reviewer"))
+    restampSkillPrefixes(editor, "$")
+    const md = editor.getMarkdown()
+    expect(md).toContain("$reviewer")
+    expect(md).toContain("$code-review")
+    // Bare ACP command stays untouched.
+    expect(md).toContain("/init")
+    expect(md).not.toContain("$init")
+  })
+
+  it("is a no-op (returns false) when every prefix already matches", () => {
+    applyExpertReference(editor, expertAttrs("reviewer", "$"))
+    const changed = restampSkillPrefixes(editor, "$")
+    expect(changed).toBe(false)
   })
 })

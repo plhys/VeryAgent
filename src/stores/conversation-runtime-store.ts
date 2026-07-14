@@ -54,6 +54,30 @@ export interface ConversationTimelineTurn {
   inProgressToolCallIds?: Set<string>
 }
 
+/**
+ * One out-of-turn overlay turn pushed by the backend transcript watcher via a
+ * `background_activity` event, tagged with the transcript byte offset it was
+ * parsed through. `FETCH_DETAIL_SUCCESS` retires entries whose watermark the
+ * refetched detail's `transcript_watermark` has caught up to (`>=`) — the
+ * race-free hand-off from overlay to persisted turns (both sides measure the
+ * SAME file, so "caught up" means the detail literally contains those bytes).
+ */
+export interface BackgroundOverlayEntry {
+  turn: MessageTurn
+  watermark: number
+}
+
+/**
+ * Backstop bound on the overlay when retirement can't run (a refetch that
+ * keeps failing — server unreachable — while cron//loop turns keep arriving).
+ * Oldest entries are dropped first: they are already-persisted facts, so the
+ * next SUCCESSFUL detail fetch shows them again; only the degraded window
+ * loses scrollback. The normal bound is much tighter — the connections layer
+ * triggers a self-healing refetch well below this (see the
+ * `background_activity` handler).
+ */
+export const BACKGROUND_OVERLAY_HARD_CAP = 300
+
 export interface ConversationRuntimeSession {
   conversationId: number
   externalId: string | null
@@ -72,6 +96,15 @@ export interface ConversationRuntimeSession {
 
   // Active session accumulated turns (promoted optimistic + completed streaming)
   localTurns: MessageTurn[]
+
+  // Out-of-turn transcript overlay: async task-notification completions, the
+  // agent's continued work after them, cron//loop autonomous turns — parsed
+  // from the agent's own session file by the backend watcher and upserted here
+  // by `background_activity` events (keyed by turn id; a still-growing turn is
+  // replaced in place). These are already-persisted facts shown ahead of the
+  // next detail refetch; the watermark rule above retires them once a refetch
+  // catches up, so overlay and persisted copies never coexist in the timeline.
+  backgroundTurns: BackgroundOverlayEntry[]
 
   // Temporary state
   optimisticTurns: MessageTurn[]
@@ -174,6 +207,16 @@ type Action =
       liveMessage?: LiveMessage | null
     }
   | {
+      // Upsert out-of-turn overlay turns from a `background_activity` event
+      // (see `BackgroundOverlayEntry`). Turns are keyed by id: new ids append
+      // in event order, a re-emitted (still-growing) turn replaces its entry
+      // in place, and every upserted entry adopts the event's watermark.
+      type: "APPLY_BACKGROUND_ACTIVITY"
+      conversationId: number
+      turns: MessageTurn[]
+      watermark: number
+    }
+  | {
       type: "APPEND_OPTIMISTIC_TURN"
       conversationId: number
       turn: MessageTurn
@@ -265,6 +308,7 @@ function createEmptySession(
     detailError: null,
     acpLoadError: null,
     localTurns: [],
+    backgroundTurns: [],
     optimisticTurns: [],
     liveMessage: null,
     syncState: "idle",
@@ -949,6 +993,23 @@ function reducer(
       const keepAllLiveBuffers =
         action.preserveLive === true || detailIsInFlight
 
+      // Retire overlay turns the refetched detail now covers: both sides
+      // measure byte offsets of the SAME transcript, so `entry.watermark <=
+      // detail.transcript_watermark` means this detail literally contains
+      // those bytes. Entries beyond the detail's watermark stay (they were
+      // parsed from bytes appended after this fetch read the file). A detail
+      // without a watermark (non-Claude parser) retires nothing — its overlay
+      // is never populated anyway.
+      const detailWatermark = action.detail.transcript_watermark ?? null
+      const retainedBackground =
+        detailWatermark === null
+          ? current.backgroundTurns
+          : current.backgroundTurns.filter((e) => e.watermark > detailWatermark)
+      const nextBackgroundTurns =
+        retainedBackground.length === current.backgroundTurns.length
+          ? current.backgroundTurns
+          : retainedBackground
+
       const nextSession: ConversationRuntimeSession = {
         ...current,
         detail: action.detail,
@@ -956,6 +1017,7 @@ function reducer(
         detailError: null,
         externalId: nextExternalId ?? current.externalId,
         sessionStats: action.detail.session_stats ?? current.sessionStats,
+        backgroundTurns: nextBackgroundTurns,
         ...(isActivelyInteracting
           ? keepAllLiveBuffers
             ? {}
@@ -1067,6 +1129,39 @@ function reducer(
         syncState: "idle",
         activeTurnToken: null,
       }))
+    }
+
+    case "APPLY_BACKGROUND_ACTIVITY": {
+      if (action.turns.length === 0) return state
+      // `updateSessionInState` materializes an empty session when the
+      // conversation isn't loaded here yet — the overlay survives until the
+      // tab opens and the cold detail fetch reconciles it away (its watermark
+      // rule), so a completion landing on a closed tab isn't lost.
+      return updateSessionInState(state, action.conversationId, (current) => {
+        const indexById = new Map<string, number>()
+        current.backgroundTurns.forEach((entry, i) =>
+          indexById.set(entry.turn.id, i)
+        )
+        const next = current.backgroundTurns.slice()
+        for (const turn of action.turns) {
+          const entry: BackgroundOverlayEntry = {
+            turn,
+            watermark: action.watermark,
+          }
+          const existing = indexById.get(turn.id)
+          if (existing === undefined) {
+            indexById.set(turn.id, next.length)
+            next.push(entry)
+          } else {
+            next[existing] = entry
+          }
+        }
+        const bounded =
+          next.length > BACKGROUND_OVERLAY_HARD_CAP
+            ? next.slice(next.length - BACKGROUND_OVERLAY_HARD_CAP)
+            : next
+        return { ...current, backgroundTurns: bounded }
+      })
     }
 
     case "APPEND_OPTIMISTIC_TURN":
@@ -1417,6 +1512,11 @@ export interface RuntimeActions {
   ) => void
   removeOptimisticTurn: (conversationId: number, id: string) => void
   appendViewerUserTurn: (conversationId: number, turn: MessageTurn) => void
+  applyBackgroundActivity: (
+    conversationId: number,
+    turns: MessageTurn[],
+    watermark: number
+  ) => void
   setLiveMessage: (
     conversationId: number,
     liveMessage: LiveMessage | null,
@@ -1487,6 +1587,43 @@ function isLatestGeneration(
   generation: number
 ): boolean {
   return fetchGeneration.get(conversationId) === generation
+}
+
+/**
+ * Stable two-list merge by turn timestamp (both inputs are already in
+ * chronological order within themselves). Ties keep the LEFT list's entry
+ * first. Timestamps are parsed (not string-compared) because the parser's
+ * RFC3339 output carries variable sub-second precision.
+ */
+function mergeTimelineByTimestamp(
+  a: ConversationTimelineTurn[],
+  b: ConversationTimelineTurn[]
+): ConversationTimelineTurn[] {
+  if (a.length === 0) return b
+  if (b.length === 0) return a
+  const at = a.map((e) => Date.parse(e.turn.timestamp) || 0)
+  const bt = b.map((e) => Date.parse(e.turn.timestamp) || 0)
+  const merged: ConversationTimelineTurn[] = []
+  let i = 0
+  let j = 0
+  while (i < a.length && j < b.length) {
+    if (at[i] <= bt[j]) {
+      merged.push(a[i])
+      i += 1
+    } else {
+      merged.push(b[j])
+      j += 1
+    }
+  }
+  while (i < a.length) {
+    merged.push(a[i])
+    i += 1
+  }
+  while (j < b.length) {
+    merged.push(b[j])
+    j += 1
+  }
+  return merged
 }
 
 /**
@@ -1621,6 +1758,26 @@ function computeTimeline(
     })
   )
 
+  // Phase 2.5: background overlay turns — out-of-turn activity (async task
+  // completions, the agent's continued work after them, cron//loop turns)
+  // parsed from the agent's own transcript by the backend watcher. They are
+  // already-persisted facts shown ahead of the next detail refetch, which
+  // retires them via the watermark rule (see FETCH_DETAIL_SUCCESS) — so a
+  // persisted copy and an overlay copy never coexist here. Interleaved with
+  // localTurns by timestamp so a foreground exchange completed BETWEEN
+  // background turns keeps wall-clock order.
+  const background: ConversationTimelineTurn[] = session.backgroundTurns.map(
+    (entry) => ({
+      key: `background-${conversationId}-${entry.turn.id}`,
+      turn: entry.turn,
+      phase: "persisted" as const,
+    })
+  )
+  const localAndBackground =
+    background.length === 0
+      ? local
+      : mergeTimelineByTimestamp(local, background)
+
   // Phase 3: Optimistic turns (pending user messages)
   const optimistic: ConversationTimelineTurn[] = session.optimisticTurns.map(
     (turn, index) => ({
@@ -1636,7 +1793,7 @@ function computeTimeline(
     ? buildStreamingTurnsFromLiveMessage(conversationId, streamingMessage)
     : null
 
-  const result = [...persisted, ...local, ...optimistic]
+  const result = [...persisted, ...localAndBackground, ...optimistic]
 
   if (built) {
     for (const [i, turn] of built.turns.entries()) {
@@ -1935,6 +2092,13 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
       dispatch({ type: "REMOVE_OPTIMISTIC_TURN", conversationId, id }),
     appendViewerUserTurn: (conversationId, turn) =>
       dispatch({ type: "APPEND_VIEWER_USER_TURN", conversationId, turn }),
+    applyBackgroundActivity: (conversationId, turns, watermark) =>
+      dispatch({
+        type: "APPLY_BACKGROUND_ACTIVITY",
+        conversationId,
+        turns,
+        watermark,
+      }),
     setLiveMessage: (conversationId, liveMessage, isLive) =>
       dispatch({
         type: "SET_LIVE_MESSAGE",

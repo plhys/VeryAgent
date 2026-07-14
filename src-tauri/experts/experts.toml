@@ -409,36 +409,6 @@ pt = "Define como descobrir e usar habilidades no início de qualquer conversa."
 ar = "يحدد كيفية اكتشاف واستخدام المهارات في بداية أي محادثة."
 
 
-[[expert]]
-id = "multimodal-vision"
-category = "meta"
-icon = "Eye"
-sort_order = 220
-
-[expert.display_name]
-en = "Multimodal Vision"
-"zh-CN" = "多模态视觉"
-"zh-TW" = "多模態視覺"
-ja = "マルチモーダル視覚"
-ko = "멀티모달 시각"
-es = "Visión multimodal"
-de = "Multimodale Vision"
-fr = "Vision multimodale"
-pt = "Visão multimodal"
-ar = "الرؤية متعددة الوسائط"
-
-[expert.description]
-en = "Analyze images and visual content via a vision model — lets text-only agents \"see\" screenshots, diagrams, charts, and UI layouts."
-"zh-CN" = "通过视觉模型分析图片和视觉内容——让纯文字智能体也能\"看\"截图、图表、图示和 UI 界面。"
-"zh-TW" = "透過視覺模型分析圖片和視覺內容——讓純文字智能體也能「看」截圖、圖表、圖示和 UI 界面。"
-ja = "視覚モデルで画像や視覚コンテンツを分析 — テキストのみのエージェントもスクリーンショット、図表、UIレイアウトを「見る」ことができます。"
-ko = "시각 모델로 이미지와 시각 콘텐츠를 분석 — 텍스트 전용 에이전트도 스크린샷, 다이어그램, 차트, UI 레이아웃을 \"볼\" 수 있습니다."
-es = "Analiza imágenes y contenido visual mediante un modelo de visión — permite a los agentes de solo texto \"ver\" capturas, diagramas, gráficos y layouts UI."
-de = "Analysiert Bilder und visuelle Inhalte über ein Vision-Modell — ermöglicht text-only-Agenten \"Sehen\" von Screenshots, Diagrammen, Charts und UI-Layouts."
-fr = "Analyse les images et contenus visuels via un modèle de vision — permet aux agents textuels de \"voir\" captures, diagrammes, graphiques et layouts UI."
-pt = "Analisa imagens e conteúdo visual via um modelo de visão — permite que agentes textuais \"vejam\" capturas, diagramas, gráficos e layouts UI."
-ar = "يحلل الصور والمحتوى البصري عبر نموذج رؤية — يتيح للعملاء النصيين فقط \"رؤية\" لقطات الشاشة والمخططات والرسوم البيانية وتخطيطات واجهة المستخدم."
-
 
 [[expert]]
 id = "writing-skills"

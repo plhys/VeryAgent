@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
+import { useScrollbarSafeDismiss } from "@/hooks/use-scrollbar-safe-dismiss"
 import type { ModelOptionGroup } from "@/lib/model-config-groups"
 import type { SessionConfigOptionInfo } from "@/lib/types"
 import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
@@ -35,6 +36,8 @@ export function InlineSessionConfigSelector({
   derivedGroups,
 }: SessionConfigSelectorProps) {
   const localizer = useConfigOptionLocalizer()
+  const { contentRef, onPointerDownOutside, onFocusOutside } =
+    useScrollbarSafeDismiss()
   if (option.kind.type !== "select") return null
 
   // Unified group list rendered in the dropdown body. Derived (model) groups
@@ -81,8 +84,11 @@ export function InlineSessionConfigSelector({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        ref={contentRef}
         side="top"
         align="start"
+        onPointerDownOutside={onPointerDownOutside}
+        onFocusOutside={onFocusOutside}
         className="min-w-72 overflow-y-auto"
         style={{
           maxWidth: "min(20rem, calc(100vw - 1rem))",

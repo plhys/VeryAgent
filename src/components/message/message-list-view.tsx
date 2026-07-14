@@ -800,12 +800,13 @@ export function MessageListView({
     for (let i = 0; i < threadItems.length; i++) {
       const item = threadItems[i]
       if (item.kind === "turn" && item.group.role === "user") {
-        // Extract a short label from the first text part
+        // Extract a short label from the first text part, and total text length
         let label = ""
+        let textLength = 0
         for (const part of item.group.parts) {
           if (part.type === "text") {
-            label = part.text.slice(0, 80)
-            break
+            if (!label) label = part.text.slice(0, 80)
+            textLength += part.text.length
           }
         }
         // Heuristic: if the next assistant turn has file-write tool calls,
@@ -837,6 +838,7 @@ export function MessageListView({
           ordinal: entries.length + 1,
           label: label || "…",
           hasChanges,
+          textLength,
         })
       }
     }

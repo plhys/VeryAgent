@@ -28,6 +28,7 @@ use sacp::{
 use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, RwLock};
 
+use crate::acp::background_watch;
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
 use crate::acp::registry::{self, AgentDistribution};
@@ -1552,6 +1553,36 @@ fn canonical_spec_to_mcp_server(name: &str, spec: &serde_json::Value) -> Result<
     }
 }
 
+/// Classify a `session/load` failure into a stable frontend code when the
+/// historical session cannot be restored.
+///
+/// - `Some("resource_not_found")` — the agent returned JSON-RPC -32002
+///   `ResourceNotFound` (session was deleted/expired/never existed).
+/// - `Some("session_unavailable")` — the error message contains crash/ended
+///   patterns ("process exited", "session has ended", "Session not found").
+///   Covers Claude 0.58.1 crash/termination cases that report as -32603
+///   `InternalError`.
+/// - `None` — for recoverable errors (`MethodNotFound`, `AuthRequired`,
+///   other) that keep the existing `session/new` fallback behavior.
+fn classify_session_load_failure(error: &sacp::Error) -> Option<&'static str> {
+    // ResourceNotFound (-32002) always maps to "resource_not_found", even if
+    // the message text would also match a crash pattern below.
+    if matches!(error.code, sacp::schema::ErrorCode::ResourceNotFound) {
+        return Some("resource_not_found");
+    }
+    // Crash/ended patterns — these are unrecoverable: the agent process
+    // terminated or the session was purged, so auto-fallback to session/new
+    // would silently orphan the historical context.
+    let msg = error.message.as_str();
+    if msg.contains("process exited")
+        || msg.contains("session has ended")
+        || msg.contains("Session not found")
+    {
+        return Some("session_unavailable");
+    }
+    None
+}
+
 /// The main ACP connection loop.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
@@ -1596,6 +1627,30 @@ async fn run_connection(
     let emitter_clone = emitter.clone();
     let perms = pending_perms.clone();
     let state_outer = Arc::clone(&state);
+
+    // Claude-only: tail this connection's session transcript for OUT-OF-TURN
+    // activity (async sub-agent / background-shell completions, the agent's
+    // continued work after them, cron//loop autonomous turns — none of which
+    // the wire reliably represents) and surface it as `BackgroundActivity`
+    // events; also feeds the keep-alive accounting that exempts the
+    // connection from the idle sweeps while such work is pending. Created
+    // HERE — per CONNECTION, not per conversation loop — so ONE watcher (and
+    // one prompt ledger) spans fork restarts: `run_watch` observes the
+    // session-id change and re-arms in place, carrying still-outstanding
+    // tasks and settled ids across the fork (a post-fork `SendMessage`
+    // resume must re-arm the keep-alive). The guard aborts the watcher when
+    // this connection ends. Its spawn epoch (captured before the session
+    // exists) is what lets the first arm process records written before the
+    // transcript file is discovered.
+    let prompt_ledger = background_watch::PromptLedger::shared();
+    let _bg_watch = background_watch::spawn_if_claude(
+        &connection_id,
+        agent_type,
+        Arc::clone(&state),
+        emitter.clone(),
+        cwd_string.clone(),
+        Arc::clone(&prompt_ledger),
+    );
 
     Client
         .builder()
@@ -1954,6 +2009,7 @@ async fn run_connection(
                                 terminal_runtime.clone(),
                                 &cwd_string,
                                 supports_fork,
+                                &prompt_ledger,
                                 delegation_injection.as_ref(),
                             )
                             .await;
@@ -1974,6 +2030,7 @@ async fn run_connection(
                                 terminal_runtime.clone(),
                                 &cwd,
                                 &cwd_string,
+                                &prompt_ledger,
                                 delegation_injection.as_ref(),
                             )
                             .await;
@@ -2111,6 +2168,7 @@ async fn run_connection(
                             terminal_runtime.clone(),
                             &cwd_string,
                             supports_fork,
+                            &prompt_ledger,
                             delegation_injection.as_ref(),
                         )
                         .await;
@@ -2127,6 +2185,7 @@ async fn run_connection(
                             terminal_runtime.clone(),
                             &cwd,
                             &cwd_string,
+                            &prompt_ledger,
                             delegation_injection.as_ref(),
                         )
                         .await
@@ -2136,33 +2195,29 @@ async fn run_connection(
                         // or ephemeral forked session).
                         // Fall back to session/new so the tab still works.
                         let err_str = e.to_string();
-                        let is_resource_not_found = matches!(
-                            e.code,
-                            sacp::schema::ErrorCode::ResourceNotFound
-                        );
+                        let failure_code = classify_session_load_failure(&e);
                         tracing::warn!(
                             "[ACP] session/load failed ({}){}",
                             err_str,
-                            if is_resource_not_found {
+                            if failure_code.is_some() {
                                 ", surfacing as session_load_failed"
                             } else {
                                 ", falling back to session/new"
                             }
                         );
-                        // ResourceNotFound (-32002): the agent has no record of
-                        // this session_id (deleted/expired/never existed).
-                        // Don't auto-fallback to session/new — that would
+                        // Unresumable sessions (ResourceNotFound or crash/ended)
+                        // should NOT auto-fallback to session/new — that would
                         // silently orphan the historical context. Surface to
                         // the frontend so the user can choose between Reload
                         // (transient agent restart) and New conversation.
-                        if is_resource_not_found {
+                        if let Some(code) = failure_code {
                             emit_with_state(
                                 &state,
                                 &emitter_clone,
                                 AcpEvent::SessionLoadFailed {
                                     session_id: sid.clone(),
                                     message: err_str,
-                                    code: "resource_not_found".to_string(),
+                                    code: code.to_string(),
                                 },
                             )
                             .await;
@@ -2253,6 +2308,7 @@ async fn run_connection(
                             terminal_runtime.clone(),
                             &cwd_string,
                             supports_fork,
+                            &prompt_ledger,
                             delegation_injection.as_ref(),
                         )
                         .await;
@@ -2271,6 +2327,7 @@ async fn run_connection(
                             terminal_runtime.clone(),
                             &cwd,
                             &cwd_string,
+                            &prompt_ledger,
                             delegation_injection.as_ref(),
                         )
                         .await
@@ -2327,6 +2384,7 @@ async fn run_connection(
                     terminal_runtime.clone(),
                     &cwd_string,
                     supports_fork,
+                    &prompt_ledger,
                     delegation_injection.as_ref(),
                 )
                 .await;
@@ -2343,6 +2401,7 @@ async fn run_connection(
                     terminal_runtime.clone(),
                     &cwd,
                     &cwd_string,
+                    &prompt_ledger,
                     delegation_injection.as_ref(),
                 )
                 .await
@@ -3234,6 +3293,10 @@ async fn handle_fork_or_exit(
     terminal_runtime: Arc<TerminalRuntime>,
     _cwd: &std::path::Path,
     cwd_string: &str,
+    // Threaded through from run_connection: the connection-scoped prompt
+    // ledger (the forked session's loop keeps fingerprinting into the SAME
+    // ledger the still-running watcher consumes from).
+    prompt_ledger: &background_watch::PromptLedger,
     // Threaded through from run_connection so the forked session's
     // run_conversation_loop call has the same delegation cascade
     // capability as the original.
@@ -3301,6 +3364,7 @@ async fn handle_fork_or_exit(
         terminal_runtime.clone(),
         cwd_string,
         true, // fork already succeeded on this process
+        prompt_ledger,
         delegation_injection,
     )
     .await;
@@ -3319,6 +3383,7 @@ async fn handle_fork_or_exit(
         terminal_runtime,
         _cwd,
         cwd_string,
+        prompt_ledger,
         delegation_injection,
     ))
     .await
@@ -3426,6 +3491,10 @@ async fn run_conversation_loop<'a>(
     terminal_runtime: Arc<TerminalRuntime>,
     cwd: &str,
     supports_fork: bool,
+    // Connection-scoped (created once in `run_connection`, shared across fork
+    // restarts of this loop): outgoing prompts are fingerprinted here so the
+    // transcript watcher can classify their turns as wire-rendered foreground.
+    prompt_ledger: &background_watch::PromptLedger,
     // Source of the broker reference used to cascade-cancel pending
     // delegations on parent prompt cancel / non-success TurnComplete.
     // `None` for test paths that don't wire delegation.
@@ -3482,6 +3551,11 @@ async fn run_conversation_loop<'a>(
                 blocks,
                 user_message,
             }) => {
+                // Fingerprint the outgoing prompt for the background watcher's
+                // foreground/out-of-turn classifier BEFORE the blocks are
+                // consumed: the transcript record this prompt becomes must
+                // classify as wire-rendered foreground, not overlay.
+                prompt_ledger.record_prompt_blocks(&blocks);
                 let vision_bridge = delegation_injection
                     .and_then(|di| di.vision_bridge.as_deref());
                 let prompt_blocks = map_prompt_blocks(blocks, vision_bridge, agent_type).await;
@@ -6378,5 +6452,64 @@ mod tests {
             companion_features_arg(true, true, true, true, true, true),
             Some("delegation,feedback,ask,sessions,vision,image".to_string())
         );
+    }
+
+    #[test]
+    fn classify_load_failure_resource_not_found_maps_to_code() {
+        // -32002 ResourceNotFound maps to "resource_not_found" even when the
+        // message text would also match a crash pattern below.
+        let error = sacp::Error {
+            code: sacp::schema::ErrorCode::ResourceNotFound,
+            message: "Session not found: process exited unexpectedly".into(),
+            data: None,
+        };
+        assert_eq!(
+            classify_session_load_failure(&error),
+            Some("resource_not_found")
+        );
+    }
+
+    #[test]
+    fn classify_load_failure_crash_and_ended_map_to_unavailable() {
+        let cases = [
+            "process exited with code 1",
+            "The session has ended",
+            "Session not found",
+        ];
+        for msg in cases {
+            let error = sacp::Error {
+                code: sacp::schema::ErrorCode::InternalError,
+                message: msg.into(),
+                data: None,
+            };
+            assert_eq!(
+                classify_session_load_failure(&error),
+                Some("session_unavailable"),
+                "expected session_unavailable for: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_load_failure_keeps_existing_behavior_for_recoverable_errors() {
+        // MethodNotFound, AuthRequired, and unknown internal errors return None,
+        // keeping the existing session/new fallback behavior.
+        let cases: Vec<(sacp::schema::ErrorCode, &str)> = vec![
+            (sacp::schema::ErrorCode::MethodNotFound, "Method not found"),
+            (sacp::schema::ErrorCode::AuthRequired, "Authentication required"),
+            (sacp::schema::ErrorCode::InternalError, "Something else"),
+        ];
+        for (code, msg) in cases {
+            let error = sacp::Error {
+                code,
+                message: msg.into(),
+                data: None,
+            };
+            assert_eq!(
+                classify_session_load_failure(&error),
+                None,
+                "expected None for: {msg}"
+            );
+        }
     }
 }

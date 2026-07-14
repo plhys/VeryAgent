@@ -38,7 +38,11 @@ const CATEGORY_SORT: Record<string, number> = {
   creative: 8,
 }
 
-export function ExpertsSettings() {
+export function ExpertsBody({
+  onRegisterRefresh,
+}: {
+  onRegisterRefresh?: (refresh: () => void) => void
+}) {
   const t = useTranslations("ExpertsSettings")
   const locale = useLocale()
 
@@ -75,6 +79,16 @@ export function ExpertsSettings() {
       console.error("[ExpertsSettings] initial refresh failed:", err)
     })
   }, [refresh])
+
+  // Publish the reload handler so the hub's fixed "Refresh" button can drive
+  // this pack while it is the active tab.
+  useEffect(() => {
+    onRegisterRefresh?.(() => {
+      refresh().catch((err) => {
+        console.error("[ExpertsSettings] refresh failed:", err)
+      })
+    })
+  }, [onRegisterRefresh, refresh])
 
   const translatedCategory = useCallback(
     (category: string): string => {
@@ -234,4 +248,9 @@ export function ExpertsSettings() {
       )}
     </div>
   )
+}
+
+/** Standalone Experts settings page (backward-compatible route). */
+export function ExpertsSettings() {
+  return <ExpertsBody />
 }

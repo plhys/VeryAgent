@@ -51,6 +51,7 @@ mod tauri_app {
         chat_channel as chat_channel_commands, conversations, delegation as delegation_commands,
         experts as experts_commands, feedback as feedback_commands, file_io, folder_commands,
         office_tools as office_tools_commands,
+        science as science_commands,
         folders, logging as logging_commands, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, pet as pet_commands, project_boot,
         question as question_commands, quick_messages as quick_messages_commands,
@@ -344,6 +345,27 @@ mod tauri_app {
                     } else {
                         tracing::info!(
                             "[Experts] install ok: installed={} updated={} pending_review={}",
+                            report.installed_count,
+                            report.updated_count,
+                            report.pending_user_review.len()
+                        );
+                    }
+                });
+
+                // Install bundled science skills into the central store
+                // (same `~/.veryagent/skills/`). Runs in the background and does
+                // not block startup; failures are logged but non-fatal.
+                tauri::async_runtime::spawn(async move {
+                    let report = crate::commands::science::ensure_central_science_installed().await;
+                    if !report.errors.is_empty() {
+                        tracing::error!(
+                            "[Science] install finished with {} error(s): {:?}",
+                            report.errors.len(),
+                            report.errors
+                        );
+                    } else {
+                        tracing::info!(
+                            "[Science] install ok: installed={} updated={} pending_review={}",
                             report.installed_count,
                             report.updated_count,
                             report.pending_user_review.len()
@@ -1255,6 +1277,14 @@ mod tauri_app {
                 experts_commands::experts_apply_links,
                 experts_commands::experts_read_content,
                 experts_commands::experts_open_central_dir,
+                science_commands::science_list,
+                science_commands::science_get_install_status,
+                science_commands::science_list_all_install_statuses,
+                science_commands::science_link_to_agent,
+                science_commands::science_unlink_from_agent,
+                science_commands::science_apply_links,
+                science_commands::science_read_content,
+                science_commands::science_open_central_dir,
                 office_tools_commands::officecli_detect,
                 office_tools_commands::officecli_install,
                 office_tools_commands::officecli_uninstall,

@@ -372,10 +372,14 @@ export function AgentIcon({ agentType, className }: AgentIconProps) {
 
   const MonoIcon = MONO_ICONS[agentType]
   if (MonoIcon) {
+    // text-foreground keeps monochrome agent marks (OpenCode, Hermes, Cline,
+    // CodeBuddy) at full strength outside hover/active. Without it they inherit
+    // the parent's muted text color via currentColor and look dim. Any explicit
+    // text-* class passed via className still overrides it (Tailwind specificity).
     return (
       <span
         className={cn(
-          "inline-flex shrink-0",
+          "inline-flex shrink-0 text-foreground",
           AGENT_TEXT_COLORS[agentType],
           className
         )}

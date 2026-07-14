@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use chrono::{DateTime, Utc};
@@ -43,6 +43,53 @@ fn model_capacity_suffix_regex() -> &'static Regex {
     })
 }
 
+/// Sentinel prefixing the structured lifecycle payload the parser writes into
+/// an async-launch ack's `output_preview` (see
+/// `ClaudeRecordAccumulator::finalize_background_lifecycle`). The frontend
+/// (`lib/background-agent.ts`) splits on it and renders a lifecycle card;
+/// anything else renders the preview verbatim, so the prefix must never occur
+/// in organic tool output.
+pub(crate) const BACKGROUND_TASK_MARKER: &str = "[[veryagent-background-task]]";
+
+/// Cap for the folded `<result>` markdown carried on the lifecycle marker —
+/// generous for a sub-agent summary, bounded against a pathological one.
+const BACKGROUND_RESULT_MAX_CHARS: usize = 16_000;
+
+/// Latest `<task-notification>` observed for a background task id.
+struct BackgroundNotification {
+    status: String,
+    summary: Option<String>,
+    result: Option<String>,
+}
+
+pub(crate) fn task_notification_task_id_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?s)<task-id>(.*?)</task-id>").unwrap())
+}
+
+pub(crate) fn task_notification_status_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?s)<status>(.*?)</status>").unwrap())
+}
+
+pub(crate) fn task_notification_summary_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?s)<summary>(.*?)</summary>").unwrap())
+}
+
+fn task_notification_result_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?s)<result>(.*?)</result>").unwrap())
+}
+
+/// First capture group of `re` in `text`, trimmed; `None` when absent/empty.
+pub(crate) fn capture_tag(re: &Regex, text: &str) -> Option<String> {
+    re.captures(text)
+        .and_then(|c| c.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Strip system-injected XML tags from text content.
 /// Returns None if the text becomes empty after stripping.
 fn strip_system_tags(text: &str) -> Option<String> {
@@ -73,7 +120,7 @@ fn command_args_regex() -> &'static Regex {
 /// user message whose string content holds `<command-name>`, `<command-message>`
 /// and `<command-args>` tags. Reconstruct the original input as `/name args`
 /// (e.g. `/init 初始化`). Returns `None` when no `<command-name>` tag is present.
-fn slash_command_display(text: &str) -> Option<String> {
+pub(crate) fn slash_command_display(text: &str) -> Option<String> {
     let name = command_name_regex()
         .captures(text)
         .and_then(|c| c.get(1))
@@ -180,7 +227,7 @@ fn rebuild_diff_from_structured_patch(
     Some(output)
 }
 
-fn is_meta_message(value: &serde_json::Value) -> bool {
+pub(crate) fn is_meta_message(value: &serde_json::Value) -> bool {
     value
         .get("isMeta")
         .and_then(|v| v.as_bool())
@@ -191,7 +238,7 @@ fn is_meta_message(value: &serde_json::Value) -> bool {
 /// Claude Code for local commands like `/context` or `/model`).
 /// These carry `model: "<synthetic>"` and all-zero usage, so they should be
 /// excluded from conversation turns and stats.
-const CONTEXT_CONTINUATION_PREFIX: &str =
+pub(crate) const CONTEXT_CONTINUATION_PREFIX: &str =
     "This session is being continued from a previous conversation";
 
 /// Detect Claude Code context continuation summary messages.
@@ -491,6 +538,36 @@ fn resolve_claude_config_dir_from(
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| home_dir.unwrap_or_default().join(".claude"))
+}
+
+/// Locate `<session_id>.jsonl` under any project directory of the Claude
+/// config dir. Used by the background watcher (`crate::acp::background_watch`)
+/// to arm its transcript tail; mirrors `get_conversation`'s discovery scan
+/// (Claude offers no forward cwd→project-dir encoding, so discovery is by
+/// session-id filename).
+pub(crate) fn find_session_file(session_id: &str) -> Option<PathBuf> {
+    find_session_file_in(&resolve_claude_config_dir().join("projects"), session_id)
+}
+
+/// `find_session_file` against an explicit base dir (test seam). `session_id`
+/// is embedded in a filename, so path-traversal shapes are rejected outright
+/// (`is_safe_subagent_id`: separators, `..`, drive colon, NUL).
+pub(crate) fn find_session_file_in(base_dir: &Path, session_id: &str) -> Option<PathBuf> {
+    if session_id.is_empty() || !is_safe_subagent_id(session_id) {
+        return None;
+    }
+    let entries = fs::read_dir(base_dir).ok()?;
+    for entry in entries.flatten() {
+        let project_dir = entry.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+        let candidate = project_dir.join(format!("{session_id}.jsonl"));
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 impl AgentParser for ClaudeParser {
@@ -1505,7 +1582,7 @@ fn is_tool_result_only(msg: &UnifiedMessage) -> bool {
 /// Group flat messages into conversation turns.
 /// Claude Code rule: assistant msg + following tool-result-only user msgs
 /// merge into one Assistant turn.
-fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
+pub(crate) fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
     let mut turns = Vec::new();
     let mut i = 0;
 
@@ -1575,6 +1652,599 @@ fn group_into_turns(messages: Vec<UnifiedMessage>) -> Vec<MessageTurn> {
     }
 
     turns
+}
+
+/// Streaming Stage-A accumulator: interprets raw session-JSONL records into
+/// flat `UnifiedMessage`s plus session metadata (cwd/title/model/timestamps).
+/// Extracted from the `parse_conversation_detail` line loop so the background
+/// watcher (`crate::acp::background_watch`) can run the SAME record
+/// interpretation over an incremental transcript tail; full-file behavior is
+/// unchanged (guarded by the parser snapshot tests and the whole-vs-chunked
+/// differential test in this file's test module).
+pub(crate) struct ClaudeRecordAccumulator {
+    /// Session transcript path — the subagent-stats lookup resolves
+    /// `<session>/subagents/agent-<id>.jsonl` relative to it.
+    session_path: PathBuf,
+    pub(crate) messages: Vec<UnifiedMessage>,
+    pub(crate) cwd: Option<String>,
+    pub(crate) git_branch: Option<String>,
+    pub(crate) model: Option<String>,
+    pub(crate) title: Option<String>,
+    pub(crate) ai_title: Option<String>,
+    pub(crate) first_timestamp: Option<DateTime<Utc>>,
+    pub(crate) last_timestamp: Option<DateTime<Utc>>,
+    /// A prompt-expanding slash command is buffered (with its promptId) until
+    /// the next entry confirms it expanded into a real prompt — see
+    /// `is_slash_command_expansion`. Client commands (`/model`) never confirm
+    /// and are dropped, so they stay hidden as before.
+    pending_command: Option<(UnifiedMessage, Option<String>)>,
+    /// Async background launches seen in this feed: the ack tool_result's
+    /// `tool_use_id` → the launched task id (`toolUseResult.agentId`). Joined
+    /// with `background_notifications` by `finalize_background_lifecycle`.
+    background_acks: std::collections::HashMap<String, String>,
+    /// task id → LATEST `<task-notification>` payload (the same id can notify
+    /// more than once — a resumed sub-agent re-notifies; last wins).
+    background_notifications: std::collections::HashMap<String, BackgroundNotification>,
+}
+
+impl ClaudeRecordAccumulator {
+    pub(crate) fn new(session_path: PathBuf) -> Self {
+        Self {
+            session_path,
+            messages: Vec::new(),
+            cwd: None,
+            git_branch: None,
+            model: None,
+            title: None,
+            ai_title: None,
+            first_timestamp: None,
+            last_timestamp: None,
+            pending_command: None,
+            background_acks: std::collections::HashMap::new(),
+            background_notifications: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Feed one raw JSONL line. Blank and non-JSON lines are skipped, mirroring
+    /// the historical `BufReader::lines()` loop (whose per-line errors were
+    /// skipped via `Err(_) => continue`).
+    pub(crate) fn feed_line(&mut self, line: &str) {
+        if line.trim().is_empty() {
+            return;
+        }
+        let value: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        self.feed_value(value);
+    }
+
+    pub(crate) fn feed_value(&mut self, value: serde_json::Value) {
+        let Self {
+            session_path: path,
+            messages,
+            cwd,
+            git_branch,
+            model,
+            title,
+            ai_title,
+            first_timestamp,
+            last_timestamp,
+            pending_command,
+            background_acks,
+            background_notifications,
+        } = self;
+
+        let msg_type = value.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+        if msg_type == "file-history-snapshot" || msg_type == "progress" {
+            return;
+        }
+
+        // Resolve a buffered slash command against this entry: emit it only
+        // if this entry is its expanded prompt, otherwise drop it (a client
+        // command like `/model` that produced no model turn).
+        if let Some((command_msg, prompt_id)) = pending_command.take() {
+            if is_slash_command_expansion(&value, prompt_id.as_deref()) {
+                messages.push(command_msg);
+            }
+        }
+
+        // Skip system meta messages
+        if is_meta_message(&value) {
+            return;
+        }
+
+        // Claude Code records its own AI-generated title as a dedicated
+        // `{"type":"ai-title","aiTitle":...}` entry. Prefer it over the first
+        // user message; the newest non-empty value wins.
+        if msg_type == "ai-title" {
+            if let Some(t) = value.get("aiTitle").and_then(|v| v.as_str()) {
+                let t = t.trim();
+                if !t.is_empty() {
+                    *ai_title = Some(truncate_str(t, 100));
+                }
+            }
+        }
+
+        if cwd.is_none() {
+            *cwd = value
+                .get("cwd")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+        }
+        if git_branch.is_none() {
+            *git_branch = value
+                .get("gitBranch")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+        }
+
+        if let Some(ts_str) = value.get("timestamp").and_then(|t| t.as_str()) {
+            if let Ok(ts) = ts_str.parse::<DateTime<Utc>>() {
+                if first_timestamp.is_none() {
+                    *first_timestamp = Some(ts);
+                }
+                *last_timestamp = Some(ts);
+            }
+        }
+
+        // Buffer a user-typed slash command and decide on the next entry
+        // whether it drove a real prompt (keep it) or was a client command
+        // (drop it). The command's own string content strips to empty, so it
+        // would otherwise vanish and make adjacent assistant turns look merged.
+        if msg_type == "user" {
+            if let Some((display, prompt_id)) = slash_command_value_display(&value) {
+                let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                let uuid = value
+                    .get("uuid")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                *pending_command = Some((
+                    UnifiedMessage {
+                        id: uuid,
+                        role: MessageRole::User,
+                        content: vec![ContentBlock::Text { text: display }],
+                        timestamp,
+                        usage: None,
+                        duration_ms: None,
+                        model: None,
+                        completed_at: Some(timestamp),
+                    },
+                    prompt_id,
+                ));
+                return;
+            }
+        }
+
+        match msg_type {
+            "assistant" if is_synthetic_assistant(&value) => {
+                // Skip synthetic assistant placeholders for local commands
+            }
+            "user" => {
+                // Capture `<task-notification>` payloads for the background
+                // lifecycle fold BEFORE tag-stripping empties the record out
+                // of the message stream (same id can notify more than once —
+                // a resumed sub-agent re-notifies — so last wins).
+                if let Some(raw) = value
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_str())
+                {
+                    if raw.trim_start().starts_with("<task-notification>") {
+                        if let Some(task_id) =
+                            capture_tag(task_notification_task_id_regex(), raw)
+                        {
+                            background_notifications.insert(
+                                task_id,
+                                BackgroundNotification {
+                                    status: capture_tag(
+                                        task_notification_status_regex(),
+                                        raw,
+                                    )
+                                    .unwrap_or_else(|| "completed".to_string()),
+                                    summary: capture_tag(
+                                        task_notification_summary_regex(),
+                                        raw,
+                                    ),
+                                    result: capture_tag(
+                                        task_notification_result_regex(),
+                                        raw,
+                                    )
+                                    .map(|r| truncate_str(&r, BACKGROUND_RESULT_MAX_CHARS)),
+                                },
+                            );
+                        }
+                    }
+                }
+
+                let mut content = extract_user_content(&value);
+
+                // Skip user messages that are empty after system tag stripping
+                if content.is_empty() {
+                    return;
+                }
+
+                let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                let uuid = value
+                    .get("uuid")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                // Detect context continuation summary and treat as system message
+                let role = if is_context_continuation(&content) {
+                    MessageRole::System
+                } else {
+                    if title.is_none() {
+                        if let Some(first_text) = content.iter().find_map(|c| match c {
+                            ContentBlock::Text { text } => Some(text.clone()),
+                            _ => None,
+                        }) {
+                            *title = Some(title_from_user_text(&first_text));
+                        }
+                    }
+                    MessageRole::User
+                };
+
+                // Check toolUseResult for structured patch and agent execution stats
+                if let Some(tur) = value.get("toolUseResult") {
+                    if let Some(sp) = tur.get("structuredPatch") {
+                        let fp = tur
+                            .get("filePath")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("file");
+                        if let Some(diff) = rebuild_diff_from_structured_patch(fp, sp) {
+                            // Find the matching ToolResult in this user message's content
+                            // and replace its output_preview with the real diff
+                            for block in content.iter_mut() {
+                                if let ContentBlock::ToolResult {
+                                    ref mut output_preview,
+                                    is_error: false,
+                                    ..
+                                } = block
+                                {
+                                    *output_preview = Some(diff.clone());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Record an async background launch: the ack's structured
+                    // sibling names the task (`agentId`), and the ack block's
+                    // tool_use_id anchors the lifecycle fold to the LAUNCHING
+                    // tool call (see `finalize_background_lifecycle`).
+                    if tur.get("status").and_then(|s| s.as_str()) == Some("async_launched") {
+                        if let Some(task_id) = tur
+                            .get("agentId")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                        {
+                            if let Some(ack_tool_use_id) =
+                                content.iter().find_map(|b| match b {
+                                    ContentBlock::ToolResult {
+                                        tool_use_id: Some(id),
+                                        ..
+                                    } => Some(id.clone()),
+                                    _ => None,
+                                })
+                            {
+                                background_acks
+                                    .insert(ack_tool_use_id, task_id.to_string());
+                            }
+                        }
+                    }
+
+                    // Extract agent execution stats from toolUseResult
+                    if tur.get("agentType").is_some() {
+                        let mut stats = extract_agent_execution_stats(tur);
+                        // Load tool calls from subagent's own JSONL transcript
+                        if let Some(agent_id) = tur.get("agentId").and_then(|v| v.as_str()) {
+                            // Reject path traversal: `agent_id` becomes a filename
+                            // component under the session dir (see
+                            // `is_safe_subagent_id` — rejects separators, `..`, a
+                            // Windows drive colon, and NUL).
+                            if is_safe_subagent_id(agent_id) {
+                                let subagent_dir = path.with_extension("").join("subagents");
+                                let subagent_path =
+                                    subagent_dir.join(format!("agent-{}.jsonl", agent_id));
+                                if subagent_path.exists() {
+                                    stats.tool_calls =
+                                        parse_subagent_tool_calls(&subagent_path);
+                                }
+                            }
+                        }
+                        for block in content.iter_mut() {
+                            if let ContentBlock::ToolResult {
+                                ref mut agent_stats,
+                                ..
+                            } = block
+                            {
+                                *agent_stats = Some(stats);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                messages.push(UnifiedMessage {
+                    id: uuid,
+                    role,
+                    content,
+                    timestamp,
+                    usage: None,
+                    duration_ms: None,
+                    model: None,
+                    completed_at: Some(timestamp),
+                });
+            }
+            "assistant" => {
+                let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                let uuid = value
+                    .get("uuid")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let msg_model = value
+                    .get("message")
+                    .and_then(|m| m.get("model"))
+                    .and_then(|m| m.as_str())
+                    .map(|s| s.to_string());
+
+                if model.is_none() {
+                    *model = msg_model.clone();
+                }
+
+                let content = extract_assistant_content(&value);
+                let usage = extract_usage(&value);
+
+                messages.push(UnifiedMessage {
+                    id: uuid,
+                    role: MessageRole::Assistant,
+                    content,
+                    timestamp,
+                    usage,
+                    duration_ms: None,
+                    model: msg_model,
+                    completed_at: Some(timestamp),
+                });
+            }
+            "system" => {
+                let subtype = value.get("subtype").and_then(|s| s.as_str()).unwrap_or("");
+                if subtype == "turn_duration" {
+                    if let Some(duration) = value.get("durationMs").and_then(|d| d.as_u64()) {
+                        // Attach to the last assistant message
+                        if let Some(last) = messages
+                            .iter_mut()
+                            .rev()
+                            .find(|m| matches!(m.role, MessageRole::Assistant))
+                        {
+                            last.duration_ms = Some(duration);
+                        }
+                    }
+                }
+            }
+            "tool_use" => {
+                // Top-level tool_use record (Claude Code JSONL format)
+                let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                let tool_name = value
+                    .get("tool_name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let input_preview = value.get("tool_input").map(|i| i.to_string());
+                let synthetic_id = format!("tl-tool-{}", messages.len());
+
+                // Attach to last assistant message, or create a synthetic one
+                if let Some(last) = messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| matches!(m.role, MessageRole::Assistant))
+                {
+                    last.content.push(ContentBlock::ToolUse {
+                        tool_use_id: Some(synthetic_id),
+                        tool_name,
+                        input_preview,
+                        meta: None,
+                    });
+                } else {
+                    messages.push(UnifiedMessage {
+                        id: format!("synth-assistant-{}", messages.len()),
+                        role: MessageRole::Assistant,
+                        content: vec![ContentBlock::ToolUse {
+                            tool_use_id: Some(synthetic_id),
+                            tool_name,
+                            input_preview,
+                            meta: None,
+                        }],
+                        timestamp,
+                        usage: None,
+                        duration_ms: None,
+                        model: None,
+                        completed_at: Some(timestamp),
+                    });
+                }
+            }
+            "tool_result" => {
+                // Top-level tool_result record (Claude Code JSONL format)
+                let tool_output = value.get("tool_output");
+                let tool_name = value
+                    .get("tool_name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("");
+                let is_error = tool_output
+                    .and_then(|o| o.get("exit"))
+                    .and_then(|e| e.as_i64())
+                    .is_some_and(|code| code != 0);
+
+                // Extract output text: prefer "preview" (read), then "output" (bash)
+                let output_text = tool_output
+                    .and_then(|o| {
+                        o.get("preview")
+                            .or_else(|| o.get("output"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .map(|s| s.to_string());
+
+                // Don't structurize here — `structurize_read_tool_output`
+                // will handle Read tool output uniformly after grouping.
+                let output_preview = output_text;
+
+                // Find the matching ToolUse by tool_name (reverse scan so the
+                // most recent match wins), then fall back to the last ToolUse
+                // without a paired ToolResult yet.
+                let existing_result_ids: std::collections::HashSet<String> = messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, MessageRole::Assistant))
+                    .map(|m| {
+                        m.content
+                            .iter()
+                            .filter_map(|b| {
+                                if let ContentBlock::ToolResult {
+                                    tool_use_id: Some(ref id),
+                                    ..
+                                } = b
+                                {
+                                    Some(id.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let matching_id = messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, MessageRole::Assistant))
+                    .and_then(|m| {
+                        // First: try to find an unpaired ToolUse with the same tool_name
+                        let by_name = m.content.iter().rev().find_map(|b| {
+                            if let ContentBlock::ToolUse {
+                                tool_use_id: Some(ref id),
+                                tool_name: ref tn,
+                                ..
+                            } = b
+                            {
+                                if tn == tool_name && !existing_result_ids.contains(id) {
+                                    return Some(id.clone());
+                                }
+                            }
+                            None
+                        });
+                        if by_name.is_some() {
+                            return by_name;
+                        }
+                        // Fallback: last unpaired ToolUse regardless of name
+                        m.content.iter().rev().find_map(|b| {
+                            if let ContentBlock::ToolUse {
+                                tool_use_id: Some(ref id),
+                                ..
+                            } = b
+                            {
+                                if !existing_result_ids.contains(id) {
+                                    return Some(id.clone());
+                                }
+                            }
+                            None
+                        })
+                    });
+
+                // Append ToolResult to the same assistant message so they stay in the same turn
+                if let Some(last) = messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| matches!(m.role, MessageRole::Assistant))
+                {
+                    last.content.push(ContentBlock::ToolResult {
+                        tool_use_id: matching_id,
+                        output_preview,
+                        is_error,
+                        agent_stats: None,
+                        images: Vec::new(),
+                    });
+                } else {
+                    let timestamp = parse_timestamp(&value).unwrap_or_else(Utc::now);
+                    messages.push(UnifiedMessage {
+                        id: format!("synth-result-{}", messages.len()),
+                        role: MessageRole::Assistant,
+                        content: vec![ContentBlock::ToolResult {
+                            tool_use_id: matching_id,
+                            output_preview,
+                            is_error,
+                            agent_stats: None,
+                            images: Vec::new(),
+                        }],
+                        timestamp,
+                        usage: None,
+                        duration_ms: None,
+                        model: None,
+                        completed_at: Some(timestamp),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Rewrite each async-launch ack's `output_preview` — internal metadata
+    /// text never meant for users ("Async agent launched successfully…
+    /// never quote or paste any part of it") — into a structured
+    /// [`BACKGROUND_TASK_MARKER`] payload, joined with the latest matching
+    /// `<task-notification>`:
+    ///
+    /// ```text
+    /// [[veryagent-background-task]]{"task_id":…,"status":…,"summary":…,"result":…}
+    /// ```
+    ///
+    /// `status` is null while no notification was observed — the frontend
+    /// renders that as "launched, result pending" WITHOUT claiming it is
+    /// still running (a killed CLI leaves it null forever; deriving
+    /// "running" from transcript alone is the zombie trap CC desktop hit).
+    /// Follows the parser's established output-rewrite pattern
+    /// (`structuredPatch` diffs, `structurize_read_tool_output`).
+    pub(crate) fn apply_background_lifecycle(&self, messages: &mut [UnifiedMessage]) {
+        if self.background_acks.is_empty() {
+            return;
+        }
+        for msg in messages {
+            for block in &mut msg.content {
+                let ContentBlock::ToolResult {
+                    tool_use_id: Some(id),
+                    output_preview,
+                    is_error: false,
+                    ..
+                } = block
+                else {
+                    continue;
+                };
+                let Some(task_id) = self.background_acks.get(id) else {
+                    continue;
+                };
+                let notification = self.background_notifications.get(task_id);
+                let payload = serde_json::json!({
+                    "task_id": task_id,
+                    "status": notification.map(|n| n.status.clone()),
+                    "summary": notification.and_then(|n| n.summary.clone()),
+                    "result": notification.and_then(|n| n.result.clone()),
+                });
+                *output_preview = Some(format!("{BACKGROUND_TASK_MARKER}{payload}"));
+            }
+        }
+    }
+
+    /// In-place [`Self::apply_background_lifecycle`] over `self.messages` —
+    /// the full-file detail parse calls this once after feeding every record.
+    pub(crate) fn finalize_background_lifecycle(&mut self) {
+        let mut messages = std::mem::take(&mut self.messages);
+        self.apply_background_lifecycle(&mut messages);
+        self.messages = messages;
+    }
 }
 
 #[cfg(test)]
