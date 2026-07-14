@@ -41,6 +41,16 @@ pnpm tauri build
 
 产物在 `src-tauri/target/release/bundle/` 下，Windows 会生成 `.exe` 安装包。
 
+### 推荐的本地 EXE 构建方式
+
+如果你只是想在本机改完代码后尽快生成一个可双击运行的 exe，优先使用项目根目录下的脚本：
+
+- `build-exe.bat`：快速模式，默认复用已有 `out/`，直接构建 exe
+- `build-exe.bat full`：完整模式，先重建前端再构建 exe
+- `prepare-release-assets.bat`：整理 `out/` 和 sidecar，便于上传到仓库 Release 附件
+
+详细说明见：[`docs/build-recovery.zh-CN.md`](docs/build-recovery.zh-CN.md)
+
 ### 服务端 (Docker)
 
 ```bash

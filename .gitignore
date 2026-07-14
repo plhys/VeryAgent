@@ -62,5 +62,8 @@ src-tauri/target/
 # pnpm local store (pnpm 11+)
 .pnpm-store/
 
+# release attachment staging dir
+.release-assets/
+
 # sccache local cache (do not commit; migrate manually per BUILD-SPEED.md)
 .sccache/
