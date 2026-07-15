@@ -81,7 +81,17 @@ function refreshSnapshotOnFocus(): void {
   // the cache is kept, so a transient error never resets a good snapshot.
   generation += 1
   inflight = null
-  loadSnapshot()
+  void loadSnapshot()
+}
+
+/**
+ * Explicit refresh after link/unlink in the same window (skills page). Prefer
+ * this over faking a window `focus` event — same cache path, no side effects.
+ */
+export function refreshEnabledSkillIds(): Promise<ExpertInstallStatus[] | null> {
+  generation += 1
+  inflight = null
+  return loadSnapshot()
 }
 
 function acquireFocusRefresh(): void {

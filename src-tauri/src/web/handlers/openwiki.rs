@@ -8,8 +8,9 @@ use serde::Deserialize;
 use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
 use crate::commands::openwiki::{
-    openwiki_get_config_core, openwiki_get_instructions_core, openwiki_run_core,
-    openwiki_save_instructions_core, openwiki_status_core, set_openwiki_config_core,
+    openwiki_get_config_core, openwiki_get_instructions_core, openwiki_install_cli_core,
+    openwiki_run_core, openwiki_save_instructions_core, openwiki_status_core,
+    openwiki_uninstall_cli_core, set_openwiki_config_core, OpenWikiInstallResult,
     OpenWikiInstructions, OpenWikiInstructionsParams, OpenWikiInstructionsUpdate,
     OpenWikiRunParams,
 };
@@ -98,5 +99,37 @@ pub async fn set_openwiki_instructions(
     let result =
         openwiki_save_instructions_core(&state.db.conn, &state.openwiki_config, body.update)
             .await?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallOpenWikiCliParams {
+    pub task_id: String,
+}
+
+pub async fn install_openwiki_cli(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<InstallOpenWikiCliParams>,
+) -> Result<Json<OpenWikiInstallResult>, AppCommandError> {
+    let result = openwiki_install_cli_core(
+        &state.db.conn,
+        &state.openwiki_config,
+        &state.emitter,
+        params.task_id,
+    )
+    .await?;
+    Ok(Json(result))
+}
+
+pub async fn uninstall_openwiki_cli(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<OpenWikiInstallResult>, AppCommandError> {
+    let result = openwiki_uninstall_cli_core(
+        &state.db.conn,
+        &state.openwiki_config,
+        &state.emitter,
+    )
+    .await?;
     Ok(Json(result))
 }

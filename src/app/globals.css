@@ -1013,6 +1013,21 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+
+  /* Clickable controls use the hand cursor. Covers raw <button>, shadcn Button
+     (data-slot="button"), and role="button" affordances used outside Button. */
+  button:not(:disabled):not([disabled]),
+  [data-slot="button"]:not(:disabled):not([disabled]),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  button[disabled],
+  [data-slot="button"]:disabled,
+  [data-slot="button"][disabled],
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 /* Native fallback for containers that cannot use OverlayScrollbars (e.g. virtua) */

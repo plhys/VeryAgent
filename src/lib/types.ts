@@ -370,12 +370,6 @@ export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
  *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
 export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
 
-/** Global side-channel announcing a shared-identity save (payload is
- *  `SharedIdentitySettings`). Same cross-window rationale as
- *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
-export const SHARED_IDENTITY_SETTINGS_CHANGED_EVENT =
-  "shared-identity-settings://changed"
-
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -510,7 +504,7 @@ export const ALL_AGENT_TYPES: AgentType[] = [
 
 /** Process-level resident butlers (match backend registry.resident). */
 export function isResidentAgent(agentType: AgentType): boolean {
-  return agentType === "hermes"
+  return agentType === "hermes" || agentType === "open_claw"
 }
 
 export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
@@ -2311,6 +2305,20 @@ export type OfficecliInstallEventKind =
 export interface OfficecliInstallEvent {
   task_id: string
   kind: OfficecliInstallEventKind
+  payload: string
+}
+
+export type OpenWikiInstallEventKind =
+  | "started"
+  | "progress"
+  | "log"
+  | "completed"
+  | "failed"
+
+export interface OpenWikiInstallEvent {
+  task_id: string
+  kind: OpenWikiInstallEventKind
+  /** Log line, or JSON `{"percent":n,"label":"..."}` for progress. */
   payload: string
 }
 

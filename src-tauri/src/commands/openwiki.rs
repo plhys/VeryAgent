@@ -256,6 +256,97 @@ pub async fn openwiki_save_instructions_core(
 }
 
 // ---------------------------------------------------------------------------
+// CLI install / uninstall — delegates to the generic npm_cli module so that
+// adding npm-based plugins never requires a Rust recompile.
+// ---------------------------------------------------------------------------
+
+const OPENWIKI_NPM_PACKAGE: &str = "openwiki";
+const OPENWIKI_NPM_BIN: &str = "openwiki";
+const OPENWIKI_INSTALL_EVENT: &str = "app://openwiki-install";
+
+/// Result of installing / locating the OpenWiki CLI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenWikiInstallResult {
+    pub success: bool,
+    pub executable_path: Option<String>,
+    pub message: String,
+}
+
+/// Install the OpenWiki CLI via the generic npm installer, then persist the
+/// resolved executable path into the OpenWiki config so status/runner work
+/// without a restart.
+pub async fn openwiki_install_cli_core(
+    conn: &DatabaseConnection,
+    runtime: &OpenWikiRuntimeConfig,
+    emitter: &EventEmitter,
+    task_id: String,
+) -> Result<OpenWikiInstallResult, AppCommandError> {
+    use crate::commands::npm_cli::{npm_install_cli_core, NpmInstallParams};
+
+    let params = NpmInstallParams {
+        package_name: OPENWIKI_NPM_PACKAGE.to_string(),
+        binary_name: OPENWIKI_NPM_BIN.to_string(),
+        event_channel: OPENWIKI_INSTALL_EVENT.to_string(),
+        task_id,
+        include_optional: true,
+    };
+
+    let result = npm_install_cli_core(&params, emitter).await?;
+
+    // Persist the resolved executable path into OpenWiki config so the
+    // runner doesn't depend on the process PATH being refreshed at runtime.
+    if let Some(ref path_str) = result.executable_path {
+        let mut config = runtime.snapshot().await;
+        if config.agent_types_list.is_empty() && config.agent_permissions.is_empty() {
+            config = load_openwiki_config(conn).await;
+        }
+        if config.paths.executable.trim().is_empty() {
+            config.paths.executable = path_str.clone();
+            set_openwiki_config_core(conn, runtime, emitter, config).await?;
+        }
+    }
+
+    // Convert generic result to OpenWiki-flavored result.
+    Ok(OpenWikiInstallResult {
+        success: result.success,
+        executable_path: result.executable_path,
+        message: result.message,
+    })
+}
+
+/// Uninstall openwiki from the default global prefix and the user-local prefix.
+/// Also clears a saved `paths.executable` when it pointed at a removed binary.
+pub async fn openwiki_uninstall_cli_core(
+    conn: &DatabaseConnection,
+    runtime: &OpenWikiRuntimeConfig,
+    emitter: &EventEmitter,
+) -> Result<OpenWikiInstallResult, AppCommandError> {
+    use crate::commands::npm_cli::npm_uninstall_package;
+
+    let result = npm_uninstall_package(OPENWIKI_NPM_PACKAGE, OPENWIKI_NPM_BIN).await?;
+
+    // Clear saved executable path if the binary is gone.
+    let mut config = runtime.snapshot().await;
+    if config.agent_types_list.is_empty() && config.agent_permissions.is_empty() {
+        config = load_openwiki_config(conn).await;
+    }
+    let configured = config.paths.executable.trim().to_string();
+    if !configured.is_empty() {
+        let p = PathBuf::from(&configured);
+        if !p.is_file() {
+            config.paths.executable = String::new();
+            set_openwiki_config_core(conn, runtime, emitter, config).await?;
+        }
+    }
+
+    Ok(OpenWikiInstallResult {
+        success: result.success,
+        executable_path: result.executable_path,
+        message: result.message,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tauri command wrappers
 // ---------------------------------------------------------------------------
 
@@ -356,6 +447,42 @@ pub async fn openwiki_save_instructions(
     #[cfg(not(feature = "tauri-runtime"))]
     {
         let _ = update;
+        Err(AppCommandError::configuration_invalid("tauri-only command"))
+    }
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn openwiki_install_cli(
+    #[cfg(feature = "tauri-runtime")] app: tauri::AppHandle,
+    #[cfg(feature = "tauri-runtime")] db: tauri::State<'_, crate::db::AppDatabase>,
+    #[cfg(feature = "tauri-runtime")] runtime: tauri::State<'_, OpenWikiRuntimeConfig>,
+    task_id: String,
+) -> Result<OpenWikiInstallResult, AppCommandError> {
+    #[cfg(feature = "tauri-runtime")]
+    {
+        let emitter = EventEmitter::Tauri(app);
+        openwiki_install_cli_core(&db.conn, &runtime, &emitter, task_id).await
+    }
+    #[cfg(not(feature = "tauri-runtime"))]
+    {
+        let _ = task_id;
+        Err(AppCommandError::configuration_invalid("tauri-only command"))
+    }
+}
+
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn openwiki_uninstall_cli(
+    #[cfg(feature = "tauri-runtime")] app: tauri::AppHandle,
+    #[cfg(feature = "tauri-runtime")] db: tauri::State<'_, crate::db::AppDatabase>,
+    #[cfg(feature = "tauri-runtime")] runtime: tauri::State<'_, OpenWikiRuntimeConfig>,
+) -> Result<OpenWikiInstallResult, AppCommandError> {
+    #[cfg(feature = "tauri-runtime")]
+    {
+        let emitter = EventEmitter::Tauri(app);
+        openwiki_uninstall_cli_core(&db.conn, &runtime, &emitter).await
+    }
+    #[cfg(not(feature = "tauri-runtime"))]
+    {
         Err(AppCommandError::configuration_invalid("tauri-only command"))
     }
 }

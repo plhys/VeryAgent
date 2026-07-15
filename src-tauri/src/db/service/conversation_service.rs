@@ -236,15 +236,56 @@ pub async fn update_pin(
     Ok(())
 }
 
+/// Persist `external_id` on `conversation_id`, reclaiming any other row that
+/// already holds the same `(external_id, agent_type)` pair.
+///
+/// The unique index `idx_conversation_external_agent` is global — soft-deleted
+/// rows still occupy the key. Resident agents (OpenClaw / Hermes) reuse one
+/// warm ACP session across many UI conversations, so the same session id is
+/// reassigned from chat A to chat B. Without reclaim, that write fails with
+/// UNIQUE constraint 2067 and the prompt never lands.
+///
+/// Ownership transfer: clear `external_id` on every other row for this agent
+/// that currently holds the id (live or soft-deleted), then write it onto the
+/// target. Idempotent when the target already owns the id.
 pub async fn update_external_id(
     conn: &DatabaseConnection,
     conversation_id: i32,
     external_id: String,
 ) -> Result<(), DbError> {
+    use sea_orm::sea_query::Expr;
+
     let conv = conversation::Entity::find_by_id(conversation_id)
         .one(conn)
         .await?
         .ok_or_else(|| DbError::Migration(format!("Conversation not found: {conversation_id}")))?;
+
+    // Already owns this id — no write needed.
+    if conv.external_id.as_deref() == Some(external_id.as_str()) {
+        return Ok(());
+    }
+
+    // Free the unique slot: any other row (including soft-deleted) that still
+    // holds this external_id for the same agent must release it first.
+    let release = conversation::Entity::update_many()
+        .col_expr(
+            conversation::Column::ExternalId,
+            Expr::value(Option::<String>::None),
+        )
+        .filter(conversation::Column::ExternalId.eq(&external_id))
+        .filter(conversation::Column::AgentType.eq(&conv.agent_type))
+        .filter(conversation::Column::Id.ne(conversation_id))
+        .exec(conn)
+        .await?;
+    if release.rows_affected > 0 {
+        tracing::info!(
+            "[conversation_service] reclaimed external_id={external_id} from {} prior row(s) \
+             (agent_type={}, target={conversation_id})",
+            release.rows_affected,
+            conv.agent_type,
+        );
+    }
+
     let mut active: conversation::ActiveModel = conv.into();
     active.external_id = Set(Some(external_id));
     active.updated_at = Set(Utc::now());
@@ -686,6 +727,166 @@ mod tests {
             parent_row.child_count, 0,
             "soft-deleted child must not be counted"
         );
+    }
+
+    #[tokio::test]
+    async fn update_external_id_reclaims_from_prior_live_row() {
+        // Resident reuse: chat A held session S; chat B claims S. Without reclaim
+        // UNIQUE(external_id, agent_type) fails.
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/veryagent-ext-reclaim-live").await;
+        let a = create(&db.conn, folder, AgentType::OpenClaw, Some("A".into()), None)
+            .await
+            .expect("A");
+        let b = create(&db.conn, folder, AgentType::OpenClaw, Some("B".into()), None)
+            .await
+            .expect("B");
+
+        update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .expect("A claims S");
+        update_external_id(&db.conn, b.id, "sess-S".into())
+            .await
+            .expect("B reclaims S");
+
+        let a_row = conversation::Entity::find_by_id(a.id)
+            .one(&db.conn)
+            .await
+            .expect("load A")
+            .expect("A exists");
+        let b_row = conversation::Entity::find_by_id(b.id)
+            .one(&db.conn)
+            .await
+            .expect("load B")
+            .expect("B exists");
+        assert_eq!(a_row.external_id, None, "prior owner must release S");
+        assert_eq!(
+            b_row.external_id.as_deref(),
+            Some("sess-S"),
+            "target owns S"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_external_id_reclaims_from_soft_deleted_row() {
+        // Soft-deleted rows still occupy the unique index (deleted_at is not
+        // part of it). Resident reassignment must clear them too.
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/veryagent-ext-reclaim-deleted").await;
+        let a = create(&db.conn, folder, AgentType::Hermes, Some("A".into()), None)
+            .await
+            .expect("A");
+        let b = create(&db.conn, folder, AgentType::Hermes, Some("B".into()), None)
+            .await
+            .expect("B");
+
+        update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .expect("A claims S");
+        soft_delete(&db.conn, a.id).await.expect("soft delete A");
+        update_external_id(&db.conn, b.id, "sess-S".into())
+            .await
+            .expect("B reclaims S from soft-deleted A");
+
+        let a_row = conversation::Entity::find_by_id(a.id)
+            .one(&db.conn)
+            .await
+            .expect("load A")
+            .expect("A exists");
+        let b_row = conversation::Entity::find_by_id(b.id)
+            .one(&db.conn)
+            .await
+            .expect("load B")
+            .expect("B exists");
+        assert_eq!(a_row.external_id, None, "soft-deleted prior owner releases S");
+        assert_eq!(
+            b_row.external_id.as_deref(),
+            Some("sess-S"),
+            "target owns S"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_external_id_is_idempotent_when_target_already_owns() {
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/veryagent-ext-idempotent").await;
+        let a = create(&db.conn, folder, AgentType::OpenClaw, Some("A".into()), None)
+            .await
+            .expect("A");
+        update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .expect("first");
+        update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .expect("second must be a no-op success");
+        let row = conversation::Entity::find_by_id(a.id)
+            .one(&db.conn)
+            .await
+            .expect("load")
+            .expect("exists");
+        assert_eq!(row.external_id.as_deref(), Some("sess-S"));
+    }
+
+    #[tokio::test]
+    async fn update_external_id_does_not_steal_from_other_agent_type() {
+        // UNIQUE is (external_id, agent_type) — same session id on a different
+        // agent must not be cleared when OpenClaw reclaims its own.
+        let db = fresh_in_memory_db().await;
+        let folder = seed_folder(&db, "/tmp/veryagent-ext-agent-scope").await;
+        let hermes = create(&db.conn, folder, AgentType::Hermes, Some("H".into()), None)
+            .await
+            .expect("hermes");
+        let claw_a = create(
+            &db.conn,
+            folder,
+            AgentType::OpenClaw,
+            Some("CA".into()),
+            None,
+        )
+        .await
+        .expect("claw A");
+        let claw_b = create(
+            &db.conn,
+            folder,
+            AgentType::OpenClaw,
+            Some("CB".into()),
+            None,
+        )
+        .await
+        .expect("claw B");
+
+        update_external_id(&db.conn, hermes.id, "sess-S".into())
+            .await
+            .expect("hermes claims S");
+        update_external_id(&db.conn, claw_a.id, "sess-S".into())
+            .await
+            .expect("openclaw A claims S");
+        update_external_id(&db.conn, claw_b.id, "sess-S".into())
+            .await
+            .expect("openclaw B reclaims S");
+
+        let hermes_row = conversation::Entity::find_by_id(hermes.id)
+            .one(&db.conn)
+            .await
+            .expect("load hermes")
+            .expect("exists");
+        assert_eq!(
+            hermes_row.external_id.as_deref(),
+            Some("sess-S"),
+            "other agent_type must keep its S"
+        );
+        let claw_a_row = conversation::Entity::find_by_id(claw_a.id)
+            .one(&db.conn)
+            .await
+            .expect("load claw A")
+            .expect("exists");
+        assert_eq!(claw_a_row.external_id, None);
+        let claw_b_row = conversation::Entity::find_by_id(claw_b.id)
+            .one(&db.conn)
+            .await
+            .expect("load claw B")
+            .expect("exists");
+        assert_eq!(claw_b_row.external_id.as_deref(), Some("sess-S"));
     }
 
     #[tokio::test]

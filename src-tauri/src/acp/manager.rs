@@ -876,7 +876,7 @@ impl ConnectionManager {
         // + DB write + emit + cmd_tx.send sequence. Two concurrent prompts
         // (multiple browser tabs of the same conversation; chat-channel
         // racing the UI) are now strictly serialized — the second waiter
-        // observes `already_linked == true` after the first commits, so
+        // observes `needs_link == false` after the first commits, so
         // it can't double-create a conversation row.
         let prompt_lock = self.clone_prompt_lock(conn_id).await?;
         let _prompt_guard = prompt_lock.lock_owned().await;
@@ -884,20 +884,34 @@ impl ConnectionManager {
         // Snapshot what we need from the connection map under one short lock.
         // The conversation-linked check happens INSIDE the prompt lock so
         // any racing send sees a consistent post-link state.
-        let (state_arc, emitter, agent_type, already_linked, turn_in_flight) = {
+        //
+        // `needs_link` is true when:
+        //   - state has no conversation_id yet (classic first-prompt path), OR
+        //   - caller supplies a conversation_id that differs from the bound one
+        //     (resident warm reuse: the process was previously attached to chat
+        //     A; UI opened chat B and reuses the same connection). Without the
+        //     re-link arm, prompts for B would keep writing status / external_id
+        //     onto A, and a subsequent SessionStarted/external_id persist for B
+        //     collides with A's UNIQUE(external_id, agent_type).
+        let (state_arc, emitter, agent_type, needs_link, turn_in_flight) = {
             let connections = self.connections.lock().await;
             let conn = connections
                 .get(conn_id)
                 .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
-            let (already, in_flight) = {
+            let (needs, in_flight) = {
                 let s = conn.state.read().await;
-                (s.conversation_id.is_some(), s.turn_in_flight)
+                let needs = match (s.conversation_id, conversation_id) {
+                    (None, _) => true,
+                    (Some(bound), Some(caller)) if bound != caller => true,
+                    _ => false,
+                };
+                (needs, s.turn_in_flight)
             };
             (
                 conn.state.clone(),
                 conn.emitter.clone(),
                 conn.agent_type,
-                already,
+                needs,
                 in_flight,
             )
         };
@@ -914,9 +928,12 @@ impl ConnectionManager {
             return Err(AcpError::TurnInProgress);
         }
 
-        if !already_linked {
+        if needs_link {
             match (conversation_id, folder_id) {
-                // Branch A: caller already owns a row — adopt it. No DB write.
+                // Branch A: caller already owns a row — adopt / re-bind it.
+                // No DB write for the row itself; ConversationLinked rewrites
+                // state.conversation_id (and folder_id). The external_id
+                // persist below then transfers UNIQUE ownership onto this row.
                 (Some(caller_conv_id), Some(caller_folder_id)) => {
                     emit_with_state(
                         &state_arc,
@@ -1129,27 +1146,18 @@ impl ConnectionManager {
         // an await while later acquiring write on the same lock causes a deadlock
         // (or, under concurrent traffic, an Arc assert_unchecked crash).
         let mut blocks = blocks;
-        let mut did_inject_shared_identity = false;
         let mut did_inject_openwiki = false;
         if delegation.is_none() {
             // Single read — guard drops at the end of this block.
-            let (already, already_wiki, working_dir) = {
+            let (already_wiki, working_dir) = {
                 let s = state_arc.read().await;
                 (
-                    s.shared_identity_injected,
                     s.openwiki_injected,
                     s.working_dir.clone(),
                 )
             };
-            match crate::memory::maybe_inject_shared_identity(agent_type, already) {
-                crate::memory::InjectDecision::Inject { preamble } => {
-                    crate::memory::prepend_preamble(&mut blocks, preamble);
-                    did_inject_shared_identity = true;
-                }
-                crate::memory::InjectDecision::Skip => {}
-            }
 
-            // OpenWiki preamble: same first-prompt latch, authorized agents only.
+            // OpenWiki preamble: first-prompt latch, authorized agents only.
             // Uses the hot-swappable runtime config when present on AppState; when
             // the manager is exercised without it (unit tests), injection is a no-op.
             if let Some(runtime) = self.openwiki_runtime().await {
@@ -1186,14 +1194,8 @@ impl ConnectionManager {
                 // failed enqueue can still inject on the next attempt.
                 // Single write lock for both flags — avoids two consecutive
                 // write acquisitions that could race with concurrent readers.
-                if did_inject_shared_identity || did_inject_openwiki {
+                if did_inject_openwiki {
                     let mut s = state_arc.write().await;
-                    if did_inject_shared_identity {
-                        s.shared_identity_injected = true;
-                        tracing::info!(
-                            "[memory] injected shared identity for conn={conn_id} agent={agent_type:?}"
-                        );
-                    }
                     if did_inject_openwiki {
                         s.openwiki_injected = true;
                         tracing::info!(
@@ -3976,6 +3978,97 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn send_prompt_linked_relinks_resident_to_different_conversation() {
+        // Warm resident connection was bound to chat A (with external_id S).
+        // UI opens chat B and reuses the same process; the first prompt for B
+        // must re-bind state.conversation_id and transfer UNIQUE ownership of
+        // S onto B — otherwise B collides with A on update_external_id.
+        use crate::db::test_helpers;
+        use sea_orm::EntityTrait;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/resident-relink").await;
+        let a = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::OpenClaw,
+            Some("A".into()),
+            None,
+        )
+        .await
+        .unwrap();
+        let b = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::OpenClaw,
+            Some("B".into()),
+            None,
+        )
+        .await
+        .unwrap();
+        conversation_service::update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .unwrap();
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        let conn_id = "conn-resident-relink";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::OpenClaw,
+            Some(PathBuf::from("/tmp/resident-relink")),
+            EventEmitter::test_web_only(broadcaster.clone()),
+        )
+        .await;
+        {
+            let state = mgr.get_state(conn_id).await.unwrap();
+            let mut s = state.write().await;
+            s.conversation_id = Some(a.id);
+            s.external_id = Some("sess-S".into());
+        }
+
+        // cmd_tx receiver is dropped → prompt send fails after link, but the
+        // re-bind + external_id transfer already completed under prompt_lock.
+        let _ = mgr
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                one_text_block(),
+                Some(folder_id),
+                Some(b.id),
+                None,
+            )
+            .await;
+
+        let bound = mgr
+            .get_state(conn_id)
+            .await
+            .unwrap()
+            .read()
+            .await
+            .conversation_id;
+        assert_eq!(bound, Some(b.id), "state must re-bind to B");
+
+        let a_row = conversation::Entity::find_by_id(a.id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .unwrap();
+        let b_row = conversation::Entity::find_by_id(b.id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a_row.external_id, None, "A must release S");
+        assert_eq!(
+            b_row.external_id.as_deref(),
+            Some("sess-S"),
+            "B must own S after re-link"
+        );
+    }
+
     // ---------- Phase: status centralization ----------
 
     #[tokio::test]
@@ -4504,7 +4597,7 @@ mod tests {
     /// Two concurrent `send_prompt_linked` calls on the SAME connection
     /// must serialize through the per-connection `prompt_lock` so the
     /// backend-creates branch can't fire twice and produce duplicate
-    /// conversation rows. The second call observes `already_linked == true`
+    /// conversation rows. The second call observes `needs_link == false`
     /// (set by the first under the lock) and skips creation.
     #[tokio::test]
     async fn send_prompt_linked_serializes_concurrent_callers() {

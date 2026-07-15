@@ -3321,52 +3321,6 @@ export async function setSessionInfoSettings(
   return getTransport().call("set_session_info_settings", { settings })
 }
 
-// ─── Shared identity + preferences (body layer) ──────────────────────────
-
-/** Mirror of Rust `SharedProfile` (structured identity). */
-export interface SharedProfile {
-  agent_name: string
-  user_address: string
-  notes: string
-  path: string
-  storage_root: string
-  default_storage_root: string
-}
-
-/** Mirror of Rust `SharingConfig`. */
-export interface SharingConfig {
-  enabled: boolean
-  /** Per-agent opt-in keyed by snake_case AgentType. */
-  agents: Record<string, boolean>
-  max_chars: number
-}
-
-/** Combined settings payload from `get_shared_identity_settings`. */
-export interface SharedIdentitySettings {
-  profile: SharedProfile
-  sharing: SharingConfig
-  storage_root: string
-  default_storage_root: string
-  storage_is_custom: boolean
-}
-
-export interface SharedIdentityUpdate {
-  profile?: SharedProfile
-  sharing?: SharingConfig
-  /** Absolute path, or empty string to reset to default. */
-  storage_root?: string
-}
-
-export async function getSharedIdentitySettings(): Promise<SharedIdentitySettings> {
-  return getTransport().call("get_shared_identity_settings")
-}
-
-export async function setSharedIdentitySettings(
-  update: SharedIdentityUpdate
-): Promise<SharedIdentitySettings> {
-  return getTransport().call("set_shared_identity_settings", { update })
-}
-
 /** Mirror of Rust `VisionBridgeConfigUpdate`. */
 export interface VisionBridgeSettings {
   enabled: boolean
@@ -3521,6 +3475,81 @@ export async function openwikiSaveInstructions(
 ): Promise<OpenWikiInstructions> {
   return getTransport().call("openwiki_save_instructions", {
     update: { workspace, content },
+  })
+}
+
+/** Mirror of Rust `OpenWikiInstallResult`. */
+export interface OpenWikiInstallResult {
+  success: boolean
+  executable_path: string | null
+  message: string
+}
+
+/**
+ * Install the OpenWiki CLI via `npm install -g openwiki` (user-prefix fallback).
+ * Streams progress/logs on `app://openwiki-install` tagged with `taskId`.
+ * Long timeout: npm may download a large dependency tree.
+ */
+export async function openwikiInstallCli(
+  taskId: string
+): Promise<OpenWikiInstallResult> {
+  return getTransport().call(
+    "openwiki_install_cli",
+    { taskId },
+    { timeoutMs: 630_000 }
+  )
+}
+
+/** Uninstall OpenWiki CLI from default global + user npm prefixes. */
+export async function openwikiUninstallCli(): Promise<OpenWikiInstallResult> {
+  return getTransport().call("openwiki_uninstall_cli", undefined, {
+    timeoutMs: 120_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Generic npm CLI install / uninstall — shared by any npm-based plugin.
+// Adding a new plugin no longer requires a Rust recompile.
+// ---------------------------------------------------------------------------
+
+export interface NpmInstallParams {
+  packageName: string
+  binaryName: string
+  eventChannel: string
+  taskId: string
+  includeOptional?: boolean
+}
+
+export interface NpmUninstallParams {
+  packageName: string
+  binaryName: string
+}
+
+/** Mirror of Rust `NpmInstallResult`. */
+export interface NpmInstallResult {
+  success: boolean
+  executablePath: string | null
+  message: string
+}
+
+/**
+ * Install an npm-based CLI globally (user-prefix first, default global fallback).
+ * Streams progress/logs on the event channel specified in `params.eventChannel`.
+ */
+export async function npmInstallCli(
+  params: NpmInstallParams
+): Promise<NpmInstallResult> {
+  return getTransport().call("npm_install_cli", { params }, {
+    timeoutMs: 630_000,
+  })
+}
+
+/** Uninstall an npm-based CLI from default global + user npm prefixes. */
+export async function npmUninstallCli(
+  params: NpmUninstallParams
+): Promise<NpmInstallResult> {
+  return getTransport().call("npm_uninstall_cli", { params }, {
+    timeoutMs: 120_000,
   })
 }
 

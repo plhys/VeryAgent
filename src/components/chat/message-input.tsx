@@ -6,6 +6,7 @@ import Image from "next/image"
 import { useLocale, useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import {
+  BookOpen,
   BookOpenText,
   Check,
   ChevronDown,
@@ -18,9 +19,11 @@ import {
   MessageSquareText,
   Paperclip,
   Plus,
+  Puzzle,
   Scissors,
   Search,
   Send,
+  Settings2,
   Command,
   Eye,
   FileSpreadsheet,
@@ -76,12 +79,15 @@ import {
   uploadLocalPathToRemote,
   isEmptyAttachmentError,
   openSettingsWindow,
+  openwikiGetConfig,
+  mcpScanLocal,
   type SettingsSection,
   UPLOAD_MAX_BYTES,
   UPLOAD_I18N_KEY_TOO_LARGE,
   UPLOAD_I18N_KEY_NOT_A_FILE,
   UPLOAD_I18N_KEY_QUOTA_EXCEEDED,
 } from "@/lib/api"
+import { isOpenWikiEnabledForAgent } from "@/lib/openwiki-agent"
 import { extractAppCommandError } from "@/lib/app-error"
 import { openFileDialog } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
@@ -95,6 +101,8 @@ import type {
   AvailableCommandInfo,
   ExpertListItem,
   ScienceListItem,
+  LocalMcpServer,
+  McpAppType,
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
@@ -628,6 +636,10 @@ export function MessageInput({
   // pick closes it explicitly — matching the prior cog menu, which also closed
   // on every selection.
   const [collapsedSelectorsOpen, setCollapsedSelectorsOpen] = useState(false)
+  // When config options exceed this threshold, the wide-view inline chips
+  // collapse into a single "设置 (N)" chip that opens a popover — keeps
+  // OpenClaw's 7+ session switches from flooding the input bar.
+  const [overflowSelectorsOpen, setOverflowSelectorsOpen] = useState(false)
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([])
   const [quickMessagesLoading, setQuickMessagesLoading] = useState(false)
   // Whether the async Clipboard read API is usable here. It's absent in
@@ -993,6 +1005,10 @@ export function MessageInput({
   // "Setting · Value" (e.g. 快速模式 · 关闭), so OpenClaw session switches
   // stay readable instead of a row of bare Off/On — and do not disappear.
   const hasInlineSelectors = hasConfigOptions || showModeSelector
+  /** Collapse inline chips into a popover when the count exceeds this. */
+  const MAX_INLINE_OPTIONS = 3
+  const shouldCollapseOptions =
+    hasConfigOptions && availableConfigOptions.length > MAX_INLINE_OPTIONS
   const hasFolderBranchPicker =
     useConversationFolderBranchPickerVisible(attachmentTabId)
   const folderBranchPickerAttached = hasFolderBranchPicker
@@ -2069,6 +2085,53 @@ export function MessageInput({
     }
   }, [])
 
+  const [enabledPlugins, setEnabledPlugins] = useState<{
+    openWiki: boolean
+    mcp: LocalMcpServer[]
+  }>({ openWiki: false, mcp: [] })
+  const [pluginsLoading, setPluginsLoading] = useState(false)
+
+  const loadEnabledPlugins = useCallback(async () => {
+    if (!agentType) {
+      setEnabledPlugins({ openWiki: false, mcp: [] })
+      return
+    }
+    setPluginsLoading(true)
+    try {
+      const mcpApp: McpAppType | null = (() => {
+        switch (agentType) {
+          case "claude_code":
+          case "codex":
+          case "gemini":
+          case "open_claw":
+          case "open_code":
+          case "cline":
+          case "hermes":
+          case "code_buddy":
+          case "kimi_code":
+            return agentType
+          default:
+            return null
+        }
+      })()
+      const [cfg, local] = await Promise.all([
+        openwikiGetConfig().catch(() => null),
+        mcpScanLocal().catch(() => [] as LocalMcpServer[]),
+      ])
+      const openWiki =
+        !!cfg && isOpenWikiEnabledForAgent(cfg, agentType)
+      const mcp = mcpApp
+        ? local.filter((p) => p.apps.includes(mcpApp))
+        : []
+      setEnabledPlugins({ openWiki, mcp })
+    } catch (error) {
+      console.error("[MessageInput] load enabled plugins failed:", error)
+      setEnabledPlugins({ openWiki: false, mcp: [] })
+    } finally {
+      setPluginsLoading(false)
+    }
+  }, [agentType])
+
   const handleAddMenuOpenChange = useCallback(
     (open: boolean) => {
       if (!open) return
@@ -2077,8 +2140,24 @@ export function MessageInput({
       loadQuickMessages().catch((error) => {
         console.error("[MessageInput] quick messages refresh failed:", error)
       })
+      void loadEnabledPlugins()
     },
-    [loadQuickMessages]
+    [loadEnabledPlugins, loadQuickMessages]
+  )
+
+  const handleOpenWikiPluginHint = useCallback(() => {
+    toast.message(t("pluginOpenWikiTitle"), {
+      description: t("pluginOpenWikiHint"),
+    })
+  }, [t])
+
+  const handleMcpPluginHint = useCallback(
+    (serverId: string) => {
+      toast.message(serverId, {
+        description: t("pluginMcpHint"),
+      })
+    },
+    [t]
   )
 
   const handleQuickMessageSelect = useCallback((message: QuickMessage) => {
@@ -2717,48 +2796,6 @@ export function MessageInput({
   const hasImageAttachments = imageAttachments.length > 0
   const showDragActive = isDragActive && !disabled
 
-  const inlineSelectorItems = (
-    <>
-      {hasConfigOptions &&
-        availableConfigOptions.map((option) => {
-          // Long model lists get the searchable + virtualized popover (a Radix
-          // menu of hundreds of items is the scroll jank); every other option —
-          // and short model lists — keep the lightweight inline dropdown.
-          const listGroups = modelPickerGroups(option)
-          if (listGroups) {
-            return (
-              <ModelOptionPicker
-                key={option.id}
-                option={option}
-                groups={listGroups}
-                onSelect={(configId, valueId) =>
-                  onConfigOptionChange?.(configId, valueId)
-                }
-              />
-            )
-          }
-          return (
-            <InlineSessionConfigSelector
-              key={option.id}
-              option={option}
-              derivedGroups={deriveModelGroups(option)}
-              onSelect={(configId, valueId) =>
-                onConfigOptionChange?.(configId, valueId)
-              }
-            />
-          )
-        })}
-      {showModeSelector && (
-        <InlineModeSelector
-          modes={availableModes}
-          selectedModeId={effectiveModeId!}
-          onSelect={handleModeSelect}
-          label={t("modeLabel")}
-        />
-      )}
-    </>
-  )
-
   // Normalized settings for the collapsed (narrow) master–detail panel. Config
   // options and the mode picker are mutually exclusive in this UI (see
   // `showModeSelector`), but both are mapped so the panel stays agnostic.
@@ -2867,6 +2904,80 @@ export function MessageInput({
     localizer,
     t,
   ])
+
+  const inlineSelectorItems = (
+    <>
+      {hasConfigOptions &&
+        (shouldCollapseOptions ? (
+          <Popover
+            open={overflowSelectorsOpen}
+            onOpenChange={setOverflowSelectorsOpen}
+          >
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="xs"
+                title={t("agentSettings")}
+                aria-label={t("agentSettings")}
+                className="min-w-0 gap-0.5 px-1.5 text-muted-foreground"
+              >
+                <Settings2 className="size-3" />
+                <span className="max-w-[9rem] truncate">
+                  {t("agentSettings")} ({availableConfigOptions.length})
+                </span>
+                <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              aria-label={t("agentSettings")}
+              className="w-[22rem] max-w-[calc(100vw-1rem)] p-1"
+            >
+              <SessionSelectorsPanel
+                settings={collapsedSettings}
+                settingsLabel={t("agentSettings")}
+                onAfterSelect={() => setOverflowSelectorsOpen(false)}
+              />
+            </PopoverContent>
+          </Popover>
+        ) : (
+          availableConfigOptions.map((option) => {
+            const listGroups = modelPickerGroups(option)
+            if (listGroups) {
+              return (
+                <ModelOptionPicker
+                  key={option.id}
+                  option={option}
+                  groups={listGroups}
+                  onSelect={(configId, valueId) =>
+                    onConfigOptionChange?.(configId, valueId)
+                  }
+                />
+              )
+            }
+            return (
+              <InlineSessionConfigSelector
+                key={option.id}
+                option={option}
+                derivedGroups={deriveModelGroups(option)}
+                onSelect={(configId, valueId) =>
+                  onConfigOptionChange?.(configId, valueId)
+                }
+              />
+            )
+          })
+        ))}
+      {showModeSelector && (
+        <InlineModeSelector
+          modes={availableModes}
+          selectedModeId={effectiveModeId!}
+          onSelect={handleModeSelect}
+          label={t("modeLabel")}
+        />
+      )}
+    </>
+  )
 
   const actionButtons = isEditingQueueItem ? (
     <div className="flex items-center gap-1">
@@ -3566,6 +3677,65 @@ export function MessageInput({
                             </>
                           )
                         })()}
+                      {(pluginsLoading ||
+                        enabledPlugins.openWiki ||
+                        enabledPlugins.mcp.length > 0) && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <Puzzle className="size-4" />
+                            {t("enabledPlugins")}
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent
+                            className="min-w-52 overflow-y-auto"
+                            style={{
+                              maxWidth: "min(20rem, calc(100vw - 1rem))",
+                              maxHeight:
+                                "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                            }}
+                          >
+                            {pluginsLoading ? (
+                              <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                {t("pluginsLoading")}
+                              </div>
+                            ) : (
+                              <>
+                                {enabledPlugins.openWiki ? (
+                                  <DropdownMenuItem
+                                    onClick={handleOpenWikiPluginHint}
+                                  >
+                                    <BookOpen className="size-4" />
+                                    <span className="flex min-w-0 flex-1 flex-col">
+                                      <span className="truncate">
+                                        {t("pluginOpenWikiTitle")}
+                                      </span>
+                                      <span className="truncate text-[11px] text-muted-foreground">
+                                        {t("pluginOpenWikiActive")}
+                                      </span>
+                                    </span>
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {enabledPlugins.mcp.map((plugin) => (
+                                  <DropdownMenuItem
+                                    key={plugin.id}
+                                    onClick={() =>
+                                      handleMcpPluginHint(plugin.id)
+                                    }
+                                  >
+                                    <Puzzle className="size-4" />
+                                    <span className="truncate">{plugin.id}</span>
+                                  </DropdownMenuItem>
+                                ))}
+                                {!enabledPlugins.openWiki &&
+                                enabledPlugins.mcp.length === 0 ? (
+                                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                    {t("pluginsEmpty")}
+                                  </div>
+                                ) : null}
+                              </>
+                            )}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                   {onToggleVision && (

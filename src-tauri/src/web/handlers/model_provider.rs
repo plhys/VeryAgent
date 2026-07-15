@@ -96,64 +96,11 @@ pub struct FetchProviderModelsParams {
     pub id: i32,
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderModelItem {
-    pub id: String,
-    pub name: String,
-}
-
-/// Fetch available models from a model provider's `/v1/models` endpoint.
+/// Fetch available models from a model provider's `/models` endpoint.
 pub async fn fetch_provider_models(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<FetchProviderModelsParams>,
-) -> Result<Json<Vec<ProviderModelItem>>, AppCommandError> {
-    let provider = mp_commands::get_model_provider_core(&state.db, params.id).await?;
-
-    let url = format!("{}/models", provider.api_url.trim_end_matches('/'));
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| AppCommandError::invalid_input(format!("HTTP client error: {e}")))?;
-
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", provider.api_key))
-        .send()
-        .await
-        .map_err(|e| AppCommandError::invalid_input(format!("Request failed: {e}")))?;
-
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-
-    if !status.is_success() {
-        return Err(AppCommandError::invalid_input(format!(
-            "Provider returned HTTP {}: {}",
-            status.as_u16(),
-            body.chars().take(500).collect::<String>()
-        )));
-    }
-
-    let parsed: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|e| AppCommandError::invalid_input(format!("Invalid JSON: {e}")))?;
-
-    // OpenAI-compatible: { "object": "list", "data": [{ "id": "gpt-5", ... }] }
-    let models: Vec<ProviderModelItem> = parsed
-        .get("data")
-        .and_then(|d| d.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|item| {
-                    let id = item.get("id")?.as_str()?.to_string();
-                    Some(ProviderModelItem {
-                        name: id.clone(),
-                        id,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
+) -> Result<Json<Vec<mp_commands::ProviderModelItem>>, AppCommandError> {
+    let models = mp_commands::fetch_provider_models_core(&state.db, params.id).await?;
     Ok(Json(models))
 }

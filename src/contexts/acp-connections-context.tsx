@@ -2267,6 +2267,22 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   // handlers registered in `attachSubscriptionsRef`.
   const reverseMapRef = useRef(new Map<string, string>())
 
+  // Resident butlers (Hermes / OpenClaw) stay warm after UI detach. When
+  // disconnect() drops the tab mapping, park the connectionId here so the
+  // next connect for the same agentType can rebind without acpConnect
+  // (avoids a full "connecting" handshake when switching general ↔ expert).
+  const parkedResidentRef = useRef(
+    new Map<
+      AgentType,
+      {
+        connectionId: string
+        workingDir: string | null
+        sessionId: string | null
+        lastAppliedSeq: number
+      }
+    >()
+  )
+
   // contextKey → active EventStream subscription handle. Populated only for
   // connections established via the Subscribe-with-Snapshot attach
   // protocol (web + remote-desktop). Used to (a) detach on disconnect /
@@ -3757,7 +3773,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             // A viewer doesn't own the backend connection — detach only, never
             // acpDisconnect (that would kill the owner's agent). Owners are
             // disconnected normally before re-spawning under new params.
-            if (!existing.isViewer && !isResidentAgent(existing.agentType)) {
+            // Residents: park so a later reconnect can rebind without spawn.
+            if (existing.isViewer) {
+              // detach only below
+            } else if (isResidentAgent(existing.agentType)) {
+              parkedResidentRef.current.set(existing.agentType, {
+                connectionId: existing.connectionId,
+                workingDir: existing.workingDir,
+                sessionId: existing.sessionId,
+                lastAppliedSeq: existing.lastAppliedSeq,
+              })
+            } else {
               await acpDisconnect(existing.connectionId).catch(() => {})
             }
             reverseMapRef.current.delete(existing.connectionId)
@@ -3765,6 +3791,78 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             lastActivityRef.current.delete(contextKey)
             pendingUnmappedEventsRef.current.delete(existing.connectionId)
           }
+        }
+
+        // Resident rebind: after expert-mode clear (or agent switch away),
+        // disconnect() parked the warm butler under agentType. Re-attach the
+        // same connectionId to this contextKey instead of acpConnect (which
+        // still reuses the process backend-side, but forces a UI reconnect).
+        if (
+          !existing &&
+          !sessionId &&
+          isResidentAgent(agentType) &&
+          parkedResidentRef.current.has(agentType)
+        ) {
+          const parked = parkedResidentRef.current.get(agentType)!
+          parkedResidentRef.current.delete(agentType)
+          lastActivityRef.current.set(contextKey, Date.now())
+          dispatch({
+            type: "CONNECTION_CREATED",
+            contextKey,
+            connectionId: parked.connectionId,
+            agentType,
+            workingDir: nextWorkingDir ?? parked.workingDir,
+          })
+          // Promote out of "connecting" immediately — the process is already live.
+          dispatch({
+            type: "STATUS_CHANGED",
+            contextKey,
+            status: "connected",
+          })
+          if (parked.sessionId) {
+            dispatch({
+              type: "SESSION_STARTED",
+              contextKey,
+              sessionId: parked.sessionId,
+            })
+          }
+
+          const attachSub = setupAttachSubscription(
+            contextKey,
+            parked.connectionId,
+            parked.lastAppliedSeq
+          )
+          if (!attachSub) {
+            // Tauri / remote-desktop: hydrate selectors + modes from snapshot
+            // so send is not stuck on selectorsReady=false after rebind.
+            try {
+              const snapshot = await acpGetSessionSnapshot(parked.connectionId)
+              if (snapshot) {
+                const snapshotPatch = denormalizeSnapshot(snapshot)
+                dispatch({
+                  type: "HYDRATE_FROM_SNAPSHOT",
+                  contextKey,
+                  patch: snapshotPatch,
+                })
+                seedDelegationsFromSnapshot(
+                  snapshotPatch.connectionId,
+                  snapshotPatch.activeDelegations,
+                  snapshotPatch.eventSeq
+                )
+              }
+            } catch (e: unknown) {
+              console.warn(
+                "[acp-context] resident rebind snapshot failed for",
+                parked.connectionId,
+                e
+              )
+            }
+            reverseMapRef.current.set(parked.connectionId, contextKey)
+            // Backend already has a live session; mark selectors ready even if
+            // snapshot lacked them so the composer is usable immediately.
+            dispatch({ type: "SELECTORS_READY", contextKey })
+          }
+          return
         }
 
         // Orphan rescue: when no entry exists at this contextKey but an
@@ -4095,8 +4193,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // detachDelegationChild. The owner's own disconnect / the idle sweep
         // governs the connection's real lifetime.
         //
-        // Resident butlers (Hermes): same detach-only policy. App-lifetime
-        // process; real teardown is app exit or reapplyConfig force-kill.
+        // Resident butlers (Hermes / OpenClaw): same detach-only policy.
+        // App-lifetime process; real teardown is app exit or reapplyConfig.
+        // Park the mapping so the next general-mode connect rebinds instantly.
+        if (isResidentAgent(conn.agentType) && !conn.isViewer) {
+          parkedResidentRef.current.set(conn.agentType, {
+            connectionId: conn.connectionId,
+            workingDir: conn.workingDir,
+            sessionId: conn.sessionId,
+            lastAppliedSeq: conn.lastAppliedSeq,
+          })
+        }
         teardownAttachSubscription(contextKey)
         reverseMapRef.current.delete(conn.connectionId)
         pendingUnmappedEventsRef.current.delete(conn.connectionId)
@@ -4126,6 +4233,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       // process resume this conversation (session/load) rather than start fresh.
       const { agentType, workingDir, sessionId, connectionId } = conn
       // Force-kill even residents: reapplyConfig is explicit restart.
+      parkedResidentRef.current.delete(agentType)
       await acpDisconnect(connectionId).catch(() => {})
       reverseMapRef.current.delete(connectionId)
       teardownAttachSubscription(contextKey)

@@ -7,7 +7,6 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tokio::process::Command;
 
 use super::config::OpenWikiConfig;
 use crate::app_error::AppCommandError;
@@ -91,24 +90,64 @@ pub fn resolve_executable(config: &OpenWikiConfig) -> Result<PathBuf, AppCommand
 }
 
 fn which_binary(name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path_var) {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            if let Some(found) = binary_in_dir(&dir, name) {
+                return Some(found);
+            }
         }
-        // Windows: also try .cmd / .exe / .bat
-        #[cfg(windows)]
-        {
-            for ext in ["exe", "cmd", "bat"] {
-                let with_ext = dir.join(format!("{name}.{ext}"));
-                if with_ext.is_file() {
-                    return Some(with_ext);
-                }
+    }
+
+    // Desktop processes launched from a shortcut often miss the user npm
+    // global bin dir even when the shell has it. Probe well-known locations.
+    for dir in known_npm_global_bin_dirs() {
+        if let Some(found) = binary_in_dir(&dir, name) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn binary_in_dir(dir: &Path, name: &str) -> Option<PathBuf> {
+    let candidate = dir.join(name);
+    if candidate.is_file() {
+        return Some(candidate);
+    }
+    #[cfg(windows)]
+    {
+        for ext in ["exe", "cmd", "bat"] {
+            let with_ext = dir.join(format!("{name}.{ext}"));
+            if with_ext.is_file() {
+                return Some(with_ext);
             }
         }
     }
     None
+}
+
+fn known_npm_global_bin_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(prefix) = crate::process::user_npm_prefix() {
+        if cfg!(windows) {
+            dirs.push(prefix);
+        } else {
+            dirs.push(prefix.join("bin"));
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            dirs.push(PathBuf::from(appdata).join("npm"));
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Some(home) = dirs::home_dir() {
+            dirs.push(home.join(".npm-global").join("bin"));
+            dirs.push(PathBuf::from("/usr/local/bin"));
+        }
+    }
+    dirs
 }
 
 /// Collect workspace status without running a long init/update.
@@ -200,7 +239,9 @@ pub async fn run_action(
     let args = action.cli_args();
     let started = std::time::Instant::now();
 
-    let mut cmd = Command::new(&executable);
+    // Use process helper so Windows `.cmd` shims get an absolute-path spawn
+    // (CREATE_NO_WINDOW + UTF-8 env). Bare names break npm-style batch wrappers.
+    let mut cmd = crate::process::tokio_command(&executable);
     cmd.args(&args)
         .current_dir(&working_dir)
         .stdout(Stdio::piped())

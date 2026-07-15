@@ -1,8 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, useMemo, useRef, type CSSProperties } from "react"
-import { createPortal } from "react-dom"
-import { format } from "date-fns"
+import { memo, useState, useCallback, useRef, type CSSProperties } from "react"
 import {
   Pencil,
   Trash2,
@@ -17,6 +15,7 @@ import {
   ChevronRight,
   LayoutGrid,
 } from "lucide-react"
+import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
 import { STATUS_ORDER } from "@/lib/types"
@@ -159,17 +158,6 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const [renameValue, setRenameValue] = useState("")
   const [isHovered, setIsHovered] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
-
-  const formattedTimestamp = useMemo(() => {
-    if (!rawTimestamp) return null
-    try {
-      const d = new Date(rawTimestamp)
-      if (Number.isNaN(d.getTime())) return null
-      return format(d, "yyyy-MM-dd HH:mm")
-    } catch {
-      return null
-    }
-  }, [rawTimestamp])
 
   const handleClick = useCallback(() => {
     onSelect(conversation.id, conversation.agent_type, conversation.folder_id)
@@ -640,31 +628,11 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
         />
       )}
 
-      {/* Time flag — portal to body so it escapes sidebar overflow */}
-      {isHovered && formattedTimestamp && cardRef.current &&
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-[9999] flex items-center"
-            style={{
-              top: cardRef.current.getBoundingClientRect().top + cardRef.current.offsetHeight / 2,
-              left: cardRef.current.getBoundingClientRect().right,
-              transform: "translateY(-50%)",
-            }}
-          >
-            <div
-              className="h-0 w-0"
-              style={{
-                borderTop: "5px solid transparent",
-                borderBottom: "5px solid transparent",
-                borderRight: "6px solid hsl(var(--popover))",
-              }}
-            />
-            <span className="whitespace-nowrap rounded-[4px] border border-border bg-popover px-2 py-0.5 text-[11px] leading-[18px] text-popover-foreground shadow-md">
-              {formattedTimestamp}
-            </span>
-          </div>,
-          document.body
-        )}
+      <SidebarHoverTimeFlag
+        hostRef={cardRef}
+        isHovered={isHovered}
+        rawTimestamp={rawTimestamp}
+      />
     </>
   )
 })

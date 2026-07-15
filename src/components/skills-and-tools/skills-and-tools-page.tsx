@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
+  BookOpen,
   Cpu,
   Puzzle,
   Check,
@@ -29,11 +30,15 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { AgentIcon } from "@/components/agent-icon"
+import { OpenWikiConfigDialog } from "@/components/skills-and-tools/openwiki-config-dialog"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
 import {
   invalidateAgentSkillsCache,
 } from "@/hooks/use-agent-skills"
-import { useEnabledSkillIds } from "@/hooks/use-enabled-skill-ids"
+import {
+  refreshEnabledSkillIds,
+  useEnabledSkillIds,
+} from "@/hooks/use-enabled-skill-ids"
 import {
   expertsList,
   expertsLinkToAgent,
@@ -46,8 +51,14 @@ import {
   officecliSkillUnlinkFromAgent,
   mcpScanLocal,
   mcpSetServerApps,
+  openwikiGetConfig,
+  openwikiSaveConfig,
 } from "@/lib/api"
 import { openSettingsWindow } from "@/lib/api"
+import {
+  isOpenWikiEnabledForAgent,
+  setOpenWikiEnabledForAgent,
+} from "@/lib/openwiki-agent"
 import type {
   AgentType,
   ExpertListItem,
@@ -378,6 +389,163 @@ function PluginCard({
 }
 
 /* ------------------------------------------------------------------ */
+/*  OpenWiki first-party connector card                               */
+/* ------------------------------------------------------------------ */
+
+function OpenWikiPluginCard({
+  agentType,
+  agentLabel,
+  workspaceHint,
+  refreshKey,
+  onToggled,
+  /** When true, hide the card while disabled (used by Enabled tab). */
+  hideWhenDisabled = false,
+  onEnabledChange,
+}: {
+  agentType: AgentType
+  agentLabel: string
+  workspaceHint?: string | null
+  refreshKey?: number
+  onToggled: () => void
+  hideWhenDisabled?: boolean
+  onEnabledChange?: (enabled: boolean) => void
+}) {
+  const t = useTranslations("SkillsAndTools")
+  const [loading, setLoading] = useState(true)
+  const [isEnabled, setIsEnabled] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [configOpen, setConfigOpen] = useState(false)
+
+  const fetchState = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true)
+      try {
+        const cfg = await openwikiGetConfig()
+        const enabled = isOpenWikiEnabledForAgent(cfg, agentType)
+        setIsEnabled(enabled)
+        onEnabledChange?.(enabled)
+      } catch {
+        setIsEnabled(false)
+        onEnabledChange?.(false)
+      } finally {
+        if (!opts?.silent) setLoading(false)
+      }
+    },
+    [agentType, onEnabledChange]
+  )
+
+  useEffect(() => {
+    void fetchState()
+  }, [fetchState])
+
+  useEffect(() => {
+    // Soft refresh after sibling tab toggles — keep current UI, no spinner.
+    if (refreshKey === 0) return
+    void fetchState({ silent: true })
+  }, [fetchState, refreshKey])
+
+  const handleToggle = useCallback(
+    async (enable: boolean) => {
+      setToggling(true)
+      try {
+        const cfg = await openwikiGetConfig()
+        const next = setOpenWikiEnabledForAgent(cfg, agentType, enable)
+        await openwikiSaveConfig(next)
+        setIsEnabled(enable)
+        onEnabledChange?.(enable)
+        if (enable) {
+          toast.success(t("openwikiEnableSuccess", { agent: agentLabel }), {
+            description: t("openwikiEnableHint"),
+          })
+        } else {
+          toast.success(t("openwikiDisableSuccess", { agent: agentLabel }))
+        }
+        onToggled()
+      } catch (err) {
+        toast.error(t("openwikiToggleFailed", { error: String(err) }))
+      } finally {
+        setToggling(false)
+      }
+    },
+    [agentLabel, agentType, onEnabledChange, onToggled, t]
+  )
+
+  if (hideWhenDisabled && !loading && !isEnabled) {
+    return null
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <BookOpen className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{t("openwikiName")}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                  {t("openwikiDescription")}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-7 w-7"
+                  title={t("openwikiConfigure")}
+                  aria-label={t("openwikiConfigure")}
+                  onClick={() => setConfigOpen(true)}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+                <Switch
+                  checked={isEnabled}
+                  onCheckedChange={(checked) => void handleToggle(checked)}
+                  disabled={loading || toggling || !agentType}
+                  aria-label={
+                    isEnabled
+                      ? t("openwikiDisableSuccess", { agent: agentLabel })
+                      : t("openwikiEnableSuccess", { agent: agentLabel })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[0.625rem]">
+            {t("firstPartyPlugins")}
+          </Badge>
+          {isEnabled ? (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3 w-3" />
+              {agentLabel}
+            </span>
+          ) : null}
+        </div>
+        {isEnabled ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {t("openwikiEnableHint")}
+          </p>
+        ) : null}
+      </div>
+      <OpenWikiConfigDialog
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+        workspaceHint={workspaceHint}
+        onSaved={() => {
+          void fetchState()
+          onToggled()
+        }}
+      />
+    </>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  Enabled Tab (shows enabled skills + enabled plugins, with toggles) */
 /* ------------------------------------------------------------------ */
 
@@ -386,7 +554,8 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const locale = useLocale()
   const navigatorLocale =
     typeof navigator !== "undefined" ? (navigator.language ?? locale) : locale
-  const { fresh, currentAgent, lockedAgentType } = useSkillsPageAgentContext()
+  const { fresh, currentAgent, lockedAgentType, workspaceHint } =
+    useSkillsPageAgentContext()
   const { enabledIds } = useEnabledSkillIds(lockedAgentType, true)
 
   // Load unified skill list to know source (expert / science / office) for toggle API
@@ -394,8 +563,8 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const [loadingSkills, setLoadingSkills] = useState(true)
   const [togglingSkillId, setTogglingSkillId] = useState<string | null>(null)
 
-  const fetchSkills = useCallback(async () => {
-    setLoadingSkills(true)
+  const fetchSkills = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingSkills(true)
     try {
       const [experts, science, officeSkills] = await Promise.all([
         expertsList(),
@@ -411,12 +580,14 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     } catch {
       // silently ignore
     } finally {
-      setLoadingSkills(false)
+      if (!opts?.silent) setLoadingSkills(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchSkills()
+    void fetchSkills({ silent: allSkills.length > 0 })
+    // Only re-run when parent signals a toggle; list identity is intentionally ignored.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchSkills, refreshKey])
 
   // Filter to only enabled skills, grouped by category
@@ -472,11 +643,9 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
               : `Enabled for ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("focus"))
-        }
+        await refreshEnabledSkillIds()
         onToggled()
-        await fetchSkills()
+        await fetchSkills({ silent: true })
       } catch (err) {
         toast.error(t("installFailed", { error: String(err) }))
       } finally {
@@ -494,21 +663,24 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const [plugins, setPlugins] = useState<LocalMcpServer[]>([])
   const [loadingPlugins, setLoadingPlugins] = useState(true)
   const [togglingPluginId, setTogglingPluginId] = useState<string | null>(null)
+  const [openWikiEnabled, setOpenWikiEnabled] = useState(false)
+  const [openWikiReady, setOpenWikiReady] = useState(false)
 
-  const fetchPlugins = useCallback(async () => {
-    setLoadingPlugins(true)
+  const fetchPlugins = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoadingPlugins(true)
     try {
       const local = await mcpScanLocal()
       setPlugins(local)
     } catch {
       // silently ignore
     } finally {
-      setLoadingPlugins(false)
+      if (!opts?.silent) setLoadingPlugins(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchPlugins()
+    void fetchPlugins({ silent: plugins.length > 0 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPlugins, refreshKey])
 
   const enabledPlugins = useMemo(
@@ -536,6 +708,10 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
 
         await mcpSetServerApps(serverId, newApps)
 
+        setPlugins((prev) =>
+          prev.map((p) => (p.id === serverId ? { ...p, apps: newApps } : p))
+        )
+
         const agentName = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
@@ -548,7 +724,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         )
 
         onToggled()
-        await fetchPlugins()
+        await fetchPlugins({ silent: true })
       } catch (err) {
         toast.error(t("installFailed", { error: String(err) }))
       } finally {
@@ -569,7 +745,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     )
   }
 
-  if (!currentAgent) {
+  if (!currentAgent || !lockedAgentType) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
         <Cpu className="h-8 w-8" />
@@ -579,23 +755,17 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   }
 
   const hasEnabledSkills = enabledSkills.length > 0
-  const hasEnabledPlugins = enabledPlugins.length > 0
-  const nothingEnabled = !hasEnabledSkills && !hasEnabledPlugins && !loadingSkills && !loadingPlugins
+  const hasEnabledPlugins = enabledPlugins.length > 0 || openWikiEnabled
+  const pluginsSectionLoading = loadingPlugins || !openWikiReady
+
+  const handleOpenWikiEnabledChange = useCallback((enabled: boolean) => {
+    setOpenWikiEnabled(enabled)
+    setOpenWikiReady(true)
+  }, [])
 
   return (
     <ScrollArea className="flex-1">
       <div className="flex flex-col gap-6 px-1 py-4 md:px-2">
-        {nothingEnabled && (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
-            <Cpu className="h-8 w-8" />
-            <p className="text-sm">
-              {navigatorLocale.toLowerCase().startsWith("zh")
-                ? "当前智能体没有启用任何技能或插件"
-                : "No skills or plugins enabled for this agent"}
-            </p>
-          </div>
-        )}
-
         {/* Enabled Skills sub-section — grouped by category */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -644,30 +814,45 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
               ? "已启用的插件"
               : "Enabled Plugins"}
           </h4>
-          {loadingPlugins ? (
+          {/* Always mount OpenWiki card so it can report enabled state. */}
+          <div
+            className={
+              !pluginsSectionLoading && hasEnabledPlugins
+                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                : "hidden"
+            }
+          >
+            <OpenWikiPluginCard
+              agentType={lockedAgentType}
+              agentLabel={agentLabel}
+              workspaceHint={workspaceHint}
+              refreshKey={refreshKey}
+              onToggled={onToggled}
+              hideWhenDisabled
+              onEnabledChange={handleOpenWikiEnabledChange}
+            />
+            {enabledPlugins.map((plugin) => (
+              <PluginCard
+                key={plugin.id}
+                plugin={plugin}
+                isEnabled={true}
+                isToggling={togglingPluginId === plugin.id}
+                onToggle={handleTogglePlugin}
+                agentLabel={agentLabel}
+                locale={navigatorLocale}
+              />
+            ))}
+          </div>
+          {pluginsSectionLoading ? (
             <div className="flex items-center justify-center py-4 text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t("loading")}
             </div>
-          ) : hasEnabledPlugins ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {enabledPlugins.map((plugin) => (
-                <PluginCard
-                  key={plugin.id}
-                  plugin={plugin}
-                  isEnabled={true}
-                  isToggling={togglingPluginId === plugin.id}
-                  onToggle={handleTogglePlugin}
-                  agentLabel={agentLabel}
-                  locale={navigatorLocale}
-                />
-              ))}
-            </div>
-          ) : (
+          ) : !hasEnabledPlugins ? (
             <p className="py-4 text-center text-xs text-muted-foreground">
               {t("noPlugins")}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </ScrollArea>
@@ -689,38 +874,41 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   const { currentAgent, lockedAgentType } = useSkillsPageAgentContext()
   const { enabledIds } = useEnabledSkillIds(lockedAgentType, true)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [experts, science, officeSkills] = await Promise.all([
-        expertsList(),
-        scienceList(),
-        officecliListSkills(),
-      ])
-      const unified: UnifiedSkillItem[] = [
-        ...experts.map(expertToUnified),
-        ...science.map(scienceToUnified),
-        ...officeSkills.map(officeSkillToUnified),
-      ]
-      // Sort by category order, then by name within category
-      unified.sort((a, b) => {
-        const orderA = CATEGORY_ORDER[a.category] ?? 99
-        const orderB = CATEGORY_ORDER[b.category] ?? 99
-        if (orderA !== orderB) return orderA - orderB
-        const nameA = pickLocalizedText(a.name, navigatorLocale, a.id)
-        const nameB = pickLocalizedText(b.name, navigatorLocale, b.id)
-        return nameA.localeCompare(nameB)
-      })
-      setSkills(unified)
-    } catch {
-      // silently ignore
-    } finally {
-      setLoading(false)
-    }
-  }, [navigatorLocale])
+  const fetchData = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true)
+      try {
+        const [experts, science, officeSkills] = await Promise.all([
+          expertsList(),
+          scienceList(),
+          officecliListSkills(),
+        ])
+        const unified: UnifiedSkillItem[] = [
+          ...experts.map(expertToUnified),
+          ...science.map(scienceToUnified),
+          ...officeSkills.map(officeSkillToUnified),
+        ]
+        // Sort by category order, then by name within category
+        unified.sort((a, b) => {
+          const orderA = CATEGORY_ORDER[a.category] ?? 99
+          const orderB = CATEGORY_ORDER[b.category] ?? 99
+          if (orderA !== orderB) return orderA - orderB
+          const nameA = pickLocalizedText(a.name, navigatorLocale, a.id)
+          const nameB = pickLocalizedText(b.name, navigatorLocale, b.id)
+          return nameA.localeCompare(nameB)
+        })
+        setSkills(unified)
+      } catch {
+        // silently ignore
+      } finally {
+        if (!opts?.silent) setLoading(false)
+      }
+    },
+    [navigatorLocale]
+  )
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
   }, [fetchData])
 
   const handleToggle = useCallback(
@@ -765,11 +953,9 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
               : `Enabled for ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("focus"))
-        }
+        await refreshEnabledSkillIds()
         onToggled()
-        await fetchData()
+        await fetchData({ silent: true })
       } catch (err) {
         toast.error(t("installFailed", { error: String(err) }))
       } finally {
@@ -898,10 +1084,11 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
 /*  Plugins Tab (MCP servers scoped to current agent)                 */
 /* ------------------------------------------------------------------ */
 
-function PluginsTab({ onToggled }: { onToggled: () => void }) {
+function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshKey: number }) {
   const t = useTranslations("SkillsAndTools")
   const locale = useLocale()
-  const { currentAgent, lockedAgentType } = useSkillsPageAgentContext()
+  const { currentAgent, lockedAgentType, workspaceHint } =
+    useSkillsPageAgentContext()
   const pluginAgentType = useMemo(
     () => agentTypeToMcpAppType(lockedAgentType),
     [lockedAgentType]
@@ -910,20 +1097,20 @@ function PluginsTab({ onToggled }: { onToggled: () => void }) {
   const [loading, setLoading] = useState(true)
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     try {
       const local = await mcpScanLocal()
       setPlugins(local)
     } catch {
       // silently ignore
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
   }, [fetchData])
 
   const handleTogglePlugin = useCallback(
@@ -943,6 +1130,11 @@ function PluginsTab({ onToggled }: { onToggled: () => void }) {
 
         await mcpSetServerApps(serverId, newApps)
 
+        // Optimistic local update — avoids full-list spinner flash.
+        setPlugins((prev) =>
+          prev.map((p) => (p.id === serverId ? { ...p, apps: newApps } : p))
+        )
+
         const agentName = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
         toast.success(
           locale.toLowerCase().startsWith("zh")
@@ -955,7 +1147,7 @@ function PluginsTab({ onToggled }: { onToggled: () => void }) {
         )
 
         onToggled()
-        await fetchData()
+        await fetchData({ silent: true })
       } catch (err) {
         toast.error(t("installFailed", { error: String(err) }))
       } finally {
@@ -988,6 +1180,15 @@ function PluginsTab({ onToggled }: { onToggled: () => void }) {
     [pluginAgentType, plugins]
   )
 
+  if (!lockedAgentType) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+        <Cpu className="h-8 w-8" />
+        <p className="text-sm">{t("noAgent")}</p>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -997,89 +1198,101 @@ function PluginsTab({ onToggled }: { onToggled: () => void }) {
     )
   }
 
-  if (plugins.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
-        <Puzzle className="h-8 w-8" />
-        <p className="text-sm">
-          {locale.toLowerCase().startsWith("zh")
-            ? `暂无插件，可在设置中添加`
-            : `No plugins yet. Add one in Settings`}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleManagePlugins}
-          className="gap-1.5"
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-          {t("managePlugins")}
-        </Button>
-      </div>
-    )
-  }
-
   return (
     <ScrollArea className="flex-1">
-      <div className="flex flex-col gap-4 px-1 py-4 md:px-2">
-        {/* Enabled for current agent */}
-        {enabledPlugins.length > 0 && (
-          <div>
-            <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {locale.toLowerCase().startsWith("zh")
-                ? `已对${agentLabel}启用`
-                : `Enabled for ${agentLabel}`}
-            </h4>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {enabledPlugins.map((plugin) => (
-                <PluginCard
-                  key={plugin.id}
-                  plugin={plugin}
-                  isEnabled={true}
-                  isToggling={togglingId === plugin.id}
-                  onToggle={handleTogglePlugin}
-                  agentLabel={agentLabel}
-                  locale={locale}
-                />
-              ))}
-            </div>
+      <div className="flex flex-col gap-6 px-1 py-4 md:px-2">
+        <div>
+          <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("firstPartyPlugins")}
+          </h4>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <OpenWikiPluginCard
+              agentType={lockedAgentType}
+              agentLabel={agentLabel}
+              workspaceHint={workspaceHint}
+              refreshKey={refreshKey}
+              onToggled={onToggled}
+            />
           </div>
-        )}
+        </div>
 
-        {/* Other available plugins */}
-        {otherPlugins.length > 0 && (
-          <div>
-            <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {locale.toLowerCase().startsWith("zh")
-                ? "其他可用插件"
-                : "Other available plugins"}
-            </h4>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {otherPlugins.map((plugin) => (
-                <PluginCard
-                  key={plugin.id}
-                  plugin={plugin}
-                  isEnabled={false}
-                  isToggling={togglingId === plugin.id}
-                  onToggle={handleTogglePlugin}
-                  agentLabel={agentLabel}
-                  locale={locale}
-                />
-              ))}
+        <div>
+          <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("mcpPlugins")}
+          </h4>
+          {plugins.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
+              <Puzzle className="h-7 w-7" />
+              <p className="text-sm">{t("noPlugins")}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManagePlugins}
+                className="gap-1.5"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                {t("managePlugins")}
+              </Button>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex flex-col gap-4">
+              {enabledPlugins.length > 0 && (
+                <div>
+                  <h5 className="mb-2 text-[11px] font-medium text-muted-foreground">
+                    {locale.toLowerCase().startsWith("zh")
+                      ? `已对${agentLabel}启用`
+                      : `Enabled for ${agentLabel}`}
+                  </h5>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {enabledPlugins.map((plugin) => (
+                      <PluginCard
+                        key={plugin.id}
+                        plugin={plugin}
+                        isEnabled={true}
+                        isToggling={togglingId === plugin.id}
+                        onToggle={handleTogglePlugin}
+                        agentLabel={agentLabel}
+                        locale={locale}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleManagePlugins}
-            className="gap-1.5"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            {t("managePlugins")}
-          </Button>
+              {otherPlugins.length > 0 && (
+                <div>
+                  <h5 className="mb-2 text-[11px] font-medium text-muted-foreground">
+                    {t("otherAvailablePlugins")}
+                  </h5>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {otherPlugins.map((plugin) => (
+                      <PluginCard
+                        key={plugin.id}
+                        plugin={plugin}
+                        isEnabled={false}
+                        isToggling={togglingId === plugin.id}
+                        onToggle={handleTogglePlugin}
+                        agentLabel={agentLabel}
+                        locale={locale}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManagePlugins}
+                  className="gap-1.5"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  {t("managePlugins")}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </ScrollArea>
@@ -1097,6 +1310,8 @@ interface SkillsPageAgentContext {
   availableAgents: SkillsPageAgent[]
   lockedAgentType: AgentType | null
   currentAgent: SkillsPageAgent | null
+  /** Current conversation working dir, if any (for OpenWiki workspace ops). */
+  workspaceHint: string | null
 }
 
 function useSkillsPageAgentContext(): SkillsPageAgentContext {
@@ -1128,6 +1343,7 @@ function useSkillsPageAgentContext(): SkillsPageAgentContext {
     availableAgents,
     lockedAgentType,
     currentAgent,
+    workspaceHint: currentConversation?.workingDir ?? null,
   }
 }
 
@@ -1139,8 +1355,7 @@ export function SkillsAndToolsPage() {
   const t = useTranslations("SkillsAndTools")
   const locale = useLocale()
   const { fresh, availableAgents, currentAgent } = useSkillsPageAgentContext()
-  // Bump this after each enable/disable toggle so the "已启用" tab
-  // re-mounts and re-fetches.
+  // Soft refresh signal for the Enabled tab (no remount / no loading flash).
   const [refreshKey, setRefreshKey] = useState(0)
   const handleToggleHappened = useCallback(() => {
     setRefreshKey((k) => k + 1)
@@ -1177,8 +1392,8 @@ export function SkillsAndToolsPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {locale.toLowerCase().startsWith("zh")
-                    ? "以下内容仅针对当前入口智能体。开启开关后，技能或插件将在此智能体下可用。"
-                    : "All content below is scoped to the current entry agent. Toggle on to make a skill or plugin available for this agent."}
+                    ? "仅作用于当前入口智能体。技能：在输入框「+」里选用；插件（如 OpenWiki）：开启后自动生效，也可在「+ → 已启用插件」查看。"
+                    : "Scoped to the current entry agent. Skills: pick from the composer “+” menu. Plugins (e.g. OpenWiki): work automatically once enabled; check “+ → Enabled plugins”."}
                 </p>
               </div>
             </div>
@@ -1220,7 +1435,7 @@ export function SkillsAndToolsPage() {
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
-            <EnabledTab key={refreshKey} refreshKey={refreshKey} onToggled={handleToggleHappened} />
+            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
           </TabsContent>
           <TabsContent
             value="skills"
@@ -1234,7 +1449,7 @@ export function SkillsAndToolsPage() {
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
-            <PluginsTab onToggled={handleToggleHappened} />
+            <PluginsTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
           </TabsContent>
         </Tabs>
       </div>

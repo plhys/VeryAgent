@@ -2962,6 +2962,8 @@ interface AgentReorderItemProps {
   selected: boolean
   reordering: boolean
   dragging: AgentType | null
+  /** Gray presentation for inactive or unusable agents. */
+  inactive?: boolean
   onDragStart: (agentType: AgentType) => void
   onDragEnd: () => void
   onSelect: (agentType: AgentType) => void
@@ -2975,6 +2977,7 @@ function AgentReorderItem({
   selected,
   reordering,
   dragging,
+  inactive = false,
   onDragStart,
   onDragEnd,
   onSelect,
@@ -3004,7 +3007,8 @@ function AgentReorderItem({
       className={cn(
         "rounded-lg border bg-card p-3 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         selected && "border-primary/60 bg-primary/5",
-        dragging === agent.agent_type && "border-primary/60 bg-primary/5"
+        dragging === agent.agent_type && "border-primary/60 bg-primary/5",
+        inactive && "opacity-60 text-muted-foreground"
       )}
       tabIndex={0}
       onDragStart={() => {
@@ -3234,6 +3238,18 @@ function KimiCodeConfigPanel({
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(
     () => agent.model_provider_id ?? null
   )
+  const [selectedProviderModel, setSelectedProviderModel] = useState(
+    () =>
+      findEnvValue(agent.env ?? {}, ["KIMI_MODEL_NAME", "OPENAI_MODEL"]) ||
+      config.modelId ||
+      ""
+  )
+  const [providerModels, setProviderModels] = useState<ProviderModelItem[]>([])
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false)
+  const [providerModelsError, setProviderModelsError] = useState<string | null>(
+    null
+  )
+  const [providerModelsRefreshKey, setProviderModelsRefreshKey] = useState(0)
   const [saving, setSaving] = useState(false)
 
   // Filter model providers that serve kimi_code.
@@ -3333,7 +3349,7 @@ function KimiCodeConfigPanel({
         {
           KIMI_MODEL_BASE_URL: provider.api_url,
           KIMI_MODEL_API_KEY: provider.api_key,
-          KIMI_MODEL_NAME: provider.model ?? "",
+          KIMI_MODEL_NAME: selectedProviderModel.trim() || provider.model || "",
         },
         true,
         selectedProviderId
@@ -3368,6 +3384,7 @@ function KimiCodeConfigPanel({
   }, [
     mode,
     selectedProviderId,
+    selectedProviderModel,
     kimiModelProviders,
     onSaveModelProvider,
     interfaceType,
@@ -3411,6 +3428,35 @@ function KimiCodeConfigPanel({
       setFetchingModels(false)
     }
   }, [effectiveBaseUrl, apiKey, t])
+
+  useEffect(() => {
+    if (mode !== "model_provider" || selectedProviderId == null) {
+      setProviderModels([])
+      setProviderModelsError(null)
+      setProviderModelsLoading(false)
+      return
+    }
+    let cancelled = false
+    setProviderModelsLoading(true)
+    setProviderModelsError(null)
+    void fetchModelProviderModels(selectedProviderId)
+      .then((list) => {
+        if (cancelled) return
+        setProviderModels(list)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error("[KimiCode] fetch provider models failed", error)
+        setProviderModels([])
+        setProviderModelsError(toErrorMessage(error))
+      })
+      .finally(() => {
+        if (!cancelled) setProviderModelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, selectedProviderId, providerModelsRefreshKey])
 
   const keyToggle = (
     <Button
@@ -3488,38 +3534,105 @@ function KimiCodeConfigPanel({
       </div>
 
       {mode === "model_provider" && (
-        <div className="space-y-1.5">
-          <label className="text-[11px] text-muted-foreground">
-            {t("selectModelProvider")}
-          </label>
-          {kimiModelProviders.length > 0 ? (
-            <Select
-              value={
-                selectedProviderId != null
-                  ? String(selectedProviderId)
-                  : ""
-              }
-              onValueChange={(value) =>
-                setSelectedProviderId(value ? Number(value) : null)
-              }
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-muted-foreground">
+              {t("selectModelProvider")}
+            </label>
+            {kimiModelProviders.length > 0 ? (
+              <Select
+                value={
+                  selectedProviderId != null
+                    ? String(selectedProviderId)
+                    : ""
+                }
+                onValueChange={(value) =>
+                  setSelectedProviderId(value ? Number(value) : null)
+                }
+                disabled={saving}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("selectModelProvider")} />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {kimiModelProviders.map((provider) => (
+                    <SelectItem key={provider.id} value={String(provider.id)}>
+                      {provider.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {t("noModelProviderAvailable")}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[11px] text-muted-foreground">
+                {t("selectProviderModel")}
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                disabled={
+                  saving ||
+                  providerModelsLoading ||
+                  selectedProviderId == null
+                }
+                onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
+              >
+                {providerModelsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t("refreshProviderModels")}
+              </Button>
+            </div>
+            <Input
+              list="kimi-provider-model-options"
+              value={selectedProviderModel}
+              onChange={(event) => setSelectedProviderModel(event.target.value)}
+              placeholder={t("selectProviderModel")}
               disabled={saving}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("selectModelProvider")} />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {kimiModelProviders.map((provider) => (
-                  <SelectItem key={provider.id} value={String(provider.id)}>
-                    {provider.name}
-                  </SelectItem>
+            />
+            {providerModels.length > 0 && (
+              <datalist id="kimi-provider-model-options">
+                {providerModels.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
                 ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              {t("noModelProviderAvailable")}
-            </p>
-          )}
+              </datalist>
+            )}
+            {providerModelsLoading ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelLoading")}
+              </p>
+            ) : providerModelsError ? (
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-destructive">
+                  {t("providerModelFetchFailed")}
+                </p>
+                <p className="break-all text-[11px] text-destructive/80">
+                  {providerModelsError}
+                </p>
+              </div>
+            ) : providerModels.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelEmpty")}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelHint")}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -5657,9 +5770,7 @@ export function AcpAgentSettings() {
         if (cancelled) return
         console.error("[Settings] fetch provider models failed:", error)
         setProviderModels([])
-        setProviderModelsError(
-          error instanceof Error ? error.message : String(error)
-        )
+        setProviderModelsError(toErrorMessage(error))
       })
       .finally(() => {
         if (!cancelled) setProviderModelsLoading(false)
@@ -5812,9 +5923,14 @@ export function AcpAgentSettings() {
             {t("providerModelLoading")}
           </p>
         ) : providerModelsError ? (
-          <p className="text-[11px] text-destructive">
-            {t("providerModelFetchFailed")}
-          </p>
+          <div className="space-y-0.5">
+            <p className="text-[11px] text-destructive">
+              {t("providerModelFetchFailed")}
+            </p>
+            <p className="break-all text-[11px] text-destructive/80">
+              {providerModelsError}
+            </p>
+          </div>
         ) : providerModels.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
             {t("providerModelEmpty")}
@@ -7371,6 +7487,8 @@ export function AcpAgentSettings() {
                           ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
                           : "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
 
+              const inactive = !draft.enabled || !agent.available
+
               return (
                 <AgentReorderItem
                   key={agent.agent_type}
@@ -7378,6 +7496,7 @@ export function AcpAgentSettings() {
                   selected={selectedAgentType === agent.agent_type}
                   reordering={reordering}
                   dragging={dragging}
+                  inactive={inactive}
                   onDragStart={(agentType) => {
                     setDragging(agentType)
                   }}
@@ -7415,12 +7534,18 @@ export function AcpAgentSettings() {
                         </button>
                         <AgentIcon
                           agentType={agent.agent_type}
+                          muted={inactive}
                           className="h-4 w-4"
                         />
-                        <span className="text-sm font-medium truncate">
+                        <span
+                          className={cn(
+                            "text-sm font-medium truncate",
+                            inactive && "text-muted-foreground"
+                          )}
+                        >
                           {agent.name}
                         </span>
-                        {draft.enabled && (
+                        {draft.enabled && agent.available ? (
                           <span
                             className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"
                             aria-label={t("status.agentEnabledAria", {
@@ -7428,7 +7553,7 @@ export function AcpAgentSettings() {
                             })}
                             title={t("status.enabled")}
                           />
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
@@ -7481,9 +7606,18 @@ export function AcpAgentSettings() {
             <div className="h-full flex flex-col">
               <div className="border-b px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "min-w-0 flex items-center gap-2",
+                      (!selectedDraft.enabled || !selectedAgent.available) &&
+                        "opacity-60 text-muted-foreground"
+                    )}
+                  >
                     <AgentIcon
                       agentType={selectedAgent.agent_type}
+                      muted={
+                        !selectedDraft.enabled || !selectedAgent.available
+                      }
                       className="h-5 w-5"
                     />
                     <h3 className="text-sm font-semibold truncate">
@@ -8034,17 +8168,19 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {(selectedDraft.codexAuthMode === "api_key" ||
-                      selectedDraft.codexAuthMode === "model_provider") && (
+                    {selectedDraft.codexAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / gpt-5-mini",
+                      })}
+
+                    {selectedDraft.codexAuthMode === "api_key" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           {t("codex.modelName")}
                         </label>
                         <Input
                           value={selectedDraft.model}
-                          readOnly={
-                            selectedDraft.codexAuthMode === "model_provider"
-                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "model",
@@ -8308,24 +8444,28 @@ supports_websockets = true`}
                       </div>
                     )}
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Model
-                      </label>
-                      <Input
-                        value={selectedDraft.model}
-                        readOnly={
-                          selectedDraft.geminiAuthMode === "model_provider"
-                        }
-                        onChange={(event) => {
-                          handleGeminiFieldChange("model", event.target.value)
-                        }}
-                        placeholder="gemini-3-pro-preview"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("modelHintDefault")}
-                      </p>
-                    </div>
+                    {selectedDraft.geminiAuthMode === "model_provider"
+                      ? renderProviderModelPicker({
+                          value: selectedDraft.model,
+                          placeholder: "gemini-3-pro-preview",
+                        })
+                      : (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          Model
+                        </label>
+                        <Input
+                          value={selectedDraft.model}
+                          onChange={(event) => {
+                            handleGeminiFieldChange("model", event.target.value)
+                          }}
+                          placeholder="gemini-3-pro-preview"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("modelHintDefault")}
+                        </p>
+                      </div>
+                      )}
 
                     {(selectedDraft.geminiAuthMode === "custom" ||
                       selectedDraft.geminiAuthMode === "model_provider") && (
@@ -9446,6 +9586,12 @@ supports_websockets = true`}
                       </div>
                     )}
 
+                    {selectedDraft.clineAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model || selectedDraft.clineModel,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
+
                     {selectedDraft.clineAuthMode === "model_provider" && (
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -9734,6 +9880,12 @@ supports_websockets = true`}
                         )}
                       </div>
                     )}
+
+                    {selectedDraft.openClawAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
 
                     {selectedDraft.openClawAuthMode === "model_provider" && (
                       <div className="flex items-center justify-end gap-2">
@@ -10039,6 +10191,12 @@ supports_websockets = true`}
                         )}
                       </div>
                     )}
+
+                    {selectedDraft.hermesAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
 
                     {selectedDraft.hermesAuthMode === "model_provider" && (
                       <div className="flex justify-end">
@@ -10596,6 +10754,12 @@ supports_websockets = true`}
 
                     {selectedAgent.agent_type === "claude_code" ? (
                       <div className="space-y-2">
+                        {selectedDraft.claudeAuthMode === "model_provider" ? (
+                          renderProviderModelPicker({
+                            value: selectedDraft.claudeMainModel,
+                            placeholder: "claude-sonnet-5",
+                          })
+                        ) : (
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-1.5">
                             <label className="text-[11px] text-muted-foreground">
@@ -10603,10 +10767,6 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeMainModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeMainModel",
@@ -10622,10 +10782,6 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeReasoningModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeReasoningModel",
@@ -10636,9 +10792,12 @@ supports_websockets = true`}
                             />
                           </div>
                         </div>
+                        )}
+                        {selectedDraft.claudeAuthMode !== "model_provider" && (
                         <p className="text-[11px] text-muted-foreground">
                           {t("modelHintDefault")}
                         </p>
+                        )}
                         <details className="group border-t border-border/60 pt-3">
                           <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors list-none">
                             <svg className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
@@ -10654,10 +10813,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultHaikuModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultHaikuModel",
@@ -10673,10 +10828,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultSonnetModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultSonnetModel",
@@ -10692,10 +10843,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultOpusModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultOpusModel",
@@ -10714,10 +10861,6 @@ supports_websockets = true`}
                                   </label>
                                   <Input
                                     value={selectedDraft.claudeCustomModelOption}
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
-                                    }
                                     onChange={(event) => {
                                       handleImportantConfigChange(
                                         "claudeCustomModelOption",
@@ -10735,10 +10878,6 @@ supports_websockets = true`}
                                     value={
                                       selectedDraft.claudeCustomModelOptionName
                                     }
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
-                                    }
                                     onChange={(event) => {
                                       handleImportantConfigChange(
                                         "claudeCustomModelOptionName",
@@ -10755,10 +10894,6 @@ supports_websockets = true`}
                                   <Input
                                     value={
                                       selectedDraft.claudeCustomModelOptionDescription
-                                    }
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
                                     }
                                     onChange={(event) => {
                                       handleImportantConfigChange(

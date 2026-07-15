@@ -63,7 +63,7 @@ describe("buildAgentReadiness", () => {
       agent: agent({
         agent_type: "open_claw",
         name: "OpenClaw",
-        installed_version: "2026.6.11",
+        installed_version: "2026.7.1",
         available: true,
       }),
       draft: draft({ openClawGatewayUrl: "ws://127.0.0.1:18789" }),
@@ -110,7 +110,7 @@ describe("buildAgentReadiness", () => {
       agent: agent({
         agent_type: "open_claw",
         name: "OpenClaw",
-        installed_version: "2026.6.11",
+        installed_version: "2026.7.1",
         available: true,
       }),
       draft: draft({ openClawAuthMode: "gateway", openClawGatewayUrl: "" }),
@@ -129,7 +129,7 @@ describe("buildAgentReadiness", () => {
       agent: agent({
         agent_type: "open_claw",
         name: "OpenClaw",
-        installed_version: "2026.6.11",
+        installed_version: "2026.7.1",
         available: true,
       }),
       draft: draft({
@@ -162,7 +162,7 @@ describe("buildAgentReadiness", () => {
       agent: agent({
         agent_type: "open_claw",
         name: "OpenClaw",
-        installed_version: "2026.6.11",
+        installed_version: "2026.7.1",
         available: true,
       }),
       draft: draft({ openClawGatewayUrl: "" }),

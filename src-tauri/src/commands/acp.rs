@@ -2894,6 +2894,11 @@ pub struct OpenClawGatewayEnsureResult {
 
 /// OpenClaw's own default local port when nothing is configured.
 const OPENCLAW_DEFAULT_LOCAL_PORT: u16 = 18789;
+/// Managed custom provider id written into `~/.openclaw/openclaw.json` when the
+/// user binds a shared model provider. OpenClaw's gateway (not the ACP client)
+/// performs inference, so credentials must live in gateway config — env on the
+/// `openclaw acp` process alone is ignored.
+const OPENCLAW_MANAGED_PROVIDER: &str = "veryagent";
 
 fn openclaw_config_path() -> PathBuf {
     let configured = std::env::var("OPENCLAW_CONFIG_PATH").ok().and_then(|raw| {
@@ -2994,6 +2999,182 @@ fn openclaw_read_config_value(path: &Path) -> Option<serde_json::Value> {
     }
     let stripped = strip_json5_noise(trimmed);
     serde_json::from_str::<serde_json::Value>(&stripped).ok()
+}
+
+/// OpenClaw's openai-completions transport expects a base that already ends in
+/// `/v1` (it appends `/chat/completions` itself). Strip common chat suffixes and
+/// append `/v1` when missing so shared model-provider URLs work either way.
+fn normalize_openclaw_openai_base_url(api_url: &str) -> String {
+    let trimmed = api_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let without_chat = trimmed
+        .strip_suffix("/chat/completions")
+        .or_else(|| trimmed.strip_suffix("/completions"))
+        .unwrap_or(trimmed)
+        .trim_end_matches('/');
+    if without_chat.ends_with("/v1") {
+        without_chat.to_string()
+    } else {
+        format!("{without_chat}/v1")
+    }
+}
+
+/// Write (or update) the veryagent-managed custom provider block in openclaw.json
+/// so the local gateway can authenticate against a shared model provider.
+///
+/// Shape matches OpenClaw's custom openai-compatible providers:
+/// `models.providers.veryagent` + optional `agents.defaults.model.primary`.
+fn write_openclaw_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+) -> Result<(), AcpError> {
+    let path = openclaw_config_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            AcpError::protocol(format!(
+                "create openclaw config dir failed ({}): {e}",
+                parent.display()
+            ))
+        })?;
+    }
+
+    let mut root = openclaw_read_config_value(&path).unwrap_or_else(|| serde_json::json!({}));
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    let base_url = normalize_openclaw_openai_base_url(api_url);
+    let model = model.map(str::trim).filter(|s| !s.is_empty());
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!("invalid openclaw.json root in {}", path.display()))
+    })?;
+
+    let models_value = obj
+        .entry("models".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let models_obj = models_value.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!("invalid models object in {}", path.display()))
+    })?;
+    models_obj
+        .entry("mode".to_string())
+        .or_insert_with(|| serde_json::json!("merge"));
+
+    let providers_value = models_obj
+        .entry("providers".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let providers_obj = providers_value.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!(
+            "invalid models.providers object in {}",
+            path.display()
+        ))
+    })?;
+
+    // Keep any previously managed model list when this write is credentials-only
+    // (cascade from provider URL/key edit without a model change).
+    let existing_models = providers_obj
+        .get(OPENCLAW_MANAGED_PROVIDER)
+        .and_then(|p| p.get("models"))
+        .cloned();
+
+    let mut provider = serde_json::Map::new();
+    if !base_url.is_empty() {
+        provider.insert(
+            "baseUrl".to_string(),
+            serde_json::Value::String(base_url),
+        );
+    }
+    if !api_key.trim().is_empty() {
+        provider.insert(
+            "apiKey".to_string(),
+            serde_json::Value::String(api_key.to_string()),
+        );
+    }
+    provider.insert(
+        "api".to_string(),
+        serde_json::Value::String("openai-completions".to_string()),
+    );
+
+    if let Some(model_id) = model {
+        provider.insert(
+            "models".to_string(),
+            serde_json::json!([{
+                "id": model_id,
+                "name": model_id,
+                "reasoning": false,
+                "input": ["text"],
+                "contextWindow": 200000,
+                "maxTokens": 8192
+            }]),
+        );
+    } else if let Some(existing) = existing_models {
+        provider.insert("models".to_string(), existing);
+    } else {
+        provider.insert("models".to_string(), serde_json::json!([]));
+    }
+    providers_obj.insert(
+        OPENCLAW_MANAGED_PROVIDER.to_string(),
+        serde_json::Value::Object(provider),
+    );
+
+    if let Some(model_id) = model {
+        let primary = format!("{OPENCLAW_MANAGED_PROVIDER}/{model_id}");
+        let agents_value = obj
+            .entry("agents".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        let agents_obj = agents_value.as_object_mut().ok_or_else(|| {
+            AcpError::protocol(format!("invalid agents object in {}", path.display()))
+        })?;
+        let defaults_value = agents_obj
+            .entry("defaults".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        let defaults_obj = defaults_value.as_object_mut().ok_or_else(|| {
+            AcpError::protocol(format!(
+                "invalid agents.defaults object in {}",
+                path.display()
+            ))
+        })?;
+        defaults_obj.insert(
+            "model".to_string(),
+            serde_json::json!({ "primary": primary }),
+        );
+        let allow_value = defaults_obj
+            .entry("models".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(allow_obj) = allow_value.as_object_mut() {
+            allow_obj.insert(
+                primary,
+                serde_json::json!({ "alias": "veryagent" }),
+            );
+        }
+    }
+
+    let text = serde_json::to_string_pretty(&root)
+        .map_err(|e| AcpError::protocol(format!("serialize openclaw.json failed: {e}")))?;
+    fs::write(&path, format!("{text}\n")).map_err(|e| {
+        AcpError::protocol(format!(
+            "write openclaw.json failed ({}): {e}",
+            path.display()
+        ))
+    })?;
+
+    Ok(())
+}
+
+/// Best-effort restart so a running gateway reloads managed provider credentials.
+async fn restart_openclaw_gateway_after_provider_write() {
+    match run_openclaw_cli(&["gateway", "restart"], 45).await {
+        Ok((ok, out)) if !ok => {
+            tracing::warn!("[OpenClaw] gateway restart after provider write: {out}");
+        }
+        Err(e) => {
+            tracing::warn!("[OpenClaw] gateway restart after provider write failed: {e}");
+        }
+        _ => {}
+    }
 }
 
 fn openclaw_json_str(value: &serde_json::Value, path: &[&str]) -> Option<String> {
@@ -5483,12 +5664,37 @@ pub(crate) async fn apply_model_provider_env(
         Ok(Some(p)) => p,
         _ => return,
     };
-    let (url_key, key_key, _) = agent_env_keys(agent_type);
+    let (url_key, key_key, model_key) = agent_env_keys(agent_type);
     if !provider.api_url.trim().is_empty() {
         runtime_env.insert(url_key.to_string(), provider.api_url.clone());
     }
     if !provider.api_key.trim().is_empty() {
         runtime_env.insert(key_key.to_string(), provider.api_key.clone());
+    }
+
+    // OpenClaw's gateway owns inference. Keep openclaw.json in sync even when
+    // the user bound a provider before this write path existed (no re-save).
+    if agent_type == AgentType::OpenClaw {
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                let agent_type_str = serde_json::to_value(&agent_type)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_else(|| agent_type.to_string());
+                extract_agent_model(provider.model.as_deref(), &agent_type_str)
+            });
+        if let Err(e) = write_openclaw_managed_provider(
+            &provider.api_url,
+            &provider.api_key,
+            model.as_deref(),
+        ) {
+            tracing::warn!(
+                "[OpenClaw] write managed provider into openclaw.json failed: {e}"
+            );
+        }
     }
 }
 
@@ -5631,7 +5837,14 @@ fn cascade_update_agent_config(
             persist_agent_local_config_json(agent_type, Some(&patch_str))?;
         }
         AgentType::OpenClaw => {
-            // agent_local_config_path returns None for OpenClaw — no-op
+            // OpenClaw inference runs inside the local gateway process, not the
+            // ACP client. Persist credentials + model into openclaw.json so the
+            // gateway can actually call the shared provider.
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str);
+            write_openclaw_managed_provider(api_url, api_key, model_name)?;
         }
         AgentType::Hermes => {
             // When a model_provider_id is set, cascade the provider's credentials
@@ -5993,6 +6206,8 @@ pub(crate) async fn cascade_update_model_provider(
             tracing::warn!(
                 "[ModelProvider] cascade_update_agent_config({agent_type}) failed: {e}, skipping config update"
             );
+        } else if agent_type == AgentType::OpenClaw {
+            restart_openclaw_gateway_after_provider_write().await;
         }
 
         emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
@@ -6070,15 +6285,12 @@ pub(crate) async fn build_session_runtime_env(
     }
 
     if agent_type == AgentType::OpenClaw {
-        // Gateway mode (no model provider): make sure a local gateway is up
-        // before ACP tries ws://127.0.0.1:18789 — users should not need CLI.
-        let using_model_provider = setting
-            .as_ref()
-            .and_then(|s| s.model_provider_id)
-            .is_some();
-        if !using_model_provider {
-            ensure_openclaw_gateway_for_session(&mut runtime_env).await?;
-        }
+        // OpenClaw ACP is always a gateway client. Model-provider mode still
+        // needs a reachable local gateway — it only changes how that gateway
+        // authenticates to the LLM (via openclaw.json), not whether gateway is
+        // required. Skipping ensure here caused silent empty turns after the
+        // user selected a shared provider.
+        ensure_openclaw_gateway_for_session(&mut runtime_env).await?;
         if session_id.is_none() {
             runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
         }
@@ -7015,51 +7227,49 @@ pub(crate) async fn acp_update_agent_env_core(
             .map_err(|e| AcpError::protocol(e.to_string()))?
             .ok_or_else(|| AcpError::protocol(format!("model provider not found: {pid}")))?;
 
-        // A provider can serve multiple agent_types. Verify the agent is in the
-        // provider's agent_types list (or the legacy single agent_type column).
+        // Model providers are shared credentials for every agent. Legacy rows may
+        // still carry agent_types_json / agent_type restrictions from older builds;
+        // those fields are ignored so any agent can bind any provider.
         let agent_type_str = serde_json::to_value(&agent_type)
             .ok()
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_else(|| agent_type.to_string());
-        let provider_agent_types = crate::models::model_provider::parse_agent_types_from_row(
-            &provider.agent_types_json,
-            &provider.agent_type,
-        );
-        // Empty list = universal provider (current create path stores [] / "").
-        if !provider_agent_types.is_empty()
-            && !provider_agent_types.contains(&agent_type_str)
-        {
-            return Err(AcpError::protocol(format!(
-                "model provider {pid} is for [{}], cannot be bound to {agent_type}",
-                provider_agent_types.join(", ")
-            )));
-        }
 
-        // Extract this agent's model from the multi-agent model JSON.
-        let agent_model = extract_agent_model(provider.model.as_deref(), &agent_type_str);
+        // Prefer the model the agent already selected in env (per-agent choice).
+        // Fall back to any legacy value still stored on the provider row.
+        let env_model = {
+            let (_, _, model_key) = agent_env_keys(agent_type);
+            merged_env
+                .get(model_key)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        let agent_model = env_model.or_else(|| {
+            extract_agent_model(provider.model.as_deref(), &agent_type_str)
+        });
 
         let model_env = parse_provider_model(agent_type, agent_model.as_deref());
+        // Only apply set values from the provider model field. Do not clear an
+        // agent-chosen model when the provider row has no model of its own.
         for (k, v) in &model_env {
-            match v {
-                Some(value) => {
-                    merged_env.insert(k.clone(), value.clone());
-                }
-                None => {
-                    merged_env.remove(k);
-                }
+            if let Some(value) = v {
+                merged_env.insert(k.clone(), value.clone());
             }
         }
         codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         // Codex's on-disk config is handled by `apply_codex_root_model_action`
         // below; Gemini's analogous config.env gap is pre-existing and out of
-        // scope here. Claude, KimiCode, Hermes, and Cline need the local-config
-        // cascade on bind so that their on-disk config files are updated immediately.
+        // scope here. Claude, KimiCode, Hermes, Cline, and OpenClaw need the
+        // local-config cascade on bind so that their on-disk config files are
+        // updated immediately (OpenClaw writes gateway model auth into
+        // openclaw.json — ACP env alone cannot authenticate inference).
         if matches!(
             agent_type,
             AgentType::ClaudeCode
                 | AgentType::KimiCode
                 | AgentType::Hermes
                 | AgentType::Cline
+                | AgentType::OpenClaw
         ) {
             claude_local_cascade = Some((provider.api_url.clone(), provider.api_key.clone(), model_env));
         }
@@ -7086,6 +7296,9 @@ pub(crate) async fn acp_update_agent_env_core(
             &CodexModelAction::NoOp,
         ) {
             eprintln!("[acp_update_agent_env] cascade_update_agent_config({agent_type}) failed: {e}");
+        } else if agent_type == AgentType::OpenClaw {
+            // Gateway may already be running with old credentials; nudge a restart.
+            restart_openclaw_gateway_after_provider_write().await;
         }
     }
 
@@ -8692,6 +8905,79 @@ mod tests {
         assert_eq!(
             openclaw_json_str(&value, &["gateway", "remote", "url"]).as_deref(),
             Some("ws://127.0.0.1:19001")
+        );
+    }
+
+    #[test]
+    fn normalize_openclaw_openai_base_url_adds_v1_and_strips_chat() {
+        assert_eq!(
+            normalize_openclaw_openai_base_url("https://api.example.com"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            normalize_openclaw_openai_base_url("https://api.example.com/v1/"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            normalize_openclaw_openai_base_url(
+                "https://api.example.com/v1/chat/completions"
+            ),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(normalize_openclaw_openai_base_url("  "), "");
+    }
+
+    #[test]
+    fn write_openclaw_managed_provider_merges_custom_provider_and_default_model() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "mode": "local", "port": 18789 }, "agents": { "defaults": { "workspace": "W" } } }"#,
+        )
+        .expect("seed");
+        // openclaw_config_path honors OPENCLAW_CONFIG_PATH.
+        // SAFETY: test-only env mutation; serialized by cargo test default.
+        unsafe {
+            std::env::set_var("OPENCLAW_CONFIG_PATH", &path);
+        }
+        write_openclaw_managed_provider(
+            "https://proxy.example.com",
+            "sk-test",
+            Some("my-model"),
+        )
+        .expect("write");
+        unsafe {
+            std::env::remove_var("OPENCLAW_CONFIG_PATH");
+        }
+
+        let raw = fs::read_to_string(&path).expect("read");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("json");
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["baseUrl"].as_str(),
+            Some("https://proxy.example.com/v1")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["apiKey"].as_str(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["api"].as_str(),
+            Some("openai-completions")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["models"][0]["id"].as_str(),
+            Some("my-model")
+        );
+        assert_eq!(
+            value["agents"]["defaults"]["model"]["primary"].as_str(),
+            Some("veryagent/my-model")
+        );
+        // Existing gateway settings preserved.
+        assert_eq!(value["gateway"]["port"].as_u64(), Some(18789));
+        assert_eq!(
+            value["agents"]["defaults"]["workspace"].as_str(),
+            Some("W")
         );
     }
 

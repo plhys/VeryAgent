@@ -59,10 +59,10 @@ mod tauri_app {
         question as question_commands, quick_messages as quick_messages_commands,
         remote_proxy as remote_proxy_commands,
         remote_workspace as remote_workspace_commands, session_info as session_info_commands,
-        shared_identity as shared_identity_commands,
         system_settings, terminal as terminal_commands,
         version_control, windows, workspace_state as workspace_state_commands,
         vision_bridge as vision_bridge_commands,
+        npm_cli as npm_cli_commands,
         openwiki as openwiki_commands,
         image_proxy,
     };
@@ -173,6 +173,11 @@ mod tauri_app {
                         tauri_plugin_window_state::StateFlags::all()
                             & !tauri_plugin_window_state::StateFlags::DECORATIONS,
                     )
+                    // Pet windows are placed by our own bottom-right formula
+                    // (and the bubble/panel follow the pet). Restoring a stale
+                    // `.window-state.json` entry would override that placement
+                    // and make default-offset tweaks appear to do nothing.
+                    .with_denylist(&["pet", "pet-bubble", "pet-panel"])
                     .build(),
             )
             .plugin(tauri_plugin_opener::init())
@@ -762,14 +767,16 @@ mod tauri_app {
                         let win_w = windows::PET_BASE_WIDTH * scale;
                         let win_h = windows::PET_BASE_HEIGHT * scale;
 
-                        // Calculate bottom-right position from the primary monitor's
-                        // work area BEFORE building the window. Using work_area
-                        // excludes the Windows taskbar / macOS Dock.  Setting
-                        // position on the builder avoids the race where
+                        // Prefer the last dragged position from pet.config. Fall back to
+                        // bottom-right of the primary work area (taskbar/Dock excluded).
+                        // Setting position on the builder avoids the race where
                         // current_monitor() returns None on a just-created window.
                         let mut pos_x = 100.0f64;
                         let mut pos_y = 100.0f64;
-                        if let Ok(Some(monitor)) = pet_app.primary_monitor() {
+                        if let (Some(x), Some(y)) = (config.x, config.y) {
+                            pos_x = x;
+                            pos_y = y;
+                        } else if let Ok(Some(monitor)) = pet_app.primary_monitor() {
                             let sf = monitor.scale_factor();
                             let area_pos: tauri::LogicalPosition<f64> =
                                 monitor.work_area().position.to_logical(sf);
@@ -783,8 +790,10 @@ mod tauri_app {
                             let margin = -7.0;
                             #[cfg(not(target_os = "windows"))]
                             let margin = 0.0;
-                            pos_x = area_pos.x + area_size.width - win_w - margin;
-                            pos_y = area_pos.y + area_size.height - win_h - margin;
+                            pos_x = area_pos.x + area_size.width - win_w - margin
+                                + windows::PET_DEFAULT_OFFSET_X;
+                            pos_y = area_pos.y + area_size.height - win_h - margin
+                                + windows::PET_DEFAULT_OFFSET_Y;
                         }
 
                         let url = tauri::WebviewUrl::App(format!("pet?petId={pet_id}").into());
@@ -1247,8 +1256,6 @@ mod tauri_app {
                 question_commands::set_question_settings,
                 session_info_commands::get_session_info_settings,
                 session_info_commands::set_session_info_settings,
-                shared_identity_commands::get_shared_identity_settings,
-                shared_identity_commands::set_shared_identity_settings,
                 version_control::detect_git,
                 version_control::test_git_path,
                 version_control::get_git_settings,
@@ -1410,6 +1417,7 @@ mod tauri_app {
                 model_provider_commands::create_model_provider,
                 model_provider_commands::update_model_provider,
                 model_provider_commands::delete_model_provider,
+                model_provider_commands::fetch_provider_models,
                 web::start_web_server,
                 web::stop_web_server,
                 web::get_web_server_status,
@@ -1424,6 +1432,10 @@ mod tauri_app {
                 openwiki_commands::openwiki_run,
                 openwiki_commands::openwiki_get_instructions,
                 openwiki_commands::openwiki_save_instructions,
+                openwiki_commands::openwiki_install_cli,
+                openwiki_commands::openwiki_uninstall_cli,
+                npm_cli_commands::npm_install_cli,
+                npm_cli_commands::npm_uninstall_cli,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

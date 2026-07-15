@@ -65,6 +65,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   mockUseAcpAgents.mockReset()
+  // Mode switch persists last choice; isolate each test to general default.
+  window.localStorage.removeItem("workspace:chat-agent-mode")
 })
 
 describe("AgentSelector", () => {
@@ -244,5 +246,112 @@ describe("AgentSelector", () => {
         "codex",
       ])
     })
+  })
+
+  it("expert mode clears selection instead of auto-picking a coding agent", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onSelect = vi.fn()
+    const onFallback = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="hermes"
+        onSelect={onSelect}
+        onFallback={onFallback}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    await waitFor(() => {
+      expect(onFallback).toHaveBeenCalledWith(null)
+    })
+    expect(onSelect).not.toHaveBeenCalled()
+    // Sliding indicator gone: no agent is selected.
+    const buttons = screen.getAllByRole("button")
+    // mode tabs + agent buttons; none of the agent buttons should be the
+    // "selected" expanded style exclusively required — we only assert no
+    // auto onSelect of codex/claude_code.
+    expect(onFallback.mock.calls.some((c) => c[0] === "codex")).toBe(false)
+    expect(onFallback.mock.calls.some((c) => c[0] === "claude_code")).toBe(
+      false
+    )
+    expect(buttons.length).toBeGreaterThan(0)
+  })
+
+  it("shows disabled and unavailable agents grayed out and non-selectable", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { enabled: false, resident: true }),
+        agent("codex", { available: false }),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onSelect = vi.fn()
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="claude_code"
+        onSelect={onSelect}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    await waitFor(() => {
+      const last =
+        onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+      // Parent only receives usable agents.
+      expect(last?.map((a: AcpAgentInfo) => a.agent_type)).toEqual([
+        "claude_code",
+      ])
+    })
+
+    // Disabled open_claw is general-mode only; expert list still shows
+    // unavailable codex (gray) + usable claude_code.
+    const codexBtn = screen.getByTitle(/Codex · Unavailable/i)
+    expect(codexBtn).toBeDisabled()
+    fireEvent.click(codexBtn)
+    expect(onSelect).not.toHaveBeenCalledWith("codex")
+
+    const claudeBtn = screen.getByTitle("Claude Code")
+    expect(claudeBtn).not.toBeDisabled()
+    fireEvent.click(claudeBtn)
+    expect(onSelect).toHaveBeenCalledWith("claude_code")
+  })
+
+  it("keeps inactive agents visible in general mode as gray icons", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { enabled: false, resident: true }),
+        agent("open_claw", { available: false, resident: true }),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType={null}
+        onSelect={() => {}}
+        showModeSwitch
+      />
+    )
+    expect(screen.getByTitle(/Hermes Agent · Inactive/i)).toBeDisabled()
+    expect(screen.getByTitle(/OpenClaw · Unavailable/i)).toBeDisabled()
+    expect(
+      screen.getByText(
+        "No general-mode butlers available (Hermes / OpenClaw). Enable and install them in Settings."
+      )
+    ).toBeInTheDocument()
   })
 })
