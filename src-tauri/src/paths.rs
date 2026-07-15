@@ -104,6 +104,22 @@ pub fn veryagent_logs_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(VERYAGENT_DIR_NAME).join(LOGS_DIR_NAME))
 }
 
+/// Root directory for the shared identity + preferences layer
+/// (`identity.json`, `sharing.json`).
+///
+/// Resolution is owned by [`crate::memory::location::effective_memory_root`]:
+/// 1. `$VERYAGENT_MEMORY_ROOT` (explicit override)
+/// 2. Custom path from `~/.veryagent/memory_root.path` (user-chosen durable dir)
+/// 3. `$VERYAGENT_HOME/memory` / `$VERYAGENT_DATA_DIR/memory` / `~/.veryagent/memory`
+///
+/// Kept as a thin wrapper so existing call sites stay stable.
+pub fn veryagent_memory_root() -> PathBuf {
+    // Avoid a circular module dependency at compile time by calling through
+    // the memory location helper (memory depends on paths for home_dir only
+    // via veryagent_home_dir / env, not this function).
+    crate::memory::location::effective_memory_root()
+}
+
 /// Single source of truth for "where does the database live, and where
 /// do `paths::*` resolve their roots against."
 ///

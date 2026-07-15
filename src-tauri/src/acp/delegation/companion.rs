@@ -1326,6 +1326,8 @@ mod tests {
             feedback: false,
             ask: false,
             sessions: false,
+            vision: false,
+            image: false,
         })
     }
 
@@ -1796,24 +1798,32 @@ mod tests {
         feedback: true,
         ask: false,
         sessions: false,
+        vision: false,
+        image: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
         feedback: true,
         ask: false,
         sessions: false,
+        vision: false,
+        image: false,
     };
     const ASK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
         feedback: false,
         ask: true,
         sessions: false,
+        vision: false,
+        image: false,
     };
     const SESSIONS_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
         feedback: false,
         ask: false,
         sessions: true,
+        vision: false,
+        image: false,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react"
 import {
+  BookOpen,
   Bot,
   Boxes,
   Eye,
@@ -23,6 +24,7 @@ import {
   Server,
   Settings,
   SlidersHorizontal,
+  UserRound,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { usePathname } from "next/navigation"
@@ -55,6 +57,8 @@ interface SettingsNavItem {
     | "web_service"
     | "logs"
     | "vision_bridge"
+    | "openwiki"
+    | "shared_preferences"
   icon: ComponentType<{ className?: string }>
 }
 
@@ -80,9 +84,19 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: Eye,
   },
   {
+    href: "/settings/openwiki",
+    labelKey: "openwiki",
+    icon: BookOpen,
+  },
+  {
     href: "/settings/agents",
     labelKey: "agents",
     icon: Bot,
+  },
+  {
+    href: "/settings/shared-preferences",
+    labelKey: "shared_preferences",
+    icon: UserRound,
   },
   {
     href: "/settings/skill-packs",

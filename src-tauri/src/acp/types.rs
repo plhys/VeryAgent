@@ -554,6 +554,9 @@ pub struct AcpAgentInfo {
     /// advanced editor. Only populated for `AgentType::Hermes`.
     pub hermes_config_yaml: Option<String>,
     pub model_provider_id: Option<i32>,
+    /// Butler-class agent: process kept for the life of VeryAgent; durable
+    /// memory remains in the agent's own home.
+    pub resident: bool,
 }
 
 /// Lightweight status info for a single agent, used by connect() pre-check.
@@ -563,6 +566,7 @@ pub struct AcpAgentStatus {
     pub available: bool,
     pub enabled: bool,
     pub installed_version: Option<String>,
+    pub resident: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

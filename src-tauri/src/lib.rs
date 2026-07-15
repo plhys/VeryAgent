@@ -13,7 +13,9 @@ pub mod git_credential;
 pub mod git_repo;
 pub mod keyring_store;
 pub mod logging;
+pub mod memory;
 pub mod models;
+pub mod openwiki;
 mod network;
 pub mod office_watch;
 pub mod parsers;
@@ -57,9 +59,11 @@ mod tauri_app {
         question as question_commands, quick_messages as quick_messages_commands,
         remote_proxy as remote_proxy_commands,
         remote_workspace as remote_workspace_commands, session_info as session_info_commands,
+        shared_identity as shared_identity_commands,
         system_settings, terminal as terminal_commands,
         version_control, windows, workspace_state as workspace_state_commands,
         vision_bridge as vision_bridge_commands,
+        openwiki as openwiki_commands,
         image_proxy,
     };
     use crate::terminal::manager::TerminalManager;
@@ -513,6 +517,11 @@ mod tauri_app {
                     app.manage(question_config.clone());
                     app.manage(session_info_config.clone());
                     app.manage(vision_bridge_config.clone());
+                    let openwiki_config = crate::openwiki::OpenWikiRuntimeConfig::new();
+                    app.manage(openwiki_config.clone());
+                    // Session inject reads OpenWiki from ConnectionManager; install
+                    // the same hot-swappable handle so settings save and inject share state.
+                    cm_state.install_openwiki_config(openwiki_config.clone());
                     app.manage(crate::commands::delegation::DelegationSocketPath(
                         socket_path.clone(),
                     ));
@@ -525,6 +534,7 @@ mod tauri_app {
                     let question_for_init = question_config.clone();
                     let session_info_for_init = session_info_config.clone();
                     let vision_bridge_for_init = vision_bridge_config.clone();
+                    let openwiki_for_init = openwiki_config.clone();
                     tauri::async_runtime::block_on(async move {
                         delegation_commands::apply_persisted_config(
                             &db_for_init,
@@ -549,6 +559,11 @@ mod tauri_app {
                         crate::commands::vision_bridge::apply_persisted_vision_bridge_config(
                             &db_for_init,
                             &vision_bridge_for_init,
+                        )
+                        .await;
+                        crate::commands::openwiki::apply_persisted_openwiki_config(
+                            &db_for_init,
+                            &openwiki_for_init,
                         )
                         .await;
                     });
@@ -649,6 +664,27 @@ mod tauri_app {
                         idle_timeout,
                         std::time::Duration::from_secs(crate::acp::SWEEP_INTERVAL_SECS),
                     ));
+                }
+
+                // Resident butlers (Hermes): warm ACP process for the life of
+                // the app. Best-effort — missing install must not block UI.
+                {
+                    let cm = app.state::<ConnectionManager>().clone_ref();
+                    let db = crate::db::AppDatabase {
+                        conn: app.state::<crate::db::AppDatabase>().conn.clone(),
+                    };
+                    let data_dir = effective_data_dir.clone();
+                    let emitter = crate::web::event_bridge::EventEmitter::Tauri(app.handle().clone());
+                    tauri::async_runtime::spawn(async move {
+                        crate::acp::bootstrap_resident_agents(
+                            cm,
+                            db,
+                            data_dir,
+                            emitter,
+                            "main".to_string(),
+                        )
+                        .await;
+                    });
                 }
 
                 // Office watch preview servers: reap dead children + ref0
@@ -1211,6 +1247,8 @@ mod tauri_app {
                 question_commands::set_question_settings,
                 session_info_commands::get_session_info_settings,
                 session_info_commands::set_session_info_settings,
+                shared_identity_commands::get_shared_identity_settings,
+                shared_identity_commands::set_shared_identity_settings,
                 version_control::detect_git,
                 version_control::test_git_path,
                 version_control::get_git_settings,
@@ -1253,6 +1291,8 @@ mod tauri_app {
                 acp_commands::acp_fetch_kimi_models,
                 acp_commands::acp_update_pi_config,
                 acp_commands::acp_load_pi_config,
+                acp_commands::acp_discover_openclaw_gateway,
+                acp_commands::acp_ensure_openclaw_gateway,
                 acp_commands::acp_validate_pi_command,
                 acp_commands::acp_install_pi_binary,
                 acp_commands::acp_uninstall_pi_binary,
@@ -1378,6 +1418,12 @@ mod tauri_app {
                 web::probe_web_service_port,
                 vision_bridge_commands::vision_bridge_get_config,
                 vision_bridge_commands::vision_bridge_save_config,
+                openwiki_commands::openwiki_get_config,
+                openwiki_commands::openwiki_save_config,
+                openwiki_commands::openwiki_status,
+                openwiki_commands::openwiki_run,
+                openwiki_commands::openwiki_get_instructions,
+                openwiki_commands::openwiki_save_instructions,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

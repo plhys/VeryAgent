@@ -1466,6 +1466,7 @@ const ConversationTabView = memo(function ConversationTabView({
                 }}
                 onOpenAgentsSettings={handleOpenAgentsSettings}
                 disabled={isConnecting || dbConversationId != null}
+                showModeSwitch
               />
             </div>
             {autoConnectError || agentConnectError ? (
@@ -1542,6 +1543,7 @@ const ConversationTabView = memo(function ConversationTabView({
               }}
               onOpenAgentsSettings={handleOpenAgentsSettings}
               disabled={isConnecting || dbConversationId != null}
+              showModeSwitch
             />
             {autoConnectError || agentConnectError ? (
               <button

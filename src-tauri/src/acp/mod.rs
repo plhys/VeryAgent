@@ -17,6 +17,7 @@ pub mod opencode_plugins;
 pub mod preflight;
 pub mod question;
 pub mod registry;
+pub mod resident;
 pub mod session_info;
 pub mod session_state;
 pub mod terminal_runtime;
@@ -26,6 +27,8 @@ pub mod vision_bridge;
 pub use idle_sweep::{idle_sweep_task, idle_timeout_from_env, SWEEP_INTERVAL_SECS};
 pub use internal_bus::{EventBusMetrics, EventBusMetricsSnapshot, InternalEventBus};
 pub use lifecycle::lifecycle_subscriber_task;
+pub use registry::is_resident_agent;
+pub use resident::{bootstrap_resident_agents, ensure_resident_running, resident_agent_types};
 pub use session_state::{LiveSessionSnapshot, SessionState};
 // Re-export the inner types of LiveSessionSnapshot for downstream consumers; not all are
 // directly named in Rust today (they ride along through the snapshot struct), so silence

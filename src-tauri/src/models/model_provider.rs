@@ -7,14 +7,8 @@ pub struct ModelProviderInfo {
     pub api_url: String,
     pub api_key: String,
     pub api_key_masked: String,
-    /// All agent types this provider is associated with (authoritative, from
-    /// `agent_types_json`). A provider can serve multiple agents — each gets
-    /// its own model value from the `model` JSON object.
-    pub agent_types: Vec<String>,
-    /// First element of `agent_types` for backward compat with older clients.
-    pub agent_type: String,
-    /// JSON object keyed by agent_type: `{"claude_code":"{...}","codex":"gpt-5"}`.
-    /// Each agent reads its own model value with its own format.
+    /// Model name this provider serves (e.g. "gpt-5", "claude-sonnet-5").
+    /// A simple string — any agent can use it.
     pub model: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -37,37 +31,14 @@ fn mask_api_key(key: &str) -> String {
     }
 }
 
-/// Parse `agent_types_json` into a Vec<String>. Falls back to deriving from
-/// `agent_type` for rows that haven't been migrated yet.
-pub fn parse_agent_types_from_row(agent_types_json: &str, agent_type: &str) -> Vec<String> {
-    if let Ok(list) = serde_json::from_str::<Vec<String>>(agent_types_json) {
-        if !list.is_empty() {
-            return list;
-        }
-    }
-    // Fallback for rows backfilled with empty agent_types_json but set agent_type.
-    if !agent_type.is_empty() {
-        vec![agent_type.to_string()]
-    } else {
-        Vec::new()
-    }
-}
-
 impl From<crate::db::entities::model_provider::Model> for ModelProviderInfo {
     fn from(m: crate::db::entities::model_provider::Model) -> Self {
-        let agent_types = parse_agent_types_from_row(&m.agent_types_json, &m.agent_type);
-        let agent_type = agent_types
-            .first()
-            .cloned()
-            .unwrap_or_else(|| m.agent_type.clone());
         Self {
             id: m.id,
             name: m.name,
             api_url: m.api_url,
             api_key: m.api_key.clone(),
             api_key_masked: mask_api_key(&m.api_key),
-            agent_types,
-            agent_type,
             model: m.model,
             created_at: m.created_at.to_rfc3339(),
             updated_at: m.updated_at.to_rfc3339(),
@@ -75,9 +46,41 @@ impl From<crate::db::entities::model_provider::Model> for ModelProviderInfo {
     }
 }
 
+/// Resolve which agent types a provider row is allowed to bind.
+///
+/// Preference order:
+/// 1. non-empty `agent_types_json` array (legacy multi-agent)
+/// 2. non-empty `agent_type` column (single-type migration)
+/// 3. empty list → unrestricted / universal provider
+pub fn parse_agent_types_from_row(
+    agent_types_json: &str,
+    agent_type: &str,
+) -> Vec<String> {
+    let trimmed_json = agent_types_json.trim();
+    if !trimmed_json.is_empty() && trimmed_json != "[]" {
+        if let Ok(list) = serde_json::from_str::<Vec<String>>(trimmed_json) {
+            let cleaned: Vec<String> = list
+                .into_iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !cleaned.is_empty() {
+                return cleaned;
+            }
+        }
+    }
+
+    let single = agent_type.trim();
+    if !single.is_empty() {
+        return vec![single.to_string()];
+    }
+
+    Vec::new()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::mask_api_key;
+    use super::{mask_api_key, parse_agent_types_from_row};
 
     #[test]
     fn masks_short_ascii_key() {
@@ -86,7 +89,10 @@ mod tests {
 
     #[test]
     fn masks_long_ascii_key_keeping_edges() {
-        assert_eq!(mask_api_key("sk-test-1234567890"), "sk-t\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}7890");
+        assert_eq!(
+            mask_api_key("sk-test-1234567890"),
+            "sk-t\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}7890"
+        );
     }
 
     #[test]
@@ -100,5 +106,27 @@ mod tests {
     #[test]
     fn masks_short_multibyte_key_without_panic() {
         assert_eq!(mask_api_key("密钥abc"), "\u{2022}".repeat(5));
+    }
+
+    #[test]
+    fn parse_agent_types_prefers_json_array() {
+        assert_eq!(
+            parse_agent_types_from_row(r#"["hermes","open_claw"]"#, "codex"),
+            vec!["hermes".to_string(), "open_claw".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_agent_types_falls_back_to_single_column() {
+        assert_eq!(
+            parse_agent_types_from_row("[]", "hermes"),
+            vec!["hermes".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_agent_types_empty_means_unrestricted() {
+        assert!(parse_agent_types_from_row("[]", "").is_empty());
+        assert!(parse_agent_types_from_row("", "  ").is_empty());
     }
 }

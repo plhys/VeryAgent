@@ -6,7 +6,6 @@ import {
   Loader2,
   Plus,
   RefreshCw,
-  Search,
   ShieldCheck,
   TerminalSquare,
 } from "lucide-react"
@@ -327,12 +326,12 @@ export function McpSettings() {
   const [installedServers, setInstalledServers] = useState<LocalMcpServer[]>([])
   const [localFilter, setLocalFilter] = useState("")
 
-  const [providers, setProviders] = useState<McpMarketplaceProvider[]>([])
+  const [, setProviders] = useState<McpMarketplaceProvider[]>([])
   const [selectedProvider, setSelectedProvider] = useState("")
-  const [marketQuery, setMarketQuery] = useState("")
+  const [marketQuery] = useState("")
   const marketQueryRef = useRef("")
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
+  const [, setSearching] = useState(false)
+  const [, setSearchError] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<McpMarketplaceItem[]>([])
 
   const [marketDetail, setMarketDetail] =

@@ -297,9 +297,15 @@ async fn async_main() -> ExitCode {
         question_config: question_config.clone(),
         session_info_config: session_info_config.clone(),
         vision_bridge_config: vision_bridge_config.clone(),
+        openwiki_config: veryagent_lib::openwiki::OpenWikiRuntimeConfig::new(),
         system_op_lock: veryagent_lib::app_state::default_system_op_lock(),
         update_state: veryagent_lib::app_state::default_update_state(),
     });
+    // Session inject reads OpenWiki from ConnectionManager; share the same
+    // hot-swappable handle as AppState / HTTP settings.
+    state
+        .connection_manager
+        .install_openwiki_config(state.openwiki_config.clone());
 
     // Logging phase 3: wire the emitter so the Logs viewer's live tail
     // (`logs://appended`) reaches WS clients.
@@ -337,6 +343,12 @@ async fn async_main() -> ExitCode {
     veryagent_lib::commands::vision_bridge::apply_persisted_vision_bridge_config(
         &state.db.conn,
         &vision_bridge_config,
+    )
+    .await;
+    // Same for OpenWiki config + agent permissions.
+    veryagent_lib::commands::openwiki::apply_persisted_openwiki_config(
+        &state.db.conn,
+        &state.openwiki_config,
     )
     .await;
 
@@ -441,6 +453,26 @@ async fn async_main() -> ExitCode {
             idle_timeout,
             std::time::Duration::from_secs(veryagent_lib::SWEEP_INTERVAL_SECS),
         ));
+    }
+
+    // Resident butlers (Hermes) — best-effort warm start.
+    {
+        let cm = state.connection_manager.clone_ref();
+        let db = veryagent_lib::db::AppDatabase {
+            conn: state.db.conn.clone(),
+        };
+        let data_dir = state.data_dir.clone();
+        let emitter = state.emitter.clone();
+        tokio::spawn(async move {
+            veryagent_lib::acp::bootstrap_resident_agents(
+                cm,
+                db,
+                data_dir,
+                emitter,
+                "server".to_string(),
+            )
+            .await;
+        });
     }
 
     // Office watch preview servers: reap dead children + ref0 stragglers.
