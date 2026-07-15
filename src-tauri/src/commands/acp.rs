@@ -2845,6 +2845,669 @@ pub struct PiCommandValidation {
     pub version: Option<String>,
 }
 
+/// Local OpenClaw gateway discovery result for the settings UI.
+///
+/// Values come from process env and/or `~/.openclaw/openclaw.json` (or
+/// `OPENCLAW_CONFIG_PATH`). Empty fields mean "not found" — we never invent a
+/// default port as an authoritative URL. `gateway_reachable` is a live TCP
+/// probe and is the only signal that may justify a "ready" badge.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenClawGatewayDiscovery {
+    /// Resolved gateway WebSocket URL, if any.
+    pub gateway_url: Option<String>,
+    /// Where `gateway_url` came from (`env`, `config_remote_url`, `config_port`, …).
+    pub gateway_url_source: Option<String>,
+    /// Gateway auth token, if any.
+    pub gateway_token: Option<String>,
+    /// Where `gateway_token` came from (`env`, `config_remote_token`,
+    /// `config_auth_token`, `config_token_file`, …).
+    pub gateway_token_source: Option<String>,
+    /// Config file path that was consulted (resolved path, even if missing).
+    pub config_path: String,
+    /// Whether that config file exists on disk.
+    pub config_exists: bool,
+    /// Whether the config file was readable as JSON/JSON5-ish.
+    pub config_parsed: bool,
+    /// Port observed from env or `gateway.port` (informational; may be None).
+    pub gateway_port: Option<u16>,
+    /// Source of `gateway_port` when present.
+    pub gateway_port_source: Option<String>,
+    /// `gateway.mode` from config when present (`local` / `remote` / …).
+    pub gateway_mode: Option<String>,
+    /// Live TCP probe against the resolved host:port. False when unreachable
+    /// or when no host/port can be resolved.
+    pub gateway_reachable: bool,
+}
+
+/// Result of the settings "one-click" OpenClaw local gateway bootstrap.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenClawGatewayEnsureResult {
+    pub ok: bool,
+    /// Short machine-ish status: already_running / started / configured / failed.
+    pub status: String,
+    pub message: String,
+    pub discovery: OpenClawGatewayDiscovery,
+    pub steps: Vec<String>,
+}
+
+/// OpenClaw's own default local port when nothing is configured.
+const OPENCLAW_DEFAULT_LOCAL_PORT: u16 = 18789;
+
+fn openclaw_config_path() -> PathBuf {
+    let configured = std::env::var("OPENCLAW_CONFIG_PATH").ok().and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    match configured {
+        Some(value) => {
+            if value == "~" {
+                home_dir_or_default()
+            } else if let Some(remain) = value.strip_prefix("~/") {
+                home_dir_or_default().join(remain)
+            } else {
+                PathBuf::from(value)
+            }
+        }
+        None => home_dir_or_default()
+            .join(".openclaw")
+            .join("openclaw.json"),
+    }
+}
+
+/// Best-effort strip of JSON5-ish features (line/block comments + trailing
+/// commas) so OpenClaw's JSON5 configs still parse with `serde_json`.
+fn strip_json5_noise(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let bytes = raw.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut escape = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_string {
+            out.push(b as char);
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        // line comment
+        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        // block comment
+        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            continue;
+        }
+        if b == b'"' {
+            in_string = true;
+            out.push('"');
+            i += 1;
+            continue;
+        }
+        // trailing comma before } or ]
+        if b == b',' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if j < bytes.len() && (bytes[j] == b'}' || bytes[j] == b']') {
+                i += 1;
+                continue;
+            }
+        }
+        out.push(b as char);
+        i += 1;
+    }
+    out
+}
+
+fn openclaw_read_config_value(path: &Path) -> Option<serde_json::Value> {
+    let raw = fs::read_to_string(path).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return Some(value);
+    }
+    let stripped = strip_json5_noise(trimmed);
+    serde_json::from_str::<serde_json::Value>(&stripped).ok()
+}
+
+fn openclaw_json_str(value: &serde_json::Value, path: &[&str]) -> Option<String> {
+    let mut cur = value;
+    for key in path {
+        cur = cur.get(*key)?;
+    }
+    cur.as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn openclaw_json_port(value: &serde_json::Value) -> Option<u16> {
+    let port = value.get("gateway")?.get("port")?;
+    if let Some(n) = port.as_u64() {
+        return u16::try_from(n).ok().filter(|p| *p != 0);
+    }
+    if let Some(s) = port.as_str() {
+        return s.trim().parse::<u16>().ok().filter(|p| *p != 0);
+    }
+    None
+}
+
+fn openclaw_env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key).ok().and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn openclaw_expand_path(raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    if trimmed == "~" {
+        home_dir_or_default()
+    } else if let Some(remain) = trimmed.strip_prefix("~/") {
+        home_dir_or_default().join(remain)
+    } else {
+        PathBuf::from(trimmed)
+    }
+}
+
+fn openclaw_read_token_file(raw_path: &str) -> Option<String> {
+    let path = openclaw_expand_path(raw_path);
+    let contents = fs::read_to_string(path).ok()?;
+    let token = contents.trim();
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+fn openclaw_local_ws_url(port: u16) -> String {
+    format!("ws://127.0.0.1:{port}")
+}
+
+/// Discover OpenClaw gateway URL/token from process env + local openclaw.json.
+/// Never fabricates a default port as truth — only reports what is configured.
+/// Live reachability is filled by `discover_openclaw_gateway_core`.
+pub(crate) async fn discover_openclaw_gateway_core() -> OpenClawGatewayDiscovery {
+    let mut discovery = discover_openclaw_gateway_from(
+        openclaw_config_path(),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_URL"),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_PORT"),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_TOKEN"),
+    );
+    discovery.gateway_reachable = probe_openclaw_gateway_reachable(&discovery).await;
+    discovery
+}
+
+/// Injectable discovery core (used by unit tests and the public wrapper).
+/// Does not perform network I/O; `gateway_reachable` is always false here.
+fn discover_openclaw_gateway_from(
+    config_path: PathBuf,
+    env_url: Option<String>,
+    env_port: Option<String>,
+    env_token: Option<String>,
+) -> OpenClawGatewayDiscovery {
+    let config_exists = config_path.is_file();
+    let config_value = if config_exists {
+        openclaw_read_config_value(&config_path)
+    } else {
+        None
+    };
+    let config_parsed = config_value.is_some();
+
+    // URL priority:
+    // 1) OPENCLAW_GATEWAY_URL env
+    // 2) gateway.remote.url in config
+    // 3) construct from OPENCLAW_GATEWAY_PORT env
+    // 4) construct from gateway.port in config (only when that port is present)
+    let mut gateway_url: Option<String> = None;
+    let mut gateway_url_source: Option<String> = None;
+    let mut gateway_port: Option<u16> = None;
+    let mut gateway_port_source: Option<String> = None;
+    let mut gateway_mode: Option<String> = None;
+
+    if let Some(url) = env_url.filter(|v| !v.trim().is_empty()) {
+        gateway_url = Some(url.trim().to_string());
+        gateway_url_source = Some("env".to_string());
+    }
+
+    if let Some(port_raw) = env_port {
+        if let Ok(port) = port_raw.trim().parse::<u16>() {
+            if port != 0 {
+                gateway_port = Some(port);
+                gateway_port_source = Some("env".to_string());
+            }
+        }
+    }
+
+    if let Some(ref value) = config_value {
+        if gateway_url.is_none() {
+            if let Some(url) = openclaw_json_str(value, &["gateway", "remote", "url"]) {
+                gateway_url = Some(url);
+                gateway_url_source = Some("config_remote_url".to_string());
+            }
+        }
+        if gateway_port.is_none() {
+            if let Some(port) = openclaw_json_port(value) {
+                gateway_port = Some(port);
+                gateway_port_source = Some("config_port".to_string());
+            }
+        }
+        gateway_mode = openclaw_json_str(value, &["gateway", "mode"]);
+    }
+
+    if gateway_url.is_none() {
+        if let Some(port) = gateway_port {
+            gateway_url = Some(openclaw_local_ws_url(port));
+            gateway_url_source = Some(if gateway_port_source.as_deref() == Some("env") {
+                "env_port".to_string()
+            } else {
+                "config_port".to_string()
+            });
+        }
+    }
+
+    // Token priority (client-side):
+    // OPENCLAW_GATEWAY_TOKEN → gateway.remote.token → gateway.auth.token
+    // → gateway.auth.tokenFile / token-file (read contents)
+    let mut gateway_token: Option<String> = None;
+    let mut gateway_token_source: Option<String> = None;
+
+    if let Some(token) = env_token.filter(|v| !v.trim().is_empty()) {
+        gateway_token = Some(token.trim().to_string());
+        gateway_token_source = Some("env".to_string());
+    }
+
+    if gateway_token.is_none() {
+        if let Some(ref value) = config_value {
+            if let Some(token) = openclaw_json_str(value, &["gateway", "remote", "token"]) {
+                gateway_token = Some(token);
+                gateway_token_source = Some("config_remote_token".to_string());
+            } else if let Some(token) = openclaw_json_str(value, &["gateway", "auth", "token"]) {
+                // Skip env-substitution placeholders like \${OPENCLAW_GATEWAY_TOKEN}
+                // when the env itself was empty — they are not real tokens.
+                if !token.starts_with("${") {
+                    gateway_token = Some(token);
+                    gateway_token_source = Some("config_auth_token".to_string());
+                }
+            }
+
+            if gateway_token.is_none() {
+                let file_path = openclaw_json_str(value, &["gateway", "auth", "tokenFile"])
+                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token_file"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token-file"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "tokenFile"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "token_file"]));
+                if let Some(path) = file_path {
+                    if let Some(token) = openclaw_read_token_file(&path) {
+                        gateway_token = Some(token);
+                        gateway_token_source = Some("config_token_file".to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    OpenClawGatewayDiscovery {
+        gateway_url,
+        gateway_url_source,
+        gateway_token,
+        gateway_token_source,
+        config_path: config_path.display().to_string(),
+        config_exists,
+        config_parsed,
+        gateway_port,
+        gateway_port_source,
+        gateway_mode,
+        gateway_reachable: false,
+    }
+}
+
+fn openclaw_probe_target(discovery: &OpenClawGatewayDiscovery) -> Option<(String, u16)> {
+    if let Some(url) = discovery.gateway_url.as_deref() {
+        if let Some(parsed) = parse_openclaw_ws_host_port(url) {
+            return Some(parsed);
+        }
+    }
+    if let Some(port) = discovery.gateway_port.filter(|p| *p != 0) {
+        return Some(("127.0.0.1".to_string(), port));
+    }
+    None
+}
+
+fn parse_openclaw_ws_host_port(raw: &str) -> Option<(String, u16)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let without_scheme = trimmed
+        .strip_prefix("ws://")
+        .or_else(|| trimmed.strip_prefix("wss://"))
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .or_else(|| trimmed.strip_prefix("https://"))
+        .unwrap_or(trimmed);
+    let host_port = without_scheme.split('/').next().unwrap_or("").trim();
+    if host_port.is_empty() {
+        return None;
+    }
+    // IPv6 in brackets: [::1]:18789
+    if let Some(rest) = host_port.strip_prefix('[') {
+        let end = rest.find(']')?;
+        let host = rest[..end].to_string();
+        let after = &rest[end + 1..];
+        let port = if let Some(p) = after.strip_prefix(':') {
+            p.parse::<u16>().ok().filter(|p| *p != 0)?
+        } else {
+            OPENCLAW_DEFAULT_LOCAL_PORT
+        };
+        return Some((host, port));
+    }
+    if let Some((host, port_raw)) = host_port.rsplit_once(':') {
+        if !host.is_empty() {
+            if let Ok(port) = port_raw.parse::<u16>() {
+                if port != 0 {
+                    return Some((host.to_string(), port));
+                }
+            }
+        }
+    }
+    // Host only — OpenClaw default local port.
+    Some((host_port.to_string(), OPENCLAW_DEFAULT_LOCAL_PORT))
+}
+
+async fn probe_openclaw_gateway_reachable(discovery: &OpenClawGatewayDiscovery) -> bool {
+    let Some((host, port)) = openclaw_probe_target(discovery) else {
+        return false;
+    };
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(400),
+        tokio::net::TcpStream::connect((host.as_str(), port)),
+    )
+    .await
+    {
+        Ok(Ok(_)) => true,
+        _ => false,
+    }
+}
+
+async fn resolve_openclaw_cli() -> Result<PathBuf, AcpError> {
+    if let Some(path) = resolve_npx_command("openclaw").await {
+        return Ok(path);
+    }
+    if let Ok(path) = which::which("openclaw") {
+        return Ok(path);
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(path) = which::which("openclaw.cmd") {
+            return Ok(path);
+        }
+    }
+    Err(AcpError::protocol(
+        "openclaw CLI not found. Install OpenClaw in Settings first.".to_string(),
+    ))
+}
+
+async fn run_openclaw_cli(args: &[&str], timeout_secs: u64) -> Result<(bool, String), AcpError> {
+    let cli = resolve_openclaw_cli().await?;
+    let mut cmd = crate::process::tokio_command(&cli);
+    cmd.args(args);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let child = cmd
+        .spawn()
+        .map_err(|e| AcpError::protocol(format!("failed to spawn openclaw: {e}")))?;
+    let output = match tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        child.wait_with_output(),
+    )
+    .await
+    {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
+            return Err(AcpError::protocol(format!("openclaw command failed: {e}")));
+        }
+        Err(_) => {
+            return Err(AcpError::protocol(format!(
+                "openclaw {} timed out after {timeout_secs}s",
+                args.join(" ")
+            )));
+        }
+    };
+    let mut text = String::new();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stdout.trim().is_empty() {
+        text.push_str(stdout.trim());
+    }
+    if !stderr.trim().is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(stderr.trim());
+    }
+    Ok((output.status.success(), text))
+}
+
+async fn spawn_openclaw_gateway_run(port: u16) -> Result<(), AcpError> {
+    let cli = resolve_openclaw_cli().await?;
+    let mut cmd = crate::process::tokio_command(&cli);
+    cmd.args([
+        "gateway",
+        "run",
+        "--port",
+        &port.to_string(),
+        "--force",
+        "--allow-unconfigured",
+    ]);
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    // Detach: we only care that the process starts; it keeps running.
+    cmd.spawn()
+        .map_err(|e| AcpError::protocol(format!("failed to start openclaw gateway: {e}")))?;
+    Ok(())
+}
+
+/// Configure a minimal local OpenClaw gateway (if needed) and start it.
+/// Intended for the settings one-click button — no terminal required.
+pub(crate) async fn ensure_openclaw_gateway_core() -> Result<OpenClawGatewayEnsureResult, AcpError> {
+    let mut steps: Vec<String> = Vec::new();
+    let mut discovery = discover_openclaw_gateway_core().await;
+    if discovery.gateway_reachable {
+        steps.push("Gateway already reachable".into());
+        return Ok(OpenClawGatewayEnsureResult {
+            ok: true,
+            status: "already_running".into(),
+            message: "OpenClaw Gateway is already running.".into(),
+            discovery,
+            steps,
+        });
+    }
+
+    // 1) Baseline config/workspace without interactive wizard.
+    if !discovery.config_exists {
+        steps.push("Creating OpenClaw baseline config".into());
+        match run_openclaw_cli(
+            &[
+                "setup",
+                "--non-interactive",
+                "--accept-risk",
+                "--mode",
+                "local",
+            ],
+            90,
+        )
+        .await
+        {
+            Ok((ok, out)) => {
+                if ok {
+                    steps.push("openclaw setup completed".into());
+                } else {
+                    steps.push(format!("openclaw setup reported an issue: {out}"));
+                }
+            }
+            Err(e) => steps.push(format!("openclaw setup failed: {e}")),
+        }
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // 2) Ensure gateway.mode=local so service start is allowed.
+    let mode = discovery.gateway_mode.as_deref().unwrap_or("").trim();
+    if mode.is_empty() || mode != "local" {
+        steps.push("Setting gateway.mode=local".into());
+        match run_openclaw_cli(&["config", "set", "gateway.mode", "local"], 30).await {
+            Ok((ok, out)) => {
+                if ok {
+                    steps.push("gateway.mode set to local".into());
+                } else {
+                    steps.push(format!("config set gateway.mode failed: {out}"));
+                }
+            }
+            Err(e) => steps.push(format!("config set gateway.mode error: {e}")),
+        }
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // Prefer configured port; else OpenClaw default 18789.
+    let port = discovery
+        .gateway_port
+        .filter(|p| *p != 0)
+        .unwrap_or(OPENCLAW_DEFAULT_LOCAL_PORT);
+    if discovery.gateway_url.is_none() {
+        // Write port so discovery and the UI can fill OPENCLAW_GATEWAY_URL.
+        steps.push(format!("Setting gateway.port={port}"));
+        let _ = run_openclaw_cli(
+            &["config", "set", "gateway.port", &port.to_string()],
+            30,
+        )
+        .await;
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // 3) Try managed service start first (Windows Scheduled Task / launchd / systemd).
+    steps.push("Starting OpenClaw Gateway service".into());
+    let mut started = false;
+    match run_openclaw_cli(&["gateway", "install", "--port", &port.to_string()], 60).await {
+        Ok((ok, out)) => {
+            if ok {
+                steps.push("gateway service installed".into());
+            } else if !out.trim().is_empty() {
+                steps.push(format!("gateway install: {out}"));
+            }
+        }
+        Err(e) => steps.push(format!("gateway install skipped: {e}")),
+    }
+    match run_openclaw_cli(&["gateway", "start"], 45).await {
+        Ok((ok, out)) => {
+            if ok {
+                steps.push("gateway start ok".into());
+                started = true;
+            } else {
+                steps.push(format!("gateway start: {out}"));
+            }
+        }
+        Err(e) => steps.push(format!("gateway start error: {e}")),
+    }
+
+    // Wait briefly for the service to bind.
+    for _ in 0..20 {
+        discovery = discover_openclaw_gateway_core().await;
+        if discovery.gateway_reachable {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    }
+
+    // 4) Fallback: foreground-style detached gateway run.
+    if !discovery.gateway_reachable {
+        steps.push(format!(
+            "Service not reachable; launching openclaw gateway run on {port}"
+        ));
+        if let Err(e) = spawn_openclaw_gateway_run(port).await {
+            steps.push(format!("gateway run failed: {e}"));
+        } else {
+            started = true;
+            for _ in 0..30 {
+                discovery = discover_openclaw_gateway_core().await;
+                if discovery.gateway_reachable {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+        }
+    }
+
+    // If discovery still has no URL but we know the local port, surface it.
+    if discovery.gateway_url.is_none() {
+        discovery.gateway_url = Some(openclaw_local_ws_url(port));
+        discovery.gateway_url_source = Some("default_local".to_string());
+        discovery.gateway_port = Some(port);
+        discovery.gateway_port_source = discovery
+            .gateway_port_source
+            .or_else(|| Some("default_local".to_string()));
+        discovery.gateway_reachable = probe_openclaw_gateway_reachable(&discovery).await;
+    }
+
+    if discovery.gateway_reachable {
+        steps.push("Gateway is reachable".into());
+        return Ok(OpenClawGatewayEnsureResult {
+            ok: true,
+            status: if started {
+                "started".into()
+            } else {
+                "configured".into()
+            },
+            message: format!(
+                "OpenClaw Gateway is running at {}.",
+                discovery
+                    .gateway_url
+                    .clone()
+                    .unwrap_or_else(|| openclaw_local_ws_url(port))
+            ),
+            discovery,
+            steps,
+        });
+    }
+
+    Ok(OpenClawGatewayEnsureResult {
+        ok: false,
+        status: "failed".into(),
+        message: "Could not start OpenClaw Gateway. Check Node/openclaw install, then retry.".into(),
+        discovery,
+        steps,
+    })
+}
+
 /// Best-effort check that `resolved` looks executable on unix (any execute bit
 /// set). On non-unix we already know it exists; treat that as good enough.
 #[cfg(unix)]
@@ -5254,7 +5917,6 @@ pub(crate) async fn cascade_update_model_provider(
     new_api_url: &str,
     new_api_key: &str,
     new_model: Option<&str>,
-    agent_types: &[String],
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, provider_id)
@@ -5267,12 +5929,11 @@ pub(crate) async fn cascade_update_model_provider(
             Err(_) => continue,
         };
 
-        // Extract this agent's model from the multi-agent model JSON.
-        let agent_type_str = serde_json::to_value(&agent_type)
-            .ok()
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_else(|| agent_type.to_string());
-        let agent_model = extract_agent_model(new_model, &agent_type_str);
+        // Provider rows no longer own a model name; models are chosen per-agent.
+        // Only cascade a model when the caller explicitly supplies one.
+        let agent_model = new_model
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
 
         // 1. Update env_json in database (uses agent_env_keys for consistent key names)
         let (url_key, key_key, _) = agent_env_keys(agent_type);
@@ -5289,17 +5950,23 @@ pub(crate) async fn cascade_update_model_provider(
             env_map.insert(key_key.to_string(), new_api_key.to_string());
         }
 
-        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
-        for (k, v) in &model_env {
-            match v {
-                Some(value) => {
-                    env_map.insert(k.clone(), value.clone());
-                }
-                None => {
-                    env_map.remove(k);
+        // Preserve each agent's currently selected model when credentials change.
+        let model_env = if agent_model.is_some() {
+            let parsed = parse_provider_model(agent_type, agent_model);
+            for (k, v) in &parsed {
+                match v {
+                    Some(value) => {
+                        env_map.insert(k.clone(), value.clone());
+                    }
+                    None => {
+                        env_map.remove(k);
+                    }
                 }
             }
-        }
+            parsed
+        } else {
+            BTreeMap::new()
+        };
 
         let patch = agent_setting_service::AgentSettingsUpdate {
             enabled: setting.enabled,
@@ -5311,7 +5978,11 @@ pub(crate) async fn cascade_update_model_provider(
             .map_err(|e| AcpError::protocol(e.to_string()))?;
 
         // 2. Update on-disk config files
-        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
+        let codex_action = if agent_model.is_some() {
+            provider_codex_model_action(agent_type, agent_model)
+        } else {
+            CodexModelAction::NoOp
+        };
         if let Err(e) = cascade_update_agent_config(
             agent_type,
             new_api_url,
@@ -5325,38 +5996,6 @@ pub(crate) async fn cascade_update_model_provider(
         }
 
         emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
-    }
-
-    // Also cascade to agent_types that are in the provider but don't yet have
-    // a dependent agent_setting row (e.g. newly added agent_type). We need to
-    // ensure their on-disk configs get updated too if they exist.
-    let dependent_agent_types: std::collections::HashSet<String> = dependents
-        .iter()
-        .filter_map(|s| serde_json::from_str::<AgentType>(&s.agent_type).ok())
-        .map(|at| at.to_string())
-        .collect();
-    for at_str in agent_types {
-        if dependent_agent_types.contains(at_str) {
-            continue; // already handled above
-        }
-        let agent_type: AgentType = match serde_json::from_str(at_str) {
-            Ok(at) => at,
-            Err(_) => continue,
-        };
-        let agent_model = extract_agent_model(new_model, at_str);
-        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
-        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
-        if let Err(e) = cascade_update_agent_config(
-            agent_type,
-            new_api_url,
-            new_api_key,
-            &model_env,
-            &codex_action,
-        ) {
-            tracing::warn!(
-                "[ModelProvider] cascade_update_agent_config({agent_type}) for new agent_type failed: {e}, skipping"
-            );
-        }
     }
 
     Ok(())
@@ -5430,11 +6069,75 @@ pub(crate) async fn build_session_runtime_env(
         }
     }
 
-    if agent_type == AgentType::OpenClaw && session_id.is_none() {
-        runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
+    if agent_type == AgentType::OpenClaw {
+        // Gateway mode (no model provider): make sure a local gateway is up
+        // before ACP tries ws://127.0.0.1:18789 — users should not need CLI.
+        let using_model_provider = setting
+            .as_ref()
+            .and_then(|s| s.model_provider_id)
+            .is_some();
+        if !using_model_provider {
+            ensure_openclaw_gateway_for_session(&mut runtime_env).await?;
+        }
+        if session_id.is_none() {
+            runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
+        }
     }
 
     Ok(runtime_env)
+}
+
+/// Best-effort ensure + fill OpenClaw gateway URL/token into session env.
+/// Fail hard only when the gateway is still unreachable after ensure — that is
+/// exactly the ECONNREFUSED the user would hit a moment later from openclaw-acp.
+async fn ensure_openclaw_gateway_for_session(
+    runtime_env: &mut BTreeMap<String, String>,
+) -> Result<(), AcpError> {
+    let result = ensure_openclaw_gateway_core().await?;
+    let discovery = &result.discovery;
+
+    if let Some(url) = discovery
+        .gateway_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        // Saved settings win if the user deliberately set a remote URL.
+        runtime_env
+            .entry("OPENCLAW_GATEWAY_URL".into())
+            .or_insert_with(|| url.to_string());
+    }
+    if let Some(token) = discovery
+        .gateway_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        runtime_env
+            .entry("OPENCLAW_GATEWAY_TOKEN".into())
+            .or_insert_with(|| token.to_string());
+    }
+
+    if !discovery.gateway_reachable {
+        return Err(AcpError::protocol(format!(
+            "OpenClaw Gateway is not reachable ({}). {}",
+            discovery
+                .gateway_url
+                .clone()
+                .unwrap_or_else(|| openclaw_local_ws_url(OPENCLAW_DEFAULT_LOCAL_PORT)),
+            result.message
+        )));
+    }
+
+    if !result.ok {
+        tracing::warn!(
+            "[OpenClaw] ensure reported not-ok but probe is reachable: {} steps={:?}",
+            result.message,
+            result.steps
+        );
+    }
+
+    Ok(())
 }
 
 /// Per-launch env keys that vary by session/run but don't represent user
@@ -5944,6 +6647,7 @@ pub(crate) async fn acp_get_agent_status_core(
         available,
         enabled: setting.map(|m| m.enabled).unwrap_or(true),
         installed_version,
+        resident: meta.resident,
     })
 }
 
@@ -6105,12 +6809,15 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             cline_secrets_json,
             hermes_config_yaml,
             model_provider_id: setting.and_then(|m| m.model_provider_id),
+            resident: meta.resident,
         });
     }
 
+    // Resident butlers first, then user sort_order, then name.
     agents.sort_by(|a, b| {
-        a.sort_order
-            .cmp(&b.sort_order)
+        b.resident
+            .cmp(&a.resident)
+            .then_with(|| a.sort_order.cmp(&b.sort_order))
             .then_with(|| a.name.cmp(&b.name))
     });
     Ok(agents)
@@ -6318,7 +7025,10 @@ pub(crate) async fn acp_update_agent_env_core(
             &provider.agent_types_json,
             &provider.agent_type,
         );
-        if !provider_agent_types.contains(&agent_type_str) {
+        // Empty list = universal provider (current create path stores [] / "").
+        if !provider_agent_types.is_empty()
+            && !provider_agent_types.contains(&agent_type_str)
+        {
             return Err(AcpError::protocol(format!(
                 "model provider {pid} is for [{}], cannot be bound to {agent_type}",
                 provider_agent_types.join(", ")
@@ -6730,6 +7440,24 @@ pub async fn acp_update_pi_config(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_load_pi_config() -> Result<PiConfigProjection, AcpError> {
     Ok(load_pi_config_core())
+}
+
+/// Discover local OpenClaw gateway URL/token from env + openclaw.json, then
+/// TCP-probe reachability. Never invents a default port as truth; empty fields
+/// mean "not found". Desktop command; the web handler awaits the same core.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_discover_openclaw_gateway() -> Result<OpenClawGatewayDiscovery, AcpError> {
+    Ok(discover_openclaw_gateway_core().await)
+}
+
+/// One-click local OpenClaw gateway bootstrap for the settings UI: create
+/// baseline config if missing, set gateway.mode=local, install/start service
+/// (or fall back to detached `gateway run`), then re-probe.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_ensure_openclaw_gateway() -> Result<OpenClawGatewayEnsureResult, AcpError> {
+    ensure_openclaw_gateway_core().await
 }
 
 /// Validate a user-supplied custom pi binary (BYO-pi): resolve it (path or
@@ -7948,6 +8676,112 @@ pub(crate) async fn codex_poll_device_code_core(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn openclaw_strip_json5_noise_handles_comments_and_trailing_commas() {
+        let raw = r#"{
+          // comment
+          "gateway": {
+            "port": 19001, /* block */
+            "remote": { "url": "ws://127.0.0.1:19001", },
+          },
+        }"#;
+        let cleaned = strip_json5_noise(raw);
+        let value: serde_json::Value = serde_json::from_str(&cleaned).expect("json");
+        assert_eq!(openclaw_json_port(&value), Some(19001));
+        assert_eq!(
+            openclaw_json_str(&value, &["gateway", "remote", "url"]).as_deref(),
+            Some("ws://127.0.0.1:19001")
+        );
+    }
+
+    #[test]
+    fn openclaw_discovery_uses_config_remote_url_and_token() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{
+              "gateway": {
+                "port": 19002,
+                "remote": {
+                  "url": "ws://192.168.1.10:19002",
+                  "token": "remote-tok"
+                }
+              }
+            }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(path.clone(), None, None, None);
+        assert!(d.config_exists);
+        assert!(d.config_parsed);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://192.168.1.10:19002"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("config_remote_url"));
+        assert_eq!(d.gateway_token.as_deref(), Some("remote-tok"));
+        assert_eq!(
+            d.gateway_token_source.as_deref(),
+            Some("config_remote_token")
+        );
+        assert_eq!(d.gateway_port, Some(19002));
+    }
+
+    #[test]
+    fn openclaw_discovery_builds_url_from_config_port_only() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(&path, r#"{ "gateway": { "port": 19003 } }"#).unwrap();
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://127.0.0.1:19003"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("config_port"));
+        assert_eq!(d.gateway_port, Some(19003));
+        assert!(d.gateway_token.is_none());
+    }
+
+    #[test]
+    fn openclaw_discovery_env_url_wins_over_config() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "remote": { "url": "ws://from-config:1", "token": "cfg" } } }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(
+            path,
+            Some("ws://from-env:2".into()),
+            None,
+            Some("env-tok".into()),
+        );
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://from-env:2"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("env"));
+        assert_eq!(d.gateway_token.as_deref(), Some("env-tok"));
+        assert_eq!(d.gateway_token_source.as_deref(), Some("env"));
+    }
+
+    #[test]
+    fn openclaw_discovery_missing_config_is_empty_not_default_port() {
+        let path = PathBuf::from("/definitely/missing/openclaw-no-such.json");
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert!(!d.config_exists);
+        assert!(!d.config_parsed);
+        assert!(d.gateway_url.is_none());
+        assert!(d.gateway_token.is_none());
+        assert!(d.gateway_port.is_none());
+    }
+
+    #[test]
+    fn openclaw_discovery_skips_env_placeholder_auth_token() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "auth": { "token": "${OPENCLAW_GATEWAY_TOKEN}" }, "port": 19004 } }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://127.0.0.1:19004"));
+        assert!(d.gateway_token.is_none());
+    }
 
     /// Build a `runtime_env` whose `PI_CODING_AGENT_DIR` points at `agent_dir`,
     /// so trust seeding writes a tempdir's `trust.json` instead of `~/.pi/agent`.

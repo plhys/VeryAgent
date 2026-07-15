@@ -210,6 +210,10 @@ pub struct ConnectionManager {
     /// no cap, no cumulative growth; entries are removed on answer / cancel /
     /// connection teardown.
     pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
+    /// Hot-swappable OpenWiki config used at first-prompt inject time.
+    /// Wrapped in `Arc<Mutex<…>>` so `clone_ref` clones share the same slot and
+    /// bootstrap can install after the manager is already managed by Tauri.
+    openwiki_config: Arc<Mutex<Option<crate::openwiki::OpenWikiRuntimeConfig>>>,
 }
 
 /// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
@@ -236,6 +240,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            openwiki_config: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -248,6 +253,7 @@ impl ConnectionManager {
             delegation_injection: self.delegation_injection.clone(),
             probe_locks: self.probe_locks.clone(),
             pending_questions: self.pending_questions.clone(),
+            openwiki_config: self.openwiki_config.clone(),
         }
     }
 
@@ -258,8 +264,22 @@ impl ConnectionManager {
         let _ = self.delegation_injection.set(injection);
     }
 
+    /// Install the OpenWiki runtime config used for first-prompt injection.
+    /// Shared across `clone_ref` clones via the Arc slot.
+    pub fn install_openwiki_config(&self, config: crate::openwiki::OpenWikiRuntimeConfig) {
+        // Bootstrap is synchronous; use blocking_lock so a contended try_lock
+        // cannot silently leave injection disabled for the process lifetime.
+        *self.openwiki_config.blocking_lock() = Some(config);
+    }
+
     fn delegation_snapshot(&self) -> Option<crate::acp::connection::DelegationInjection> {
         self.delegation_injection.get().cloned()
+    }
+
+    /// Snapshot the OpenWiki runtime config for session inject.
+    /// Returns `None` when not installed (unit tests / bare managers).
+    async fn openwiki_runtime(&self) -> Option<crate::openwiki::OpenWikiRuntimeConfig> {
+        self.openwiki_config.lock().await.clone()
     }
 
     /// Test-only constructor that overrides the spawn-handshake timeout.
@@ -273,6 +293,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            openwiki_config: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -515,6 +536,11 @@ impl ConnectionManager {
             let connections = self.connections.lock().await;
             let mut victims = Vec::new();
             for (id, conn) in connections.iter() {
+                // Resident butlers (Hermes) stay up for the life of the app;
+                // idle sweep must not treat "no open tab" as abandon.
+                if crate::acp::registry::is_resident_agent(conn.agent_type) {
+                    continue;
+                }
                 let Ok(state) = conn.state.try_read() else {
                     // Per-state writer holds the lock; a future tick will
                     // re-evaluate this entry. Don't block the connections
@@ -616,7 +642,15 @@ impl ConnectionManager {
         working_dir: Option<&PathBuf>,
         session_id: Option<&str>,
     ) -> Option<String> {
-        // No session_id → caller is opening a fresh session; never dedup.
+        // Resident butlers (Hermes): when the UI opens a fresh chat without a
+        // resume id, attach to the warm resident process instead of spawning a
+        // second one. Durable memory still lives in the agent's own home; this
+        // only keeps the ACP process continuous.
+        if session_id.is_none() && crate::acp::registry::is_resident_agent(agent_type) {
+            return self.find_live_resident_connection(agent_type).await;
+        }
+
+        // No session_id → non-resident fresh session; never dedup.
         let session_id = session_id?;
         let connections = self.connections.lock().await;
         for (id, conn) in connections.iter() {
@@ -630,6 +664,31 @@ impl ConnectionManager {
             if state.working_dir.as_ref() != working_dir {
                 continue;
             }
+            if matches!(
+                state.status,
+                ConnectionStatus::Disconnected | ConnectionStatus::Error
+            ) {
+                continue;
+            }
+            return Some(id.clone());
+        }
+        None
+    }
+
+    /// Live connection for a resident agent, if any (any working_dir).
+    pub(crate) async fn find_live_resident_connection(
+        &self,
+        agent_type: AgentType,
+    ) -> Option<String> {
+        if !crate::acp::registry::is_resident_agent(agent_type) {
+            return None;
+        }
+        let connections = self.connections.lock().await;
+        for (id, conn) in connections.iter() {
+            if conn.agent_type != agent_type {
+                continue;
+            }
+            let state = conn.state.read().await;
             if matches!(
                 state.status,
                 ConnectionStatus::Disconnected | ConnectionStatus::Error
@@ -1032,6 +1091,10 @@ impl ConnectionManager {
         // separately) and a bound conversation row (a sidebar-visible turn). The
         // `message_id` prefers the sender's client-supplied id (exact echo
         // dedup), falling back to a connection-scoped id for non-UI senders.
+        //
+        // Build UI blocks from the ORIGINAL user input first. Shared identity
+        // injection (below) mutates only the wire `blocks` so the chat bubble
+        // stays free of the body preamble.
         let user_message: Option<(String, Vec<crate::acp::UserMessageBlock>)> =
             if delegation.is_none() && conversation_id_for_status.is_some() {
                 let user_blocks = crate::acp::user_blocks_from_prompt(&blocks);
@@ -1055,6 +1118,57 @@ impl ConnectionManager {
                 None
             };
 
+        // Shared identity (body) preamble: first user prompt only, per connection,
+        // and only for brains the user opted in. Skip delegation children — their
+        // parent already carries body context, and the task text is not a user
+        // utterance. Wire blocks are mutated; UI `user_message` was built above
+        // from the clean original so the chat bubble stays free of the preamble.
+        //
+        // Read all inject-latch fields in ONE read lock so the guard is dropped
+        // before any write lock below. Holding a tokio RwLock read guard across
+        // an await while later acquiring write on the same lock causes a deadlock
+        // (or, under concurrent traffic, an Arc assert_unchecked crash).
+        let mut blocks = blocks;
+        let mut did_inject_shared_identity = false;
+        let mut did_inject_openwiki = false;
+        if delegation.is_none() {
+            // Single read — guard drops at the end of this block.
+            let (already, already_wiki, working_dir) = {
+                let s = state_arc.read().await;
+                (
+                    s.shared_identity_injected,
+                    s.openwiki_injected,
+                    s.working_dir.clone(),
+                )
+            };
+            match crate::memory::maybe_inject_shared_identity(agent_type, already) {
+                crate::memory::InjectDecision::Inject { preamble } => {
+                    crate::memory::prepend_preamble(&mut blocks, preamble);
+                    did_inject_shared_identity = true;
+                }
+                crate::memory::InjectDecision::Skip => {}
+            }
+
+            // OpenWiki preamble: same first-prompt latch, authorized agents only.
+            // Uses the hot-swappable runtime config when present on AppState; when
+            // the manager is exercised without it (unit tests), injection is a no-op.
+            if let Some(runtime) = self.openwiki_runtime().await {
+                let config = runtime.snapshot().await;
+                match crate::openwiki::maybe_inject_openwiki(
+                    &config,
+                    agent_type,
+                    already_wiki,
+                    working_dir.as_ref().map(|p| p.as_path()),
+                ) {
+                    crate::openwiki::OpenWikiInjectDecision::Inject { preamble } => {
+                        crate::openwiki::inject::prepend_preamble(&mut blocks, preamble);
+                        did_inject_openwiki = true;
+                    }
+                    crate::openwiki::OpenWikiInjectDecision::Skip => {}
+                }
+            }
+        }
+
         // We hold `_prompt_guard` here, so call the lock-free inner helper —
         // re-entering `send_prompt` would try to acquire the same mutex and
         // deadlock. The helper reserves channel capacity FIRST and only then
@@ -1068,6 +1182,25 @@ impl ConnectionManager {
         // row would be stuck until a follow-up `send_prompt_linked` re-flipped it.
         match self.send_prompt_inner(conn_id, blocks, user_message).await {
             Ok(()) => {
+                // Latch only after the prompt actually reached the agent so a
+                // failed enqueue can still inject on the next attempt.
+                // Single write lock for both flags — avoids two consecutive
+                // write acquisitions that could race with concurrent readers.
+                if did_inject_shared_identity || did_inject_openwiki {
+                    let mut s = state_arc.write().await;
+                    if did_inject_shared_identity {
+                        s.shared_identity_injected = true;
+                        tracing::info!(
+                            "[memory] injected shared identity for conn={conn_id} agent={agent_type:?}"
+                        );
+                    }
+                    if did_inject_openwiki {
+                        s.openwiki_injected = true;
+                        tracing::info!(
+                            "[openwiki] injected wiki preamble for conn={conn_id} agent={agent_type:?}"
+                        );
+                    }
+                }
                 // The prompt reached the agent: surface it to the chat-channel
                 // "user message" event feed. Notification-only — never gates the
                 // send result.
@@ -4114,6 +4247,73 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn find_connection_for_reuse_resident_without_session_id() {
+        let mgr = ConnectionManager::new();
+        let existing_id = "hermes-resident";
+        insert_fake_connection(
+            &mgr,
+            existing_id,
+            AgentType::Hermes,
+            Some(PathBuf::from("/tmp/hermes-home")),
+            EventEmitter::Noop,
+        )
+        .await;
+        {
+            let state = mgr.get_state(existing_id).await.unwrap();
+            state.write().await.status = ConnectionStatus::Connected;
+        }
+
+        // Fresh chat (no session_id) must attach to warm Hermes, not spawn.
+        let found = mgr
+            .find_connection_for_reuse(
+                AgentType::Hermes,
+                Some(&PathBuf::from("/tmp/other-cwd")),
+                None,
+            )
+            .await;
+        assert_eq!(found.as_deref(), Some(existing_id));
+
+        // Working_dir is ignored for resident warm attach.
+        let found2 = mgr.find_live_resident_connection(AgentType::Hermes).await;
+        assert_eq!(found2.as_deref(), Some(existing_id));
+
+        // Non-resident still never dedups without session_id.
+        assert!(mgr
+            .find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&PathBuf::from("/tmp/hermes-home")),
+                None,
+            )
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn find_live_resident_connection_skips_dead() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "dead-hermes",
+            AgentType::Hermes,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        {
+            let state = mgr.get_state("dead-hermes").await.unwrap();
+            state.write().await.status = ConnectionStatus::Disconnected;
+        }
+        assert!(mgr
+            .find_live_resident_connection(AgentType::Hermes)
+            .await
+            .is_none());
+        assert!(mgr
+            .find_connection_for_reuse(AgentType::Hermes, None, None)
+            .await
+            .is_none());
+    }
+
     /// Helper that backdates a connection's `last_activity_at` so the
     /// idle sweep sees it as having crossed its threshold.
     async fn backdate_last_activity(mgr: &ConnectionManager, conn_id: &str, secs_ago: i64) {
@@ -4141,6 +4341,38 @@ mod tests {
             mgr.connections.lock().await.get("stale").is_none(),
             "Idle connection must be removed after sweep"
         );
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_skips_resident_agent() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "hermes-idle",
+            AgentType::Hermes,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        insert_fake_connection(
+            &mgr,
+            "claude-idle",
+            AgentType::ClaudeCode,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        backdate_last_activity(&mgr, "hermes-idle", 600).await;
+        backdate_last_activity(&mgr, "claude-idle", 600).await;
+
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 1, "only non-resident idle connection should be swept");
+        let map = mgr.connections.lock().await;
+        assert!(
+            map.contains_key("hermes-idle"),
+            "resident Hermes must survive idle sweep"
+        );
+        assert!(!map.contains_key("claude-idle"));
     }
 
     #[tokio::test]

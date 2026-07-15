@@ -34,6 +34,8 @@ export interface SessionSelectorSearch {
 export interface SessionSelectorSetting {
   key: string
   title: string
+  /** Optional plain-language explanation of what this setting does. */
+  description?: string | null
   currentValue: string
   currentLabel: string
   groups: SessionSelectorGroup[]
@@ -127,6 +129,11 @@ export function SessionSelectorsPanel({
         // Long model lists: a searchable + virtualized list (its own scroller),
         // so no surrounding `overflow-y-auto` wrapper here.
         <div className="flex min-w-0 flex-1 flex-col pl-1">
+          {active.description ? (
+            <p className="px-2 pb-2 text-xs leading-relaxed text-muted-foreground">
+              {localizer.localize(active.description)}
+            </p>
+          ) : null}
           <ModelOptionList
             groups={active.groups}
             currentValue={active.currentValue}
@@ -146,6 +153,11 @@ export function SessionSelectorsPanel({
           aria-label={active.title}
           className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto pl-1"
         >
+          {active.description ? (
+            <p className="px-2 pb-2 text-xs leading-relaxed text-muted-foreground">
+              {localizer.localize(active.description)}
+            </p>
+          ) : null}
           {active.groups.map((group, groupIndex) => (
             <div key={group.key} className="flex flex-col gap-0.5">
               {group.name ? (

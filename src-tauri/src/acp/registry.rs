@@ -62,6 +62,16 @@ pub struct AcpAgentMeta {
     pub name: &'static str,
     pub description: &'static str,
     pub distribution: AgentDistribution,
+    /// Butler / researcher agents that keep a process-level connection for the
+    /// life of VeryAgent (start with the app, skip idle sweep). Their durable
+    /// memory still lives in the agent's own home (e.g. `~/.hermes`); VeryAgent
+    /// is only the host entry point, not a second memory store.
+    pub resident: bool,
+}
+
+/// Whether this agent type is a resident butler (Hermes / OpenClaw).
+pub fn is_resident_agent(agent_type: AgentType) -> bool {
+    get_agent_meta(agent_type).resident
 }
 
 impl AcpAgentMeta {
@@ -158,6 +168,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Claude Code",
             description: "ACP wrapper for Anthropic's Claude",
+            resident: false,
             distribution: AgentDistribution::Npx {
                 version: "0.55.0",
                 package: "@agentclientprotocol/claude-agent-acp@0.55.0",
@@ -172,6 +183,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Codex CLI",
             description: "ACP adapter for OpenAI's coding assistant",
+            resident: false,
             // codex-acp moved from zed-industries (Rust binary) to the
             // agentclientprotocol org (TypeScript rewrite, npx-distributed).
             // 1.1.0 bundles `@openai/codex` 0.142.5 and drives `codex
@@ -195,6 +207,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Gemini CLI",
             description: "Google's official CLI for Gemini",
+            resident: false,
             distribution: AgentDistribution::Npx {
                 version: "0.47.0",
                 package: "@google/gemini-cli@0.47.0",
@@ -211,6 +224,10 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: false,
             name: "OpenClaw",
             description: "OpenClaw is a personal AI assistant you run on your own devices.",
+            // General-mode butler: keep a warm ACP process when the local
+            // gateway is available. Gateway ensure still runs at session env
+            // build so cold machines recover without a terminal.
+            resident: true,
             distribution: AgentDistribution::Npx {
                 version: "2026.6.11",
                 package: "openclaw@2026.6.11",
@@ -225,6 +242,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Cline",
             description: "Autonomous coding agent CLI",
+            resident: false,
             distribution: AgentDistribution::Npx {
                 version: "3.0.34",
                 package: "cline@3.0.34",
@@ -239,6 +257,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "OpenCode",
             description: "The open source coding agent",
+            resident: false,
             distribution: AgentDistribution::Binary {
                 version: "1.17.13",
                 cmd: "opencode",
@@ -276,7 +295,8 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             agent_type,
             supports_mcp: true,
             name: "Hermes Agent",
-            description: "Nous Research's self-improving agent (ACP via uvx)",
+            description: "Resident butler agent — durable memory in ~/.hermes (ACP)",
+            resident: true,
             distribution: AgentDistribution::Uvx {
                 version: "0.18.0",
                 package: "hermes-agent[acp,mcp]==0.18.0",
@@ -299,6 +319,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "CodeBuddy",
             description: "Tencent Cloud's official AI coding assistant (ACP)",
+            resident: false,
             distribution: AgentDistribution::Npx {
                 version: "2.117.0",
                 package: "@tencent-ai/codebuddy-code@2.117.0",
@@ -313,6 +334,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Kimi Code",
             description: "Moonshot AI's official CLI coding assistant (ACP)",
+            resident: false,
             distribution: AgentDistribution::Npx {
                 version: "0.22.3",
                 package: "@moonshot-ai/kimi-code@0.22.3",
@@ -333,6 +355,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             supports_mcp: true,
             name: "Pi",
             description: "Self-extensible coding agent (ACP via pi-acp)",
+            resident: false,
             // pi-acp 0.0.31 spawns `pi --mode rpc` as a child, so `pi` (npm
             // `@earendil-works/pi-coding-agent`) must be resolvable on PATH —
             // or pointed at a custom build via the `PI_ACP_PI_COMMAND` env

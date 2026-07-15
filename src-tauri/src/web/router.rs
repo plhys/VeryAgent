@@ -94,12 +94,44 @@ pub fn build_router(
             post(handlers::session_info::set_session_info_settings),
         )
         .route(
+            "/get_shared_identity_settings",
+            post(handlers::shared_identity::get_shared_identity_settings),
+        )
+        .route(
+            "/set_shared_identity_settings",
+            post(handlers::shared_identity::set_shared_identity_settings),
+        )
+        .route(
             "/vision_bridge_get_config",
             post(handlers::vision_bridge::get_vision_bridge_settings),
         )
         .route(
             "/vision_bridge_save_config",
             post(handlers::vision_bridge::set_vision_bridge_settings),
+        )
+        .route(
+            "/openwiki_get_config",
+            post(handlers::openwiki::get_openwiki_config),
+        )
+        .route(
+            "/openwiki_save_config",
+            post(handlers::openwiki::set_openwiki_config),
+        )
+        .route(
+            "/openwiki_status",
+            post(handlers::openwiki::get_openwiki_status),
+        )
+        .route(
+            "/openwiki_run",
+            post(handlers::openwiki::run_openwiki),
+        )
+        .route(
+            "/openwiki_get_instructions",
+            post(handlers::openwiki::get_openwiki_instructions),
+        )
+        .route(
+            "/openwiki_save_instructions",
+            post(handlers::openwiki::set_openwiki_instructions),
         )
         .route(
             "/get_folder_conversation",
@@ -655,6 +687,14 @@ pub fn build_router(
             post(handlers::acp::acp_load_pi_config),
         )
         .route(
+            "/acp_discover_openclaw_gateway",
+            post(handlers::acp::acp_discover_openclaw_gateway),
+        )
+        .route(
+            "/acp_ensure_openclaw_gateway",
+            post(handlers::acp::acp_ensure_openclaw_gateway),
+        )
+        .route(
             "/acp_validate_pi_command",
             post(handlers::acp::acp_validate_pi_command),
         )
@@ -986,6 +1026,10 @@ pub fn build_router(
         .route(
             "/delete_model_provider",
             post(handlers::model_provider::delete_model_provider),
+        )
+        .route(
+            "/fetch_provider_models",
+            post(handlers::model_provider::fetch_provider_models),
         )
         // ─── Quick Messages ───
         .route(

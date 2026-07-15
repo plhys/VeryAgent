@@ -989,6 +989,9 @@ export function MessageInput({
   const showConfigLoading = configOptionsLoading && !hasConfigOptions
   const hasAnySelector =
     showConfigLoading || hasConfigOptions || showModeLoading || showModeSelector
+  // Keep every agent-advertised setting visible as a chip. Labels show
+  // "Setting · Value" (e.g. 快速模式 · 关闭), so OpenClaw session switches
+  // stay readable instead of a row of bare Off/On — and do not disappear.
   const hasInlineSelectors = hasConfigOptions || showModeSelector
   const hasFolderBranchPicker =
     useConversationFolderBranchPickerVisible(attachmentTabId)
@@ -2813,6 +2816,7 @@ export function MessageInput({
         result.push({
           key: `config:${option.id}`,
           title: localizer.localize(option.name),
+          description: option.description ?? null,
           currentValue: kind.current_value,
           currentLabel: localizer.localize(current?.name ?? kind.current_value),
           groups,
@@ -3581,7 +3585,7 @@ export function MessageInput({
                     </button>
                   )}
                   {hasInlineSelectors && (
-                    <div className="hidden min-w-0 items-end gap-1 @[30rem]:flex">
+                    <div className="hidden min-w-0 flex-wrap items-end gap-x-1 gap-y-0.5 @[30rem]:flex">
                       {inlineSelectorItems}
                     </div>
                   )}

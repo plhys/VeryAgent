@@ -38,6 +38,7 @@ function agent(
     cline_secrets_json: null,
     hermes_config_yaml: null,
     model_provider_id: null,
+    resident: false,
     ...overrides,
   }
 }
@@ -179,5 +180,69 @@ describe("AgentSelector", () => {
     const calls = onAgentsLoaded.mock.calls
     const lastCall = calls[calls.length - 1]?.[0]
     expect(lastCall).toEqual([codex])
+  })
+
+  it("general mode only lists Hermes and OpenClaw when mode switch is on", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="hermes"
+        onSelect={() => {}}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    await waitFor(() => {
+      expect(onAgentsLoaded).toHaveBeenCalled()
+    })
+    const last =
+      onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+    expect(last?.map((a: AcpAgentInfo) => a.agent_type).sort()).toEqual([
+      "hermes",
+      "open_claw",
+    ])
+    expect(screen.getByRole("tab", { name: "General" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Expert" })).toBeInTheDocument()
+  })
+
+  it("expert mode hides general butlers", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="codex"
+        onSelect={() => {}}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    await waitFor(() => {
+      const last =
+        onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+      expect(last?.map((a: AcpAgentInfo) => a.agent_type).sort()).toEqual([
+        "claude_code",
+        "codex",
+      ])
+    })
   })
 })

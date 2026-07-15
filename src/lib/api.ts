@@ -31,6 +31,8 @@ import type {
   QuestionAnswer,
   AcpAgentInfo,
   AcpAgentStatus,
+  OpenClawGatewayDiscovery,
+  OpenClawGatewayEnsureResult,
   AgentSkillScope,
   AgentSkillLayout,
   AgentSkillItem,
@@ -104,6 +106,7 @@ import type {
   ChatChannelMessageLog,
   WebhookConfig,
   ModelProviderInfo,
+  ProviderModelItem,
   UpdateModelProviderResult,
   PluginCheckSummary,
   OpenCodeCatalogProvider,
@@ -536,6 +539,26 @@ export async function loadPiConfig(): Promise<{
   customProviders: { id: string; baseUrl: string; api: string }[]
 }> {
   return getTransport().call("acp_load_pi_config", {})
+}
+
+/**
+ * Discover OpenClaw gateway URL/token from process env and local
+ * `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`). Empty fields mean
+ * "not found" — never a fabricated default port.
+ */
+export async function acpDiscoverOpenClawGateway(): Promise<
+  OpenClawGatewayDiscovery
+> {
+  return getTransport().call("acp_discover_openclaw_gateway", {})
+}
+
+/**
+ * One-click local OpenClaw gateway bootstrap for settings: create baseline
+ * config if needed, set gateway.mode=local, install/start service (or
+ * detached run), then re-probe reachability.
+ */
+export async function acpEnsureOpenClawGateway(): Promise<OpenClawGatewayEnsureResult> {
+  return getTransport().call("acp_ensure_openclaw_gateway", {})
 }
 
 /**
@@ -3172,15 +3195,11 @@ export async function createModelProvider(params: {
   name: string
   apiUrl: string
   apiKey: string
-  agentTypes: string[]
-  models: Record<string, string>
 }): Promise<ModelProviderInfo> {
   return getTransport().call("create_model_provider", {
     name: params.name,
     apiUrl: params.apiUrl,
     apiKey: params.apiKey,
-    agentTypes: params.agentTypes,
-    models: params.models,
   })
 }
 
@@ -3189,21 +3208,27 @@ export async function updateModelProvider(params: {
   name?: string | null
   apiUrl?: string | null
   apiKey?: string | null
-  agentTypes?: string[] | null
-  models?: Record<string, string> | null
 }): Promise<UpdateModelProviderResult> {
   return getTransport().call("update_model_provider", {
     id: params.id,
     name: params.name ?? null,
     apiUrl: params.apiUrl ?? null,
     apiKey: params.apiKey ?? null,
-    agentTypes: params.agentTypes ?? null,
-    models: params.models ?? null,
   })
 }
 
 export async function deleteModelProvider(id: number): Promise<void> {
   return getTransport().call("delete_model_provider", { id })
+}
+
+/**
+ * List models a saved provider can serve (GET `<api_url>/models` with its key).
+ * Used by agent settings after a model provider is selected.
+ */
+export async function fetchModelProviderModels(
+  id: number
+): Promise<ProviderModelItem[]> {
+  return getTransport().call("fetch_provider_models", { id })
 }
 
 // ─── Delegation settings ───────────────────────────────────────────────
@@ -3296,6 +3321,52 @@ export async function setSessionInfoSettings(
   return getTransport().call("set_session_info_settings", { settings })
 }
 
+// ─── Shared identity + preferences (body layer) ──────────────────────────
+
+/** Mirror of Rust `SharedProfile` (structured identity). */
+export interface SharedProfile {
+  agent_name: string
+  user_address: string
+  notes: string
+  path: string
+  storage_root: string
+  default_storage_root: string
+}
+
+/** Mirror of Rust `SharingConfig`. */
+export interface SharingConfig {
+  enabled: boolean
+  /** Per-agent opt-in keyed by snake_case AgentType. */
+  agents: Record<string, boolean>
+  max_chars: number
+}
+
+/** Combined settings payload from `get_shared_identity_settings`. */
+export interface SharedIdentitySettings {
+  profile: SharedProfile
+  sharing: SharingConfig
+  storage_root: string
+  default_storage_root: string
+  storage_is_custom: boolean
+}
+
+export interface SharedIdentityUpdate {
+  profile?: SharedProfile
+  sharing?: SharingConfig
+  /** Absolute path, or empty string to reset to default. */
+  storage_root?: string
+}
+
+export async function getSharedIdentitySettings(): Promise<SharedIdentitySettings> {
+  return getTransport().call("get_shared_identity_settings")
+}
+
+export async function setSharedIdentitySettings(
+  update: SharedIdentityUpdate
+): Promise<SharedIdentitySettings> {
+  return getTransport().call("set_shared_identity_settings", { update })
+}
+
 /** Mirror of Rust `VisionBridgeConfigUpdate`. */
 export interface VisionBridgeSettings {
   enabled: boolean
@@ -3318,6 +3389,139 @@ export async function visionBridgeSaveConfig(
   settings: VisionBridgeSettings
 ): Promise<VisionBridgeConfig> {
   return getTransport().call("vision_bridge_save_config", { settings })
+}
+
+/** Mirror of Rust `OpenWikiAgentCapability`. */
+export type OpenWikiAgentCapability =
+  | "read_wiki"
+  | "request_update"
+  | "request_init"
+  | "request_chat"
+
+/** Mirror of Rust `OpenWikiAgentPermission`. */
+export interface OpenWikiAgentPermission {
+  agent_type: string
+  capabilities: OpenWikiAgentCapability[]
+}
+
+/** Mirror of Rust `OpenWikiInjectMode`. */
+export type OpenWikiInjectMode = "summary_and_path" | "summary" | "path_only"
+
+/** Mirror of Rust `OpenWikiConfig`. */
+export interface OpenWikiConfig {
+  enabled: boolean
+  modes: {
+    code: boolean
+    personal: boolean
+  }
+  agent_types_list: string[]
+  agent_permissions: OpenWikiAgentPermission[]
+  inject: {
+    on_session_start: boolean
+    inject_agents_md: boolean
+    inject_mode: OpenWikiInjectMode
+  }
+  auto_update: {
+    enabled: boolean
+    on_git_change: boolean
+    schedule_cron?: string | null
+  }
+  model: {
+    use_openwiki_env: boolean
+    provider?: string | null
+    model_id?: string | null
+    api_key: string
+    base_url?: string | null
+  }
+  paths: {
+    code_wiki_dirname: string
+    personal_wiki_root?: string | null
+    executable: string
+  }
+  commands: {
+    allow_init: boolean
+    allow_update: boolean
+    allow_chat: boolean
+    allow_ingest: boolean
+    allow_cron: boolean
+    allow_auth: boolean
+    advanced_enabled: boolean
+  }
+  ignore_patterns: string[]
+}
+
+/** Mirror of Rust `OpenWikiStatus`. */
+export interface OpenWikiStatus {
+  enabled: boolean
+  executable_found: boolean
+  executable_path?: string | null
+  wiki_exists: boolean
+  wiki_path?: string | null
+  last_update_path?: string | null
+  instructions_exists: boolean
+  message: string
+}
+
+/** Mirror of Rust `OpenWikiAction`. */
+export type OpenWikiAction = "code_init" | "code_update" | "status"
+
+/** Mirror of Rust `OpenWikiRunResult`. */
+export interface OpenWikiRunResult {
+  action: string
+  success: boolean
+  exit_code?: number | null
+  stdout: string
+  stderr: string
+  executable: string
+  working_dir: string
+  duration_ms: number
+}
+
+export interface OpenWikiInstructions {
+  content: string
+  path: string
+}
+
+export async function openwikiGetConfig(): Promise<OpenWikiConfig> {
+  return getTransport().call("openwiki_get_config")
+}
+
+export async function openwikiSaveConfig(
+  settings: OpenWikiConfig
+): Promise<OpenWikiConfig> {
+  return getTransport().call("openwiki_save_config", { settings })
+}
+
+export async function openwikiStatus(
+  workspace?: string | null
+): Promise<OpenWikiStatus> {
+  return getTransport().call("openwiki_status", { workspace: workspace ?? null })
+}
+
+export async function openwikiRun(
+  action: OpenWikiAction,
+  workspace?: string | null
+): Promise<OpenWikiRunResult> {
+  return getTransport().call("openwiki_run", {
+    params: { action, workspace: workspace ?? null },
+  })
+}
+
+export async function openwikiGetInstructions(
+  workspace: string
+): Promise<OpenWikiInstructions> {
+  return getTransport().call("openwiki_get_instructions", {
+    params: { workspace },
+  })
+}
+
+export async function openwikiSaveInstructions(
+  workspace: string,
+  content: string
+): Promise<OpenWikiInstructions> {
+  return getTransport().call("openwiki_save_instructions", {
+    update: { workspace, content },
+  })
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what

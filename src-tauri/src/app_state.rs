@@ -64,6 +64,10 @@ pub struct AppState {
     /// updated by the vision bridge settings command on save. Populated at
     /// startup by `apply_persisted_vision_bridge_config`.
     pub vision_bridge_config: crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
+    /// Hot-swappable OpenWiki config (permissions + inject policy). Read at
+    /// session-prompt inject time; updated by the OpenWiki settings command on
+    /// save. Populated at startup by `apply_persisted_openwiki_config`.
+    pub openwiki_config: crate::openwiki::OpenWikiRuntimeConfig,
     /// Serializes mutually-exclusive system operations — in-place
     /// self-update, restart, rollback — so a second click can't race a
     /// download/swap already in flight. Handlers `try_lock` and reject when
@@ -262,6 +266,7 @@ impl AppState {
             question_config,
             session_info_config,
             vision_bridge_config,
+            openwiki_config: crate::openwiki::OpenWikiRuntimeConfig::new(),
             system_op_lock: default_system_op_lock(),
             update_state: default_update_state(),
         }

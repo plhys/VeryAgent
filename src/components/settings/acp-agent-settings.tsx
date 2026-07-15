@@ -89,8 +89,11 @@ import {
   acpFetchKimiModels,
   acpRevealHermesHome,
   acpOpenHermesSetupTerminal,
+  acpDiscoverOpenClawGateway,
+  acpEnsureOpenClawGateway,
   codexPollDeviceCode,
   codexRequestDeviceCode,
+  fetchModelProviderModels,
   listModelProviders,
   opencodeProviderCatalog,
 } from "@/lib/api"
@@ -101,10 +104,19 @@ import type {
   FixAction,
   HermesLocalConfig,
   ModelProviderInfo,
+  OpenClawGatewayDiscovery,
   OpenCodeCatalogProvider,
   PreflightResult,
+  ProviderModelItem,
 } from "@/lib/types"
-import { HERMES_PROVIDERS, parseClaudeProviderModel, extractAgentModel } from "@/lib/types"
+import { HERMES_PROVIDERS } from "@/lib/types"
+import {
+  buildAgentReadiness,
+  isReadinessPilotAgent,
+  readinessToneClass,
+  type AgentReadiness,
+  type AgentReadinessKind,
+} from "@/lib/agent-readiness"
 import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
@@ -257,6 +269,9 @@ function summarizeChecks(checks: UiCheckItem[]): CheckStatus | "unchecked" {
   if (checks.some((check) => check.status === "warn")) return "warn"
   return "pass"
 }
+
+// Re-export readiness types for any settings consumers that imported them here.
+export type { AgentReadiness, AgentReadinessKind }
 
 function envMapToText(env: Record<string, string>): string {
   return Object.entries(env)
@@ -2389,18 +2404,11 @@ export function applyClaudeProviderToConfigText(
   configText: string,
   provider: Pick<ModelProviderInfo, "api_url" | "api_key" | "model">
 ): string {
-  const model = parseClaudeProviderModel(provider.model ?? null)
+  const model = provider.model ?? ""
   return patchImportantConfigText("claude_code", configText, {
     apiBaseUrl: provider.api_url,
     apiKey: provider.api_key,
-    claudeMainModel: model.main ?? "",
-    claudeReasoningModel: model.reasoning ?? "",
-    claudeDefaultHaikuModel: model.haiku ?? "",
-    claudeDefaultSonnetModel: model.sonnet ?? "",
-    claudeDefaultOpusModel: model.opus ?? "",
-    claudeCustomModelOption: model.customOption ?? "",
-    claudeCustomModelOptionName: model.customOptionName ?? "",
-    claudeCustomModelOptionDescription: model.customOptionDescription ?? "",
+    claudeMainModel: model,
   }).configText
 }
 
@@ -3230,7 +3238,7 @@ function KimiCodeConfigPanel({
 
   // Filter model providers that serve kimi_code.
   const kimiModelProviders = useMemo(
-    () => modelProviders.filter((p) => p.agent_types.includes("kimi_code")),
+    () => modelProviders,
     [modelProviders]
   )
   const [showKey, setShowKey] = useState(false)
@@ -3325,7 +3333,7 @@ function KimiCodeConfigPanel({
         {
           KIMI_MODEL_BASE_URL: provider.api_url,
           KIMI_MODEL_API_KEY: provider.api_key,
-          KIMI_MODEL_NAME: extractAgentModel(provider.model, "kimi_code") ?? "",
+          KIMI_MODEL_NAME: provider.model ?? "",
         },
         true,
         selectedProviderId
@@ -3836,6 +3844,12 @@ export function AcpAgentSettings() {
     Partial<Record<AgentType, boolean>>
   >({})
   const [modelProviders, setModelProviders] = useState<ModelProviderInfo[]>([])
+  const [providerModels, setProviderModels] = useState<ProviderModelItem[]>([])
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false)
+  const [providerModelsError, setProviderModelsError] = useState<string | null>(
+    null
+  )
+  const [providerModelsRefreshKey, setProviderModelsRefreshKey] = useState(0)
   const [uninstallConfirmAgent, setUninstallConfirmAgent] =
     useState<AcpAgentInfo | null>(null)
   const [customInstallAgent, setCustomInstallAgent] =
@@ -3851,6 +3865,10 @@ export function AcpAgentSettings() {
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(
     null
   )
+  const [openClawDiscovery, setOpenClawDiscovery] =
+    useState<OpenClawGatewayDiscovery | null>(null)
+  const openClawDiscoveryAppliedRef = useRef(false)
+  const [ensuringOpenClawGateway, setEnsuringOpenClawGateway] = useState(false)
   const [drafts, setDrafts] = useState<Partial<Record<AgentType, AgentDraft>>>(
     {}
   )
@@ -4136,6 +4154,96 @@ export function AcpAgentSettings() {
       return sortedAgents[0].agent_type
     })
   }, [sortedAgents])
+
+  // Discover local OpenClaw gateway from env + openclaw.json and auto-fill
+  // empty draft fields only (never overwrite user-saved VA env values).
+  useEffect(() => {
+    if (selectedAgentType !== "open_claw") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const discovered = await acpDiscoverOpenClawGateway()
+        if (cancelled) return
+        setOpenClawDiscovery(discovered)
+      } catch (err) {
+        console.warn("[Settings] openclaw gateway discovery failed:", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAgentType])
+
+  const handleEnsureOpenClawGateway = useCallback(async () => {
+    if (ensuringOpenClawGateway) return
+    setEnsuringOpenClawGateway(true)
+    try {
+      const result = await acpEnsureOpenClawGateway()
+      openClawDiscoveryAppliedRef.current = false
+      setOpenClawDiscovery(result.discovery)
+      if (result.ok) {
+        toast.success(
+          t("openClaw.ensureGatewayOk", { message: result.message })
+        )
+      } else {
+        toast.error(
+          t("openClaw.ensureGatewayFailed", { message: result.message })
+        )
+      }
+      // Re-run preflight so sidebar badge / status card refresh with probe result.
+      await runPreflight("open_claw", true)
+    } catch (err) {
+      console.error("[Settings] openclaw ensure gateway failed:", err)
+      toast.error(
+        t("openClaw.ensureGatewayFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        })
+      )
+    } finally {
+      setEnsuringOpenClawGateway(false)
+    }
+  }, [ensuringOpenClawGateway, runPreflight, t])
+
+  useEffect(() => {
+    if (selectedAgentType !== "open_claw" || !openClawDiscovery) return
+    if (openClawDiscoveryAppliedRef.current) return
+    const discovered = openClawDiscovery
+    setDrafts((prev) => {
+      const current = prev.open_claw
+      if (!current) return prev
+      openClawDiscoveryAppliedRef.current = true
+      const nextUrl =
+        current.openClawGatewayUrl.trim() || discovered.gatewayUrl || ""
+      const nextToken =
+        current.openClawGatewayToken.trim() || discovered.gatewayToken || ""
+      if (
+        nextUrl === current.openClawGatewayUrl &&
+        nextToken === current.openClawGatewayToken
+      ) {
+        return prev
+      }
+      let envText = current.envText
+      if (!current.openClawGatewayUrl.trim() && nextUrl) {
+        envText = patchEnvText(envText, {
+          [OPENCLAW_ENV_KEYS.gatewayUrl]: nextUrl,
+        })
+      }
+      if (!current.openClawGatewayToken.trim() && nextToken) {
+        envText = patchEnvText(envText, {
+          [OPENCLAW_ENV_KEYS.gatewayToken]: nextToken,
+        })
+      }
+      return {
+        ...prev,
+        open_claw: {
+          ...current,
+          openClawGatewayUrl: nextUrl,
+          openClawGatewayToken: nextToken,
+          envText,
+        },
+      }
+    })
+  }, [selectedAgentType, openClawDiscovery, drafts.open_claw])
 
   // A settings save (env or native config) only takes effect on the NEXT agent
   // start, so any running session of that agent stays on its launch-time config
@@ -4447,6 +4555,20 @@ export function AcpAgentSettings() {
           )
         }
         const finalVersion = detectedVersion ?? installedVersion
+        // After OpenClaw install, re-discover local gateway so empty fields
+        // can pick up an existing openclaw.json / env without user re-entry.
+        if (agent.agent_type === "open_claw") {
+          openClawDiscoveryAppliedRef.current = false
+          try {
+            const discovered = await acpDiscoverOpenClawGateway()
+            setOpenClawDiscovery(discovered)
+          } catch (err) {
+            console.warn(
+              "[Settings] openclaw gateway rediscovery after install failed:",
+              err
+            )
+          }
+        }
         toast.success(
           t("toasts.agentActionCompleted", {
             name: agent.name,
@@ -4827,9 +4949,7 @@ export function AcpAgentSettings() {
 
   const selectedModelProviders = useMemo(() => {
     if (!selectedAgent) return []
-    return modelProviders.filter(
-      (p) => p.agent_types.includes(selectedAgent.agent_type)
-    )
+    return modelProviders
   }, [modelProviders, selectedAgent])
 
   const selectedNeedsModelProvider = useMemo(() => {
@@ -4960,6 +5080,27 @@ export function AcpAgentSettings() {
     if (!selectedAgent || !locale) return []
     return getAgentChecks(selectedAgent, selectedCurrent)
   }, [locale, selectedAgent, selectedCurrent])
+
+  const selectedReadiness = useMemo(() => {
+    if (!selectedAgent || !selectedDraft) return null
+    if (!isReadinessPilotAgent(selectedAgent.agent_type)) return null
+    return buildAgentReadiness({
+      agent: selectedAgent,
+      draft: selectedDraft,
+      checks: selectedChecks,
+      isChecking: Boolean(checking[selectedAgent.agent_type]),
+      openClawDiscovery:
+        selectedAgent.agent_type === "open_claw" ? openClawDiscovery : null,
+      t: rawTranslator,
+    })
+  }, [
+    selectedAgent,
+    selectedDraft,
+    selectedChecks,
+    checking,
+    openClawDiscovery,
+    rawTranslator,
+  ])
 
   useEffect(() => {
     if (!selectedAgent || selectedChecks.length === 0) return
@@ -5251,18 +5392,16 @@ export function AcpAgentSettings() {
       const agentType = selectedAgent.agent_type
 
       if (agentType === "claude_code") {
-        // Provider's model fields are authoritative: missing/empty keys clear
-        // the corresponding draft + env value.
-        const claudeModel = parseClaudeProviderModel(provider?.model ?? null)
-        const claudeMain = claudeModel.main ?? ""
-        const claudeReasoning = claudeModel.reasoning ?? ""
-        const claudeHaiku = claudeModel.haiku ?? ""
-        const claudeSonnet = claudeModel.sonnet ?? ""
-        const claudeOpus = claudeModel.opus ?? ""
-        const claudeCustomOption = claudeModel.customOption ?? ""
-        const claudeCustomOptionName = claudeModel.customOptionName ?? ""
+        // Keep the agent's currently selected model; provider only supplies credentials.
+        const claudeMain = selectedDraft.claudeMainModel
+        const claudeReasoning = selectedDraft.claudeReasoningModel
+        const claudeHaiku = selectedDraft.claudeDefaultHaikuModel
+        const claudeSonnet = selectedDraft.claudeDefaultSonnetModel
+        const claudeOpus = selectedDraft.claudeDefaultOpusModel
+        const claudeCustomOption = selectedDraft.claudeCustomModelOption
+        const claudeCustomOptionName = selectedDraft.claudeCustomModelOptionName
         const claudeCustomOptionDescription =
-          claudeModel.customOptionDescription ?? ""
+          selectedDraft.claudeCustomModelOptionDescription
         const nextConfigJson = patchImportantConfigText(
           agentType,
           selectedDraft.configText,
@@ -5366,19 +5505,19 @@ export function AcpAgentSettings() {
           }
         })
       } else if (agentType === "codex") {
-        const codexModel = provider?.model?.trim() ?? ""
+        const keepModel = selectedDraft.model
         const nextAuthPatch = patchCodexAuthJsonText(
           selectedDraft.codexAuthJsonText,
           { apiKey, authMode: null }
         )
         const nextAuthJsonText = nextAuthPatch.authJsonText
-        // Always pass the provider's model (empty string clears it from the toml).
+        // Credentials only — keep the agent's currently selected model.
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
             modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
             apiBaseUrl: apiUrl,
-            model: codexModel,
+            model: keepModel,
           }
         )
         const synced = extractCodexImportantValues(
@@ -5390,7 +5529,7 @@ export function AcpAgentSettings() {
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
-          model: codexModel,
+          model: keepModel,
           codexAuthJsonText: nextAuthJsonText,
           codexConfigTomlText: nextConfigTomlText,
           codexModelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
@@ -5398,11 +5537,11 @@ export function AcpAgentSettings() {
           envText: patchEnvText(current.envText, {
             OPENAI_API_KEY: apiKey,
             OPENAI_BASE_URL: apiUrl,
-            OPENAI_MODEL: codexModel,
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "gemini") {
-        const geminiModel = provider?.model?.trim() ?? ""
+        const keepModel = selectedDraft.model
         const nextConfigJson = patchGeminiConfigText(selectedDraft.configText, {
           apiBaseUrl: apiUrl,
           geminiApiKey: apiKey,
@@ -5416,10 +5555,9 @@ export function AcpAgentSettings() {
             apiBaseUrl: apiUrl,
             geminiApiKey: apiKey,
           })
-          // Always overwrite GEMINI_MODEL with the provider's value (empty
-          // string clears it).
+          // Keep the agent's currently selected model when binding a provider.
           nextEnvText = patchEnvText(nextEnvText, {
-            GEMINI_MODEL: geminiModel,
+            GEMINI_MODEL: keepModel,
           })
           return {
             ...current,
@@ -5427,48 +5565,50 @@ export function AcpAgentSettings() {
             apiBaseUrl: apiUrl,
             apiKey,
             geminiApiKey: apiKey,
-            model: geminiModel,
+            model: keepModel,
             envText: nextEnvText,
             configText: nextConfigJson.configText,
           }
         })
       } else if (agentType === "hermes") {
-        const hermesModel = extractAgentModel(provider?.model ?? null, "hermes") ?? ""
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
-          model: hermesModel,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: hermesModel,
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "open_claw") {
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: extractAgentModel(provider?.model ?? null, "open_claw") ?? "",
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "cline") {
-        const clineModel = extractAgentModel(provider?.model ?? null, "cline") ?? ""
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
           clineApiKey: apiKey,
-          model: clineModel,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: clineModel,
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else {
@@ -5495,6 +5635,198 @@ export function AcpAgentSettings() {
     selectedModelProviders,
     handleModelProviderSelect,
   ])
+
+  // Fetch the selected provider's model list for the agent-side picker.
+  useEffect(() => {
+    if (!selectedNeedsModelProvider || selectedDraft?.modelProviderId == null) {
+      setProviderModels([])
+      setProviderModelsError(null)
+      setProviderModelsLoading(false)
+      return
+    }
+    const providerId = selectedDraft.modelProviderId
+    let cancelled = false
+    setProviderModelsLoading(true)
+    setProviderModelsError(null)
+    void fetchModelProviderModels(providerId)
+      .then((models) => {
+        if (cancelled) return
+        setProviderModels(models)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error("[Settings] fetch provider models failed:", error)
+        setProviderModels([])
+        setProviderModelsError(
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setProviderModelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    selectedNeedsModelProvider,
+    selectedDraft?.modelProviderId,
+    providerModelsRefreshKey,
+  ])
+
+  const handleProviderModelChange = useCallback(
+    (modelId: string) => {
+      if (!selectedAgent || !selectedDraft) return
+      const agentType = selectedAgent.agent_type
+
+      if (agentType === "claude_code") {
+        handleImportantConfigChange("claudeMainModel", modelId)
+        return
+      }
+
+      if (agentType === "codex") {
+        const nextToml = patchCodexConfigTomlText(
+          selectedDraft.codexConfigTomlText,
+          {
+            model: modelId,
+            modelReasoningEffort: selectedDraft.codexReasoningEffort,
+          }
+        )
+        const synced = extractCodexImportantValues(
+          selectedDraft.codexAuthJsonText,
+          nextToml
+        )
+        updateSelectedDraft((current) => ({
+          ...applyImportantFieldToDraft(current, "model", modelId),
+          model: synced.model,
+          codexModelProvider: synced.modelProvider,
+          codexProviderOptions: synced.providerOptions,
+          codexReasoningEffort: synced.reasoningEffort,
+          codexSupportsWebsockets: synced.supportsWebsockets,
+          codexSkills: synced.skills,
+          codexServiceTierFast: synced.serviceTierFast,
+          codexConfigTomlText: nextToml,
+          envText: patchEnvText(current.envText, {
+            OPENAI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "gemini") {
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            GEMINI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "hermes" || agentType === "open_claw") {
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            OPENAI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "cline") {
+        updateSelectedDraft((current) => {
+          const next = {
+            ...current,
+            model: modelId,
+            clineModel: modelId,
+            envText: patchEnvText(current.envText, {
+              OPENAI_MODEL: modelId,
+            }),
+          }
+          const config: Record<string, unknown> = {}
+          config.apiProvider = next.clineProvider
+          if (next.clineApiKey.trim()) config.apiKey = next.clineApiKey.trim()
+          if (modelId.trim()) config.model = modelId.trim()
+          if (next.clineBaseUrl.trim()) {
+            config.apiBaseUrl = next.clineBaseUrl.trim()
+          }
+          next.configText = JSON.stringify(config, null, 2)
+          return next
+        })
+        return
+      }
+
+      handleImportantConfigChange("model", modelId)
+    },
+    [selectedAgent, selectedDraft, handleImportantConfigChange, updateSelectedDraft]
+  )
+
+  const renderProviderModelPicker = (opts?: {
+    disabled?: boolean
+    value?: string
+    placeholder?: string
+  }) => {
+    const value = opts?.value ?? selectedDraft?.model ?? ""
+    const disabled = Boolean(opts?.disabled || selectedIsSavingConfig)
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-[11px] text-muted-foreground">
+            {t("selectProviderModel")}
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px]"
+            disabled={disabled || providerModelsLoading || selectedDraft?.modelProviderId == null}
+            onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
+          >
+            {providerModelsLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t("refreshProviderModels")}
+          </Button>
+        </div>
+        <Input
+          list="provider-model-options"
+          value={value}
+          onChange={(event) => handleProviderModelChange(event.target.value)}
+          placeholder={opts?.placeholder ?? t("selectProviderModel")}
+          disabled={disabled}
+        />
+        {providerModels.length > 0 && (
+          <datalist id="provider-model-options">
+            {providerModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </datalist>
+        )}
+        {providerModelsLoading ? (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelLoading")}
+          </p>
+        ) : providerModelsError ? (
+          <p className="text-[11px] text-destructive">
+            {t("providerModelFetchFailed")}
+          </p>
+        ) : providerModels.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelEmpty")}
+          </p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelHint")}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   const handleGeminiFieldChange = useCallback(
     (
@@ -7002,26 +7334,42 @@ export function AcpAgentSettings() {
               const isChecking = Boolean(checking[agent.agent_type])
               const draft = drafts[agent.agent_type] ?? buildAgentDraft(agent)
               const allChecks = getAgentChecks(agent, current)
+              const pilotReadiness = isReadinessPilotAgent(agent.agent_type)
+                ? buildAgentReadiness({
+                    agent,
+                    draft,
+                    checks: allChecks,
+                    isChecking,
+                    openClawDiscovery:
+                      agent.agent_type === "open_claw"
+                        ? openClawDiscovery
+                        : null,
+                    t: rawTranslator,
+                  })
+                : null
               const summary = summarizeChecks(allChecks)
               const displaySummary: CheckStatus | "unchecked" | "checking" =
                 isChecking ? "checking" : summary
-              const statusLabel =
-                displaySummary === "unchecked"
+              const statusLabel = pilotReadiness
+                ? pilotReadiness.badge
+                : displaySummary === "unchecked"
                   ? t("status.unchecked")
                   : displaySummary === "checking"
-                    ? "Checking"
+                    ? t("readiness.badge.checking")
                     : displaySummary.toUpperCase()
-              const statusToneClass = !draft.enabled
-                ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
-                : displaySummary === "pass"
-                  ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
-                  : displaySummary === "fail"
-                    ? "border-red-500/40 bg-red-500/10 text-red-500"
-                    : displaySummary === "warn"
-                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                      : displaySummary === "checking"
-                        ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                        : "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+              const statusToneClass = pilotReadiness
+                ? readinessToneClass(pilotReadiness.kind)
+                : !draft.enabled
+                  ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+                  : displaySummary === "pass"
+                    ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
+                    : displaySummary === "fail"
+                      ? "border-red-500/40 bg-red-500/10 text-red-500"
+                      : displaySummary === "warn"
+                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        : displaySummary === "checking"
+                          ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          : "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
 
               return (
                 <AgentReorderItem
@@ -7219,6 +7567,117 @@ export function AcpAgentSettings() {
                     <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-start gap-2">
                       <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                       <span className="break-all">{selectedCurrent.error}</span>
+                    </div>
+                  )}
+                  {selectedReadiness && (
+                    <div
+                      className={cn(
+                        "rounded-md border px-3 py-2.5 space-y-1.5",
+                        readinessToneClass(selectedReadiness.kind)
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="text-xs font-semibold leading-snug">
+                            {selectedReadiness.title}
+                          </div>
+                          <p className="text-[11px] leading-relaxed opacity-90">
+                            {selectedReadiness.detail}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {selectedReadiness.kind === "checking" && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "h-6 px-2 text-[11px]",
+                              readinessToneClass(selectedReadiness.kind)
+                            )}
+                          >
+                            {selectedReadiness.badge}
+                          </Badge>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-current/20 hover:bg-black/5 dark:hover:bg-white/10"
+                            title={t("actions.refreshCheck")}
+                            aria-label={t("actions.refreshCheckAgent", {
+                              name: selectedAgent.name,
+                            })}
+                            onClick={() => {
+                              runPreflight(selectedAgent.agent_type, true).catch(
+                                (err) => {
+                                  console.error(
+                                    "[Settings] readiness recheck failed:",
+                                    err
+                                  )
+                                }
+                              )
+                              if (selectedAgent.agent_type === "open_claw") {
+                                openClawDiscoveryAppliedRef.current = false
+                                acpDiscoverOpenClawGateway()
+                                  .then(setOpenClawDiscovery)
+                                  .catch((err) => {
+                                    console.warn(
+                                      "[Settings] openclaw rediscovery failed:",
+                                      err
+                                    )
+                                  })
+                              }
+                            }}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      {selectedReadiness.kind === "not_installed" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.installFirst")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "dependency_blocked" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.fixDependency")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "config_needed" && (
+                        <p className="text-[11px] opacity-80">
+                          {selectedAgent.agent_type === "open_claw" &&
+                          selectedDraft.openClawAuthMode === "gateway"
+                            ? t("readiness.hint.openClawStartGateway")
+                            : t("readiness.hint.configureBelow")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "ready" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.readyToChat")}
+                        </p>
+                      )}
+                      {selectedAgent.agent_type === "open_claw" &&
+                        selectedDraft.openClawAuthMode === "gateway" &&
+                        selectedReadiness.kind === "config_needed" && (
+                          <div className="pt-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 text-[11px]"
+                              disabled={ensuringOpenClawGateway}
+                              onClick={() => {
+                                handleEnsureOpenClawGateway().catch(() => {})
+                              }}
+                            >
+                              {ensuringOpenClawGateway ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  {t("openClaw.ensureGatewayRunning")}
+                                </>
+                              ) : (
+                                t("openClaw.ensureGateway")
+                              )}
+                            </Button>
+                          </div>
+                        )}
                     </div>
                   )}
                   <div className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -9307,6 +9766,65 @@ supports_websockets = true`}
 
                     {selectedDraft.openClawAuthMode === "gateway" && (
                     <>
+                    {openClawDiscovery && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-muted-foreground">
+                          {openClawDiscovery.gatewayUrl
+                            ? openClawDiscovery.gatewayReachable
+                              ? t("openClaw.discoveryReachable", {
+                                  url: openClawDiscovery.gatewayUrl,
+                                })
+                              : t("openClaw.discoveryUnreachable", {
+                                  url: openClawDiscovery.gatewayUrl,
+                                })
+                            : openClawDiscovery.configExists
+                              ? t("openClaw.discoveryConfigNoGateway", {
+                                  path: openClawDiscovery.configPath,
+                                })
+                              : t("openClaw.discoveryNotFound", {
+                                  path: openClawDiscovery.configPath,
+                                })}
+                        </p>
+                        {openClawDiscovery.gatewayUrl &&
+                          openClawDiscovery.gatewayUrlSource && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("openClaw.discoveryFound", {
+                                source:
+                                  openClawDiscovery.gatewayUrlSource ??
+                                  "config",
+                                path: openClawDiscovery.configPath,
+                              })}
+                            </p>
+                          )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          openClawDiscovery?.gatewayReachable
+                            ? "outline"
+                            : "default"
+                        }
+                        disabled={ensuringOpenClawGateway}
+                        onClick={() => {
+                          handleEnsureOpenClawGateway().catch(() => {})
+                        }}
+                      >
+                        {ensuringOpenClawGateway ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t("openClaw.ensureGatewayRunning")}
+                          </>
+                        ) : (
+                          t("openClaw.ensureGateway")
+                        )}
+                      </Button>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("readiness.hint.openClawStartGateway")}
+                      </p>
+                    </div>
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         Gateway URL
@@ -9319,7 +9837,10 @@ supports_websockets = true`}
                             event.target.value
                           )
                         }}
-                        placeholder="wss://gateway-host:18789"
+                        placeholder={
+                          openClawDiscovery?.gatewayUrl ??
+                          t("openClaw.gatewayUrlPlaceholder")
+                        }
                       />
                       <p className="text-[11px] text-muted-foreground">
                         {t("openClaw.gatewayUrlHint")}

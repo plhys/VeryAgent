@@ -1,3 +1,4 @@
+import type { ReactElement } from "react"
 import {
   render,
   screen,
@@ -6,12 +7,22 @@ import {
   fireEvent,
 } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { NextIntlClientProvider } from "next-intl"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import enMessages from "@/i18n/messages/en.json"
 import {
   SessionSelectorsPanel,
   type SessionSelectorSetting,
 } from "./session-selectors-panel"
+
+function renderPanel(ui: ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
 
 // Two distinct settings (no substring overlap in their titles) so role queries
 // stay unambiguous.
@@ -65,7 +76,7 @@ describe("SessionSelectorsPanel", () => {
   afterEach(() => cleanup())
 
   it("shows the first setting's options with the current one marked", () => {
-    render(
+    renderPanel(
       <SessionSelectorsPanel
         settings={makeSettings()}
         settingsLabel="Settings"
@@ -85,7 +96,7 @@ describe("SessionSelectorsPanel", () => {
   it("commits a value via a plain click and notifies onAfterSelect", () => {
     const modelOnSelect = vi.fn()
     const onAfterSelect = vi.fn()
-    render(
+    renderPanel(
       <SessionSelectorsPanel
         settings={makeSettings(modelOnSelect)}
         settingsLabel="Settings"
@@ -100,7 +111,7 @@ describe("SessionSelectorsPanel", () => {
   it("activates an option with the keyboard (native button semantics)", async () => {
     const user = userEvent.setup()
     const modelOnSelect = vi.fn()
-    render(
+    renderPanel(
       <SessionSelectorsPanel
         settings={makeSettings(modelOnSelect)}
         settingsLabel="Settings"
@@ -118,7 +129,7 @@ describe("SessionSelectorsPanel", () => {
   it("switches the detail pane to another setting", () => {
     const modelOnSelect = vi.fn()
     const effortOnSelect = vi.fn()
-    render(
+    renderPanel(
       <SessionSelectorsPanel
         settings={makeSettings(modelOnSelect, effortOnSelect)}
         settingsLabel="Settings"
@@ -158,7 +169,7 @@ describe("SessionSelectorsPanel", () => {
         onSelect: vi.fn(),
       },
     ]
-    render(
+    renderPanel(
       <SessionSelectorsPanel settings={settings} settingsLabel="Settings" />
     )
     expect(screen.getByText("Anthropic")).toBeInTheDocument()
@@ -166,7 +177,7 @@ describe("SessionSelectorsPanel", () => {
   })
 
   it("renders nothing when there are no settings", () => {
-    const { container } = render(
+    const { container } = renderPanel(
       <SessionSelectorsPanel settings={[]} settingsLabel="Settings" />
     )
     expect(container).toBeEmptyDOMElement()

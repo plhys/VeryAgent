@@ -59,7 +59,7 @@ import type {
   ToolCallImageWire,
   UserMessageBlock,
 } from "@/lib/types"
-import { AGENT_LABELS } from "@/lib/types"
+import { AGENT_LABELS, isResidentAgent } from "@/lib/types"
 import {
   CONNECTION_IDLE_TIMEOUT_MS,
   CONNECTION_KEEPALIVE_INTERVAL_MS,
@@ -3503,6 +3503,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // would kill another client's agent. The viewer is torn down when its
         // tab unmounts (disconnect's isViewer branch detaches it).
         if (conn.isViewer) continue
+        // Resident butlers stay warm for the app lifetime.
+        if (isResidentAgent(conn.agentType)) continue
         // Launched-but-unresolved background work (async sub-agent /
         // background shell): disconnecting would kill the agent CLI and the
         // background task with it. The backend watcher settles or max-age
@@ -3555,6 +3557,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // acpDisconnect it on our unmount. The attach-sub detach loop below
         // releases our read-only subscription cleanly.
         if (conn?.isViewer) continue
+        // Resident butlers outlive the React tree.
+        if (conn && isResidentAgent(conn.agentType)) continue
         acpDisconnect(connectionId).catch(() => {})
       }
       for (const [, sub] of attachSubs) {
@@ -3753,7 +3757,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             // A viewer doesn't own the backend connection — detach only, never
             // acpDisconnect (that would kill the owner's agent). Owners are
             // disconnected normally before re-spawning under new params.
-            if (!existing.isViewer) {
+            if (!existing.isViewer && !isResidentAgent(existing.agentType)) {
               await acpDisconnect(existing.connectionId).catch(() => {})
             }
             reverseMapRef.current.delete(existing.connectionId)
@@ -3907,12 +3911,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // If disconnect was requested while connect was in flight,
         // tear down immediately instead of registering the connection.
         if (abandonedKeysRef.current.delete(contextKey)) {
-          acpDisconnect(connectionId).catch(() => {})
+          // Keep resident warm across agent-switch / unmount races.
+          if (!isResidentAgent(agentType)) {
+            acpDisconnect(connectionId).catch(() => {})
+          }
           return
         }
         const pendingRequest = pendingConnectRequestsRef.current.get(contextKey)
         if (pendingRequest && !sameConnectRequest(pendingRequest, request)) {
-          acpDisconnect(connectionId).catch(() => {})
+          if (!isResidentAgent(agentType)) {
+            acpDisconnect(connectionId).catch(() => {})
+          }
           return
         }
 
@@ -4079,12 +4088,15 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         }
         return
       }
-      if (conn.isViewer) {
+      if (conn.isViewer || isResidentAgent(conn.agentType)) {
         // Viewer teardown: drop our read-only attachment WITHOUT
         // `acpDisconnect` — the backend connection belongs to another client,
         // and disconnecting it would kill the owner's agent mid-turn. Mirrors
         // detachDelegationChild. The owner's own disconnect / the idle sweep
         // governs the connection's real lifetime.
+        //
+        // Resident butlers (Hermes): same detach-only policy. App-lifetime
+        // process; real teardown is app exit or reapplyConfig force-kill.
         teardownAttachSubscription(contextKey)
         reverseMapRef.current.delete(conn.connectionId)
         pendingUnmappedEventsRef.current.delete(conn.connectionId)
@@ -4112,8 +4124,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       if (!conn || conn.isViewer || conn.isDelegationChild) return false
       // Capture identity BEFORE teardown. `sessionId` is what makes the new
       // process resume this conversation (session/load) rather than start fresh.
-      const { agentType, workingDir, sessionId } = conn
-      await disconnect(contextKey)
+      const { agentType, workingDir, sessionId, connectionId } = conn
+      // Force-kill even residents: reapplyConfig is explicit restart.
+      await acpDisconnect(connectionId).catch(() => {})
+      reverseMapRef.current.delete(connectionId)
+      teardownAttachSubscription(contextKey)
+      lastActivityRef.current.delete(contextKey)
+      pendingUnmappedEventsRef.current.delete(connectionId)
+      dispatch({ type: "CONNECTION_REMOVED", contextKey })
       await connect(
         contextKey,
         agentType,
@@ -4122,7 +4140,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       )
       return true
     },
-    [connect, disconnect]
+    [connect, dispatch, teardownAttachSubscription]
   )
 
   const dismissConfigStale = useCallback(
@@ -4139,7 +4157,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       // Viewers attach to a connection another client owns — detach our
       // read-only subscription but never acpDisconnect (that would kill the
       // owner's agent). Owners are torn down normally.
-      if (!conn.isViewer) {
+      if (!conn.isViewer && !isResidentAgent(conn.agentType)) {
         promises.push(acpDisconnect(conn.connectionId).catch(() => {}))
       }
       reverseMapRef.current.delete(conn.connectionId)

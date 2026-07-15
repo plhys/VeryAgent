@@ -380,6 +380,16 @@ pub struct SessionState {
     /// lapses after `background_keepalive_max_age()` instead of pinning the
     /// connection alive forever. Backend-internal; not serialized.
     pub background_activity_at: Option<DateTime<Utc>>,
+
+    /// Whether the shared identity/preferences preamble has already been
+    /// injected on this connection. Set after the first successful inject so
+    /// follow-up prompts in the same conversation do not re-send the body
+    /// context. Backend-internal; not serialized on the snapshot.
+    pub shared_identity_injected: bool,
+    /// Whether the OpenWiki preamble has already been injected on this
+    /// connection. Same once-per-connection latch as shared identity.
+    /// Backend-internal; not serialized on the snapshot.
+    pub openwiki_injected: bool,
 }
 
 impl SessionState {
@@ -430,6 +440,8 @@ impl SessionState {
             config_stale_kind: None,
             background_outstanding: 0,
             background_activity_at: None,
+            shared_identity_injected: false,
+            openwiki_injected: false,
         }
     }
 

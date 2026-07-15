@@ -1,4 +1,4 @@
-export type AgentType =
+﻿export type AgentType =
   | "claude_code"
   | "codex"
   | "open_code"
@@ -370,6 +370,12 @@ export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
  *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
 export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
 
+/** Global side-channel announcing a shared-identity save (payload is
+ *  `SharedIdentitySettings`). Same cross-window rationale as
+ *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
+export const SHARED_IDENTITY_SETTINGS_CHANGED_EVENT =
+  "shared-identity-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -501,6 +507,11 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "kimi_code",
   "pi",
 ]
+
+/** Process-level resident butlers (match backend registry.resident). */
+export function isResidentAgent(agentType: AgentType): boolean {
+  return agentType === "hermes"
+}
 
 export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "claude_code",
@@ -781,6 +792,35 @@ export interface HermesLocalConfig {
   hermesHome?: string
   setupCommand?: string
   modelCommand?: string
+}
+
+/**
+ * Result of discovering a local OpenClaw gateway from env + openclaw.json.
+ * Empty optional fields mean "not found" — never a fabricated default.
+ */
+export interface OpenClawGatewayDiscovery {
+  gatewayUrl: string | null
+  gatewayUrlSource: string | null
+  gatewayToken: string | null
+  gatewayTokenSource: string | null
+  configPath: string
+  configExists: boolean
+  configParsed: boolean
+  gatewayPort: number | null
+  gatewayPortSource: string | null
+  /** `gateway.mode` from openclaw.json when present. */
+  gatewayMode: string | null
+  /** Live TCP probe against the resolved host:port. */
+  gatewayReachable: boolean
+}
+
+/** Result of the settings one-click OpenClaw gateway bootstrap. */
+export interface OpenClawGatewayEnsureResult {
+  ok: boolean
+  status: string
+  message: string
+  discovery: OpenClawGatewayDiscovery
+  steps: string[]
 }
 
 export const AGENT_LABELS: Record<AgentType, string> = {
@@ -1534,6 +1574,8 @@ export interface AcpAgentInfo {
   /** Raw ~/.hermes/config.yaml text, for the Hermes panel's advanced editor. */
   hermes_config_yaml: string | null
   model_provider_id: number | null
+  /** Butler-class agent kept for the life of VeryAgent. */
+  resident: boolean
 }
 
 // Lightweight agent status returned by acp_get_agent_status
@@ -1542,6 +1584,7 @@ export interface AcpAgentStatus {
   available: boolean
   enabled: boolean
   installed_version: string | null
+  resident: boolean
 }
 
 export type AgentSkillScope = "global" | "project"
@@ -2324,20 +2367,17 @@ export interface ModelProviderInfo {
   api_url: string
   api_key: string
   api_key_masked: string
-  /** All agent types this provider serves. */
-  agent_types: AgentType[]
-  /** First element of agent_types for backward compat. */
-  agent_type: AgentType
-  /**
-   * Model value as a JSON object keyed by agent_type:
-   * `{"claude_code":"{\"main\":\"...\"}","codex":"gpt-5"}`
-   * Each agent_type's value follows its own format:
-   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus, ...}
-   * - codex / gemini / others: plain model name string
-   */
+  /** Optional default model name stored on the provider row. Agent settings
+   *  now select models per-agent; this field is retained for compatibility. */
   model: string | null
   created_at: string
   updated_at: string
+}
+
+/** One model returned by a provider's OpenAI-compatible `/models` endpoint. */
+export interface ProviderModelItem {
+  id: string
+  name: string
 }
 
 /** Result of `updateModelProvider` (mirror of Rust `UpdateModelProviderResult`):

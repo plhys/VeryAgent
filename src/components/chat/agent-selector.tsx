@@ -7,6 +7,12 @@ import type { AgentType, AcpAgentInfo } from "@/lib/types"
 import { AGENT_LABELS } from "@/lib/types"
 import { AgentIcon } from "@/components/agent-icon"
 import { cn } from "@/lib/utils"
+import {
+  isGeneralModeAgent,
+  loadChatAgentMode,
+  saveChatAgentMode,
+  type ChatAgentMode,
+} from "@/lib/chat-agent-mode-storage"
 
 interface AgentSelectorProps {
   defaultAgentType?: AgentType
@@ -23,6 +29,11 @@ interface AgentSelectorProps {
   onAgentsLoaded?: (agents: AcpAgentInfo[]) => void
   onOpenAgentsSettings?: () => void
   disabled?: boolean
+  /**
+   * When true (welcome / draft header), show the general/expert mode switch
+   * and filter the agent list. Existing conversations keep the full list.
+   */
+  showModeSwitch?: boolean
 }
 
 export function AgentSelector({
@@ -32,13 +43,33 @@ export function AgentSelector({
   onAgentsLoaded,
   onOpenAgentsSettings,
   disabled = false,
+  showModeSwitch = false,
 }: AgentSelectorProps) {
   const t = useTranslations("Folder.chat.agentSelector")
   const { agents: rawAgents } = useAcpAgents()
-  const agents = useMemo<AcpAgentInfo[]>(
-    () => rawAgents.filter((a) => a.enabled),
-    [rawAgents]
-  )
+  const [mode, setMode] = useState<ChatAgentMode>("general")
+
+  useEffect(() => {
+    if (!showModeSwitch) return
+    setMode(loadChatAgentMode())
+  }, [showModeSwitch])
+
+  const handleModeChange = useCallback((next: ChatAgentMode) => {
+    setMode(next)
+    saveChatAgentMode(next)
+  }, [])
+
+  const agents = useMemo<AcpAgentInfo[]>(() => {
+    const enabled = rawAgents.filter((a) => a.enabled)
+    const filtered = !showModeSwitch
+      ? enabled
+      : mode === "general"
+        ? enabled.filter((a) => isGeneralModeAgent(a.agent_type))
+        : enabled.filter((a) => !isGeneralModeAgent(a.agent_type))
+    return filtered
+      .slice()
+      .sort((a, b) => Number(!!b.resident) - Number(!!a.resident))
+  }, [rawAgents, showModeSwitch, mode])
   const onSelectRef = useRef(onSelect)
   const onFallbackRef = useRef(onFallback)
   const onAgentsLoadedRef = useRef(onAgentsLoaded)
@@ -162,80 +193,145 @@ export function AgentSelector({
     []
   )
 
+  const modeSwitch = showModeSwitch ? (
+    <div
+      role="tablist"
+      aria-label={t("modeSwitchAria")}
+      className="inline-flex items-center self-center rounded-full border border-border/50 bg-muted/40 p-0.5"
+    >
+      {(
+        [
+          ["general", t("modeGeneral")] as const,
+          ["expert", t("modeExpert")] as const,
+        ] as const
+      ).map(([value, label]) => {
+        const active = mode === value
+        return (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            disabled={disabled}
+            onClick={() => handleModeChange(value)}
+            className={cn(
+              "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
+              disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+              active
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                : "text-muted-foreground hover:text-foreground/80"
+            )}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  ) : null
+
   if (agents.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
-        <div>{t("noEnabledAgents")}</div>
-        {onOpenAgentsSettings ? (
-          <button
-            type="button"
-            onClick={onOpenAgentsSettings}
-            className="mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent cursor-pointer"
-          >
-            {t("openAgentsSettings")}
-          </button>
-        ) : null}
+      <div className="flex flex-col items-center gap-3">
+        {modeSwitch}
+        <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
+          <div>
+            {showModeSwitch
+              ? mode === "general"
+                ? t("noGeneralAgents")
+                : t("noExpertAgents")
+              : t("noEnabledAgents")}
+          </div>
+          {onOpenAgentsSettings ? (
+            <button
+              type="button"
+              onClick={onOpenAgentsSettings}
+              className="mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent cursor-pointer"
+            >
+              {t("openAgentsSettings")}
+            </button>
+          ) : null}
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
-    >
-      {/* Sliding droplet indicator */}
-      {indicator && (
-        <div
-          className="absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{
-            left: indicator.left,
-            width: indicator.width,
-          }}
-        />
-      )}
-      {agents.map((agent) => {
-        const isSelected = selected === agent.agent_type
-        return (
-          <button
-            key={agent.agent_type}
-            ref={setItemRef(agent.agent_type)}
-            title={!isSelected ? AGENT_LABELS[agent.agent_type] : undefined}
-            disabled={disabled || !agent.available}
-            onClick={() => handleSelect(agent.agent_type)}
-            className={cn(
-              "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-300",
-              isSelected ? "px-3 py-2" : "px-2 py-2",
-              disabled || !agent.available
-                ? "cursor-not-allowed opacity-40"
-                : "cursor-pointer",
-              isSelected
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground/70"
-            )}
-          >
-            <AgentIcon
-              agentType={agent.agent_type}
-              className="w-4 h-4 shrink-0"
-            />
-            <span
+    <div className="flex flex-col items-center gap-3">
+      {modeSwitch}
+      <div
+        ref={containerRef}
+        className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
+      >
+        {/* Sliding droplet indicator */}
+        {indicator && (
+          <div
+            className="absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            style={{
+              left: indicator.left,
+              width: indicator.width,
+            }}
+          />
+        )}
+        {agents.map((agent) => {
+          const isSelected = selected === agent.agent_type
+          return (
+            <button
+              key={agent.agent_type}
+              ref={setItemRef(agent.agent_type)}
+              title={
+                !isSelected
+                  ? agent.resident
+                    ? `${AGENT_LABELS[agent.agent_type]} · ${t("residentBadge")}`
+                    : AGENT_LABELS[agent.agent_type]
+                  : agent.resident
+                    ? t("residentBadge")
+                    : undefined
+              }
+              disabled={disabled || !agent.available}
+              onClick={() => handleSelect(agent.agent_type)}
               className={cn(
-                "grid transition-[grid-template-columns] duration-300",
-                isSelected ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
+                "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-300",
+                isSelected ? "px-3 py-2" : "px-2 py-2",
+                disabled || !agent.available
+                  ? "cursor-not-allowed opacity-40"
+                  : "cursor-pointer",
+                isSelected
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground/70"
               )}
             >
+              <span className="relative inline-flex shrink-0">
+                <AgentIcon
+                  agentType={agent.agent_type}
+                  className="w-4 h-4 shrink-0"
+                />
+                {agent.resident ? (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-background"
+                    title={t("residentBadge")}
+                    aria-label={t("residentBadge")}
+                  />
+                ) : null}
+              </span>
               <span
                 className={cn(
-                  "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
-                  isSelected ? "opacity-100" : "opacity-0"
+                  "grid transition-[grid-template-columns] duration-300",
+                  isSelected ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
                 )}
               >
-                {AGENT_LABELS[agent.agent_type]}
+                <span
+                  className={cn(
+                    "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
+                    isSelected ? "opacity-100" : "opacity-0"
+                  )}
+                >
+                  {AGENT_LABELS[agent.agent_type]}
+                </span>
               </span>
-            </span>
-          </button>
-        )
-      })}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

@@ -367,6 +367,15 @@ async fn build_agent(
                 {
                     parts.push("--url".into());
                     parts.push(url.clone());
+                    // `--url` is override-safe and does not reuse implicit
+                    // config/env credentials; pass token explicitly when set.
+                    if let Some(token) = runtime_env
+                        .get("OPENCLAW_GATEWAY_TOKEN")
+                        .filter(|v| !v.is_empty())
+                    {
+                        parts.push("--token".into());
+                        parts.push(token.clone());
+                    }
                 }
                 if let Some(key) = runtime_env
                     .get("OPENCLAW_SESSION_KEY")
@@ -6458,11 +6467,9 @@ mod tests {
     fn classify_load_failure_resource_not_found_maps_to_code() {
         // -32002 ResourceNotFound maps to "resource_not_found" even when the
         // message text would also match a crash pattern below.
-        let error = sacp::Error {
-            code: sacp::schema::ErrorCode::ResourceNotFound,
-            message: "Session not found: process exited unexpectedly".into(),
-            data: None,
-        };
+        // `sacp::Error` is non-exhaustive; construct via the public builders.
+        let error = sacp::Error::resource_not_found(None)
+            .data("Session not found: process exited unexpectedly");
         assert_eq!(
             classify_session_load_failure(&error),
             Some("resource_not_found")
@@ -6477,11 +6484,7 @@ mod tests {
             "Session not found",
         ];
         for msg in cases {
-            let error = sacp::Error {
-                code: sacp::schema::ErrorCode::InternalError,
-                message: msg.into(),
-                data: None,
-            };
+            let error = sacp::Error::internal_error().data(msg);
             assert_eq!(
                 classify_session_load_failure(&error),
                 Some("session_unavailable"),
@@ -6494,21 +6497,17 @@ mod tests {
     fn classify_load_failure_keeps_existing_behavior_for_recoverable_errors() {
         // MethodNotFound, AuthRequired, and unknown internal errors return None,
         // keeping the existing session/new fallback behavior.
-        let cases: Vec<(sacp::schema::ErrorCode, &str)> = vec![
-            (sacp::schema::ErrorCode::MethodNotFound, "Method not found"),
-            (sacp::schema::ErrorCode::AuthRequired, "Authentication required"),
-            (sacp::schema::ErrorCode::InternalError, "Something else"),
+        let cases = [
+            sacp::Error::method_not_found().data("Method not found"),
+            sacp::Error::auth_required().data("Authentication required"),
+            sacp::Error::internal_error().data("Something else"),
         ];
-        for (code, msg) in cases {
-            let error = sacp::Error {
-                code,
-                message: msg.into(),
-                data: None,
-            };
+        for error in cases {
             assert_eq!(
                 classify_session_load_failure(&error),
                 None,
-                "expected None for: {msg}"
+                "expected None for: {}",
+                error.message
             );
         }
     }
