@@ -59,11 +59,20 @@ docker compose up -d
 
 ### 开发
 
+**推荐（Windows 日常）**：前后端拆开、桌面进程独立，避免 `pnpm tauri dev` 每次冷启动，也避免关终端/agent 时把桌面端一起杀掉。
+
+```powershell
+# 一键：后台前端 + 按需增量编 debug + Start-Process 独立拉起 exe
+.\dev-detached.ps1
+```
+
+说明见：[`docs/dev-detached.zh-CN.md`](docs/dev-detached.zh-CN.md)
+
 ```bash
 # 前端开发 (Next.js dev server)
 pnpm dev
 
-# 完整桌面应用
+# 完整桌面应用（偶发排查用；日常更推荐 dev-detached）
 pnpm tauri dev
 
 # 独立服务器

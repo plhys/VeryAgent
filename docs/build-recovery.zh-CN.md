@@ -5,6 +5,10 @@
 1. **本机改源码后，尽量快速重编**
 2. **换机器后，尽量少走弯路，直接从仓库 Release 下载必要附件恢复构建**
 
+> **日常开发联调（热更新 + 桌面进程不随终端/agent 被杀）** 请看：  
+> [`dev-detached.zh-CN.md`](./dev-detached.zh-CN.md)  
+> 推荐用根目录 `.\dev-detached.ps1`，不要每次都 `pnpm tauri dev`。
+
 ---
 
 ## 一、推荐工作流
