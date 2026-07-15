@@ -229,8 +229,12 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // build so cold machines recover without a terminal.
             resident: true,
             distribution: AgentDistribution::Npx {
-                version: "2026.6.11",
-                package: "openclaw@2026.6.11",
+                // 2026.7.1 runs reply-session init under the exclusive session-store
+                // write lock (was optimistic load-then-CAS with one retry in 2026.6.11).
+                // The old path hit `reply session initialization conflicted` on every
+                // second ACP multi-turn chat.send and OpenClaw returned empty EndTurn.
+                version: "2026.7.1",
+                package: "openclaw@2026.7.1",
                 cmd: "openclaw",
                 args: &["acp"],
                 env: &[],
@@ -475,8 +479,8 @@ mod tests {
         );
         assert_npx_version(
             AgentType::OpenClaw,
-            "2026.6.11",
-            "openclaw@2026.6.11",
+            "2026.7.1",
+            "openclaw@2026.7.1",
             Some("22.19.0"),
         );
         assert_npx_version(AgentType::Cline, "3.0.34", "cline@3.0.34", None);

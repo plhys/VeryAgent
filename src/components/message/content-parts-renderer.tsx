@@ -2608,17 +2608,17 @@ const ToolGroupPart = memo(function ToolGroupPart({
     <Collapsible open={open} onOpenChange={setOpen} className="w-full">
       <CollapsibleTrigger
         className={cn(
-          "group inline-flex max-w-full items-center gap-1.5 rounded-full bg-muted/60 px-3.5 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          "group inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         )}
       >
         <ChevronRightIcon
           aria-hidden="true"
           className={cn(
-            "size-3 shrink-0 opacity-60 transition-transform",
+            "size-3 shrink-0 opacity-50 transition-transform",
             open && "rotate-90"
           )}
         />
-        <span className="min-w-0 truncate">
+        <span className="min-w-0 truncate font-normal">
           {part.isStreaming ? (
             <Shimmer as="span" duration={1} shineColor="var(--primary)">
               {titleText}
@@ -2642,7 +2642,7 @@ const ToolGroupPart = memo(function ToolGroupPart({
           "data-[state=closed]:slide-out-to-top-1 data-[state=open]:slide-in-from-top-1"
         )}
       >
-        <div className="mt-3 w-full space-y-3">
+        <div className="mt-1.5 w-full space-y-2">
           {part.items.map((item, idx) => (
             <ToolCallPart
               key={`grouped-tc-${item.toolCallId ?? idx}-${idx}`}

@@ -360,7 +360,10 @@ export function AutomationEditor({
           }}
           // A system substitution (saved agent unavailable) updates the type but
           // must NOT be treated as a user choice that wipes the saved config.
-          onFallback={setAgentType}
+          // Expert-mode null clear does not apply here (no mode switch).
+          onFallback={(a) => {
+            if (a) setAgentType(a)
+          }}
         />
       </div>
 

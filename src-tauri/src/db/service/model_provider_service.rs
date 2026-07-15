@@ -50,6 +50,10 @@ pub async fn update(
     if let Some(v) = api_key {
         active.api_key = Set(v);
     }
+    // Providers are universal shared credentials. Clear any legacy per-agent
+    // restriction fields left by older builds so bind checks / UIs stay consistent.
+    active.agent_types_json = Set("[]".to_string());
+    active.agent_type = Set(String::new());
     active.updated_at = Set(Utc::now());
     Ok(active.update(conn).await?)
 }

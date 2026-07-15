@@ -10,7 +10,11 @@ import { AGENT_LABELS, type AgentType, type PromptDraft } from "@/lib/types"
 
 interface UseConnectionLifecycleOptions {
   contextKey: string
-  agentType: AgentType
+  /**
+   * Agent to auto-connect. `null` means the draft has no agent yet
+   * (expert-mode welcome: wait for an explicit pick) — connect is skipped.
+   */
+  agentType: AgentType | null
   isActive: boolean
   workingDir?: string
   sessionId?: string
@@ -161,8 +165,16 @@ export function useConnectionLifecycle({
   // same-param calls and disconnects+reconnects when workingDir or
   // agentType differs. Status changes must NOT re-trigger this to avoid
   // infinite reconnect loops on transient errors.
+  //
+  // Expert mode may clear agentType (null). Detach the previous mapping so
+  // resident butlers park warm; non-residents disconnect normally. Without
+  // this, a null selection leaves the old agent still "connected" on the tab.
   useEffect(() => {
     if (!isActive) return
+    if (!agentType) {
+      connDisconnectRef.current().catch(() => {})
+      return
+    }
     if (!workingDir) return
     let cancelled = false
     connConnectRef
@@ -199,6 +211,7 @@ export function useConnectionLifecycle({
   useEffect(() => {
     if (status === "connecting") {
       if (!taskIdRef.current) {
+        if (!agentType) return
         const id = `acp-connect-${Date.now()}`
         taskIdRef.current = id
         const agent = AGENT_LABELS[agentType]
@@ -250,6 +263,7 @@ export function useConnectionLifecycle({
     }
 
     if (!selectorTaskIdRef.current) {
+      if (!agentType) return
       const id = `acp-session-init-${Date.now()}`
       selectorTaskIdRef.current = id
       const agent = AGENT_LABELS[agentType]
@@ -306,6 +320,7 @@ export function useConnectionLifecycle({
     // set isActive=false until the session's external_id resolves, to
     // avoid connecting with sessionId=undefined and orphaning context.
     if (!isActive) return
+    if (!agentType) return
     touchActivity(contextKey)
     if (!status || status === "disconnected" || status === "error") {
       setLastAutoConnectError(null)

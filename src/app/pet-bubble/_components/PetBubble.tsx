@@ -348,7 +348,9 @@ export function PetBubble() {
         html, body { background: transparent !important; overflow: hidden; }
         *:focus, *:focus-visible { outline: none !important; }
         .bubble-root {
-          position: fixed; inset: 0; display: flex; align-items: flex-start;
+          /* Bottom-align so spare window height (if any) sits above the card;
+             the window itself is bottom-anchored to the pet by Rust. */
+          position: fixed; inset: 0; display: flex; align-items: flex-end;
           padding: 6px; pointer-events: none;
         }
         .bubble {

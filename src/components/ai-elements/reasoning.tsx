@@ -180,9 +180,11 @@ export const ReasoningTrigger = memo(
           )
         }
         if (nextDuration === undefined) {
-          return <p>{t("thoughtForFewSeconds")}</p>
+          return <span>{t("thoughtForFewSeconds")}</span>
         }
-        return <p>{t("thoughtForSeconds", { duration: nextDuration })}</p>
+        return (
+          <span>{t("thoughtForSeconds", { duration: nextDuration })}</span>
+        )
       },
       [t]
     )
@@ -192,9 +194,9 @@ export const ReasoningTrigger = memo(
     return (
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors",
+          "inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors",
           expandable
-            ? "hover:text-foreground"
+            ? "hover:bg-muted/50 hover:text-foreground"
             : "cursor-default hover:text-muted-foreground",
           className
         )}
@@ -203,12 +205,14 @@ export const ReasoningTrigger = memo(
       >
         {children ?? (
           <>
-            <BrainIcon className="size-4" />
-            {thinkingMessageBuilder(isStreaming, duration)}
+            <BrainIcon className="size-3 shrink-0 opacity-70" />
+            <span className="min-w-0 truncate">
+              {thinkingMessageBuilder(isStreaming, duration)}
+            </span>
             {expandable && (
               <ChevronDownIcon
                 className={cn(
-                  "size-4 transition-transform",
+                  "size-3 shrink-0 opacity-50 transition-transform",
                   isOpen ? "rotate-180" : "rotate-0"
                 )}
               />
@@ -242,7 +246,7 @@ export const ReasoningContent = memo(
     return (
       <CollapsibleContent
         className={cn(
-          "mt-4 text-sm",
+          "mt-1.5 text-[11px] leading-relaxed",
           "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
           className
         )}

@@ -94,14 +94,6 @@ pub fn build_router(
             post(handlers::session_info::set_session_info_settings),
         )
         .route(
-            "/get_shared_identity_settings",
-            post(handlers::shared_identity::get_shared_identity_settings),
-        )
-        .route(
-            "/set_shared_identity_settings",
-            post(handlers::shared_identity::set_shared_identity_settings),
-        )
-        .route(
             "/vision_bridge_get_config",
             post(handlers::vision_bridge::get_vision_bridge_settings),
         )
@@ -132,6 +124,22 @@ pub fn build_router(
         .route(
             "/openwiki_save_instructions",
             post(handlers::openwiki::set_openwiki_instructions),
+        )
+        .route(
+            "/openwiki_install_cli",
+            post(handlers::openwiki::install_openwiki_cli),
+        )
+        .route(
+            "/openwiki_uninstall_cli",
+            post(handlers::openwiki::uninstall_openwiki_cli),
+        )
+        .route(
+            "/npm_install_cli",
+            post(handlers::npm_cli::install_npm_cli),
+        )
+        .route(
+            "/npm_uninstall_cli",
+            post(handlers::npm_cli::uninstall_npm_cli),
         )
         .route(
             "/get_folder_conversation",

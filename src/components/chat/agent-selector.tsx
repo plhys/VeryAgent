@@ -15,7 +15,7 @@ import {
 } from "@/lib/chat-agent-mode-storage"
 
 interface AgentSelectorProps {
-  defaultAgentType?: AgentType
+  defaultAgentType?: AgentType | null
   /** Fires on user click. The caller should treat this as confirmation. */
   onSelect: (agentType: AgentType) => void
   /**
@@ -24,8 +24,11 @@ interface AgentSelectorProps {
    * caller can avoid promoting a system pick to a confirmed user choice
    * (which would otherwise mask a stale-default correction upstream).
    * When omitted, falls back to `onSelect` for backwards compatibility.
+   *
+   * Expert mode with the mode switch on never auto-picks: callers get
+   * `null` so the welcome/draft UI stays unselected until the user clicks.
    */
-  onFallback?: (agentType: AgentType) => void
+  onFallback?: (agentType: AgentType | null) => void
   onAgentsLoaded?: (agents: AcpAgentInfo[]) => void
   onOpenAgentsSettings?: () => void
   disabled?: boolean
@@ -59,33 +62,49 @@ export function AgentSelector({
     saveChatAgentMode(next)
   }, [])
 
+  // Expert mode never auto-selects — user must pick a coding agent.
+  const autoSelectEnabled = !showModeSwitch || mode === "general"
+
+  // Keep disabled / unavailable agents visible (grayed out) so users can see
+  // what exists in this mode. Only enabled+available agents are selectable.
   const agents = useMemo<AcpAgentInfo[]>(() => {
-    const enabled = rawAgents.filter((a) => a.enabled)
     const filtered = !showModeSwitch
-      ? enabled
+      ? rawAgents
       : mode === "general"
-        ? enabled.filter((a) => isGeneralModeAgent(a.agent_type))
-        : enabled.filter((a) => !isGeneralModeAgent(a.agent_type))
+        ? rawAgents.filter((a) => isGeneralModeAgent(a.agent_type))
+        : rawAgents.filter((a) => !isGeneralModeAgent(a.agent_type))
     return filtered
       .slice()
-      .sort((a, b) => Number(!!b.resident) - Number(!!a.resident))
+      .sort((a, b) => {
+        // Usable first, then resident butlers, keep relative order otherwise.
+        const usableA = Number(a.enabled && a.available)
+        const usableB = Number(b.enabled && b.available)
+        if (usableA !== usableB) return usableB - usableA
+        return Number(!!b.resident) - Number(!!a.resident)
+      })
   }, [rawAgents, showModeSwitch, mode])
   const onSelectRef = useRef(onSelect)
   const onFallbackRef = useRef(onFallback)
   const onAgentsLoadedRef = useRef(onAgentsLoaded)
 
-  // Effective selection. Priority: prop default (when still available) →
-  // first available. Derived so we don't have to call setState inside an
-  // effect. Click handling lives on the parent — `handleSelect` just
-  // forwards via `onSelect`, which patches `defaultAgentType` upstream.
+  const isUsable = useCallback(
+    (a: AcpAgentInfo) => a.enabled && a.available,
+    []
+  )
+
+  // Effective selection. Priority: prop default (when still usable) →
+  // first usable (general / full list only). Expert mode stays null
+  // until the user clicks. Click handling lives on the parent —
+  // `handleSelect` just forwards via `onSelect`.
   const selected = useMemo<AgentType | null>(() => {
     const found = defaultAgentType
-      ? agents.find((a) => a.agent_type === defaultAgentType && a.available)
+      ? agents.find((a) => a.agent_type === defaultAgentType && isUsable(a))
       : null
     if (found) return found.agent_type
-    const first = agents.find((a) => a.available)
+    if (!autoSelectEnabled) return null
+    const first = agents.find(isUsable)
     return first?.agent_type ?? null
-  }, [agents, defaultAgentType])
+  }, [agents, defaultAgentType, autoSelectEnabled, isUsable])
 
   // Sliding indicator state
   const containerRef = useRef<HTMLDivElement>(null)
@@ -153,7 +172,7 @@ export function AgentSelector({
   }, [onAgentsLoaded])
 
   // Notify parent when the agent list changes, and emit a *fallback* event
-  // (not onSelect) when the requested preferred agent is unavailable and
+  // (not onSelect) when the requested preferred agent is unusable and
   // we had to pick a substitute. Splitting the channel matters: the caller
   // treats `onSelect` as a confirmed user choice and clears any "this is a
   // provisional default" flag upstream — if the auto-fallback came through
@@ -162,13 +181,25 @@ export function AgentSelector({
   // effect has a chance to apply the folder's saved default. Callers that
   // don't supply `onFallback` get the legacy behavior (fallback as
   // onSelect) so this prop stays optional.
+  //
+  // Expert mode is intentional "no default": when the preferred agent is
+  // outside the expert list, the `selected` memo already returns null so
+  // nothing is highlighted — no onFallback(null) needed. Silently skipping
+  // lets the parent keep its draftAgentType, which preserves the user's
+  // general-mode pick across a mode round-trip (general → expert → general).
   useEffect(() => {
-    onAgentsLoadedRef.current?.(agents)
+    // Parent "available agents" consumers still want usable-only lists.
+    onAgentsLoadedRef.current?.(agents.filter(isUsable))
     const found = defaultAgentType
-      ? agents.find((a) => a.agent_type === defaultAgentType && a.available)
+      ? agents.find((a) => a.agent_type === defaultAgentType && isUsable(a))
       : null
     if (found) return
-    const first = agents.find((a) => a.available)
+
+    // Expert / non-auto-select mode: visual shows nothing (via `selected`
+    // memo), parent keeps its state — no fallback to emit.
+    if (!autoSelectEnabled) return
+
+    const first = agents.find(isUsable)
     if (!first) return
     const fallback = onFallbackRef.current
     if (fallback) {
@@ -176,10 +207,11 @@ export function AgentSelector({
     } else {
       onSelectRef.current(first.agent_type)
     }
-  }, [agents, defaultAgentType])
+  }, [agents, defaultAgentType, autoSelectEnabled, isUsable])
 
-  const handleSelect = (agentType: AgentType) => {
-    onSelect(agentType)
+  const handleSelect = (agent: AcpAgentInfo) => {
+    if (!isUsable(agent)) return
+    onSelect(agent.agent_type)
   }
 
   const setItemRef = useCallback(
@@ -229,10 +261,41 @@ export function AgentSelector({
     </div>
   ) : null
 
-  if (agents.length === 0) {
+  const hasUsableAgent = agents.some(isUsable)
+
+  if (agents.length === 0 || !hasUsableAgent) {
     return (
       <div className="flex flex-col items-center gap-3">
         {modeSwitch}
+        {agents.length > 0 ? (
+          <div
+            ref={containerRef}
+            className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
+          >
+            {agents.map((agent) => {
+              const label = AGENT_LABELS[agent.agent_type]
+              const reason = !agent.enabled
+                ? t("agentDisabled")
+                : t("agentUnavailable")
+              return (
+                <button
+                  key={agent.agent_type}
+                  ref={setItemRef(agent.agent_type)}
+                  type="button"
+                  title={`${label} · ${reason}`}
+                  disabled
+                  className="relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-50"
+                >
+                  <AgentIcon
+                    agentType={agent.agent_type}
+                    muted
+                    className="w-4 h-4 shrink-0"
+                  />
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
         <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
           <div>
             {showModeSwitch
@@ -274,38 +337,50 @@ export function AgentSelector({
         )}
         {agents.map((agent) => {
           const isSelected = selected === agent.agent_type
+          const usable = isUsable(agent)
+          const label = AGENT_LABELS[agent.agent_type]
+          const inactiveReason = !agent.enabled
+            ? t("agentDisabled")
+            : !agent.available
+              ? t("agentUnavailable")
+              : null
+          const title = (() => {
+            if (inactiveReason) return `${label} · ${inactiveReason}`
+            if (!isSelected) {
+              return agent.resident
+                ? `${label} · ${t("residentBadge")}`
+                : label
+            }
+            return agent.resident ? t("residentBadge") : undefined
+          })()
           return (
             <button
               key={agent.agent_type}
               ref={setItemRef(agent.agent_type)}
-              title={
-                !isSelected
-                  ? agent.resident
-                    ? `${AGENT_LABELS[agent.agent_type]} · ${t("residentBadge")}`
-                    : AGENT_LABELS[agent.agent_type]
-                  : agent.resident
-                    ? t("residentBadge")
-                    : undefined
-              }
-              disabled={disabled || !agent.available}
-              onClick={() => handleSelect(agent.agent_type)}
+              type="button"
+              title={title}
+              disabled={disabled || !usable}
+              onClick={() => handleSelect(agent)}
               className={cn(
                 "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-300",
                 isSelected ? "px-3 py-2" : "px-2 py-2",
-                disabled || !agent.available
-                  ? "cursor-not-allowed opacity-40"
+                disabled || !usable
+                  ? "cursor-not-allowed opacity-50 text-muted-foreground"
                   : "cursor-pointer",
-                isSelected
+                usable && isSelected
                   ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground/70"
+                  : usable
+                    ? "text-muted-foreground hover:text-foreground/70"
+                    : null
               )}
             >
               <span className="relative inline-flex shrink-0">
                 <AgentIcon
                   agentType={agent.agent_type}
+                  muted={!usable}
                   className="w-4 h-4 shrink-0"
                 />
-                {agent.resident ? (
+                {agent.resident && usable ? (
                   <span
                     className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-background"
                     title={t("residentBadge")}
@@ -325,7 +400,7 @@ export function AgentSelector({
                     isSelected ? "opacity-100" : "opacity-0"
                   )}
                 >
-                  {AGENT_LABELS[agent.agent_type]}
+                  {label}
                 </span>
               </span>
             </button>

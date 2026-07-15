@@ -6,7 +6,7 @@
 
 ## 一、已完成
 
-### 2026-07-15（已推 main，见 CHANGELOG Unreleased）
+### 2026-07-15（见 CHANGELOG Unreleased）
 
 - [x] OpenClaw / Hermes readiness：安装 ≠ 可用；Gateway 探测 + auto ensure
 - [x] OpenClaw resident（类 Hermes 常驻）
@@ -14,8 +14,13 @@
 - [x] OpenClaw 会话设置中文短标签 + 说明（思考/快速/工具/插件/推理/用量/提权）
 - [x] 修正 off→「拒绝」误映射
 - [x] 独立开发启动文档与脚本（`dev-detached.ps1`，进程不随 agent 被杀）
-- [x] 工作区全量提交并推送（含其他智能体已落盘的 OpenWiki / shared identity / memory 等）
 - [x] 补写 `CHANGELOG.md` 版本更新说明
+- [x] **移除**共享身份 / 共享记忆（后端 + 设置页 + 注入路径）
+- [x] OpenWiki 插件化：技能和插件卡片启用 + 齿轮配置弹窗；npm CLI 安装流
+- [x] 侧边栏对话/项目列表悬停绝对时间旗标
+- [x] 设置侧栏：通用设置 / 专家设置分组；shared-preferences 重定向防白屏
+- [x] 桌宠位置与气泡锚定、缩放尺寸修正；全局 pointer 光标
+- [x] 修复 MessageInput `collapsedSettings` TDZ 崩溃
 
 ### codeg v0.20.0 → v0.20.2 合并（0.9.2）
 
@@ -56,8 +61,8 @@
 
 ### 用户偏好记忆系统
 
-- [ ] 后端/设置骨架已有 shared identity & memory 路径
-- [ ] 与「所有智能体共享、会话启动注入」产品闭环仍待验收
+- [x] 已移除 shared identity / memory 路径（产品决策）
+- [ ] 若后续重做「跨智能体偏好」，需新方案（不再沿用已删模块）
 
 ---
 

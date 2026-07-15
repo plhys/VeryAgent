@@ -28,7 +28,6 @@ pub mod remote_proxy;
 #[cfg(feature = "tauri-runtime")]
 pub mod remote_workspace;
 pub mod session_info;
-pub mod shared_identity;
 pub mod system_settings;
 pub mod terminal;
 pub mod version_control;
@@ -36,6 +35,7 @@ pub mod version_control;
 pub mod windows;
 pub mod workspace_state;
 pub mod vision_bridge;
+pub mod npm_cli;
 pub mod openwiki;
 #[cfg(feature = "tauri-runtime")]
 pub mod image_proxy;

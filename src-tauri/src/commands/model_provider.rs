@@ -178,6 +178,207 @@ pub async fn delete_model_provider_core(db: &AppDatabase, id: i32) -> Result<(),
     Ok(())
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelItem {
+    pub id: String,
+    pub name: String,
+}
+
+/// Normalize a provider API base URL into candidate `/models` endpoints.
+///
+/// Users commonly save any of:
+/// - `https://api.openai.com/v1`
+/// - `https://api.openai.com/v1/`
+/// - `https://api.openai.com`
+/// - `https://api.openai.com/v1/models`
+/// - `https://gateway.example.com/v1/chat/completions` (chat endpoint pasted by mistake)
+fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
+    let mut base = api_url.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return Vec::new();
+    }
+
+    // Strip accidental chat/completions suffix so we can recover a models list URL.
+    for suffix in [
+        "/chat/completions",
+        "/completions",
+        "/messages",
+        "/v1/chat/completions",
+        "/v1/messages",
+    ] {
+        if let Some(stripped) = base
+            .strip_suffix(suffix)
+            .map(|s| s.trim_end_matches('/').to_string())
+        {
+            if !stripped.is_empty() {
+                base = stripped;
+            }
+            break;
+        }
+    }
+
+    let mut candidates = Vec::new();
+    let mut push = |url: String| {
+        if !url.is_empty() && !candidates.iter().any(|x| x == &url) {
+            candidates.push(url);
+        }
+    };
+
+    if base.ends_with("/models") {
+        push(base.clone());
+    } else {
+        push(format!("{base}/models"));
+        // Many gateways only expose OpenAI-compatible routes under /v1.
+        if !base.ends_with("/v1") && !base.contains("/v1/") {
+            push(format!("{base}/v1/models"));
+        }
+    }
+
+    candidates
+}
+
+fn parse_provider_models_body(body: &str) -> Result<Vec<ProviderModelItem>, String> {
+    let parsed: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| format!("Invalid JSON: {e}"))?;
+
+    let extract_id = |item: &serde_json::Value| -> Option<String> {
+        item.get("id")
+            .or_else(|| item.get("model"))
+            .or_else(|| item.get("name"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                item.as_str()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            })
+    };
+
+    let mut models: Vec<ProviderModelItem> = Vec::new();
+    let push_item = |models: &mut Vec<ProviderModelItem>, id: String| {
+        if !models.iter().any(|m| m.id == id) {
+            models.push(ProviderModelItem {
+                name: id.clone(),
+                id,
+            });
+        }
+    };
+
+    // OpenAI-compatible: { "object": "list", "data": [{ "id": "gpt-5", ... }] }
+    if let Some(arr) = parsed.get("data").and_then(|d| d.as_array()) {
+        for item in arr {
+            if let Some(id) = extract_id(item) {
+                push_item(&mut models, id);
+            }
+        }
+    }
+
+    // Some gateways: { "models": ["a", "b"] } or { "models": [{ "id": ... }] }
+    if models.is_empty() {
+        if let Some(arr) = parsed.get("models").and_then(|d| d.as_array()) {
+            for item in arr {
+                if let Some(id) = extract_id(item) {
+                    push_item(&mut models, id);
+                }
+            }
+        }
+    }
+
+    // Rare: bare array
+    if models.is_empty() {
+        if let Some(arr) = parsed.as_array() {
+            for item in arr {
+                if let Some(id) = extract_id(item) {
+                    push_item(&mut models, id);
+                }
+            }
+        }
+    }
+
+    Ok(models)
+}
+
+/// Fetch available models from a model provider's OpenAI-compatible `/models` endpoint.
+pub async fn fetch_provider_models_core(
+    db: &AppDatabase,
+    id: i32,
+) -> Result<Vec<ProviderModelItem>, AppCommandError> {
+    let provider = get_model_provider_core(db, id).await?;
+    let api_key = provider.api_key.trim();
+    if api_key.is_empty() {
+        return Err(AppCommandError::invalid_input(
+            "API Key is empty; cannot list models",
+        ));
+    }
+
+    let candidates = provider_models_url_candidates(&provider.api_url);
+    if candidates.is_empty() {
+        return Err(AppCommandError::invalid_input(
+            "API URL is empty; cannot list models",
+        ));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| AppCommandError::invalid_input(format!("HTTP client error: {e}")))?;
+
+    let mut last_error = String::from("no candidate URL succeeded");
+
+    for url in candidates {
+        let resp = match client
+            .get(&url)
+            .header("Authorization", format!("Bearer {api_key}"))
+            // Some OpenAI-compatible gateways accept either form.
+            .header("api-key", api_key)
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                last_error = format!("Request failed for {url}: {e}");
+                continue;
+            }
+        };
+
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+
+        if !status.is_success() {
+            let snippet = body.chars().take(300).collect::<String>();
+            last_error = format!(
+                "Provider returned HTTP {} for {}: {}",
+                status.as_u16(),
+                url,
+                snippet
+            );
+            // Keep trying alternate candidates on 404/405.
+            if status.as_u16() == 404 || status.as_u16() == 405 {
+                continue;
+            }
+            // Auth/permission errors are definitive.
+            if status.as_u16() == 401 || status.as_u16() == 403 {
+                return Err(AppCommandError::invalid_input(last_error));
+            }
+            continue;
+        }
+
+        match parse_provider_models_body(&body) {
+            Ok(models) => return Ok(models),
+            Err(e) => {
+                last_error = format!("{e} (url: {url})");
+                continue;
+            }
+        }
+    }
+
+    Err(AppCommandError::invalid_input(last_error))
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
@@ -234,10 +435,64 @@ pub async fn delete_model_provider(
     delete_model_provider_core(&db, id).await
 }
 
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn fetch_provider_models(
+    db: tauri::State<'_, AppDatabase>,
+    id: i32,
+) -> Result<Vec<ProviderModelItem>, AppCommandError> {
+    fetch_provider_models_core(&db, id).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::test_helpers::fresh_in_memory_db;
+
+    #[test]
+    fn models_url_candidates_cover_common_user_inputs() {
+        assert_eq!(
+            provider_models_url_candidates("https://api.openai.com/v1"),
+            vec!["https://api.openai.com/v1/models".to_string()]
+        );
+        assert_eq!(
+            provider_models_url_candidates("https://api.openai.com/v1/"),
+            vec!["https://api.openai.com/v1/models".to_string()]
+        );
+        assert_eq!(
+            provider_models_url_candidates("https://api.openai.com"),
+            vec![
+                "https://api.openai.com/models".to_string(),
+                "https://api.openai.com/v1/models".to_string(),
+            ]
+        );
+        assert_eq!(
+            provider_models_url_candidates("https://api.openai.com/v1/models"),
+            vec!["https://api.openai.com/v1/models".to_string()]
+        );
+        assert_eq!(
+            provider_models_url_candidates(
+                "https://gateway.example.com/v1/chat/completions"
+            ),
+            vec![
+                "https://gateway.example.com/models".to_string(),
+                "https://gateway.example.com/v1/models".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_provider_models_body_accepts_common_shapes() {
+        let openai = r#"{"object":"list","data":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]}"#;
+        let models = parse_provider_models_body(openai).expect("openai shape");
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "gpt-5");
+
+        let alt = r#"{"models":["a","b"]}"#;
+        let models = parse_provider_models_body(alt).expect("models array");
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[1].id, "b");
+    }
 
     #[tokio::test]
     async fn create_and_list_tolerate_multibyte_api_key() {
