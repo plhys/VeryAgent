@@ -43,13 +43,16 @@ use tokio::sync::{oneshot, Mutex};
 
 use crate::acp::delegation::transport::{
     client_ask_round_trip, client_cancel, client_cancel_task_round_trip, client_commit_feedback,
-    client_feedback_round_trip, client_generate_image_round_trip, client_modify_image_round_trip,
+    client_feedback_round_trip, client_generate_image_round_trip, client_image_search_round_trip,
+    client_modify_image_round_trip,
     client_round_trip, client_session_round_trip,
-    client_status_round_trip, client_vision_round_trip, BrokerAskRequest, BrokerCancelRequest,
+    client_status_round_trip, client_vision_round_trip, client_web_search_round_trip,
+    BrokerAskRequest, BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerFeedbackRequest,
-    BrokerGenerateImageRequest, BrokerModifyImageRequest, BrokerRequest,
+    BrokerGenerateImageRequest, BrokerImageSearchRequest, BrokerModifyImageRequest, BrokerRequest,
     BrokerResponse,
     BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
+    BrokerWebSearchRequest,
 };
 use crate::acp::question::parse_questions;
 use crate::acp::session_info::MAX_SESSION_MESSAGES;
@@ -143,6 +146,7 @@ pub struct CompanionFeatures {
     pub sessions: bool,
     pub vision: bool,
     pub image: bool,
+    pub search: bool,
 }
 
 impl CompanionFeatures {
@@ -160,6 +164,7 @@ impl CompanionFeatures {
                 sessions: false,
                 vision: false,
                 image: false,
+                search: false,
             };
         };
         let mut f = Self {
@@ -169,6 +174,7 @@ impl CompanionFeatures {
             sessions: false,
             vision: false,
             image: false,
+            search: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
@@ -178,6 +184,7 @@ impl CompanionFeatures {
                 "sessions" => f.sessions = true,
                 "vision" => f.vision = true,
                 "image" => f.image = true,
+                "search" => f.search = true,
                 _ => {}
             }
         }
@@ -193,6 +200,7 @@ impl CompanionFeatures {
             "delegate_to_agent" | "get_delegation_status" | "cancel_delegation" => self.delegation,
             "vision_analyze" => self.vision,
             "generate_image" | "modify_image" => self.image,
+            "web_search" | "image_search" => self.search,
                 _ => false,
         }
     }
@@ -588,6 +596,11 @@ async fn build_tools_call_spawn(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            let model = arguments
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or("gemini")
+                .to_string();
             let image_size = arguments
                 .get("image_size")
                 .and_then(|v| v.as_str())
@@ -600,17 +613,13 @@ async fn build_tools_call_spawn(
                 .get("ref_urls")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-            let session_id = arguments
-                .get("session_id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
             let req = BrokerGenerateImageRequest {
                 token: ctx.token.clone(),
                 prompt,
+                model,
                 image_size,
                 aspect_ratio,
                 ref_urls,
-                session_id,
             };
             let round_trip =
                 Box::pin(async move { client_generate_image_round_trip(&socket, &req).await });
@@ -622,18 +631,62 @@ async fn build_tools_call_spawn(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let session_id = arguments
-                .get("session_id")
+            let model = arguments
+                .get("model")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .unwrap_or("gemini")
+                .to_string();
+            let ref_urls = arguments
+                .get("ref_urls")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
             let req = BrokerModifyImageRequest {
                 token: ctx.token.clone(),
                 prompt,
-                session_id,
+                model,
+                ref_urls,
             };
             let round_trip =
                 Box::pin(async move { client_modify_image_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_modify_image_result).await
+        }
+        "web_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let freshness = arguments
+                .get("freshness")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let count = arguments
+                .get("count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(10) as u32;
+            let req = BrokerWebSearchRequest {
+                token: ctx.token.clone(),
+                query,
+                freshness,
+                count,
+            };
+            let round_trip =
+                Box::pin(async move { client_web_search_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_web_search_result).await
+        }
+        "image_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let req = BrokerImageSearchRequest {
+                token: ctx.token.clone(),
+                query,
+            };
+            let round_trip =
+                Box::pin(async move { client_image_search_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_image_search_result).await
         }
         other => LineAction::Respond(err(id, -32602, format!("unknown tool: {other}"))),
     }
@@ -1150,15 +1203,22 @@ pub fn render_generate_image_result(outcome: &Value) -> Value {
             "structuredContent": outcome.clone(),
         })
     } else {
-        let url = outcome
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or("(no URL returned)");
-        json!({
-            "content": [{ "type": "text", "text": format!("![生成图片]({url})") }],
-            "isError": false,
-            "structuredContent": outcome.clone(),
-        })
+        let base64 = outcome.get("base64").and_then(|v| v.as_str()).unwrap_or("");
+        let mime = outcome.get("mime").and_then(|v| v.as_str()).unwrap_or("image/png");
+        let path = outcome.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        if !base64.is_empty() {
+            json!({
+                "content": [{ "type": "text", "text": format!("![生成图片](data:{mime};base64,{base64})") }],
+                "isError": false,
+                "structuredContent": { "path": path, "mime": mime },
+            })
+        } else {
+            json!({
+                "content": [{ "type": "text", "text": format!("Image saved to: {path}") }],
+                "isError": false,
+                "structuredContent": outcome.clone(),
+            })
+        }
     }
 }
 
@@ -1171,12 +1231,58 @@ pub fn render_modify_image_result(outcome: &Value) -> Value {
             "structuredContent": outcome.clone(),
         })
     } else {
-        let url = outcome
-            .get("url")
-            .and_then(|v| v.as_str())
-            .unwrap_or("(no URL returned)");
+        let base64 = outcome.get("base64").and_then(|v| v.as_str()).unwrap_or("");
+        let mime = outcome.get("mime").and_then(|v| v.as_str()).unwrap_or("image/png");
+        let path = outcome.get("path").and_then(|v| v.as_str()).unwrap_or("");
+        if !base64.is_empty() {
+            json!({
+                "content": [{ "type": "text", "text": format!("![修改后的图片](data:{mime};base64,{base64})") }],
+                "isError": false,
+                "structuredContent": { "path": path, "mime": mime },
+            })
+        } else {
+            json!({
+                "content": [{ "type": "text", "text": format!("Image saved to: {path}") }],
+                "isError": false,
+                "structuredContent": outcome.clone(),
+            })
+        }
+    }
+}
+
+pub fn render_web_search_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
         json!({
-            "content": [{ "type": "text", "text": format!("![修改后的图片]({url})") }],
+            "content": [{ "type": "text", "text": format!("Web search failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        })
+    } else {
+        let text = outcome
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(no results)");
+        json!({
+            "content": [{ "type": "text", "text": text }],
+            "isError": false,
+            "structuredContent": outcome.clone(),
+        })
+    }
+}
+
+pub fn render_image_search_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
+        json!({
+            "content": [{ "type": "text", "text": format!("Image search failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        })
+    } else {
+        let images = outcome.get("images").unwrap_or(outcome);
+        json!({
+            "content": [{ "type": "text", "text": serde_json::to_string_pretty(images).unwrap_or_default() }],
             "isError": false,
             "structuredContent": outcome.clone(),
         })

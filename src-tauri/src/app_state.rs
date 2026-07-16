@@ -183,6 +183,9 @@ pub fn build_delegation_stack(
         // Image generation is always enabled — the Gemini API is available on
         // the internal network and requires no per-agent opt-in.
         image_enabled: true,
+        // Web search is always enabled — it's a core capability backed by the
+        // upstream MCP proxy at feishu.ideasir.com.
+        search_enabled: true,
         // Same backing manager as the listener's question lookup; used only by
         // the run_connection teardown guard to reclaim a parked ask.
         questions: Arc::new(crate::acp::manager::ConnectionManagerQuestionLookup {
