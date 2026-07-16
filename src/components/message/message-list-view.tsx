@@ -931,7 +931,7 @@ export function MessageListView({
         />
         <MessageThreadScrollButton />
       </MessageThread>
-      {liveMessage && connStatus === "prompting" && (
+      {liveMessage && connStatus === "prompting" && agentType && (
         <LiveTurnStats
           message={liveMessage}
           agentType={agentType}
