@@ -1,4 +1,4 @@
-import { toErrorMessage } from "./app-error"
+import { extractAppCommandError, toErrorMessage } from "./app-error"
 import { getTransport, isDesktop, isRemoteDesktopMode } from "./transport"
 
 // Drive the LOCAL Tauri app updater only for a genuine local desktop window.
@@ -297,41 +297,67 @@ export async function closeAppUpdate(
 }
 
 export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
+  // Prefer a combined haystack: transport often puts the useful URL/path in
+  // `message` while the plugin's raw failure lands in `detail`. Classifying on
+  // only one side mis-labels "no release yet" / 404 as a generic unknown.
+  const appError = extractAppCommandError(error)
   const rawMessage = toErrorMessage(error)
-  const normalized = rawMessage.toLowerCase()
+  const haystack = [rawMessage, appError?.message, appError?.detail, appError?.code]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .join("\n")
+    .toLowerCase()
 
   if (
-    normalized.includes("latest.json") ||
-    normalized.includes("/releases/latest/download/") ||
-    normalized.includes("could not fetch a valid release") ||
-    normalized.includes("release json")
+    haystack.includes("latest.json") ||
+    haystack.includes("/releases/latest/download/") ||
+    haystack.includes("could not fetch a valid release") ||
+    haystack.includes("release json") ||
+    haystack.includes("failed to check for updates") ||
+    haystack.includes("failed to fetch update manifest") ||
+    haystack.includes("update manifest") ||
+    haystack.includes("no release") ||
+    // 404 / empty channel before the first signed release is published
+    haystack.includes("404") ||
+    haystack.includes("not found") ||
+    haystack.includes("status code 404") ||
+    haystack.includes("empty endpoints") ||
+    haystack.includes("updater does not have any endpoints")
   ) {
     return { kind: "source_unreachable", rawMessage }
   }
 
   if (
-    normalized.includes("error sending request for url") ||
-    normalized.includes("failed to send request") ||
-    normalized.includes("network") ||
-    normalized.includes("timed out") ||
-    normalized.includes("dns") ||
-    normalized.includes("connection refused")
+    appError?.code === "network_error" ||
+    haystack.includes("error sending request for url") ||
+    haystack.includes("failed to send request") ||
+    haystack.includes("network") ||
+    haystack.includes("timed out") ||
+    haystack.includes("timeout") ||
+    haystack.includes("dns") ||
+    haystack.includes("connection refused") ||
+    haystack.includes("connection reset") ||
+    haystack.includes("econnreset") ||
+    haystack.includes("name or service not known") ||
+    haystack.includes("no such host") ||
+    haystack.includes("unreachable")
   ) {
     return { kind: "network", rawMessage }
   }
 
   if (
-    normalized.includes("download") ||
-    normalized.includes("checksum") ||
-    normalized.includes("content-length")
+    haystack.includes("download") ||
+    haystack.includes("checksum") ||
+    haystack.includes("content-length") ||
+    haystack.includes("signature") ||
+    haystack.includes("minisign")
   ) {
     return { kind: "download_failed", rawMessage }
   }
 
   if (
-    normalized.includes("install") ||
-    normalized.includes("installer") ||
-    normalized.includes("permission denied")
+    haystack.includes("install") ||
+    haystack.includes("installer") ||
+    haystack.includes("permission denied")
   ) {
     return { kind: "install_failed", rawMessage }
   }

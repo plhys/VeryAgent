@@ -187,8 +187,8 @@
     "rollbackSuccess": "Rolled back to the previous version. Reloading...",
     "rollbackFailed": "Rollback failed. Check the server logs.",
     "updateErrors": {
-      "sourceUnavailable": "Cannot reach the update source. Check your network or proxy and try again.",
-      "network": "Network connection failed. Check your network or proxy and try again.",
+      "sourceUnavailable": "Cannot reach the update source, or no release manifest (latest.json) is published yet. Switch GitHub/Gitea, or publish signed artifacts + latest.json on that repo's Release.",
+      "network": "Network connection failed. Check your network or proxy, or try the other update source.",
       "downloadFailed": "Failed to download update package. Please try again later.",
       "installFailed": "Failed to install update. Please close the app and try again.",
       "unknown": "Update failed. Please try again later."
