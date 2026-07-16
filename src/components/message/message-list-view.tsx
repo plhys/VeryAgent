@@ -70,7 +70,7 @@ import { useStickToBottomContext } from "use-stick-to-bottom"
 
 interface MessageListViewProps {
   conversationId: number
-  agentType: AgentType
+  agentType: AgentType | null
   connStatus?: ConnectionStatus | null
   isActive?: boolean
   sendSignal?: number

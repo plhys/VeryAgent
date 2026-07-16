@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn bare_key_line_parses() {
         let text = "untrusted comment: minisign public key: BC5EFEA8AFC76F30\n\
-                    RWqwb8evqP5evCf6Sz1CklVG5XlZDTKAQkjv8OmoydsB5rbhUK888s3Z\n";
+                    RWQwb8evqP5evCf6Sz1CklVG5XlZDTKAQkjv8OmoydsB5rbhUK888s3Z\n";
         parse_public_key(text).expect("two-line pub text should parse");
     }
 
