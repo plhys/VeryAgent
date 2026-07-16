@@ -1,12 +1,25 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-07-15
+> 更新日期：2026-07-16
 
 ---
 
 ## 一、已完成
 
-### 2026-07-15（见 CHANGELOG Unreleased）
+### 2026-07-16（0.9.3）
+
+- [x] 产品版本号抬升至 **0.9.3**（package / tauri.conf / Cargo.toml / Cargo.lock + CHANGELOG）
+- [x] 共享模型供应商（A计划）：Pi / CodeBuddy 可绑定；聊天仅展示可用模型
+- [x] CodeBuddy：自定义模型追加，保留原生中国/海外/iOA
+- [x] 智能体默认全关（新建 `agent_setting`）
+- [x] Codex 模型供应商 Responses API 边界提示
+- [x] 项目侧栏：文件夹 + 会话双选中；会话点击走 `openTab`
+- [x] i18n：zh-CN authMode 中英混杂清理；CodeBuddy 文案口径修正
+- [x] 模型供应商 + 视觉桥接合并设置页
+- [x] **双更新源管道**：GitHub（`plhys/VeryAgent`）/ Gitea（`10.10.100.233:3030/boss/veryagent`）可选；桌面 check 走 Rust endpoint 覆盖；`createUpdaterArtifacts` + 文档
+- [x] 标题栏主题切换旁绿色「更新」按钮（有新版本时显示，点击下载/重启）
+
+### 2026-07-15（已并入 0.9.3）
 
 - [x] OpenClaw / Hermes readiness：安装 ≠ 可用；Gateway 探测 + auto ensure
 - [x] OpenClaw resident（类 Hermes 常驻）
@@ -41,10 +54,11 @@
 
 ## 二、待定
 
-### 产品版本号抬升
+### 0.9.3 发版前
 
-- [ ] 当前仍为 **0.9.2**；Unreleased 内容是否发 **0.9.3** 待定
-- [ ] 发版时同步改：`package.json` / `tauri.conf.json` / `Cargo.toml` + CHANGELOG 章节定稿
+- [ ] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏双选中；新库默认关智能体）
+- [ ] 正式包构建与安装/升级冒烟
+- [ ] 提交并推送工作区改动（当前尚未 commit）
 
 ### OpenClaw 模型鉴权
 

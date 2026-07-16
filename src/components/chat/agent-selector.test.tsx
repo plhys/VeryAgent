@@ -270,23 +270,23 @@ describe("AgentSelector", () => {
       />
     )
     fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    // Expert mode intentionally does not auto-pick and does not emit
+    // onFallback(null), so the parent can keep draftAgentType across a
+    // general → expert → general round-trip.
     await waitFor(() => {
-      expect(onFallback).toHaveBeenCalledWith(null)
+      expect(
+        screen.getByRole("button", { name: /Codex/i })
+      ).toBeInTheDocument()
     })
     expect(onSelect).not.toHaveBeenCalled()
-    // Sliding indicator gone: no agent is selected.
-    const buttons = screen.getAllByRole("button")
-    // mode tabs + agent buttons; none of the agent buttons should be the
-    // "selected" expanded style exclusively required — we only assert no
-    // auto onSelect of codex/claude_code.
+    expect(onFallback).not.toHaveBeenCalled()
     expect(onFallback.mock.calls.some((c) => c[0] === "codex")).toBe(false)
     expect(onFallback.mock.calls.some((c) => c[0] === "claude_code")).toBe(
       false
     )
-    expect(buttons.length).toBeGreaterThan(0)
   })
 
-  it("shows disabled and unavailable agents grayed out and non-selectable", async () => {
+  it("hides inactive agents and grays out activated-but-unavailable ones", async () => {
     mockUseAcpAgents.mockReturnValue({
       agents: [
         agent("hermes", { resident: true }),
@@ -317,8 +317,10 @@ describe("AgentSelector", () => {
       ])
     })
 
-    // Disabled open_claw is general-mode only; expert list still shows
-    // unavailable codex (gray) + usable claude_code.
+    // Inactive open_claw must not appear. Expert list shows unavailable
+    // codex (gray) + usable claude_code.
+    expect(screen.queryByTitle(/OpenClaw/i)).not.toBeInTheDocument()
+
     const codexBtn = screen.getByTitle(/Codex · Unavailable/i)
     expect(codexBtn).toBeDisabled()
     fireEvent.click(codexBtn)
@@ -330,7 +332,7 @@ describe("AgentSelector", () => {
     expect(onSelect).toHaveBeenCalledWith("claude_code")
   })
 
-  it("keeps inactive agents visible in general mode as gray icons", async () => {
+  it("hides inactive agents and grays unavailable ones in general mode", async () => {
     mockUseAcpAgents.mockReturnValue({
       agents: [
         agent("hermes", { enabled: false, resident: true }),
@@ -346,7 +348,9 @@ describe("AgentSelector", () => {
         showModeSwitch
       />
     )
-    expect(screen.getByTitle(/Hermes Agent · Inactive/i)).toBeDisabled()
+    // Not activated → hidden.
+    expect(screen.queryByTitle(/Hermes Agent/i)).not.toBeInTheDocument()
+    // Activated but unavailable → grayed, not selectable.
     expect(screen.getByTitle(/OpenClaw · Unavailable/i)).toBeDisabled()
     expect(
       screen.getByText(

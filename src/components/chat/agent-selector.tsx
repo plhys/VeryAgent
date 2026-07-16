@@ -65,20 +65,23 @@ export function AgentSelector({
   // Expert mode never auto-selects — user must pick a coding agent.
   const autoSelectEnabled = !showModeSwitch || mode === "general"
 
-  // Keep disabled / unavailable agents visible (grayed out) so users can see
-  // what exists in this mode. Only enabled+available agents are selectable.
+  // Activation switch rules for the chat picker:
+  // 1. Not activated (`!enabled`) → hide completely.
+  // 2. Activated but unavailable → keep visible, grayed out, not selectable.
+  // Only enabled+available agents are selectable / auto-picked.
   const agents = useMemo<AcpAgentInfo[]>(() => {
+    const activated = rawAgents.filter((a) => a.enabled)
     const filtered = !showModeSwitch
-      ? rawAgents
+      ? activated
       : mode === "general"
-        ? rawAgents.filter((a) => isGeneralModeAgent(a.agent_type))
-        : rawAgents.filter((a) => !isGeneralModeAgent(a.agent_type))
+        ? activated.filter((a) => isGeneralModeAgent(a.agent_type))
+        : activated.filter((a) => !isGeneralModeAgent(a.agent_type))
     return filtered
       .slice()
       .sort((a, b) => {
         // Usable first, then resident butlers, keep relative order otherwise.
-        const usableA = Number(a.enabled && a.available)
-        const usableB = Number(b.enabled && b.available)
+        const usableA = Number(a.available)
+        const usableB = Number(b.available)
         if (usableA !== usableB) return usableB - usableA
         return Number(!!b.resident) - Number(!!a.resident)
       })
@@ -87,10 +90,7 @@ export function AgentSelector({
   const onFallbackRef = useRef(onFallback)
   const onAgentsLoadedRef = useRef(onAgentsLoaded)
 
-  const isUsable = useCallback(
-    (a: AcpAgentInfo) => a.enabled && a.available,
-    []
-  )
+  const isUsable = useCallback((a: AcpAgentInfo) => a.available, [])
 
   // Effective selection. Priority: prop default (when still usable) →
   // first usable (general / full list only). Expert mode stays null
@@ -274,9 +274,9 @@ export function AgentSelector({
           >
             {agents.map((agent) => {
               const label = AGENT_LABELS[agent.agent_type]
-              const reason = !agent.enabled
-                ? t("agentDisabled")
-                : t("agentUnavailable")
+              // List already excludes inactive agents; remaining entries are
+              // activated but unavailable (or empty usable set).
+              const reason = t("agentUnavailable")
               return (
                 <button
                   key={agent.agent_type}
@@ -339,11 +339,10 @@ export function AgentSelector({
           const isSelected = selected === agent.agent_type
           const usable = isUsable(agent)
           const label = AGENT_LABELS[agent.agent_type]
-          const inactiveReason = !agent.enabled
-            ? t("agentDisabled")
-            : !agent.available
-              ? t("agentUnavailable")
-              : null
+          // Activated-but-unavailable only — disabled agents are filtered out.
+          const inactiveReason = !agent.available
+            ? t("agentUnavailable")
+            : null
           const title = (() => {
             if (inactiveReason) return `${label} · ${inactiveReason}`
             if (!isSelected) {

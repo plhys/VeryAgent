@@ -37,16 +37,31 @@ coverage/
 *.snap.new
 .vitest-cache/
 
+# Env / secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!*.pub
+
 # macOS signing material. Keep certificates and exported private keys out of git.
 *.cer
 *.csr
 *.p12
 certificate-base64.txt
 
-# Agent
+# Agent / local scratch
 .claude
 .docs
 docs/superpowers
+.zcode/
+.hermes/
+tmp/
+tmp-*
+
+# Local design assets (not part of the published tree; runtime logos live in public/)
+/素材/
 
 # Tauri sidecar staging (built per-target by prepare-sidecars.mjs).
 # The binaries are platform-specific build artifacts; ship them through
@@ -67,4 +82,3 @@ src-tauri/target/
 
 # sccache local cache (do not commit; migrate manually per BUILD-SPEED.md)
 .sccache/
-tmp-*

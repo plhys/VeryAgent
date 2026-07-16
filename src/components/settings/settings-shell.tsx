@@ -12,7 +12,6 @@ import {
   Bot,
   Boxes,
   ChevronDown,
-  Eye,
   FileSpreadsheet,
   GitBranch,
   Globe,
@@ -59,7 +58,6 @@ type SettingsNavLabelKey =
   | "system"
   | "web_service"
   | "logs"
-  | "vision_bridge"
 
 interface SettingsNavItem {
   href: string
@@ -98,11 +96,6 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/agents",
     labelKey: "agents",
     icon: Bot,
-  },
-  {
-    href: "/settings/vision-bridge",
-    labelKey: "vision_bridge",
-    icon: Eye,
   },
   {
     href: "/settings/chat-channels",

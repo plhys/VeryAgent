@@ -574,6 +574,14 @@ pub fn build_router(
             post(handlers::system_settings::get_system_proxy_settings),
         )
         .route(
+            "/get_app_update_source_settings",
+            post(handlers::system_settings::get_app_update_source_settings),
+        )
+        .route(
+            "/update_app_update_source_settings",
+            post(handlers::system_settings::update_app_update_source_settings),
+        )
+        .route(
             "/get_system_terminal_settings",
             post(handlers::system_settings::get_system_terminal_settings),
         )

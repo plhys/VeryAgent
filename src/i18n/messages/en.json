@@ -143,7 +143,14 @@
     "languageSaveFailed": "Failed to save language settings: {message}",
     "updateTitle": "App Update",
     "versionTitle": "Software Update",
-    "updateDescription": "Check the configured release source for newer versions and install directly when available.",
+    "updateDescription": "Check the selected release source for newer versions and install directly when available.",
+    "updateSourceTitle": "Update source",
+    "updateSourceDescription": "Pick the release repository that matches your network. GitHub is public; Gitea is the internal mirror.",
+    "updateSourceGithub": "GitHub repository",
+    "updateSourceGitea": "Gitea repository",
+    "updateSourceGithubHint": "Public: github.com/plhys/VeryAgent",
+    "updateSourceGiteaHint": "Internal: 10.10.100.233 Gitea / boss/veryagent",
+    "updateSourceSaveFailed": "Failed to save update source: {message}",
     "currentVersion": "Current version",
     "upgradableVersion": "Latest version",
     "none": "None",
@@ -672,7 +679,8 @@
       "loggedIn": "Account logged in",
       "loginRelogin": "Re-login / Switch account",
       "loginTimeout": "Login timed out, please try again",
-      "loginSaveFailed": "Login succeeded but failed to save config"
+      "loginSaveFailed": "Login succeeded but failed to save config",
+      "modelProviderResponsesWarning": "Codex only supports the OpenAI Responses API (wire_api = responses). Gateways that only implement Chat Completions — including most A计划 providers — will not work with Codex. Use ChatGPT subscription, the official OpenAI API, or a Responses-compatible endpoint."
     },
     "gemini": {
       "authConfig": "Gemini Auth Config",
@@ -757,7 +765,12 @@
       },
       "refreshCatalog": "Refresh catalog",
       "reasoningBadge": "reasoning",
-      "contextWindow": "Context window"
+      "contextWindow": "Context window",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native multi-provider",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use OpenCode's native multi-provider connect and config UI."
     },
     "openClaw": {
       "gatewayConfig": "Gateway Config",
@@ -814,6 +827,11 @@
     "codebuddy": {
       "configManagement": "CodeBuddy Configuration",
       "configDescription": "CodeBuddy authenticates with an API key. Mainland China builds also require the environment set to “China (internal)”; iOA builds use “iOA”. The overseas build leaves it unset.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native config",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Append the selected model provider as a CodeBuddy custom model (~/.codebuddy/models.json). Native China / overseas / iOA models and CODEBUDDY_API_KEY are left unchanged.",
+      "authModeNativeHint": "Use CodeBuddy's native environment / API key / deployment URL settings.",
       "apiKeyLabel": "API Key",
       "apiKeyHint": "Saved as CODEBUDDY_API_KEY for this agent. Alternatively, sign in with the CodeBuddy CLI in a terminal.",
       "apiKeyHintSelfHosted": "Saved as CODEBUDDY_API_KEY for this agent. Use the key issued by your private deployment.",
@@ -1030,6 +1048,11 @@
     "pi": {
       "configManagement": "Pi Configuration",
       "configDescription": "Pi authenticates with your model provider's API key. The key is written to ~/.pi/agent/auth.json and the model selection to settings.json.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native providers",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use Pi's native providers and custom endpoint configuration.",
       "providerLabel": "Provider",
       "modelLabel": "Model",
       "thinkingLabel": "Thinking",
@@ -1396,15 +1419,19 @@
       "untitledConversation": "Untitled conversation"
     },
     "folderTitleBar": {
-      "showSidebar": "Show Sidebar",
-      "hideSidebar": "Hide Sidebar",
-      "toggleTerminal": "Toggle Terminal",
-      "toggleAuxPanel": "Toggle Auxiliary Panel",
+      "showSidebar": "Show sidebar",
+      "hideSidebar": "Hide sidebar",
+      "toggleTerminal": "Toggle terminal",
+      "toggleAuxPanel": "Toggle aux panel",
       "search": "Search",
-      "openSettings": "Open Settings",
+      "openSettings": "Open settings",
       "withShortcut": "{label} ({shortcut})",
       "switchToLight": "Switch to light theme",
-      "switchToDark": "Switch to dark theme"
+      "switchToDark": "Switch to dark theme",
+      "updateAvailable": "Update available {version}",
+      "updateNow": "Update",
+      "restartToUpdate": "Restart to update",
+      "updating": "Updating…"
     },
     "statusBar": {
       "connection": {

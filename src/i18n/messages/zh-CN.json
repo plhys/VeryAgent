@@ -143,7 +143,14 @@
     "languageSaveFailed": "语言设置保存失败：{message}",
     "updateTitle": "应用升级",
     "versionTitle": "软件更新",
-    "updateDescription": "点击检查后会从配置的发布源拉取最新版本信息，有新版本时可直接下载并安装。",
+    "updateDescription": "点击检查后会从所选发布源拉取最新版本信息，有新版本时可直接下载并安装。",
+    "updateSourceTitle": "更新源",
+    "updateSourceDescription": "按网络情况选择发布仓库。GitHub 为公网仓库，Gitea 为内网仓库。",
+    "updateSourceGithub": "GitHub 仓库",
+    "updateSourceGitea": "Gitea 仓库",
+    "updateSourceGithubHint": "公网：github.com/plhys/VeryAgent",
+    "updateSourceGiteaHint": "内网：10.10.100.233 Gitea / boss/veryagent",
+    "updateSourceSaveFailed": "保存更新源失败：{message}",
     "currentVersion": "当前版本",
     "upgradableVersion": "最新版本",
     "none": "暂无",
@@ -621,10 +628,10 @@
         "disabled": "打开右上角开关后才会参与检测与会话。",
         "notInstalled": "本机还没有这个智能体。请先点下方安装，装完会自动再检测。",
         "dependencyBlocked": "原因：{reason}",
-        "hermesNeedProvider": "当前走 Model Provider，但还没选 Provider。请在下方选好并保存。",
+        "hermesNeedProvider": "当前走模型供应商，但还没选供应商。请在下方选好并保存。",
         "hermesNeedNativeConfig": "请在下方配置 Hermes 供应商、API 密钥和模型，然后保存。",
         "hermesNeedApiOrOauth": "已有模型，但还没有 API 密钥。请填写密钥，或对 {provider} 走终端 OAuth 设置。",
-        "openClawNeedProvider": "当前走 Model Provider，但还没选 Provider。请在下方选好并保存。",
+        "openClawNeedProvider": "当前走模型供应商，但还没选供应商。请在下方选好并保存。",
         "openClawNeedGateway": "Gateway 模式需要本机 OpenClaw Gateway。未在 {path} 或环境变量里发现地址。请点「一键配置并启动 Gateway」，无需自己敲命令。",
         "openClawGatewayDown": "Gateway 地址是 {url}，但当前连不上（进程没在跑）。请点「一键配置并启动 Gateway」。",
         "ready": "环境与配置看起来正常，可以开新会话使用。",
@@ -644,7 +651,7 @@
     },
     "codex": {
       "configDescription": "支持 API URL、API Key、模型名称、Reasoning Effort 快捷配置，并与 `auth.json` / `config.toml` 双向联动。",
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "chatgptSubscription": "官网订阅",
       "chatgptSubscriptionHint": "使用 ChatGPT 官网订阅登录，无需配置 API Key",
       "apiKeyHint": "使用 API Key 连接 OpenAI 或兼容的 API 服务",
@@ -672,12 +679,13 @@
       "loggedIn": "账号已登录",
       "loginRelogin": "重新登录 / 切换账号",
       "loginTimeout": "登录超时，请重试",
-      "loginSaveFailed": "登录成功但配置保存失败"
+      "loginSaveFailed": "登录成功但配置保存失败",
+      "modelProviderResponsesWarning": "Codex 仅支持 OpenAI Responses API（wire_api = responses）。仅实现 Chat Completions 的网关（含多数 A计划供应商）无法用于 Codex；请改用官网订阅、OpenAI 官方 API，或提供 Responses 兼容端点。"
     },
     "gemini": {
       "authConfig": "Gemini 认证配置",
       "authConfigDescription": "对齐 Gemini CLI 认证文档，支持自定义、Google 登录、Gemini API Key、Vertex AI（ADC / 服务账号 / API Key）。",
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "selectAuthMode": "选择认证方式",
       "viewAuthDoc": "查看认证文档",
       "mode": {
@@ -757,7 +765,12 @@
       },
       "refreshCatalog": "刷新目录",
       "reasoningBadge": "推理",
-      "contextWindow": "上下文窗口"
+      "contextWindow": "上下文窗口",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生多供应商",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 OpenCode 原生多供应商连接与配置。"
     },
     "openClaw": {
       "gatewayConfig": "Gateway 配置",
@@ -767,11 +780,11 @@
       "gatewayTokenPlaceholder": "Gateway 认证 Token",
       "gatewayTokenHint": "建议使用 token-file 替代明文 Token，可通过 openclaw 命令行配置。",
       "sessionKeyHint": "可选。指定 Gateway Session Key，留空则自动分配隔离会话。",
-      "authModeLabel": "Authentication method",
+      "authModeLabel": "认证方式",
       "authModeGateway": "Gateway",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeGatewayHint": "Connect to an OpenClaw Gateway.",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeGatewayHint": "连接 OpenClaw Gateway。",
       "discoveryFound": "已从 {source} 发现 Gateway（{path}）。空字段已自动填充。",
       "discoveryConfigNoGateway": "找到 openclaw 配置 {path}，但其中未设置 gateway URL/port。",
       "discoveryNotFound": "未找到 openclaw.json（{path}）。可点下方一键配置并启动。",
@@ -805,15 +818,20 @@
       "advancedTitle": "高级：编辑 config.yaml",
       "rawConfigHint": "直接编辑 ~/.hermes/config.yaml。在此保存将原样覆盖该文件。",
       "saveRawConfig": "保存 config.yaml",
-      "authModeLabel": "Authentication method",
-      "authModeNative": "Native (hermes login)",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeNativeHint": "Use the native hermes authentication flow."
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生（hermes login）",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Hermes 原生认证流程。"
     },
     "codebuddy": {
       "configManagement": "CodeBuddy 配置",
       "configDescription": "CodeBuddy 使用 API Key 进行认证。中国版还必须将环境设为“中国版（internal）”；iOA 版使用“iOA”；海外版则不设置。",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生配置",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "将已配置的模型供应商作为自定义模型追加到 CodeBuddy（写入 ~/.codebuddy/models.json），不覆盖原生中国版/海外版/iOA 模型与 CODEBUDDY_API_KEY。",
+      "authModeNativeHint": "使用 CodeBuddy 原生环境 / API Key / 私有化地址配置。",
       "apiKeyLabel": "API Key",
       "apiKeyHint": "将作为该智能体的 CODEBUDDY_API_KEY 保存。也可以在终端用 CodeBuddy CLI 登录。",
       "apiKeyHintSelfHosted": "将作为该智能体的 CODEBUDDY_API_KEY 保存。请使用你的私有化部署签发的密钥。",
@@ -888,7 +906,7 @@
     "providerModelFetchFailed": "无法列出模型——请检查供应商 URL 与 Key。",
     "refreshProviderModels": "刷新模型列表",
     "claude": {
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "officialSubscription": "官方订阅",
       "officialSubscriptionHint": "使用 Anthropic 官方订阅，无需 API Key。",
       "mainModel": "主模型",
@@ -906,7 +924,7 @@
       "effortLevel_medium": "中",
       "effortLevel_high": "高",
       "effortLevel_xhigh": "超高",
-      "advancedModelSettings": "Advanced model settings"
+      "advancedModelSettings": "高级模型设置"
     },
     "dialogs": {
       "confirmDeleteProvider": "确认删除 Provider {providerId}？",
@@ -1005,11 +1023,11 @@
     },
     "cline": {
       "configDescription": "配置 Cline API 提供商和凭证。设置将保存到 ~/.cline/data/。",
-      "authModeLabel": "Authentication method",
-      "authModeNative": "Native (cline login)",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeNativeHint": "Use the native cline authentication flow."
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生（cline login）",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Cline 原生认证流程。"
     },
     "opencodePlugins": {
       "title": "OpenCode 插件",
@@ -1030,6 +1048,11 @@
     "pi": {
       "configManagement": "Pi 配置",
       "configDescription": "Pi 通过模型提供方的 API Key 鉴权。Key 写入 ~/.pi/agent/auth.json，模型选择写入 settings.json。",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生提供方",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Pi 原生提供方与自定义端点配置。",
       "providerLabel": "提供方",
       "modelLabel": "模型",
       "thinkingLabel": "思考",
@@ -1404,7 +1427,11 @@
       "openSettings": "打开设置",
       "withShortcut": "{label}（{shortcut}）",
       "switchToLight": "切换为浅色主题",
-      "switchToDark": "切换为深色主题"
+      "switchToDark": "切换为深色主题",
+      "updateAvailable": "发现新版本 {version}",
+      "updateNow": "更新",
+      "restartToUpdate": "重启以更新",
+      "updating": "更新中…"
     },
     "statusBar": {
       "connection": {

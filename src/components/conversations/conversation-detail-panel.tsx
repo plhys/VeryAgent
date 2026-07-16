@@ -554,6 +554,9 @@ const ConversationTabView = memo(function ConversationTabView({
     () => conn.modes?.available_modes ?? [],
     [conn.modes?.available_modes]
   )
+  // Chat model picker shows only what the live agent advertises via ACP.
+  // Do not inject the shared-provider /models catalog here — placeholder
+  // entries that the session cannot switch to are unusable noise.
   const connectionConfigOptions = useMemo(
     () => conn.configOptions ?? [],
     [conn.configOptions]

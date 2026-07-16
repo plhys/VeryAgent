@@ -515,6 +515,9 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "hermes",
   "open_claw",
   "cline",
+  "open_code",
+  "pi",
+  "code_buddy",
 ]
 
 /**
@@ -1729,6 +1732,17 @@ export interface SkillSyncReport {
 export interface SystemProxySettings {
   enabled: boolean
   proxy_url: string | null
+}
+
+/** Preferred release channel for app updates. */
+export type AppUpdateSource = "github" | "gitea"
+
+export interface AppUpdateSourceSettings {
+  source: AppUpdateSource
+  sourceLabel: string
+  repoUrl: string
+  releasesUrl: string
+  manifestUrl: string
 }
 
 export type AppLocale =

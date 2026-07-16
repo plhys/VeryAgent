@@ -22,7 +22,15 @@ import type { ModelProviderInfo } from "@/lib/types"
 import { AddModelProviderDialog } from "./add-model-provider-dialog"
 import { EditModelProviderDialog } from "./edit-model-provider-dialog"
 
-export function ModelProviderSettings() {
+/**
+ * Model-provider list body. When `embedded` is true, omit the outer ScrollArea
+ * so a parent page can compose this with Vision Bridge under one scroller.
+ */
+export function ModelProviderSettingsBody({
+  embedded = false,
+}: {
+  embedded?: boolean
+}) {
   const t = useTranslations("ModelProviderSettings")
   const [providers, setProviders] = useState<ModelProviderInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,11 +80,11 @@ export function ModelProviderSettings() {
     }
   }, [deleteTarget, loadProviders, t])
 
-  return (
-    <ScrollArea className="h-full">
+  const body = (
+    <>
       <section className="space-y-3 px-3 pt-3 md:px-4 md:pt-4">
         <div>
-          <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
+          <h2 className="text-sm font-semibold">{t("sectionTitle")}</h2>
           <p className="text-sm text-muted-foreground">
             {t("sectionDescription")}
           </p>
@@ -176,6 +184,13 @@ export function ModelProviderSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </ScrollArea>
+    </>
   )
+
+  if (embedded) return body
+  return <ScrollArea className="h-full">{body}</ScrollArea>
+}
+
+export function ModelProviderSettings() {
+  return <ModelProviderSettingsBody />
 }

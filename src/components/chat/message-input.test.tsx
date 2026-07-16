@@ -257,7 +257,7 @@ const MODEL_OPTION: SessionConfigOptionInfo = {
 describe("MessageInput collapsed selectors popover", () => {
   afterEach(() => cleanup())
 
-  it("selects a config option from the cog Popover and closes it", async () => {
+  it("selects a config option from the cog Popover and keeps it open", async () => {
     const user = userEvent.setup()
     const onConfigOptionChange = vi.fn()
     const { container } = renderInput({
@@ -277,14 +277,13 @@ describe("MessageInput collapsed selectors popover", () => {
       within(popover).getByRole("button", { name: /Model/ })
     ).toBeInTheDocument()
 
-    // Options are plain buttons (native clicks) — selecting fires the change.
+    // Options are plain buttons (native clicks) — selecting fires the change
+    // without dismissing the menu, so the next setting can be adjusted immediately.
     await user.click(within(popover).getByRole("button", { name: /Opus/ }))
     expect(onConfigOptionChange).toHaveBeenCalledWith("model", "opus")
-
-    // Selecting a value closes the controlled popover.
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: settingsLabel })).toBeNull()
-    )
+    expect(
+      screen.getByRole("dialog", { name: settingsLabel })
+    ).toBeInTheDocument()
   })
 
   it("groups model values by their provider prefix in the cog Popover", async () => {
@@ -375,7 +374,7 @@ describe("MessageInput collapsed selectors popover", () => {
     )
   })
 
-  it("selects a mode from the cog Popover and closes it", async () => {
+  it("selects a mode from the cog Popover and keeps it open", async () => {
     const user = userEvent.setup()
     const onModeChange = vi.fn()
     const { container } = renderInput({
@@ -396,9 +395,9 @@ describe("MessageInput collapsed selectors popover", () => {
     const popover = await screen.findByRole("dialog", { name: settingsLabel })
     await user.click(within(popover).getByRole("button", { name: /Act/ }))
     expect(onModeChange).toHaveBeenCalledWith("act")
-
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: settingsLabel })).toBeNull()
-    )
+    // Continuous ops: mode change must not dismiss agent settings.
+    expect(
+      screen.getByRole("dialog", { name: settingsLabel })
+    ).toBeInTheDocument()
   })
 })

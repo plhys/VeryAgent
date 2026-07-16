@@ -93,7 +93,7 @@ describe("SessionSelectorsPanel", () => {
     ).not.toHaveAttribute("aria-current")
   })
 
-  it("commits a value via a plain click and notifies onAfterSelect", () => {
+  it("commits a value via a plain click and notifies onAfterSelect when provided", () => {
     const modelOnSelect = vi.fn()
     const onAfterSelect = vi.fn()
     renderPanel(
@@ -106,6 +106,18 @@ describe("SessionSelectorsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Opus/ }))
     expect(modelOnSelect).toHaveBeenCalledWith("opus")
     expect(onAfterSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it("commits a value without requiring onAfterSelect", () => {
+    const modelOnSelect = vi.fn()
+    renderPanel(
+      <SessionSelectorsPanel
+        settings={makeSettings(modelOnSelect)}
+        settingsLabel="Settings"
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: /Opus/ }))
+    expect(modelOnSelect).toHaveBeenCalledWith("opus")
   })
 
   it("activates an option with the keyboard (native button semantics)", async () => {

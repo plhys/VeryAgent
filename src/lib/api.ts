@@ -81,6 +81,8 @@ import type {
   WorkspaceSnapshotResponse,
   GitLogResult,
   AvailableTerminalShells,
+  AppUpdateSource,
+  AppUpdateSourceSettings,
   SystemLanguageSettings,
   SystemProxySettings,
   SystemRenderingSettings,
@@ -998,6 +1000,16 @@ export async function updateSystemProxySettings(
   settings: SystemProxySettings
 ): Promise<SystemProxySettings> {
   return getTransport().call("update_system_proxy_settings", { settings })
+}
+
+export async function getAppUpdateSourceSettings(): Promise<AppUpdateSourceSettings> {
+  return getTransport().call("get_app_update_source_settings")
+}
+
+export async function updateAppUpdateSourceSettings(
+  source: AppUpdateSource
+): Promise<AppUpdateSourceSettings> {
+  return getTransport().call("update_app_update_source_settings", { source })
 }
 
 export async function getSystemLanguageSettings(): Promise<SystemLanguageSettings> {

@@ -2937,7 +2937,6 @@ export function MessageInput({
               <SessionSelectorsPanel
                 settings={collapsedSettings}
                 settingsLabel={t("agentSettings")}
-                onAfterSelect={() => setOverflowSelectorsOpen(false)}
               />
             </PopoverContent>
           </Popover>
@@ -3804,9 +3803,6 @@ export function MessageInput({
                             <SessionSelectorsPanel
                               settings={collapsedSettings}
                               settingsLabel={t("agentSettings")}
-                              onAfterSelect={() =>
-                                setCollapsedSelectorsOpen(false)
-                              }
                             />
                           )}
                         </PopoverContent>

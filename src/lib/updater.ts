@@ -167,13 +167,10 @@ export async function getCurrentAppVersion(): Promise<string> {
 }
 
 export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
-  if (!usesTauriUpdater()) {
-    return getTransport().call<AppUpdateCheckResult>("check_app_update")
-  }
-  const { getVersion } = await import("@tauri-apps/api/app")
-  const { check } = await import("@tauri-apps/plugin-updater")
-  const [currentVersion, update] = await Promise.all([getVersion(), check()])
-  return { currentVersion, update }
+  // Both desktop and server check go through the backend so the selected
+  // release channel (GitHub vs Gitea) can override endpoints. The JS plugin
+  // `check()` has no endpoints option, so desktop uses the Rust command too.
+  return getTransport().call<AppUpdateCheckResult>("check_app_update")
 }
 
 /**
