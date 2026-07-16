@@ -158,11 +158,16 @@ fn server_rollback_available() -> bool {
     crate::update::install::rollback_available()
 }
 
-pub async fn check_app_update() -> Result<Json<AppUpdateCheckResult>, AppCommandError> {
+pub async fn check_app_update(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<AppUpdateCheckResult>, AppCommandError> {
     use crate::update::{runtime, version};
 
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    let manifest = version::fetch_latest_manifest().await?;
+    let source = crate::commands::system_settings::load_app_update_source(&state.db.conn)
+        .await
+        .unwrap_or_default();
+    let manifest = version::fetch_latest_manifest_from(source).await?;
 
     let update = if version::is_newer(&manifest.version, &current_version) {
         Some(AppUpdateInfo {

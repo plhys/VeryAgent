@@ -17,6 +17,10 @@ const call = vi.fn(async (endpoint: string) => {
   if (endpoint === "app_update_state") {
     return callQueue.length ? callQueue.shift()! : snapshot
   }
+  // Quiet availability poll from UpdateProvider (title-bar green button).
+  if (endpoint === "check_app_update") {
+    return { currentVersion: "0.0.0", update: null }
+  }
   throw new Error(`unexpected endpoint: ${endpoint}`)
 })
 const subscribe = vi.fn(

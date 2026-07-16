@@ -1547,7 +1547,9 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
         .ok_or_else(|| AcpError::protocol("invalid model provider table"))?;
     match trim_non_empty(api_base_url) {
         Some(base_url) => {
-            provider_table.insert("base_url".to_string(), toml::Value::String(base_url));
+            // Codex appends the wire path itself; force OpenAI-compatible `/v1`.
+            let normalized = normalize_openai_compatible_base_url(&base_url);
+            provider_table.insert("base_url".to_string(), toml::Value::String(normalized));
         }
         None => {
             provider_table.remove("base_url");
@@ -1555,6 +1557,8 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
     }
     if provider_name == "veryagent" {
         provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
+        // Current Codex rejects `wire_api = "chat"` at config load time; only
+        // `responses` is accepted. The gateway must implement Responses API.
         provider_table.insert(
             "wire_api".to_string(),
             toml::Value::String("responses".to_string()),
@@ -1682,6 +1686,445 @@ fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
     }
     fs::write(&path, format!("{raw_auth}\n"))
         .map_err(|e| AcpError::protocol(format!("write opencode auth.json failed: {e}")))?;
+    Ok(())
+}
+
+/// Managed OpenCode provider id written by the unified model-provider cascade.
+const OPENCODE_MANAGED_PROVIDER: &str = "veryagent";
+const OPENCODE_OPENAI_COMPAT_NPM: &str = "@ai-sdk/openai-compatible";
+
+/// Merge-write a `provider.veryagent` block into opencode.json and the matching
+/// credential into auth.json. Preserves every other provider / top-level key.
+///
+/// `model` is the agent-selected default. Chat only shows models the agent
+/// actually loads, so the managed provider table is limited to that selection
+/// (plus any explicit `catalog` entries callers still pass). Do not dump the
+/// entire gateway `/models` list — embeddings / image / unused ids are noise.
+fn write_opencode_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let config_path = resolve_opencode_config_path();
+    let mut config = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let config_obj = config
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("opencode config root must be a JSON object"))?;
+
+    let provider_root = config_obj
+        .entry("provider".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_root.is_object() {
+        *provider_root = serde_json::json!({});
+    }
+    let providers = provider_root
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider table"))?;
+
+    let provider_item = providers
+        .entry(OPENCODE_MANAGED_PROVIDER.to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_item.is_object() {
+        *provider_item = serde_json::json!({});
+    }
+    let provider_obj = provider_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider block"))?;
+
+    provider_obj.insert(
+        "npm".to_string(),
+        serde_json::Value::String(OPENCODE_OPENAI_COMPAT_NPM.to_string()),
+    );
+    provider_obj.insert(
+        "name".to_string(),
+        serde_json::Value::String(OPENCODE_MANAGED_PROVIDER.to_string()),
+    );
+
+    let options_item = provider_obj
+        .entry("options".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !options_item.is_object() {
+        *options_item = serde_json::json!({});
+    }
+    let options = options_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider options"))?;
+    // Secrets never belong in opencode.json.
+    options.remove("apiKey");
+    if api_url.trim().is_empty() {
+        options.remove("baseURL");
+    } else {
+        let normalized = normalize_openai_compatible_base_url(api_url);
+        options.insert(
+            "baseURL".to_string(),
+            serde_json::Value::String(normalized),
+        );
+    }
+    if options.is_empty() {
+        provider_obj.remove("options");
+    }
+
+    let model_id = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        // OpenCode model values are `provider/model`; accept either form.
+        .map(|s| {
+            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        });
+
+    // Managed models table = configured selection only (and any explicit extras).
+    // Always replace so stale gateway dump entries cannot linger in chat.
+    let mut catalog_ids: Vec<String> = catalog
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        })
+        .collect();
+    if let Some(ref mid) = model_id {
+        if !catalog_ids.iter().any(|id| id == mid) {
+            catalog_ids.push(mid.clone());
+        }
+    }
+    if !catalog_ids.is_empty() {
+        let mut models = serde_json::Map::new();
+        for mid in &catalog_ids {
+            models.insert(mid.clone(), serde_json::json!({ "name": mid }));
+        }
+        provider_obj.insert("models".to_string(), serde_json::Value::Object(models));
+    }
+    if let Some(ref mid) = model_id {
+        config_obj.insert(
+            "model".to_string(),
+            serde_json::Value::String(format!("{OPENCODE_MANAGED_PROVIDER}/{mid}")),
+        );
+    }
+
+    let config_str = serde_json::to_string_pretty(&config)
+        .map_err(|e| AcpError::protocol(format!("serialize opencode config failed: {e}")))?;
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create opencode directory failed: {e}")))?;
+    }
+    fs::write(&config_path, format!("{config_str}\n"))
+        .map_err(|e| AcpError::protocol(format!("write opencode config failed: {e}")))?;
+
+    // auth.json: merge credential for the managed provider only.
+    let auth_path = opencode_auth_json_path();
+    let mut auth_obj = if auth_path.exists() {
+        fs::read_to_string(&auth_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    if !api_key.trim().is_empty() {
+        auth_obj[OPENCODE_MANAGED_PROVIDER] = serde_json::json!({
+            "type": "api",
+            "key": api_key,
+        });
+    }
+    let auth_str = serde_json::to_string_pretty(&auth_obj)
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    persist_opencode_auth_json(&auth_str)?;
+    Ok(())
+}
+
+/// Managed Pi custom provider id written by the unified model-provider cascade.
+const PI_MANAGED_PROVIDER: &str = "veryagent";
+
+/// Default context window / output budget for managed Pi models.
+/// Pi rejects incomplete custom-model entries; match the schema used by a
+/// working hand-authored `a-plan` provider and by OpenClaw's managed write.
+const PI_MANAGED_MODEL_CONTEXT_WINDOW: u64 = 131_072;
+const PI_MANAGED_MODEL_MAX_TOKENS: u64 = 8_192;
+
+/// Build one Pi `models.json` model object with the fields pi requires.
+fn pi_managed_model_object(id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "name": id,
+        "reasoning": false,
+        "input": ["text"],
+        "contextWindow": PI_MANAGED_MODEL_CONTEXT_WINDOW,
+        "maxTokens": PI_MANAGED_MODEL_MAX_TOKENS,
+        "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+        }
+    })
+}
+
+/// Merge-write a custom `veryagent` provider into pi's native settings/auth/models.
+///
+/// `model` is the default selection written to settings.json. `catalog` is an
+/// optional extra list of model ids the caller wants loaded; chat only shows
+/// what pi actually loads, so callers should pass the agent-selected model
+/// rather than the entire gateway `/models` dump.
+fn write_pi_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let model = model.trim();
+    // settings.json — defaultProvider / defaultModel
+    let settings_path = pi_settings_json_path();
+    let mut settings = read_json_object_or_empty(&settings_path);
+    settings.insert(
+        "defaultProvider".to_string(),
+        serde_json::Value::String(PI_MANAGED_PROVIDER.to_string()),
+    );
+    if !model.is_empty() {
+        settings.insert(
+            "defaultModel".to_string(),
+            serde_json::Value::String(model.to_string()),
+        );
+    }
+    write_json_object_pretty(&settings_path, &settings)?;
+
+    // auth.json — provider credential
+    if !api_key.trim().is_empty() {
+        let auth_path = pi_auth_json_path();
+        let mut auth = read_json_object_or_empty(&auth_path);
+        let mut entry = serde_json::Map::new();
+        entry.insert(
+            "type".to_string(),
+            serde_json::Value::String("api_key".to_string()),
+        );
+        entry.insert(
+            "key".to_string(),
+            serde_json::Value::String(api_key.to_string()),
+        );
+        auth.insert(
+            PI_MANAGED_PROVIDER.to_string(),
+            serde_json::Value::Object(entry),
+        );
+        write_json_object_pretty(&auth_path, &auth)?;
+    }
+
+    // models.json — custom provider definition (baseUrl + openai-completions)
+    if !api_url.trim().is_empty() {
+        let models_path = pi_models_json_path();
+        let mut models_doc = read_json_object_or_empty(&models_path);
+        let mut providers = match models_doc.remove("providers") {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        let mut entry = match providers.remove(PI_MANAGED_PROVIDER) {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        let normalized = normalize_openai_compatible_base_url(api_url);
+        entry.insert(
+            "baseUrl".to_string(),
+            serde_json::Value::String(normalized),
+        );
+        entry.insert(
+            "api".to_string(),
+            serde_json::Value::String("openai-completions".to_string()),
+        );
+        // Display name for the managed provider in pi's model picker.
+        entry.insert(
+            "name".to_string(),
+            serde_json::Value::String("A计划".to_string()),
+        );
+        // Pi's model-registry rejects non-built-in providers that define models
+        // without an inline `apiKey` (auth.json alone is not enough). Without
+        // this field the entire custom provider fails to load, and set_model
+        // returns "Model not found: veryagent/<id>" even though models.json
+        // lists the id. Match the working hand-authored a-plan provider.
+        if !api_key.trim().is_empty() {
+            entry.insert(
+                "apiKey".to_string(),
+                serde_json::Value::String(api_key.to_string()),
+            );
+        }
+        // Gateway models rarely support OpenAI's developer role / reasoning
+        // effort; match the working hand-authored a-plan provider.
+        entry.insert(
+            "compat".to_string(),
+            serde_json::json!({
+                "supportsDeveloperRole": false,
+                "supportsReasoningEffort": false
+            }),
+        );
+
+        // Only the configured selection (and any explicit extras). Rebuild the
+        // array so stale gateway dump entries cannot linger in chat.
+        // Always use the full pi schema — bare `{id,name}` entries are ignored.
+        let mut models_arr: Vec<serde_json::Value> = Vec::new();
+        let mut push_model = |id: &str| {
+            let id = id.trim();
+            if id.is_empty() {
+                return;
+            }
+            let already = models_arr
+                .iter()
+                .any(|m| m.get("id").and_then(serde_json::Value::as_str) == Some(id));
+            if !already {
+                models_arr.push(pi_managed_model_object(id));
+            }
+        };
+        for id in catalog {
+            push_model(id);
+        }
+        if !model.is_empty() {
+            push_model(model);
+        }
+        entry.insert("models".to_string(), serde_json::Value::Array(models_arr));
+        providers.insert(
+            PI_MANAGED_PROVIDER.to_string(),
+            serde_json::Value::Object(entry),
+        );
+        models_doc.insert(
+            "providers".to_string(),
+            serde_json::Value::Object(providers),
+        );
+        write_json_object_pretty(&models_path, &models_doc)?;
+    }
+
+    Ok(())
+}
+
+/// Managed custom-model vendor tag written by veryagent into CodeBuddy's
+/// `~/.codebuddy/models.json`. CodeBuddy supports two independent paths:
+///   1. Native Tencent models — `CODEBUDDY_API_KEY` + region
+///      (`CODEBUDDY_INTERNET_ENVIRONMENT`: unset/overseas, `internal`, `ioa`)
+///   2. Additive custom models — entries in `models.json` with their own
+///      `url`/`apiKey` (OpenAI-compatible full `/chat/completions` path)
+///
+/// A计划 must use path (2) only. Hijacking `CODEBUDDY_BASE_URL` or setting
+/// `CODEBUDDY_DISABLE_BUILTIN_MODELS` / `availableModels` would hide or break
+/// the native China/overseas built-ins the user still needs.
+const CODEBUDDY_MANAGED_MODEL_VENDOR: &str = "A计划";
+const CODEBUDDY_MANAGED_MODEL_MAX_INPUT: u64 = 131_072;
+const CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT: u64 = 8_192;
+
+fn codebuddy_models_json_path() -> PathBuf {
+    crate::parsers::codebuddy::resolve_codebuddy_config_dir().join("models.json")
+}
+
+/// Build the full chat-completions URL CodeBuddy requires for custom models.
+/// Docs require a complete path ending in `/chat/completions` (not a bare `/v1`).
+fn codebuddy_chat_completions_url(api_url: &str) -> String {
+    let base = normalize_openai_compatible_base_url(api_url);
+    if base.is_empty() {
+        return String::new();
+    }
+    format!("{base}/chat/completions")
+}
+
+/// Merge-write the agent-selected A计划 model into CodeBuddy's native
+/// `~/.codebuddy/models.json` as an additive custom model.
+///
+/// Built-in Tencent models stay visible: we never write `availableModels` and
+/// never set `CODEBUDDY_DISABLE_BUILTIN_MODELS`. Previous veryagent-managed
+/// entries (vendor `A计划`) are replaced; other custom entries are preserved.
+/// A stale `availableModels` key left by older builds is removed so native
+/// models reappear in the picker.
+fn write_codebuddy_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let model = model.trim();
+    let chat_url = codebuddy_chat_completions_url(api_url);
+    if chat_url.is_empty() {
+        return Ok(());
+    }
+
+    let mut ids: Vec<String> = catalog
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    if !model.is_empty() && !ids.iter().any(|id| id == model) {
+        ids.push(model.to_string());
+    }
+
+    let path = codebuddy_models_json_path();
+    let mut doc = read_json_object_or_empty(&path);
+
+    // Keep non-managed custom models; drop previous veryagent-managed ones so
+    // the list tracks only the currently configured selection.
+    let mut models: Vec<serde_json::Value> = match doc.remove("models") {
+        Some(serde_json::Value::Array(arr)) => arr
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .get("vendor")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(CODEBUDDY_MANAGED_MODEL_VENDOR)
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    for id in &ids {
+        // Replace same-id entries even if they were user-authored so bind wins.
+        models.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id.as_str()));
+        let mut entry = serde_json::Map::new();
+        entry.insert("id".to_string(), serde_json::Value::String(id.clone()));
+        entry.insert("name".to_string(), serde_json::Value::String(id.clone()));
+        entry.insert(
+            "vendor".to_string(),
+            serde_json::Value::String(CODEBUDDY_MANAGED_MODEL_VENDOR.to_string()),
+        );
+        entry.insert("url".to_string(), serde_json::Value::String(chat_url.clone()));
+        if !api_key.trim().is_empty() {
+            entry.insert(
+                "apiKey".to_string(),
+                serde_json::Value::String(api_key.to_string()),
+            );
+        }
+        entry.insert(
+            "maxInputTokens".to_string(),
+            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_INPUT.into()),
+        );
+        entry.insert(
+            "maxOutputTokens".to_string(),
+            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT.into()),
+        );
+        entry.insert("supportsToolCall".to_string(), serde_json::Value::Bool(true));
+        models.push(serde_json::Value::Object(entry));
+    }
+
+    if models.is_empty() {
+        doc.remove("models");
+    } else {
+        doc.insert("models".to_string(), serde_json::Value::Array(models));
+    }
+    // Older builds wrote availableModels=[A计划 only], which hid every native
+    // Tencent model. Clear it so the picker merges built-ins + customs again.
+    doc.remove("availableModels");
+    if doc.is_empty() {
+        // Nothing left to keep — remove the file rather than write `{}`.
+        let _ = fs::remove_file(&path);
+        return Ok(());
+    }
+    write_json_object_pretty(&path, &doc)?;
     Ok(())
 }
 
@@ -2266,7 +2709,7 @@ async fn clear_kimi_model_env(db: &AppDatabase) -> Result<(), AcpError> {
     let setting = agent_setting_service::get_by_agent_type(&db.conn, AgentType::KimiCode)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
-    let enabled = setting.as_ref().map(|m| m.enabled).unwrap_or(true);
+    let enabled = setting.as_ref().map(|m| m.enabled).unwrap_or(false);
     let _model_provider_id = setting.as_ref().and_then(|m| m.model_provider_id);
     let mut env: BTreeMap<String, String> = setting
         .and_then(|m| m.env_json)
@@ -3005,19 +3448,31 @@ fn openclaw_read_config_value(path: &Path) -> Option<serde_json::Value> {
 /// `/v1` (it appends `/chat/completions` itself). Strip common chat suffixes and
 /// append `/v1` when missing so shared model-provider URLs work either way.
 fn normalize_openclaw_openai_base_url(api_url: &str) -> String {
+    normalize_openai_compatible_base_url(api_url)
+}
+
+/// Shared OpenAI-compatible base-url normalizer for Codex / OpenClaw / similar
+/// clients that append `/chat/completions` (or `/responses`) themselves.
+///
+/// Shared model-provider URLs are often pasted as a bare host root
+/// (`http://gateway:18080`). Without `/v1`, Codex ends up calling
+/// `/chat/completions` on the HTML root and appears to "retry forever".
+fn normalize_openai_compatible_base_url(api_url: &str) -> String {
     let trimmed = api_url.trim().trim_end_matches('/');
     if trimmed.is_empty() {
         return String::new();
     }
-    let without_chat = trimmed
+    let without_suffix = trimmed
         .strip_suffix("/chat/completions")
         .or_else(|| trimmed.strip_suffix("/completions"))
+        .or_else(|| trimmed.strip_suffix("/responses"))
+        .or_else(|| trimmed.strip_suffix("/models"))
         .unwrap_or(trimmed)
         .trim_end_matches('/');
-    if without_chat.ends_with("/v1") {
-        without_chat.to_string()
+    if without_suffix.ends_with("/v1") {
+        without_suffix.to_string()
     } else {
-        format!("{without_chat}/v1")
+        format!("{without_suffix}/v1")
     }
 }
 
@@ -5592,6 +6047,14 @@ fn agent_env_keys(agent_type: AgentType) -> (&'static str, &'static str, &'stati
         // non-interactive credential path is the `KIMI_MODEL_*` family, which
         // also takes priority over `~/.kimi-code/config.toml`.
         AgentType::KimiCode => ("KIMI_MODEL_BASE_URL", "KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME"),
+        // CodeBuddy self-hosted / shared-provider path uses CODEBUDDY_BASE_URL +
+        // CODEBUDDY_API_KEY. Hosted region is CODEBUDDY_INTERNET_ENVIRONMENT and
+        // is cleared when a model provider is bound.
+        AgentType::CodeBuddy => (
+            "CODEBUDDY_BASE_URL",
+            "CODEBUDDY_API_KEY",
+            "CODEBUDDY_MODEL",
+        ),
         _ => ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"),
     }
 }
@@ -5665,11 +6128,64 @@ pub(crate) async fn apply_model_provider_env(
         _ => return,
     };
     let (url_key, key_key, model_key) = agent_env_keys(agent_type);
-    if !provider.api_url.trim().is_empty() {
-        runtime_env.insert(url_key.to_string(), provider.api_url.clone());
+    // Pi authenticates the managed A计划 provider via models.json/auth.json,
+    // not process env. Injecting OPENAI_API_KEY unlocks pi's entire built-in
+    // OpenAI catalog (~40 placeholder models) in the chat picker even though
+    // they are not configured for A计划 and cannot be used.
+    //
+    // CodeBuddy is the same class of problem: A计划 credentials belong in
+    // ~/.codebuddy/models.json as additive custom models. Writing them into
+    // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY hijacks the whole agent onto the
+    // gateway and breaks native China/overseas Tencent models.
+    let inject_openai_compat_env =
+        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy);
+    if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
+        // Agents that append `/chat/completions` themselves need a `/v1` base.
+        // Shared provider rows are often bare host roots (`http://host:port`).
+        let api_url = match agent_type {
+            AgentType::KimiCode
+            | AgentType::Codex
+            | AgentType::OpenClaw
+            | AgentType::Cline
+            | AgentType::Hermes => normalize_openai_compatible_base_url(&provider.api_url),
+            _ => provider.api_url.clone(),
+        };
+        runtime_env.insert(url_key.to_string(), api_url);
     }
-    if !provider.api_key.trim().is_empty() {
+    if inject_openai_compat_env && !provider.api_key.trim().is_empty() {
         runtime_env.insert(key_key.to_string(), provider.api_key.clone());
+    }
+    if agent_type == AgentType::CodeBuddy {
+        // Scrub leftover "replace native endpoint" knobs from older binds so
+        // Tencent built-ins work again alongside A计划 custom models.
+        runtime_env.remove("CODEBUDDY_BASE_URL");
+        runtime_env.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+        // Keep CODEBUDDY_INTERNET_ENVIRONMENT / CODEBUDDY_API_KEY if present —
+        // those are the native China/overseas/iOA path, independent of A计划.
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        if let Some(ref model) = model {
+            // Optional default selection + Claude-derived custom option label.
+            runtime_env.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+            runtime_env.insert(
+                "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                model.clone(),
+            );
+        }
+        // Additive custom model in models.json (own url/apiKey). Native models
+        // stay available from CodeBuddy's built-in catalog + region auth.
+        if let Err(e) = write_codebuddy_managed_provider(
+            &provider.api_url,
+            &provider.api_key,
+            model.as_deref().unwrap_or(""),
+            &[],
+        ) {
+            tracing::warn!(
+                "[CodeBuddy] write managed models.json for shared model provider failed: {e}"
+            );
+        }
     }
 
     // OpenClaw's gateway owns inference. Keep openclaw.json in sync even when
@@ -5695,6 +6211,48 @@ pub(crate) async fn apply_model_provider_env(
                 "[OpenClaw] write managed provider into openclaw.json failed: {e}"
             );
         }
+    }
+
+    // Pi / OpenCode: refresh the managed `veryagent` provider on every session
+    // start so credentials + the agent-selected model stay current. Pass an
+    // empty catalog — chat should only show the configured model, not the
+    // entire gateway /models dump (embeddings / image / unused placeholders).
+    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode) {
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let empty_catalog: Vec<String> = Vec::new();
+        let result = if agent_type == AgentType::Pi {
+            write_pi_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref().unwrap_or(""),
+                &empty_catalog,
+            )
+        } else {
+            write_opencode_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref(),
+                &empty_catalog,
+            )
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                "[{agent_type}] write managed provider for shared model provider failed: {e}"
+            );
+        }
+    }
+
+    // After writing Pi's managed files, scrub any leftover OPENAI_* credentials
+    // from env_json so the spawned pi process cannot unlock built-in openai/*.
+    // Keep OPENAI_MODEL in env_json for settings UI bookkeeping only — strip it
+    // from the runtime process as well; defaultModel lives in settings.json.
+    if agent_type == AgentType::Pi {
+        runtime_env.remove("OPENAI_BASE_URL");
+        runtime_env.remove("OPENAI_API_KEY");
+        runtime_env.remove("OPENAI_MODEL");
     }
 }
 
@@ -5766,6 +6324,12 @@ pub(crate) fn parse_provider_model(
                 trimmed_raw.map(str::to_string),
             );
         }
+        AgentType::CodeBuddy => {
+            out.insert(
+                "CODEBUDDY_MODEL".to_string(),
+                trimmed_raw.map(str::to_string),
+            );
+        }
         _ => {
             out.insert("OPENAI_MODEL".to_string(), trimmed_raw.map(str::to_string));
         }
@@ -5802,7 +6366,10 @@ pub(crate) fn provider_codex_model_action(
 /// For `model_env`: entries with `Some(value)` are written; entries with `None`
 /// are explicitly cleared (overwritten with empty string in the env-patch, so
 /// `persist_agent_local_config_json` removes them).
-fn cascade_update_agent_config(
+///
+/// Async so Pi/OpenCode can best-effort fetch the shared provider's full model
+/// catalog and inject it into the managed provider entry (chat model picker).
+async fn cascade_update_agent_config(
     agent_type: AgentType,
     api_url: &str,
     api_key: &str,
@@ -5956,13 +6523,15 @@ fn cascade_update_agent_config(
             if api_url.trim().is_empty() {
                 provider_table.remove("base_url");
             } else {
+                let normalized = normalize_openai_compatible_base_url(api_url);
                 provider_table.insert(
                     "base_url".to_string(),
-                    toml::Value::String(api_url.to_string()),
+                    toml::Value::String(normalized),
                 );
             }
             if provider_name == "veryagent" {
                 provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
+                // Codex 2026+ only accepts `responses` (chat was removed).
                 provider_table.insert(
                     "wire_api".to_string(),
                     toml::Value::String("responses".to_string()),
@@ -5987,27 +6556,21 @@ fn cascade_update_agent_config(
             persist_codex_native_config_files(Some(&auth_str), Some(&toml_str))?;
         }
         AgentType::OpenCode => {
-            let auth_path = opencode_auth_json_path();
-            let mut auth_obj = if auth_path.exists() {
-                fs::read_to_string(&auth_path)
-                    .ok()
-                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-                    .filter(|v| v.is_object())
-                    .unwrap_or_else(|| serde_json::json!({}))
-            } else {
-                serde_json::json!({})
-            };
-            if !api_key.trim().is_empty() {
-                auth_obj["api_key"] = serde_json::Value::String(api_key.to_string());
-            }
-            let auth_str = serde_json::to_string_pretty(&auth_obj)
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_opencode_auth_json(&auth_str)?;
-
-            let patch = serde_json::json!({ "apiBaseUrl": api_url });
-            let patch_str =
-                serde_json::to_string(&patch).map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_agent_local_config_json(agent_type, Some(&patch_str))?;
+            // OpenCode stores credentials per provider id in auth.json
+            // (`{ type: "api", key }`) and non-secret provider defs in
+            // opencode.json (`provider.<id>`). Write a managed `veryagent`
+            // provider so the unified model-provider selector works the same
+            // as Hermes/Cline/Kimi. Only the agent-selected model is loaded —
+            // settings remains the place to pick from the full A计划 catalog.
+            write_opencode_managed_provider(
+                api_url,
+                api_key,
+                model_env
+                    .get("OPENAI_MODEL")
+                    .and_then(|v| v.as_ref())
+                    .map(String::as_str),
+                &[],
+            )?;
         }
         AgentType::Cline => {
             // When a model_provider_id is set, cascade the provider's credentials
@@ -6029,10 +6592,16 @@ fn cascade_update_agent_config(
             persist_cline_local_config(Some(&patch_str))?;
         }
         AgentType::CodeBuddy => {
-            // CodeBuddy authenticates via env vars (CODEBUDDY_API_KEY /
-            // CODEBUDDY_INTERNET_ENVIRONMENT) managed by its dedicated settings
-            // panel through `acpUpdateAgentEnv`; it does not participate in the
-            // model-provider credential cascade.
+            // A计划 is additive: write a custom model into models.json with its
+            // own OpenAI-compatible url/apiKey. Do not touch CODEBUDDY_BASE_URL
+            // / region / native API key — those own the Tencent built-in catalog
+            // (China vs overseas).
+            let model_name = model_env
+                .get("CODEBUDDY_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str)
+                .unwrap_or("");
+            write_codebuddy_managed_provider(api_url, api_key, model_name, &[])?;
         }
         AgentType::KimiCode => {
             // When a model_provider_id is set, the cascade injects provider
@@ -6047,10 +6616,12 @@ fn cascade_update_agent_config(
                 .unwrap_or_default();
             let spec = KimiManagedSpec {
                 interface_type: "openai".to_string(),
+                // Kimi's openai transport appends `/chat/completions` to base_url.
+                // Shared providers are often bare host roots; force `/v1`.
                 base_url: if api_url.trim().is_empty() {
                     None
                 } else {
-                    Some(api_url.to_string())
+                    Some(normalize_openai_compatible_base_url(api_url))
                 },
                 api_key: if api_key.trim().is_empty() {
                     None
@@ -6065,10 +6636,18 @@ fn cascade_update_agent_config(
             seed_kimi_synthetic_credential()?;
         }
         AgentType::Pi => {
-            // Pi authenticates via its own `~/.pi/agent/auth.json` + model
-            // selection in `~/.pi/agent/settings.json`, managed by the dedicated
-            // Pi settings panel (`acp_update_pi_config`); it does not participate
-            // in the model-provider credential cascade.
+            // Pi authenticates via `~/.pi/agent/{settings,auth,models}.json`.
+            // When bound to a shared model provider, write a managed custom
+            // provider (`veryagent`) so the agent uses the same credentials as
+            // every other agent that selected "A计划"/model provider. Only the
+            // agent-selected model is written — chat shows what pi loads, and
+            // settings is where the full A计划 catalog is chosen.
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str)
+                .unwrap_or("");
+            write_pi_managed_provider(api_url, api_key, model_name, &[])?;
         }
     }
     Ok(())
@@ -6108,9 +6687,19 @@ pub(crate) fn extract_agent_model(
             // Heuristic: check if any key looks like an agent_type (contains underscore
             // or matches known types).
             let has_agent_key = obj.keys().any(|k| {
-                k.contains('_') || k == "claude_code" || k == "codex" || k == "gemini"
-                    || k == "kimi_code" || k == "hermes" || k == "openhands"
-                    || k == "openclaw" || k == "cline" || k == "augment"
+                k.contains('_')
+                    || k == "claude_code"
+                    || k == "codex"
+                    || k == "gemini"
+                    || k == "kimi_code"
+                    || k == "hermes"
+                    || k == "openhands"
+                    || k == "openclaw"
+                    || k == "open_claw"
+                    || k == "cline"
+                    || k == "open_code"
+                    || k == "pi"
+                    || k == "augment"
             });
             if has_agent_key {
                 // Multi-agent format but this agent_type has no entry.
@@ -6156,11 +6745,31 @@ pub(crate) async fn cascade_update_model_provider(
             .and_then(|raw| serde_json::from_str(raw).ok())
             .unwrap_or_default();
 
-        if !new_api_url.trim().is_empty() {
-            env_map.insert(url_key.to_string(), new_api_url.to_string());
+        // CodeBuddy: A计划 credentials go into models.json only. Do not overwrite
+        // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY — that breaks native Tencent
+        // models (China/overseas/iOA).
+        if agent_type != AgentType::CodeBuddy {
+            if !new_api_url.trim().is_empty() {
+                env_map.insert(url_key.to_string(), new_api_url.to_string());
+            }
+            if !new_api_key.trim().is_empty() {
+                env_map.insert(key_key.to_string(), new_api_key.to_string());
+            }
         }
-        if !new_api_key.trim().is_empty() {
-            env_map.insert(key_key.to_string(), new_api_key.to_string());
+        if agent_type == AgentType::CodeBuddy {
+            env_map.remove("CODEBUDDY_BASE_URL");
+            env_map.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+            if let Some(model) = env_map
+                .get("CODEBUDDY_MODEL")
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                env_map.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+                env_map.insert(
+                    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                    model.clone(),
+                );
+            }
         }
 
         // Preserve each agent's currently selected model when credentials change.
@@ -6202,7 +6811,9 @@ pub(crate) async fn cascade_update_model_provider(
             new_api_key,
             &model_env,
             &codex_action,
-        ) {
+        )
+        .await
+        {
             tracing::warn!(
                 "[ModelProvider] cascade_update_agent_config({agent_type}) failed: {e}, skipping config update"
             );
@@ -6857,7 +7468,7 @@ pub(crate) async fn acp_get_agent_status_core(
     Ok(crate::acp::types::AcpAgentStatus {
         agent_type,
         available,
-        enabled: setting.map(|m| m.enabled).unwrap_or(true),
+        enabled: setting.map(|m| m.enabled).unwrap_or(false),
         installed_version,
         resident: meta.resident,
     })
@@ -7008,7 +7619,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             description: meta.description.to_string(),
             available,
             distribution_type: dist_type.to_string(),
-            enabled: setting.map(|m| m.enabled).unwrap_or(true),
+            enabled: setting.map(|m| m.enabled).unwrap_or(false),
             sort_order,
             installed_version: local_installed_version,
             env,
@@ -7256,6 +7867,30 @@ pub(crate) async fn acp_update_agent_env_core(
                 merged_env.insert(k.clone(), value.clone());
             }
         }
+        // CodeBuddy has no separate config file: env_json is the source of truth.
+        // Bind writes the shared provider into CODEBUDDY_* and clears the hosted
+        // region selector so it cannot fight a custom endpoint. Also mirror the
+        // selected model into Claude-derived custom-option env so the ACP
+        // model picker surfaces the A计划 model in chat.
+        if agent_type == AgentType::CodeBuddy {
+            // A计划 is additive custom models only. Keep native CODEBUDDY_API_KEY
+            // + CODEBUDDY_INTERNET_ENVIRONMENT (China/overseas/iOA). Strip any
+            // leftover endpoint hijack from older binds.
+            let (_, _, model_key) = agent_env_keys(agent_type);
+            merged_env.remove("CODEBUDDY_BASE_URL");
+            merged_env.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+            if let Some(model) = merged_env
+                .get(model_key)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                merged_env.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+                merged_env.insert(
+                    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                    model.clone(),
+                );
+            }
+        }
         codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         // Codex's on-disk config is handled by `apply_codex_root_model_action`
         // below; Gemini's analogous config.env gap is pre-existing and out of
@@ -7270,6 +7905,9 @@ pub(crate) async fn acp_update_agent_env_core(
                 | AgentType::Hermes
                 | AgentType::Cline
                 | AgentType::OpenClaw
+                | AgentType::OpenCode
+                | AgentType::Pi
+                | AgentType::CodeBuddy
         ) {
             claude_local_cascade = Some((provider.api_url.clone(), provider.api_key.clone(), model_env));
         }
@@ -7294,7 +7932,9 @@ pub(crate) async fn acp_update_agent_env_core(
             &api_key,
             &model_env,
             &CodexModelAction::NoOp,
-        ) {
+        )
+        .await
+        {
             eprintln!("[acp_update_agent_env] cascade_update_agent_config({agent_type}) failed: {e}");
         } else if agent_type == AgentType::OpenClaw {
             // Gateway may already be running with old credentials; nudge a restart.
@@ -8979,6 +9619,104 @@ mod tests {
             value["agents"]["defaults"]["workspace"].as_str(),
             Some("W")
         );
+    }
+
+    #[test]
+    fn write_codebuddy_managed_provider_writes_chat_completions_model() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // resolve_codebuddy_config_dir honors CODEBUDDY_CONFIG_DIR.
+        // SAFETY: test-only env mutation.
+        unsafe {
+            std::env::set_var("CODEBUDDY_CONFIG_DIR", tmp.path());
+        }
+        // Preserve a non-managed custom model; replace a previous A计划 entry.
+        let seed = serde_json::json!({
+            "models": [
+                {
+                    "id": "user-custom",
+                    "name": "User Custom",
+                    "vendor": "OpenAI",
+                    "url": "https://other.example.com/v1/chat/completions",
+                    "apiKey": "sk-user"
+                },
+                {
+                    "id": "stale-model",
+                    "name": "stale-model",
+                    "vendor": "A计划",
+                    "url": "https://old.example.com/v1/chat/completions",
+                    "apiKey": "sk-old"
+                }
+            ]
+        });
+        fs::write(
+            tmp.path().join("models.json"),
+            serde_json::to_string_pretty(&seed).unwrap(),
+        )
+        .expect("seed");
+
+        write_codebuddy_managed_provider(
+            "https://gateway.example.com",
+            "sk-a-plan",
+            "MiniMax-M2.7",
+            &[],
+        )
+        .expect("write");
+        unsafe {
+            std::env::remove_var("CODEBUDDY_CONFIG_DIR");
+        }
+
+        let raw = fs::read_to_string(tmp.path().join("models.json")).expect("read");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("json");
+        let models = value["models"].as_array().expect("models array");
+        // Stale A计划 entry gone; user custom kept; new selection present.
+        assert_eq!(models.len(), 2);
+        let managed = models
+            .iter()
+            .find(|m| m["id"].as_str() == Some("MiniMax-M2.7"))
+            .expect("managed model");
+        assert_eq!(
+            managed["url"].as_str(),
+            Some("https://gateway.example.com/v1/chat/completions")
+        );
+        assert_eq!(managed["apiKey"].as_str(), Some("sk-a-plan"));
+        assert_eq!(managed["vendor"].as_str(), Some("A计划"));
+        assert!(
+            models
+                .iter()
+                .any(|m| m["id"].as_str() == Some("user-custom")),
+            "non-managed custom model must be preserved"
+        );
+        assert!(
+            !models
+                .iter()
+                .any(|m| m["id"].as_str() == Some("stale-model")),
+            "previous A计划 entry must be replaced"
+        );
+        // availableModels must stay absent so native Tencent built-ins remain
+        // visible alongside additive custom models.
+        assert!(
+            value.get("availableModels").is_none(),
+            "must not write availableModels (would hide native models)"
+        );
+    }
+
+    #[test]
+    fn codebuddy_chat_completions_url_normalizes_base() {
+        assert_eq!(
+            codebuddy_chat_completions_url("https://api.example.com"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            codebuddy_chat_completions_url("https://api.example.com/v1/"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            codebuddy_chat_completions_url(
+                "https://api.example.com/v1/chat/completions"
+            ),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(codebuddy_chat_completions_url("  "), "");
     }
 
     #[test]

@@ -2,8 +2,16 @@
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Version](https://img.shields.io/badge/version-0.9.3-blue)](./CHANGELOG.md)
 
 一个多智能体协作编程桌面应用。把多个 AI 编程助手（Claude Code、Codex CLI、Gemini CLI、OpenCode 等）整合到一个工作空间里，支持会话聚合、多智能体协作、以及丰富的开发工具链。
+
+**仓库**
+
+- GitHub（公网）：https://github.com/plhys/VeryAgent
+- Gitea（内网）：http://10.10.100.233:3030/boss/veryagent
+
+应用内「系统管理 → 软件更新」可按网络选择上述任一发布源；标题栏主题切换旁在有新版本时会显示绿色「更新」按钮。发布产物与 `latest.json` 说明见 [`docs/updater-release.zh-CN.md`](docs/updater-release.zh-CN.md)。
 
 ## 主要功能
 

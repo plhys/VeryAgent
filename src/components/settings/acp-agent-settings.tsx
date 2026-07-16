@@ -194,6 +194,9 @@ interface AgentDraft {
   hermesAuthMode: HermesAuthMode
   openClawAuthMode: OpenClawAuthMode
   clineAuthMode: ClineAuthMode
+  openCodeAuthMode: OpenCodeAuthMode
+  piAuthMode: PiAuthMode
+  codeBuddyAuthMode: CodeBuddyAuthMode
   // Hermes — `apiKey`/`model`/`apiBaseUrl` are reused for the active provider's
   // key, model.default, and model.base_url. These carry the rest.
   hermesProvider: string
@@ -1984,6 +1987,25 @@ function upsertTomlSectionBooleanKey(
   return lines.join("\n").trim()
 }
 
+/** Codex appends `/chat/completions` or `/responses` itself — force `/v1`. */
+function normalizeOpenAiCompatibleBaseUrl(apiBaseUrl: string): string {
+  let base = apiBaseUrl.trim().replace(/\/+$/, "")
+  if (!base) return ""
+  for (const suffix of [
+    "/chat/completions",
+    "/completions",
+    "/responses",
+    "/models",
+  ]) {
+    if (base.endsWith(suffix)) {
+      base = base.slice(0, -suffix.length).replace(/\/+$/, "")
+      break
+    }
+  }
+  if (base.endsWith("/v1")) return base
+  return `${base}/v1`
+}
+
 function patchCodexProviderBaseUrl(
   configTomlText: string,
   provider: string,
@@ -1993,6 +2015,8 @@ function patchCodexProviderBaseUrl(
   if (!trimmedProvider) return configTomlText.trim()
 
   const nextApiBaseUrl = apiBaseUrl.trim()
+    ? normalizeOpenAiCompatibleBaseUrl(apiBaseUrl)
+    : ""
   const lines = configTomlText.split(/\r?\n/)
   const sectionPattern = new RegExp(
     `^\\[\\s*model_providers\\.${escapeRegExp(trimmedProvider)}\\s*\\]$`
@@ -2127,6 +2151,7 @@ function ensureCodexProviderDefaults(
     next,
     CODEX_DEFAULT_MODEL_PROVIDER,
     "wire_api",
+    // Current Codex rejects `chat` at config load; only `responses` is valid.
     'wire_api = "responses"'
   )
   next = patchCodexProviderField(
@@ -2669,6 +2694,18 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
       agent.agent_type === "cline" && agent.model_provider_id != null
         ? ("model_provider" as ClineAuthMode)
         : "native",
+    openCodeAuthMode:
+      agent.agent_type === "open_code" && agent.model_provider_id != null
+        ? ("model_provider" as OpenCodeAuthMode)
+        : "native",
+    piAuthMode:
+      agent.agent_type === "pi" && agent.model_provider_id != null
+        ? ("model_provider" as PiAuthMode)
+        : "native",
+    codeBuddyAuthMode:
+      agent.agent_type === "code_buddy" && agent.model_provider_id != null
+        ? ("model_provider" as CodeBuddyAuthMode)
+        : "native",
     openClawGatewayUrl: openClawImportant.gatewayUrl,
     openClawGatewayToken: openClawImportant.gatewayToken,
     openClawSessionKey: openClawImportant.sessionKey,
@@ -3051,6 +3088,12 @@ export type HermesAuthMode = "native" | "model_provider"
 export type OpenClawAuthMode = "gateway" | "model_provider"
 /** Cline credential mode. `native` = existing CLINE_PROVIDERS system; `model_provider` = veryAgent unified model provider. */
 export type ClineAuthMode = "native" | "model_provider"
+/** OpenCode credential mode. `native` = multi-provider opencode.json/auth.json UI; `model_provider` = unified model provider. */
+export type OpenCodeAuthMode = "native" | "model_provider"
+/** Pi credential mode. `native` = pi settings/auth/models UI; `model_provider` = unified model provider. */
+export type PiAuthMode = "native" | "model_provider"
+/** CodeBuddy credential mode. `native` = hosted/self-hosted env panel; `model_provider` = unified model provider. */
+export type CodeBuddyAuthMode = "native" | "model_provider"
 /** The six provider `type` values Kimi's config.toml `[providers]` accepts. */
 export type KimiInterfaceType =
   | "kimi"
@@ -3347,7 +3390,8 @@ function KimiCodeConfigPanel({
       setSaving(true)
       onSaveModelProvider(
         {
-          KIMI_MODEL_BASE_URL: provider.api_url,
+          // Kimi appends `/chat/completions` itself; bare host roots fail silently.
+          KIMI_MODEL_BASE_URL: normalizeOpenAiCompatibleBaseUrl(provider.api_url),
           KIMI_MODEL_API_KEY: provider.api_key,
           KIMI_MODEL_NAME: selectedProviderModel.trim() || provider.model || "",
         },
@@ -5087,6 +5131,11 @@ export function AcpAgentSettings() {
       return selectedDraft.openClawAuthMode === "model_provider"
     if (at === "cline")
       return selectedDraft.clineAuthMode === "model_provider"
+    if (at === "open_code")
+      return selectedDraft.openCodeAuthMode === "model_provider"
+    if (at === "pi") return selectedDraft.piAuthMode === "model_provider"
+    if (at === "code_buddy")
+      return selectedDraft.codeBuddyAuthMode === "model_provider"
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -5724,6 +5773,56 @@ export function AcpAgentSettings() {
             OPENAI_MODEL: keepModel,
           }),
         }))
+      } else if (agentType === "open_code") {
+        // OpenCode models are `provider/model`. When binding the managed
+        // veryagent provider, keep a bare model id and let the cascade write
+        // `veryagent/<model>` into opencode.json.
+        const keepModel = selectedDraft.model
+          .replace(/^veryagent\//, "")
+          .trim()
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: keepModel,
+          }),
+        }))
+      } else if (agentType === "pi") {
+        const keepModel = selectedDraft.model
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: keepModel,
+          }),
+        }))
+      } else if (agentType === "code_buddy") {
+        const keepModel = selectedDraft.model
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          // A计划 is additive via ~/.codebuddy/models.json (backend cascade).
+          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL — those
+          // own the native China/overseas Tencent catalog.
+          envText: patchEnvText(current.envText, {
+            CODEBUDDY_MODEL: keepModel,
+            CODEBUDDY_BASE_URL: "",
+            CODEBUDDY_DISABLE_BUILTIN_MODELS: "",
+          }),
+        }))
       } else {
         updateSelectedDraft((current) => ({
           ...current,
@@ -5834,12 +5933,33 @@ export function AcpAgentSettings() {
         return
       }
 
-      if (agentType === "hermes" || agentType === "open_claw") {
+      if (
+        agentType === "hermes" ||
+        agentType === "open_claw" ||
+        agentType === "open_code" ||
+        agentType === "pi"
+      ) {
         updateSelectedDraft((current) => ({
           ...current,
           model: modelId,
           envText: patchEnvText(current.envText, {
             OPENAI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "code_buddy") {
+        // Remember the A计划 selection; backend rewrites models.json on save.
+        // Do not force ANTHROPIC_MODEL / disable built-ins — native Tencent
+        // models must remain selectable (China vs overseas region).
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            CODEBUDDY_MODEL: modelId,
+            ANTHROPIC_CUSTOM_MODEL_OPTION: modelId,
+            ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: modelId,
           }),
         }))
         return
@@ -6188,6 +6308,56 @@ export function AcpAgentSettings() {
       updateSelectedDraft((current) => ({
         ...current,
         hermesAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleOpenCodeAuthModeChange = useCallback(
+    (nextMode: OpenCodeAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "open_code"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        openCodeAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handlePiAuthModeChange = useCallback(
+    (nextMode: PiAuthMode) => {
+      if (!selectedAgent || !selectedDraft || selectedAgent.agent_type !== "pi")
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        piAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleCodeBuddyAuthModeChange = useCallback(
+    (nextMode: CodeBuddyAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "code_buddy"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        codeBuddyAuthMode: nextMode,
         modelProviderId:
           nextMode === "model_provider" ? current.modelProviderId : null,
       }))
@@ -7950,6 +8120,12 @@ export function AcpAgentSettings() {
                             ? t("modelProviderHint")
                             : t("authModeCustomEndpointHint")}
                       </p>
+                      {selectedDraft.codexAuthMode === "model_provider" && (
+                        <div className="mt-1.5 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{t("codex.modelProviderResponsesWarning")}</span>
+                        </div>
+                      )}
                     </div>
 
                     {selectedDraft.codexAuthMode === "chatgpt_subscription" && (
@@ -8696,6 +8872,116 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("openCode.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.openCodeAuthMode}
+                        onValueChange={(value) =>
+                          handleOpenCodeAuthModeChange(
+                            value as OpenCodeAuthMode
+                          )
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("openCode.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("openCode.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.openCodeAuthMode === "model_provider"
+                          ? t("openCode.authModeModelProviderHint")
+                          : t("openCode.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "glm-5.1 / gpt-5",
+                      })}
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "open_code",
+                              selectedAgent.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.openCodeAuthMode === "native" && (
+                    <>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
@@ -9481,7 +9767,16 @@ supports_websockets = true`}
                                 selectedDraft.openCodeAuthJsonText,
                             }
                           )
-                            .then(() => {
+                            .then(async () => {
+                              // Native multi-provider save clears the shared
+                              // model_provider binding so refresh stays in
+                              // native mode (same as Hermes/Cline).
+                              await persistEnv(
+                                "open_code",
+                                selectedAgent.enabled,
+                                selectedDraft.envText,
+                                null
+                              )
                               toast.success(t("toasts.openCodeSaved"), {
                                 description: t("toasts.configSavedHint"),
                               })
@@ -9512,6 +9807,8 @@ supports_websockets = true`}
                         )}
                       </Button>
                     </div>
+                    </>
+                    )}
                   </div>
                 ) : selectedAgent.agent_type === "cline" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
@@ -10532,18 +10829,131 @@ supports_websockets = true`}
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "code_buddy" ? (
-                  <CodeBuddyConfigPanel
-                    agent={selectedAgent}
-                    saving={Boolean(savingEnv[selectedAgent.agent_type])}
-                    onSave={(env, enabled) =>
-                      persistEnv(
-                        selectedAgent.agent_type,
-                        enabled,
-                        envMapToText(env),
-                        selectedAgent.model_provider_id
-                      )
-                    }
-                  />
+                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">
+                        {t("codebuddy.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.codeBuddyAuthMode}
+                        onValueChange={(value) =>
+                          handleCodeBuddyAuthModeChange(
+                            value as CodeBuddyAuthMode
+                          )
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("codebuddy.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("codebuddy.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.codeBuddyAuthMode === "model_provider"
+                          ? t("codebuddy.authModeModelProviderHint")
+                          : t("codebuddy.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "glm-5.1 / gpt-5",
+                      })}
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "code_buddy",
+                              selectedAgent.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.codeBuddyAuthMode === "native" && (
+                      <CodeBuddyConfigPanel
+                        agent={selectedAgent}
+                        saving={Boolean(savingEnv[selectedAgent.agent_type])}
+                        onSave={(env, enabled) =>
+                          persistEnv(
+                            selectedAgent.agent_type,
+                            enabled,
+                            envMapToText(env),
+                            // Native save clears shared model_provider binding.
+                            null
+                          )
+                        }
+                      />
+                    )}
+                  </div>
                 ) : selectedAgent.agent_type === "kimi_code" ? (
                   <KimiCodeConfigPanel
                     agent={selectedAgent}
@@ -10565,19 +10975,154 @@ supports_websockets = true`}
                     }
                   />
                 ) : selectedAgent.agent_type === "pi" ? (
-                  <PiConfigPanel
-                    agent={selectedAgent}
-                    saving={Boolean(savingEnv[selectedAgent.agent_type])}
-                    onSaveEnv={(env, enabled) =>
-                      persistEnv(
-                        selectedAgent.agent_type,
-                        enabled,
-                        envMapToText(env),
-                        selectedAgent.model_provider_id
-                      )
-                    }
-                    onSaved={refreshAgents}
-                  />
+                  <div className="space-y-3">
+                    <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                      <div>
+                        <label className="text-xs font-medium">
+                          {t("pi.configManagement")}
+                        </label>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {t("pi.configDescription")}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">
+                          {t("pi.authModeLabel")}
+                        </label>
+                        <Select
+                          value={selectedDraft.piAuthMode}
+                          onValueChange={(value) =>
+                            handlePiAuthModeChange(value as PiAuthMode)
+                          }
+                          disabled={selectedIsSavingConfig}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectItem value="model_provider">
+                              {t("pi.authModeModelProvider")}
+                            </SelectItem>
+                            <SelectItem value="native">
+                              {t("pi.authModeNative")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          {selectedDraft.piAuthMode === "model_provider"
+                            ? t("pi.authModeModelProviderHint")
+                            : t("pi.authModeNativeHint")}
+                        </p>
+                      </div>
+
+                      {selectedDraft.piAuthMode === "model_provider" && (
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("selectModelProvider")}
+                          </label>
+                          {selectedModelProviders.length > 0 ? (
+                            <Select
+                              value={
+                                selectedDraft.modelProviderId != null
+                                  ? String(selectedDraft.modelProviderId)
+                                  : ""
+                              }
+                              onValueChange={handleModelProviderSelect}
+                              disabled={selectedIsSavingConfig}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue
+                                  placeholder={t("selectModelProvider")}
+                                />
+                              </SelectTrigger>
+                              <SelectContent align="start">
+                                {selectedModelProviders.map((provider) => (
+                                  <SelectItem
+                                    key={provider.id}
+                                    value={String(provider.id)}
+                                  >
+                                    {provider.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("noModelProviderAvailable")}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedDraft.piAuthMode === "model_provider" &&
+                        renderProviderModelPicker({
+                          value: selectedDraft.model,
+                          placeholder: "glm-5.1 / gpt-5",
+                        })}
+
+                      {selectedDraft.piAuthMode === "model_provider" && (
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              persistEnv(
+                                "pi",
+                                selectedAgent.enabled,
+                                selectedDraft.envText,
+                                selectedDraft.modelProviderId
+                              )
+                            }
+                            disabled={
+                              selectedIsSavingEnv ||
+                              selectedMissingModelProvider
+                            }
+                          >
+                            {selectedIsSavingEnv ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveEnvVars")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedDraft.piAuthMode === "native" && (
+                      <PiConfigPanel
+                        agent={selectedAgent}
+                        saving={Boolean(savingEnv[selectedAgent.agent_type])}
+                        onSaveEnv={(env, enabled) =>
+                          persistEnv(
+                            selectedAgent.agent_type,
+                            enabled,
+                            envMapToText(env),
+                            // Native pi save clears shared model_provider
+                            // binding so refresh stays in native mode.
+                            null
+                          )
+                        }
+                        onSaved={async () => {
+                          // Credential save goes through acp_update_pi_config,
+                          // not env; still clear model_provider_id so refresh
+                          // doesn't snap back to model_provider mode.
+                          await persistEnv(
+                            "pi",
+                            selectedAgent.enabled,
+                            selectedDraft.envText,
+                            null
+                          )
+                          await refreshAgents()
+                        }}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
                     <div>

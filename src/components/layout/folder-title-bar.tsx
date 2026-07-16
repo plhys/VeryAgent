@@ -34,6 +34,7 @@ import {
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
 import { CommandDropdown } from "./command-dropdown"
+import { TitleBarUpdateButton } from "./title-bar-update-button"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -207,6 +208,7 @@ export function FolderTitleBar() {
                   <Sun className="h-5 w-5 dark:hidden" />
                   <Moon className="hidden h-5 w-5 dark:block" />
                 </Button>
+                <TitleBarUpdateButton />
               </div>
               <div data-tauri-drag-region className="h-8 flex-1" />
             </div>

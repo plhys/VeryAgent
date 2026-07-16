@@ -21,6 +21,7 @@ use crate::terminal::manager::resolve_shell;
 pub(crate) const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
 pub(crate) const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
 pub(crate) const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
+pub(crate) const APP_UPDATE_SOURCE_KEY: &str = "app_update_source";
 pub(crate) const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
 pub(crate) const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
 
@@ -317,6 +318,81 @@ pub async fn update_system_terminal_settings(
     );
 
     Ok(normalized)
+}
+
+/// Load the preferred update channel (GitHub vs Gitea). Defaults to GitHub.
+pub async fn load_app_update_source(
+    conn: &DatabaseConnection,
+) -> Result<crate::update::source::AppUpdateSource, AppCommandError> {
+    let raw = app_metadata_service::get_value(conn, APP_UPDATE_SOURCE_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let Some(raw) = raw else {
+        return Ok(crate::update::source::AppUpdateSource::default());
+    };
+
+    // Accept either a bare source string (`"github"`) or a small JSON object
+    // `{ "source": "gitea" }` so older/hand-edited values still parse.
+    if let Ok(source) = serde_json::from_str::<crate::update::source::AppUpdateSource>(&raw) {
+        return Ok(source);
+    }
+    if let Ok(wrapper) = serde_json::from_str::<serde_json::Value>(&raw) {
+        if let Some(s) = wrapper.get("source") {
+            if let Ok(source) =
+                serde_json::from_value::<crate::update::source::AppUpdateSource>(s.clone())
+            {
+                return Ok(source);
+            }
+        }
+    }
+
+    Err(
+        AppCommandError::configuration_invalid("Failed to parse stored update source preference")
+            .with_detail(raw),
+    )
+}
+
+pub async fn load_app_update_source_settings(
+    conn: &DatabaseConnection,
+) -> Result<crate::update::source::AppUpdateSourceSettings, AppCommandError> {
+    let source = load_app_update_source(conn).await?;
+    Ok(crate::update::source::AppUpdateSourceSettings::from_source(
+        source,
+    ))
+}
+
+pub async fn store_app_update_source(
+    conn: &DatabaseConnection,
+    source: crate::update::source::AppUpdateSource,
+) -> Result<crate::update::source::AppUpdateSourceSettings, AppCommandError> {
+    let serialized = serde_json::to_string(&source).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize update source preference")
+            .with_detail(e.to_string())
+    })?;
+    app_metadata_service::upsert_value(conn, APP_UPDATE_SOURCE_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(crate::update::source::AppUpdateSourceSettings::from_source(
+        source,
+    ))
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn get_app_update_source_settings(
+    db: State<'_, AppDatabase>,
+) -> Result<crate::update::source::AppUpdateSourceSettings, AppCommandError> {
+    load_app_update_source_settings(&db.conn).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn update_app_update_source_settings(
+    source: crate::update::source::AppUpdateSource,
+    db: State<'_, AppDatabase>,
+) -> Result<crate::update::source::AppUpdateSourceSettings, AppCommandError> {
+    store_app_update_source(&db.conn, source).await
 }
 
 #[cfg(feature = "tauri-runtime")]

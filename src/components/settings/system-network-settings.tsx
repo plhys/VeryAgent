@@ -39,12 +39,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  getAppUpdateSourceSettings,
   getSystemProxySettings,
+  updateAppUpdateSourceSettings,
   updateSystemLanguageSettings,
   updateSystemProxySettings,
 } from "@/lib/api"
 import { openUrl } from "@/lib/platform"
-import type { AppLocale } from "@/lib/types"
+import type { AppLocale, AppUpdateSource, AppUpdateSourceSettings } from "@/lib/types"
 import {
   checkAppUpdate,
   closeAppUpdate,
@@ -109,6 +111,10 @@ export function SystemNetworkSettings() {
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [sourceUnreachable, setSourceUnreachable] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null)
+  const [updateSource, setUpdateSource] = useState<AppUpdateSource>("github")
+  const [updateSourceMeta, setUpdateSourceMeta] =
+    useState<AppUpdateSourceSettings | null>(null)
+  const [savingUpdateSource, setSavingUpdateSource] = useState(false)
   // Server/Docker self-update capability reported by `check_app_update`
   // (absent in desktop mode). Drives whether the upgrade button performs a
   // real in-place update or just links to the release page.
@@ -225,14 +231,19 @@ export function SystemNetworkSettings() {
     setLoadError(null)
 
     try {
-      const [proxySettings, version] = await Promise.all([
+      const [proxySettings, version, sourceSettings] = await Promise.all([
         getSystemProxySettings(),
         getCurrentAppVersion(),
+        getAppUpdateSourceSettings().catch(() => null),
       ])
 
       setEnabled(proxySettings.enabled)
       setProxyUrl(proxySettings.proxy_url ?? "")
       setCurrentVersion(version)
+      if (sourceSettings) {
+        setUpdateSource(sourceSettings.source)
+        setUpdateSourceMeta(sourceSettings)
+      }
     } catch (err) {
       const message = toErrorMessage(err)
       setLoadError(message)
@@ -284,6 +295,29 @@ export function SystemNetworkSettings() {
       }
     },
     [t]
+  )
+
+  const saveUpdateSource = useCallback(
+    async (nextSource: AppUpdateSource) => {
+      if (nextSource === updateSource && updateSourceMeta) return
+      setSavingUpdateSource(true)
+      try {
+        const next = await updateAppUpdateSourceSettings(nextSource)
+        setUpdateSource(next.source)
+        setUpdateSourceMeta(next)
+        // Clear a previous check result so the next check hits the new channel.
+        setAvailableUpdate(null)
+        setSourceUnreachable(false)
+        setUpdateError(null)
+        setLastCheckedAt(null)
+      } catch (err) {
+        const message = toErrorMessage(err)
+        toast.error(t("updateSourceSaveFailed", { message }))
+      } finally {
+        setSavingUpdateSource(false)
+      }
+    },
+    [t, updateSource, updateSourceMeta]
   )
 
   const saveLanguage = useCallback(
@@ -459,7 +493,12 @@ export function SystemNetworkSettings() {
             <Button
               variant="ghost"
               className="size-5 rounded-full"
-              onClick={() => openUrl("https://github.com/veryagent-plus/veryagent")}
+              onClick={() =>
+                openUrl(
+                  updateSourceMeta?.repoUrl ??
+                    "https://github.com/plhys/VeryAgent"
+                )
+              }
             >
               <GithubMarkIcon className="size-5" />
             </Button>
@@ -486,6 +525,43 @@ export function SystemNetworkSettings() {
           <p className="text-xs text-muted-foreground leading-5">
             {t("updateDescription")}
           </p>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">{t("updateSourceTitle")}</p>
+                <p className="text-[11px] text-muted-foreground leading-5">
+                  {t("updateSourceDescription")}
+                </p>
+              </div>
+              <Select
+                value={updateSource}
+                onValueChange={(value) => {
+                  if (value === "github" || value === "gitea") {
+                    void saveUpdateSource(value)
+                  }
+                }}
+                disabled={savingUpdateSource || isBusy || checkingUpdate}
+              >
+                <SelectTrigger className="w-[11.5rem] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="github">
+                    {t("updateSourceGithub")}
+                  </SelectItem>
+                  <SelectItem value="gitea">
+                    {t("updateSourceGitea")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {updateSource === "gitea"
+                ? t("updateSourceGiteaHint")
+                : t("updateSourceGithubHint")}
+            </p>
+          </div>
 
           <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs space-y-2">
             <div className="flex items-center justify-between gap-3">
@@ -540,7 +616,8 @@ export function SystemNetworkSettings() {
                     size="sm"
                     onClick={() =>
                       openUrl(
-                        "https://github.com/veryagent-plus/veryagent/releases/latest"
+                        updateSourceMeta?.releasesUrl ??
+                          "https://github.com/plhys/VeryAgent/releases/latest"
                       )
                     }
                   >
