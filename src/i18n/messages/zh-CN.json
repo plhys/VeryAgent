@@ -187,7 +187,6 @@
     "rollbackSuccess": "已回滚到上一个版本，正在重新加载……",
     "rollbackFailed": "回滚失败，请检查服务器日志。",
     "updateErrors": {
-      "sourceUnavailable": "无法连接更新源或尚未发布更新清单（latest.json）。可切换 GitHub/Gitea 更新源，或确认该仓库 Release 已挂上签名产物与 latest.json。",
       "network": "网络连接异常，请检查网络或代理设置后重试。也可切换另一更新源再试。",
       "downloadFailed": "下载更新包失败，请稍后重试。",
       "installFailed": "安装更新失败，请关闭应用后重试。",

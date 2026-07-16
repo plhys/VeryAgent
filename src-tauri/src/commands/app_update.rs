@@ -93,21 +93,31 @@ pub async fn check_app_update(
         }),
         Ok(None) => None,
         Err(e) => {
-            // Include the manifest URL in both message and detail so the
-            // frontend can classify 404 / empty-channel as source_unreachable
-            // even when only one field is shown.
+            // Empty / unpublished release channel is not a user-facing failure:
+            // product UX is simply "no update available" (already latest).
+            // Real transport failures still surface so the user can switch
+            // sources or fix the network.
             let detail = format!(
                 "{} — {} ({})",
                 e,
                 source.label(),
                 source.manifest_url()
             );
-            return Err(AppCommandError::network(format!(
-                "Failed to check for updates from {} (latest.json): {}",
-                source.label(),
-                source.manifest_url()
-            ))
-            .with_detail(detail));
+            if is_empty_update_channel(&detail) {
+                tracing::info!(
+                    "update check: no release on {} ({}); treating as up-to-date",
+                    source.label(),
+                    source.manifest_url()
+                );
+                None
+            } else {
+                return Err(AppCommandError::network(format!(
+                    "Failed to check for updates from {} ({})",
+                    source.label(),
+                    source.manifest_url()
+                ))
+                .with_detail(detail));
+            }
         }
     };
 
@@ -115,6 +125,23 @@ pub async fn check_app_update(
         current_version,
         update,
     })
+}
+
+/// 404 / missing release assets / empty endpoints → no published update yet.
+fn is_empty_update_channel(message: &str) -> bool {
+    let m = message.to_ascii_lowercase();
+    m.contains("404")
+        || m.contains("not found")
+        || m.contains("could not fetch a valid release")
+        || m.contains("no release")
+        || m.contains("empty endpoints")
+        || m.contains("does not have any endpoints")
+        // Common before the first signed release is uploaded.
+        || (m.contains("latest.json")
+            && (m.contains("404")
+                || m.contains("not found")
+                || m.contains("could not fetch")
+                || m.contains("failed to fetch")))
 }
 
 /// Begin (or attach to) a download+install of the available update. Returns

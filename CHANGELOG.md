@@ -9,19 +9,16 @@
 
 ## [Unreleased]
 
-### 新增
-
-- **双更新源**：系统设置可选 **GitHub 仓库**（`plhys/VeryAgent`）或 **Gitea 仓库**（内网 `10.10.100.233:3030/boss/veryagent`），检查/下载均跟随所选源
-- 桌面更新检查改为后端 `check_app_update`（可覆盖 endpoint）；开启 `createUpdaterArtifacts` 与 updater 插件
-- **标题栏更新按钮**：主题切换旁，有新版本时显示绿色「更新」小按钮，点击下载安装；装完可「重启以更新」
-- 文档：`docs/updater-release.zh-CN.md`（双仓 `latest.json` 与签名发布说明）
-
 ---
 
 ## [0.9.3] — 2026-07-16
 
 ### 新增
 
+- **双更新源**：系统设置可选 **GitHub 仓库**（`plhys/VeryAgent`）或 **Gitea 仓库**（内网 `10.10.100.233:3030/boss/veryagent`），检查/下载均跟随所选源
+- 桌面更新检查改为后端 `check_app_update`（可覆盖 endpoint）；开启 `createUpdaterArtifacts` 与 updater 插件
+- **标题栏更新按钮**：主题切换旁，有新版本时显示绿色「更新」小按钮，点击下载安装；装完可「重启以更新」
+- 文档：`docs/updater-release.zh-CN.md`（双仓 `latest.json` 与签名发布说明）
 - **共享模型供应商（A计划）绑定**
   - 智能体可绑定后台配置的模型供应商；聊天模型选择仅展示 ACP 已通告/已配置可用模型（不注入占位目录）
   - **Pi**：写入 `~/.pi/agent/models.json` 完整 schema + 内联 `apiKey`；运行时不注入 `OPENAI_*`（避免展开约 40 个内置 openai 模型）
@@ -39,6 +36,8 @@
 
 ### 变更
 
+- 更新检查：未发布 / 空渠道时按「已是最新」处理，不再向用户展示清单/签名技术细节
+- 发布用 updater 签名公钥更新为本机正式发布密钥（首次自动更新渠道）
 - **移除共享身份 / 共享记忆**；`/settings/shared-preferences` 重定向外观设置
 - **设置侧栏分组**：通用设置（默认展开）/ 专家设置（默认折叠）
 - 桌宠：气泡锁定跟随、自下向上生长、缩放与 320 基数对齐

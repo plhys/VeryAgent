@@ -136,9 +136,22 @@ export type AppUpdateErrorKind =
   | "install_failed"
   | "unknown"
 
+/** Why the release channel could not be used (for precise UI copy). */
+export type AppUpdateSourceFailureReason =
+  | "not_found"
+  | "network"
+  | "timeout"
+  | "unknown"
+
 export interface AppUpdateErrorInfo {
   kind: AppUpdateErrorKind
   rawMessage: string
+  /** GitHub / Gitea when detectable from the error text. */
+  sourceLabel?: string | null
+  /** Manifest URL when present in the error. */
+  manifestUrl?: string | null
+  /** Finer cause for source/network failures. */
+  failureReason?: AppUpdateSourceFailureReason | null
 }
 
 export async function getCurrentAppVersion(): Promise<string> {
@@ -296,16 +309,80 @@ export async function closeAppUpdate(
   await update.close()
 }
 
+function extractManifestUrl(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s)"']+latest\.json[^\s)"']*/i)
+  return m?.[0] ?? null
+}
+
+function extractSourceLabel(text: string): string | null {
+  if (/\bgithub\b/i.test(text) || /github\.com/i.test(text)) return "GitHub"
+  if (/\bgitea\b/i.test(text) || /10\.10\.100\.233/i.test(text)) return "Gitea"
+  return null
+}
+
+function extractFailureReason(haystack: string): AppUpdateSourceFailureReason {
+  // Order matters: network/timeout signals win over a bare "latest.json" mention
+  // so a GitHub connect failure is not mislabeled as "manifest missing".
+  if (
+    haystack.includes("timed out") ||
+    haystack.includes("timeout") ||
+    haystack.includes("deadline exceeded")
+  ) {
+    return "timeout"
+  }
+  if (
+    haystack.includes("error sending request") ||
+    haystack.includes("failed to send request") ||
+    haystack.includes("connection refused") ||
+    haystack.includes("connection reset") ||
+    haystack.includes("econnreset") ||
+    haystack.includes("dns") ||
+    haystack.includes("no such host") ||
+    haystack.includes("name or service not known") ||
+    haystack.includes("unreachable") ||
+    // Avoid matching "network_error" code alone when the body is a 404 —
+    // pure transport failures usually include one of the phrases above.
+    (haystack.includes("network") &&
+      !haystack.includes("404") &&
+      !haystack.includes("not found"))
+  ) {
+    return "network"
+  }
+  if (
+    haystack.includes("404") ||
+    haystack.includes("not found") ||
+    haystack.includes("status code 404") ||
+    haystack.includes("no release") ||
+    haystack.includes("could not fetch a valid release") ||
+    haystack.includes("empty endpoints") ||
+    haystack.includes("updater does not have any endpoints") ||
+    // Manifest path without a transport signal ≈ empty/unpublished channel.
+    haystack.includes("latest.json") ||
+    haystack.includes("/releases/latest/download/")
+  ) {
+    return "not_found"
+  }
+  return "unknown"
+}
+
 export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
   // Prefer a combined haystack: transport often puts the useful URL/path in
   // `message` while the plugin's raw failure lands in `detail`. Classifying on
   // only one side mis-labels "no release yet" / 404 as a generic unknown.
   const appError = extractAppCommandError(error)
   const rawMessage = toErrorMessage(error)
-  const haystack = [rawMessage, appError?.message, appError?.detail, appError?.code]
+  const combined = [rawMessage, appError?.message, appError?.detail, appError?.code]
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .join("\n")
-    .toLowerCase()
+  const haystack = combined.toLowerCase()
+  const sourceLabel = extractSourceLabel(combined)
+  const manifestUrl = extractManifestUrl(combined)
+  const failureReason = extractFailureReason(haystack)
+  const meta = {
+    sourceLabel,
+    manifestUrl,
+    failureReason,
+  }
 
   if (
     haystack.includes("latest.json") ||
@@ -323,7 +400,7 @@ export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
     haystack.includes("empty endpoints") ||
     haystack.includes("updater does not have any endpoints")
   ) {
-    return { kind: "source_unreachable", rawMessage }
+    return { kind: "source_unreachable", rawMessage, ...meta }
   }
 
   if (
@@ -341,7 +418,7 @@ export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
     haystack.includes("no such host") ||
     haystack.includes("unreachable")
   ) {
-    return { kind: "network", rawMessage }
+    return { kind: "network", rawMessage, ...meta }
   }
 
   if (
@@ -351,7 +428,7 @@ export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
     haystack.includes("signature") ||
     haystack.includes("minisign")
   ) {
-    return { kind: "download_failed", rawMessage }
+    return { kind: "download_failed", rawMessage, ...meta }
   }
 
   if (
@@ -359,8 +436,8 @@ export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
     haystack.includes("installer") ||
     haystack.includes("permission denied")
   ) {
-    return { kind: "install_failed", rawMessage }
+    return { kind: "install_failed", rawMessage, ...meta }
   }
 
-  return { kind: "unknown", rawMessage }
+  return { kind: "unknown", rawMessage, ...meta }
 }
