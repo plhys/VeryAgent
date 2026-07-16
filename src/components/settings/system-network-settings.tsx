@@ -109,7 +109,6 @@ export function SystemNetworkSettings() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
-  const [sourceUnreachable, setSourceUnreachable] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null)
   const [updateSource, setUpdateSource] = useState<AppUpdateSource>("github")
   const [updateSourceMeta, setUpdateSourceMeta] =
@@ -307,7 +306,6 @@ export function SystemNetworkSettings() {
         setUpdateSourceMeta(next)
         // Clear a previous check result so the next check hits the new channel.
         setAvailableUpdate(null)
-        setSourceUnreachable(false)
         setUpdateError(null)
         setLastCheckedAt(null)
       } catch (err) {
@@ -343,11 +341,14 @@ export function SystemNetworkSettings() {
 
   const formatUpdateError = useCallback(
     (error: unknown, action: UpdateAction): string => {
-      const { kind, rawMessage } = normalizeAppUpdateError(error)
+      const info = normalizeAppUpdateError(error)
+      const { kind, rawMessage } = info
 
       switch (kind) {
         case "source_unreachable":
-          return t("updateErrors.sourceUnavailable")
+          // Backend now maps empty channels to "no update"; if one still
+          // arrives (older build), treat it as already-latest, not an error.
+          return t("alreadyLatest")
         case "network":
           return t("updateErrors.network")
         case "download_failed":
@@ -369,22 +370,19 @@ export function SystemNetworkSettings() {
   // A failure inside the detached backend download/install task lands in the
   // shared update state rather than as a thrown error here, so surface it the
   // same way as a check error — and it stays visible after navigating back.
-  // source_unreachable errors are shown as a gentle hint, not a red error.
   const lifecycleError =
     updateState.status === "error" && updateState.error
-      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
-        ? null
-        : formatUpdateError(updateState.error, "install")
+      ? (() => {
+          const kind = normalizeAppUpdateError(updateState.error).kind
+          // Empty channel is not an install failure.
+          if (kind === "source_unreachable") return null
+          return formatUpdateError(updateState.error, "install")
+        })()
       : null
-  const lifecycleSourceUnreachable =
-    updateState.status === "error" && updateState.error
-      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
-      : false
 
   const checkForUpdates = useCallback(async () => {
     setCheckingUpdate(true)
     setUpdateError(null)
-    setSourceUnreachable(false)
 
     try {
       const previousUpdate = availableUpdate
@@ -409,15 +407,15 @@ export function SystemNetworkSettings() {
         await closeAppUpdate(previousUpdate)
       }
     } catch (err) {
-      const { kind } = normalizeAppUpdateError(err)
-      // "source_unreachable" means the update server has no published
-      // release yet (or the endpoint is misconfigured). This is expected
-      // before the first release is published — surface it as a gentle
-      // inline hint instead of a red error block.
-      if (kind === "source_unreachable") {
+      const info = normalizeAppUpdateError(err)
+      // Empty / unpublished channel: product semantics are "already latest".
+      if (info.kind === "source_unreachable") {
+        setAvailableUpdate(null)
+        setLastCheckedAt(new Date())
         setUpdateError(null)
-        setSourceUnreachable(true)
-        console.info("[Settings] update source unreachable (no release published yet)")
+        console.info(
+          "[Settings] no published update on selected source; treating as up-to-date"
+        )
       } else {
         const message = formatUpdateError(err, "check")
         setUpdateError(message)
@@ -771,11 +769,6 @@ export function SystemNetworkSettings() {
                 message: updateError || lifecycleError || "",
               })}
             </div>
-          )}
-          {(sourceUnreachable || lifecycleSourceUnreachable) && !updateError && !lifecycleError && (
-            <p className="text-xs text-muted-foreground">
-              {t("updateErrors.sourceUnavailable")}
-            </p>
           )}
         </section>
 

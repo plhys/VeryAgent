@@ -36,6 +36,19 @@ VeryAgent 支持从两个发布源检查并安装更新，用户可在 **系统�
 
 服务端自更新另需平台 tarball（`veryagent-server-*` + `.sig`），路径约定见 `src-tauri/src/update/install.rs`。
 
+## 签名密钥
+
+- 公钥已写入 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`，并同步 `src-tauri/src/update/verify.rs`
+- 私钥**不入库**。本机发布默认路径：`%USERPROFILE%\.veryagent\keys\veryagent-updater.key`
+- 构建前设置：
+
+```bat
+set TAURI_SIGNING_PRIVATE_KEY_PATH=%USERPROFILE%\.veryagent\keys\veryagent-updater.key
+set TAURI_SIGNING_PRIVATE_KEY_PASSWORD=
+```
+
+丢失私钥后无法再为旧公钥签名；只能换钥并重新发版（旧客户端无法校验新钥签名）。
+
 ## 双仓发布步骤
 
 1. 打 tag / 构建 release 产物（桌面 installer + `.sig` + `latest.json`，以及需要的 server 包）
