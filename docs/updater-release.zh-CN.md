@@ -56,8 +56,8 @@ set TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<password for that key>
 1. 打 tag / 构建 release 产物（桌面 installer + `.sig` + `latest.json`，以及需要的 server 包）
 2. 上传到 **GitHub** `plhys/VeryAgent` 的对应 Release
 3. 将**相同** `latest.json` 与二进制上传到 **Gitea** `boss/veryagent` 的对应 Release  
-   - Gitea 下载 URL 形态：  
-     `http://10.10.100.233:3030/boss/veryagent/releases/latest/download/latest.json`
+   - Gitea 下载 URL 形态（注意与 GitHub 路径不同）：  
+     `http://10.10.100.233:3030/boss/veryagent/releases/download/latest/latest.json`
 4. 确认两处 `latest.json` 的 `version` 一致；Gitea 上的 `platforms.*.url` 应指向 Gitea 可下载的资产地址（不要仍指向仅公网可达的 GitHub URL，除非内网也能访问 GitHub）
 
 ## 客户端行为

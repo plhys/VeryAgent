@@ -23,13 +23,13 @@ describe("normalizeAppUpdateError", () => {
     const info = normalizeAppUpdateError({
       code: "network_error",
       message:
-        "Update manifest from Gitea returned status 404 (http://10.10.100.233:3030/boss/veryagent/releases/latest/download/latest.json)",
+        "Update manifest from Gitea returned status 404 (http://10.10.100.233:3030/boss/veryagent/releases/download/latest/latest.json)",
       detail: "Not found.",
     })
     expect(info.kind).toBe("source_unreachable")
     expect(info.sourceLabel).toBe("Gitea")
     expect(info.manifestUrl).toBe(
-      "http://10.10.100.233:3030/boss/veryagent/releases/latest/download/latest.json"
+      "http://10.10.100.233:3030/boss/veryagent/releases/download/latest/latest.json"
     )
     expect(info.failureReason).toBe("not_found")
   })
@@ -38,7 +38,7 @@ describe("normalizeAppUpdateError", () => {
     const info = normalizeAppUpdateError({
       code: "network_error",
       message:
-        "Failed to check for updates from Gitea (latest.json): http://10.10.100.233:3030/boss/veryagent/releases/latest/download/latest.json",
+        "Failed to check for updates from Gitea (latest.json): http://10.10.100.233:3030/boss/veryagent/releases/download/latest/latest.json",
       detail: "operation timed out",
     })
     expect(info.kind).toBe("source_unreachable")
