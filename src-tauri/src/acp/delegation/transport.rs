@@ -214,30 +214,59 @@ pub struct BrokerGenerateImageRequest {
     pub token: String,
     /// The user's original prompt text (must be passed verbatim).
     pub prompt: String,
+    /// Model: "gemini" or "doubao". Default "gemini".
+    #[serde(default = "default_model")]
+    pub model: String,
     /// Image resolution: "1K", "2K", "4K". Default "2K".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_size: Option<String>,
-    /// Image aspect ratio: "1:1", "4:3", "16:9", "9:16", "3:4". Default "16:9".
+    /// Image aspect ratio: "1:1", "4:3", "16:9", "9:16", "3:4". Default "1:1".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<String>,
     /// Reference image URLs for image-to-image generation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ref_urls: Option<Vec<String>>,
-    /// Session ID for iterative editing. Same session_id shares history.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
 }
 
+fn default_model() -> String { "gemini".to_string() }
+
 /// Iteratively modify a previously generated image. Backs the `modify_image`
-/// MCP tool. Requires the same session_id as the previous generate_image call.
+/// MCP tool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerModifyImageRequest {
     pub token: String,
     /// The user's modification request text (must be passed verbatim).
     pub prompt: String,
-    /// Session ID from the previous generate_image call.
+    /// Model: "gemini" or "doubao". Default "gemini".
+    #[serde(default = "default_model")]
+    pub model: String,
+    /// Reference image URLs for the previous image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
+    pub ref_urls: Option<Vec<String>>,
+}
+
+/// Web search via upstream MCP proxy. Backs the `web_search` MCP tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerWebSearchRequest {
+    pub token: String,
+    /// The user's search query (must be passed verbatim).
+    pub query: String,
+    /// Optional time filter: "day", "week", "month".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freshness: Option<String>,
+    /// Number of results, 1-20, default 10.
+    #[serde(default = "default_search_count")]
+    pub count: u32,
+}
+
+fn default_search_count() -> u32 { 10 }
+
+/// Image search via upstream MCP proxy. Backs the `image_search` MCP tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerImageSearchRequest {
+    pub token: String,
+    /// The user's search keyword (must be passed verbatim).
+    pub query: String,
 }
 
 /// Tagged top-level message dispatched by the listener. Adding new variants
@@ -257,6 +286,8 @@ pub enum BrokerMessage {
     VisionAnalyze(BrokerVisionAnalyzeRequest),
     GenerateImage(BrokerGenerateImageRequest),
     ModifyImage(BrokerModifyImageRequest),
+    WebSearch(BrokerWebSearchRequest),
+    ImageSearch(BrokerImageSearchRequest),
 }
 
 /// The wrapped outcome the main process returns over the same socket.
@@ -433,6 +464,24 @@ pub async fn client_modify_image_round_trip(
     req: &BrokerModifyImageRequest,
 ) -> io::Result<BrokerResponse> {
     message_round_trip(socket_path, &BrokerMessage::ModifyImage(req.clone())).await
+}
+
+/// Dispatch a `web_search` request and read back the search results from the
+/// listener. One-shot API call — search may take 3-10 seconds.
+pub async fn client_web_search_round_trip(
+    socket_path: &str,
+    req: &BrokerWebSearchRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::WebSearch(req.clone())).await
+}
+
+/// Dispatch an `image_search` request and read back the image results from the
+/// listener. One-shot API call — search may take 10-30 seconds.
+pub async fn client_image_search_round_trip(
+    socket_path: &str,
+    req: &BrokerImageSearchRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::ImageSearch(req.clone())).await
 }
 
 /// Total budget for `open()` retries on Windows named pipes. Has to be

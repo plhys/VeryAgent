@@ -3,7 +3,7 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.3**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.4**）。
 
 ---
 
@@ -11,7 +11,19 @@
 
 ---
 
-## [0.9.3] — 2026-07-16
+## [0.9.4] — 2026-07-17
+
+### 新增
+
+- **web-search 技能**：网页搜索 + 图片搜索，经 MCP 代理上游 `feishu.ideasir.com`，中文优先，支持时间过滤
+- **doubao-image 技能**：豆包出图，使用 `generate_image` 工具 + `model: "doubao"`
+- **gemini-image 技能重构**：从旧 1666 直连 API 迁移到 MCP 端点 `feishu.ideasir.com`，支持 `model` 参数切换 Gemini/豆包
+- 恢复 transcripts 图片右键「引用二次创作」菜单项
+
+### 变更
+
+- `generate_image` / `modify_image` 后端改用 MCP JSON-RPC 协议，返回 base64 图片数据
+- 出图工具 `model` 参数：`gemini` → `generate_image_model1`，`doubao` → `generate_image_model2`
 
 ### 新增
 

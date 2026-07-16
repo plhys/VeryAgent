@@ -179,14 +179,20 @@
   },
   {
     "name": "generate_image",
-    "description": "Generate an image using the Gemini image generation API. Pass the user's original prompt text — do NOT translate, rephrase, or optimize it. The tool returns the URL of the generated image. For image-to-image, pass reference image URLs in ref_urls. Supports text-to-image and image-to-image. Use this tool directly — do NOT write Python/curl scripts to call the API.",
+    "description": "Generate an image using Gemini or Doubao via MCP. Pass the user's original prompt text — do NOT translate, rephrase, or optimize it. The tool returns the generated image. For image-to-image, pass reference image URLs in ref_urls. Default model is Gemini (no watermark). Use this tool directly — do NOT write Python/curl scripts to call the API.",
     "inputSchema": {
       "type": "object",
       "required": ["prompt"],
       "properties": {
         "prompt": {
           "type": "string",
-          "description": "The user's original request text. MUST be passed verbatim — never translate, rephrase, or optimize. The Gemini model understands the intent directly."
+          "description": "The user's original request text. MUST be passed verbatim — never translate, rephrase, or optimize."
+        },
+        "model": {
+          "type": "string",
+          "enum": ["gemini", "doubao"],
+          "description": "Model to use. Default is gemini (no watermark). Use doubao for the Doubao model.",
+          "default": "gemini"
         },
         "image_size": {
           "type": "string",
@@ -197,24 +203,20 @@
         "aspect_ratio": {
           "type": "string",
           "enum": ["1:1", "4:3", "16:9", "9:16", "3:4"],
-          "description": "Output image aspect ratio. Default is 16:9.",
-          "default": "16:9"
+          "description": "Output image aspect ratio. Default is 1:1.",
+          "default": "1:1"
         },
         "ref_urls": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Reference image URLs for image-to-image generation. Prefer public internet URLs (Gemini can download directly). Internal URLs (10.x.x.x) are auto-uploaded to image hosting. Pass the user's reference image URL here."
-        },
-        "session_id": {
-          "type": "string",
-          "description": "Session ID for iterative editing. Same session_id shares generation history so you can iteratively modify the image. Omit for one-shot generation."
+          "description": "Reference image URLs for image-to-image generation. The reference image is uploaded as base64 automatically. Pass the user's reference image URL here."
         }
       }
     }
   },
   {
     "name": "modify_image",
-    "description": "Iteratively modify a previously generated image. Must be called after generate_image with the same session_id to continue editing. Pass the user's modification request — do NOT translate or rephrase. The tool returns the URL of the modified image. Use this tool directly — do NOT write Python/curl scripts.",
+    "description": "Iteratively modify a previously generated image. Pass the user's modification request and the previous image URL as ref_urls — do NOT translate or rephrase. The tool returns the modified image. Use this tool directly — do NOT write Python/curl scripts.",
     "inputSchema": {
       "type": "object",
       "required": ["prompt"],
@@ -223,10 +225,56 @@
           "type": "string",
           "description": "The user's modification request text. MUST be passed verbatim — never translate, rephrase, or optimize."
         },
-        "session_id": {
+        "model": {
           "type": "string",
-          "description": "The session_id from the previous generate_image call. Same session shares iterative history.",
-          "default": "default"
+          "enum": ["gemini", "doubao"],
+          "description": "Model to use. Default is gemini.",
+          "default": "gemini"
+        },
+        "ref_urls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The previous image URL(s) to use as reference for modification."
+        }
+      }
+    }
+  },
+  {
+    "name": "web_search",
+    "description": "Search the web for up-to-date information. Returns Markdown-formatted results with titles, sources, dates, and snippets. Best for Chinese content (CSDN, Juejin, Zhihu, etc.) — better coverage than general-purpose search engines. Use this when you need current information beyond your knowledge cutoff. The user's search query is passed verbatim — never translate, rephrase, or optimize it.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The user's search query. MUST be passed verbatim — never translate, rephrase, or optimize."
+        },
+        "freshness": {
+          "type": "string",
+          "enum": ["day", "week", "month"],
+          "description": "Time filter. Use 'day' when the user asks about today, 'week' for recent/this week, 'month' for this month. Omit for no time restriction."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Number of results to return. Default is 10.",
+          "default": 10
+        }
+      }
+    }
+  },
+  {
+    "name": "image_search",
+    "description": "Search for images by keyword. Returns JSON with image URLs, dimensions, and match scores. Use this when the user asks to find pictures ('找一张...的图片', '有没有...的图'). The user's search query is passed verbatim — never translate or rephrase.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["query"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The user's search keyword. MUST be passed verbatim — never translate, rephrase, or optimize."
         }
       }
     }

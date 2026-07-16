@@ -19,8 +19,9 @@ use crate::acp::delegation::broker::{DelegationBroker, StatusWait};
 use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerGenerateImageRequest,
-    BrokerMessage, BrokerModifyImageRequest, BrokerRequest,
+    BrokerImageSearchRequest, BrokerMessage, BrokerModifyImageRequest, BrokerRequest,
     BrokerResponse, BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
+    BrokerWebSearchRequest,
 };
 use crate::acp::delegation::types::{DelegationRequest, DelegationTaskReport, TaskStatus};
 use crate::acp::feedback::{PendingFeedback, SessionFeedbackAccess};
@@ -28,6 +29,7 @@ use crate::acp::question::{QuestionOutcome, SessionQuestionAccess};
 use crate::acp::session_info::{SessionInfo, SessionInfoAccess};
 use crate::models::AgentType;
 use serde_json::Value;
+use base64::Engine as _;
 
 /// Hard ceiling on a *positive* `get_delegation_status` long-poll, so a single
 /// MCP tool call can't block the companion's round-trip unbounded. The child
@@ -334,6 +336,16 @@ impl DelegationListener {
                     outcome: self.process_modify_image(req).await,
                 }
             }
+            BrokerMessage::WebSearch(req) => {
+                BrokerResponse {
+                    outcome: self.process_web_search(req).await,
+                }
+            }
+            BrokerMessage::ImageSearch(req) => {
+                BrokerResponse {
+                    outcome: self.process_image_search(req).await,
+                }
+            }
             BrokerMessage::Cancel(cancel) => {
                 self.process_cancel(cancel).await;
                 // Empty ack — the companion only uses this to detect the
@@ -479,117 +491,426 @@ impl DelegationListener {
             .await
     }
 
-    /// Call the Gemini image generation API and return the image URL.
+    /// Call the MCP image generation endpoint and return the generated image.
     async fn process_generate_image(&self, req: BrokerGenerateImageRequest) -> Value {
         if self.tokens.lookup(&req.token).await.is_none() {
             return serde_json::json!({ "error": "invalid token" });
         }
 
-        let api_url = "http://10.10.100.233:1666/v1/images/generations";
-        let mut body = serde_json::json!({
-            "messages": [{ "role": "user", "content": req.prompt }]
-        });
-        if let Some(size) = &req.image_size {
-            body["image_size"] = serde_json::Value::String(size.clone());
-        }
-        if let Some(ar) = &req.aspect_ratio {
-            body["aspect_ratio"] = serde_json::Value::String(ar.clone());
-        }
-        if let Some(urls) = &req.ref_urls {
-            body["ref_urls"] = serde_json::Value::Array(
-                urls.iter().map(|u| serde_json::Value::String(u.clone())).collect()
+        let mcp_url = "http://feishu.ideasir.com/mcp/proxy/multimodal-model-prod/mcp";
+        let token = "mMV7z9gjPHCCFqT8dTK1wjHzMUHUCuTT";
+        let model = req.model.as_str();
+        let tool_name = match model {
+            "doubao" => "generate_image_model2",
+            _ => "generate_image_model1",
+        };
+
+        let mut args = serde_json::json!({ "prompt": req.prompt });
+        if model == "gemini" || model.is_empty() {
+            args["aspectRatio"] = serde_json::Value::String(
+                req.aspect_ratio.as_deref().unwrap_or("1:1").to_string()
+            );
+            args["imageSize"] = serde_json::Value::String(
+                req.image_size.as_deref().unwrap_or("2K").to_string()
+            );
+        } else {
+            args["size"] = serde_json::Value::String(
+                req.image_size.as_deref().unwrap_or("2K").to_string()
             );
         }
-        if let Some(sid) = &req.session_id {
-            body["session_id"] = serde_json::Value::String(sid.clone());
+
+        // image-to-image: download reference image and convert to base64
+        if let Some(ref_urls) = &req.ref_urls {
+            if let Some(first_url) = ref_urls.first() {
+                match Self::download_image_as_base64(first_url).await {
+                    Ok((b64, mime)) => {
+                        args["referenceImageBase64"] = serde_json::Value::String(b64);
+                        args["referenceImageMimeType"] = serde_json::Value::String(mime);
+                    }
+                    Err(e) => {
+                        // Fallback: pass as URL
+                        args["referenceImageUrls"] = serde_json::json!(ref_urls);
+                        tracing::warn!("[generate_image] failed to download ref as base64: {e}, falling back to URL");
+                    }
+                }
+            }
         }
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": { "name": tool_name, "arguments": args },
+        });
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
+            .no_proxy()
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
-        let mut request_builder = client
-            .post(api_url)
+        match client
+            .post(mcp_url)
             .header("Content-Type", "application/json")
-            .json(&body);
-        if let Some(sid) = &req.session_id {
-            request_builder = request_builder.header("X-Session-Id", sid);
-        }
-
-        match request_builder.send().await {
+            .header("Accept", "application/json, text/event-stream")
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&body)
+            .send()
+            .await
+        {
             Ok(resp) => {
                 let status = resp.status();
-                match resp.json::<serde_json::Value>().await {
-                    Ok(data) => {
-                        if status.is_success() {
-                            let url = data
-                                .get("data")
-                                .and_then(|d| d.get(0))
-                                .and_then(|item| item.get("url"))
-                                .and_then(|v| v.as_str());
-                            match url {
-                                Some(url) => serde_json::json!({ "url": url }),
-                                None => serde_json::json!({ "error": format!("API returned unexpected format: {}", data) }),
-                            }
-                        } else {
-                            serde_json::json!({ "error": format!("API returned {}: {}", status, data) })
-                        }
-                    }
-                    Err(e) => serde_json::json!({ "error": format!("Failed to parse API response (status {}): {}", status, e) }),
+                match resp.text().await {
+                    Ok(body_text) => Self::extract_image_from_mcp_response(&body_text, model, tool_name),
+                    Err(e) => serde_json::json!({ "error": format!("Failed to read response: {e}") }),
                 }
             }
-            Err(e) => serde_json::json!({ "error": format!("Failed to call Gemini image API: {}", e) }),
+            Err(e) => serde_json::json!({ "error": format!("Failed to call MCP image API: {e}") }),
         }
     }
 
-    /// Call the Gemini image modify API and return the modified image URL.
+    /// Call the MCP image generation endpoint for modification.
     async fn process_modify_image(&self, req: BrokerModifyImageRequest) -> Value {
         if self.tokens.lookup(&req.token).await.is_none() {
             return serde_json::json!({ "error": "invalid token" });
         }
 
-        let api_url = "http://10.10.100.233:1666/v1/images/modify";
+        let mcp_url = "http://feishu.ideasir.com/mcp/proxy/multimodal-model-prod/mcp";
+        let token = "mMV7z9gjPHCCFqT8dTK1wjHzMUHUCuTT";
+        let model = req.model.as_str();
+        let tool_name = match model {
+            "doubao" => "generate_image_model2",
+            _ => "generate_image_model1",
+        };
+
+        let mut args = serde_json::json!({ "prompt": req.prompt });
+        if model == "gemini" || model.is_empty() {
+            args["aspectRatio"] = serde_json::Value::String("1:1".to_string());
+            args["imageSize"] = serde_json::Value::String("2K".to_string());
+        } else {
+            args["size"] = serde_json::Value::String("2K".to_string());
+        }
+
+        // image-to-image: download reference image and convert to base64
+        if let Some(ref_urls) = &req.ref_urls {
+            if let Some(first_url) = ref_urls.first() {
+                match Self::download_image_as_base64(first_url).await {
+                    Ok((b64, mime)) => {
+                        args["referenceImageBase64"] = serde_json::Value::String(b64);
+                        args["referenceImageMimeType"] = serde_json::Value::String(mime);
+                    }
+                    Err(e) => {
+                        args["referenceImageUrls"] = serde_json::json!(ref_urls);
+                        tracing::warn!("[modify_image] failed to download ref as base64: {e}, falling back to URL");
+                    }
+                }
+            }
+        }
+
         let body = serde_json::json!({
-            "messages": [{ "role": "user", "content": req.prompt }]
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": { "name": tool_name, "arguments": args },
         });
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
+            .no_proxy()
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
-        let mut request_builder = client
-            .post(api_url)
+        match client
+            .post(mcp_url)
             .header("Content-Type", "application/json")
-            .json(&body);
-        if let Some(sid) = &req.session_id {
-            request_builder = request_builder.header("X-Session-Id", sid);
-        }
-
-        match request_builder.send().await {
+            .header("Accept", "application/json, text/event-stream")
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&body)
+            .send()
+            .await
+        {
             Ok(resp) => {
-                let status = resp.status();
-                match resp.json::<serde_json::Value>().await {
-                    Ok(data) => {
-                        if status.is_success() {
-                            let url = data
-                                .get("data")
-                                .and_then(|d| d.get(0))
-                                .and_then(|item| item.get("url"))
-                                .and_then(|v| v.as_str());
-                            match url {
-                                Some(url) => serde_json::json!({ "url": url }),
-                                None => serde_json::json!({ "error": format!("API returned unexpected format: {}", data) }),
-                            }
-                        } else {
-                            serde_json::json!({ "error": format!("API returned {}: {}", status, data) })
-                        }
-                    }
-                    Err(e) => serde_json::json!({ "error": format!("Failed to parse API response (status {}): {}", status, e) }),
+                match resp.text().await {
+                    Ok(body_text) => Self::extract_image_from_mcp_response(&body_text, model, tool_name),
+                    Err(e) => serde_json::json!({ "error": format!("Failed to read response: {e}") }),
                 }
             }
-            Err(e) => serde_json::json!({ "error": format!("Failed to call Gemini modify API: {}", e) }),
+            Err(e) => serde_json::json!({ "error": format!("Failed to call MCP modify API: {e}") }),
+        }
+    }
+
+    /// Parse MCP SSE response, extract base64 image data, save to temp dir,
+/// return { base64, mime, path }.
+fn extract_image_from_mcp_response(body_text: &str, model: &str, tool_name: &str) -> Value {
+    // Parse SSE: "data: {...}" lines
+    let payload = Self::parse_mcp_sse(body_text);
+    let payload = match payload {
+        Some(p) => p,
+        None => return serde_json::json!({ "error": format!("no valid MCP payload: {}", &body_text[..body_text.len().min(240)]) }),
+    };
+
+    if let Some(err) = payload.get("error") {
+        return serde_json::json!({ "error": format!("MCP error: {err}") });
+    }
+
+    let result = payload.get("result").cloned().unwrap_or(serde_json::Value::Null);
+    let content = result.get("content").and_then(|c| c.as_array());
+
+    if let Some(items) = content {
+        for item in items {
+            if item.get("type").and_then(|t| t.as_str()) == Some("image") {
+                if let Some(b64) = item.get("data").and_then(|d| d.as_str()) {
+                    // Strip data: URL prefix if present
+                    let (mime, b64) = if let Some(comma_pos) = b64.find(',') {
+                        if b64[..comma_pos].contains("data:") {
+                            let header = &b64[..comma_pos];
+                            let mime = header
+                                .strip_prefix("data:")
+                                .and_then(|h| h.split(';').next())
+                                .unwrap_or("image/png");
+                            (mime.to_string(), b64[comma_pos + 1..].to_string())
+                        } else {
+                            ("image/png".to_string(), b64.to_string())
+                        }
+                    } else {
+                        let mime = item.get("mimeType")
+                            .or_else(|| item.get("mime_type"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("image/jpeg");
+                        (mime.to_string(), b64.to_string())
+                    };
+
+                    // Decode base64
+                    let data = match base64::Engine::decode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &b64,
+                    ) {
+                        Ok(d) => d,
+                        Err(e) => return serde_json::json!({ "error": format!("base64 decode failed: {e}") }),
+                    };
+
+                    // Save to temp dir
+                    let ext = if mime.contains("png") { "png" } else if mime.contains("jpeg") || mime.contains("jpg") { "jpg" } else { "bin" };
+                    let dir = std::env::temp_dir().join("veryagent-images");
+                    let _ = std::fs::create_dir_all(&dir);
+                    let filename = format!("{}_{}_{}.{}", model, tool_name, std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(), ext);
+                    let path = dir.join(&filename);
+                    if let Err(e) = std::fs::write(&path, &data) {
+                        return serde_json::json!({ "error": format!("failed to save image: {e}") });
+                    }
+
+                    return serde_json::json!({
+                        "base64": b64,
+                        "mime": mime,
+                        "path": path.to_string_lossy(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Fallback: check for text content with URL
+    if let Some(items) = content {
+        for item in items {
+            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                // Check for URL in text
+                if let Some(url) = text.split_whitespace().find(|w| w.starts_with("http")) {
+                    return serde_json::json!({ "error": format!("text URL only (no image data): {url}") });
+                }
+                return serde_json::json!({ "error": format!("text only: {}", &text[..text.len().min(200)]) });
+            }
+        }
+    }
+
+    serde_json::json!({ "error": format!("no image in response: {}", serde_json::to_string(&payload).unwrap_or_default()) })
+}
+
+/// Parse MCP JSON-RPC response from SSE stream or raw JSON.
+fn parse_mcp_sse(raw: &str) -> Option<Value> {
+    // Try raw JSON first
+    if let Ok(v) = serde_json::from_str::<Value>(raw) {
+        if v.get("result").is_some() || v.get("error").is_some() {
+            return Some(v);
+        }
+    }
+    // Parse SSE lines
+    for line in raw.lines() {
+        let line = line.trim();
+        if let Some(data) = line.strip_prefix("data:") {
+            let data = data.trim();
+            if data.is_empty() || data == "[DONE]" {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(data) {
+                if v.get("result").is_some() || v.get("error").is_some() {
+                    return Some(v);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Download an image from a URL and return (base64, mime_type).
+async fn download_image_as_base64(url: &str) -> Result<(String, String), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .no_proxy()
+        .build()
+        .map_err(|e| format!("build client: {e}"))?;
+
+    let resp = client.get(url).send().await.map_err(|e| format!("fetch: {e}"))?;
+    let mime = resp.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(';').next().unwrap_or(s).trim().to_string())
+        .unwrap_or_else(|| "image/jpeg".to_string());
+
+    let bytes = resp.bytes().await.map_err(|e| format!("read body: {e}"))?;
+    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+
+    Ok((b64, mime))
+}
+
+/// Proxy web search to the upstream MCP endpoint.
+    async fn process_web_search(&self, req: BrokerWebSearchRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+
+        let mcp_url = "http://feishu.ideasir.com/mcp/proxy/web-search-prod/mcp";
+        let token = "mMV7z9gjPHCCFqT8dTK1wjHzMUHUCuTT";
+
+        let mut args = serde_json::json!({
+            "query": req.query,
+            "count": req.count.min(20),
+        });
+        if let Some(f) = &req.freshness {
+            args["freshness"] = serde_json::Value::String(f.clone());
+        }
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": { "name": "web_search", "arguments": args },
+            "id": 1,
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        match client
+            .post(mcp_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let body_text = match resp.text().await {
+                    Ok(t) => t,
+                    Err(e) => return serde_json::json!({ "error": format!("Failed to read response: {e}") }),
+                };
+                // Parse SSE: "data: {...}" lines
+                for line in body_text.lines() {
+                    if let Some(data) = line.strip_prefix("data: ") {
+                        if let Ok(parsed) = serde_json::from_str::<Value>(data) {
+                            if let Some(err) = parsed.get("error") {
+                                return serde_json::json!({ "error": format!("Upstream search error: {err}") });
+                            }
+                            let result = parsed.get("result").cloned().unwrap_or(parsed);
+                            let content = result
+                                .get("content")
+                                .and_then(|c| c.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|item| item.get("text"))
+                                .and_then(|t| t.as_str());
+                            if let Some(text) = content {
+                                // The upstream returns JSON text; try to parse it
+                                if let Ok(inner) = serde_json::from_str::<Value>(text) {
+                                    return inner;
+                                }
+                                return serde_json::json!({ "text": text });
+                            }
+                            return result;
+                        }
+                    }
+                }
+                serde_json::json!({ "error": format!("Empty or unexpected response: {body_text}") })
+            }
+            Err(e) => serde_json::json!({ "error": format!("Failed to call web search API: {e}") }),
+        }
+    }
+
+    /// Proxy image search to the upstream MCP endpoint.
+    async fn process_image_search(&self, req: BrokerImageSearchRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+
+        let mcp_url = "http://feishu.ideasir.com/mcp/proxy/web-search-prod/mcp";
+        let token = "mMV7z9gjPHCCFqT8dTK1wjHzMUHUCuTT";
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": { "name": "image_search", "arguments": { "query": req.query } },
+            "id": 1,
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        match client
+            .post(mcp_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let body_text = match resp.text().await {
+                    Ok(t) => t,
+                    Err(e) => return serde_json::json!({ "error": format!("Failed to read response: {e}") }),
+                };
+                for line in body_text.lines() {
+                    if let Some(data) = line.strip_prefix("data: ") {
+                        if let Ok(parsed) = serde_json::from_str::<Value>(data) {
+                            if let Some(err) = parsed.get("error") {
+                                return serde_json::json!({ "error": format!("Upstream image search error: {err}") });
+                            }
+                            let result = parsed.get("result").cloned().unwrap_or(parsed);
+                            let content = result
+                                .get("content")
+                                .and_then(|c| c.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|item| item.get("text"))
+                                .and_then(|t| t.as_str());
+                            if let Some(text) = content {
+                                // The upstream returns JSON text; try to parse it
+                                if let Ok(inner) = serde_json::from_str::<Value>(text) {
+                                    return inner;
+                                }
+                                return serde_json::json!({ "images": text });
+                            }
+                            return result;
+                        }
+                    }
+                }
+                serde_json::json!({ "error": format!("Empty or unexpected response: {body_text}") })
+            }
+            Err(e) => serde_json::json!({ "error": format!("Failed to call image search API: {e}") }),
         }
     }
 
