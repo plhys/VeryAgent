@@ -93,12 +93,21 @@ pub async fn check_app_update(
         }),
         Ok(None) => None,
         Err(e) => {
+            // Include the manifest URL in both message and detail so the
+            // frontend can classify 404 / empty-channel as source_unreachable
+            // even when only one field is shown.
+            let detail = format!(
+                "{} — {} ({})",
+                e,
+                source.label(),
+                source.manifest_url()
+            );
             return Err(AppCommandError::network(format!(
-                "Failed to check for updates from {} ({})",
+                "Failed to check for updates from {} (latest.json): {}",
                 source.label(),
                 source.manifest_url()
             ))
-            .with_detail(e.to_string()));
+            .with_detail(detail));
         }
     };
 
