@@ -18,12 +18,15 @@ pub const GITHUB_RELEASES_URL: &str = "https://github.com/plhys/VeryAgent/releas
 /// Internal Gitea release channel (HTTP — requires insecure transport for the
 /// desktop updater plugin).
 pub const GITEA_REPO_URL: &str = "http://10.10.100.233:3030/boss/veryagent";
+// Gitea attachment URLs use `/releases/download/<tag>/…` (not GitHub's
+// `/releases/latest/download/…`). For the rolling channel we publish under the
+// `latest` tag alias path that Gitea actually serves.
 pub const GITEA_MANIFEST_URL: &str =
-    "http://10.10.100.233:3030/boss/veryagent/releases/latest/download/latest.json";
+    "http://10.10.100.233:3030/boss/veryagent/releases/download/latest/latest.json";
 pub const GITEA_DOWNLOAD_BASE: &str =
-    "http://10.10.100.233:3030/boss/veryagent/releases/latest/download";
+    "http://10.10.100.233:3030/boss/veryagent/releases/download/latest";
 pub const GITEA_RELEASES_URL: &str =
-    "http://10.10.100.233:3030/boss/veryagent/releases/latest";
+    "http://10.10.100.233:3030/boss/veryagent/releases";
 
 /// Which remote hosts the update manifest / release assets.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
