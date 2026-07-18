@@ -60,8 +60,8 @@ pub enum McpAppType {
     Hermes,
     CodeBuddy,
     KimiCode,
+    MimoCode,
 }
-
 #[derive(Debug, Clone, Serialize)]
 pub struct LocalMcpServer {
     pub id: String,
@@ -376,6 +376,7 @@ pub async fn mcp_upsert_local_server(
         McpAppType::Hermes,
         McpAppType::CodeBuddy,
         McpAppType::KimiCode,
+        McpAppType::MimoCode,
     ];
 
     for app in all_apps {
@@ -433,6 +434,7 @@ pub async fn mcp_remove_server(
             McpAppType::Hermes,
             McpAppType::CodeBuddy,
             McpAppType::KimiCode,
+            McpAppType::MimoCode,
         ],
     };
 
@@ -629,6 +631,13 @@ fn opencode_config_path() -> PathBuf {
         .join(".config")
         .join("opencode")
         .join("opencode.json")
+}
+
+fn mimo_code_config_path() -> PathBuf {
+    home_dir_or_default()
+        .join(".config")
+        .join("mimocode")
+        .join("mimocode.json")
 }
 
 fn gemini_config_path() -> PathBuf {
@@ -1942,6 +1951,117 @@ pub(crate) fn remove_opencode_server(id: &str) -> Result<bool, AppCommandError> 
 }
 
 // ---------------------------------------------------------------------------
+// MiMo Code  (~/.config/mimocode/mimocode.json  →  mcpServers)
+//
+// MiMo Code is an OpenCode fork by Xiaomi; it reads MCP server config from
+// `~/.config/mimocode/mimocode.json` using the same `mcpServers` format as
+// OpenCode. This implementation mirrors `read/upsert/remove_opencode_server`.
+// ---------------------------------------------------------------------------
+
+pub(crate) fn read_mimo_code_servers() -> Result<BTreeMap<String, Value>, AppCommandError> {
+    let path = mimo_code_config_path();
+    let root = read_json_file(&path)?;
+
+    let mut out = BTreeMap::new();
+
+    if let Some(servers) = root.get("mcpServers").and_then(Value::as_object) {
+        for (id, spec) in servers {
+            match canonicalize_spec(spec, "MiMo Code mcpServers") {
+                Ok(normalized) => {
+                    out.insert(id.to_string(), normalized);
+                }
+                Err(err) => {
+                    tracing::warn!("[MCP] skip invalid MiMo Code mcpServers entry id={id}: {err}");
+                }
+            }
+        }
+    }
+
+    if let Some(servers) = root.get("mcp").and_then(Value::as_object) {
+        for (id, spec) in servers {
+            if out.contains_key(id) {
+                continue;
+            }
+            match canonicalize_opencode_spec(spec, "MiMo Code mcp") {
+                Ok(normalized) => {
+                    out.insert(id.to_string(), normalized);
+                }
+                Err(err) => {
+                    tracing::warn!("[MCP] skip invalid MiMo Code mcp entry id={id}: {err}");
+                }
+            }
+        }
+    }
+
+    Ok(out)
+}
+
+pub(crate) fn upsert_mimo_code_server(id: &str, spec: &Value) -> Result<(), AppCommandError> {
+    let path = mimo_code_config_path();
+    let mut root = read_json_file(&path)?;
+    if !root.is_object() {
+        root = json!({});
+    }
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        mcp_configuration_invalid(format!("invalid JSON root in {}", path.display()))
+    })?;
+
+    if obj.get("mcpServers").map(Value::is_object).unwrap_or(false) {
+        let canonical = canonicalize_spec(spec, "MiMo Code write mcpServers")?;
+        let map = obj
+            .get_mut("mcpServers")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| {
+                mcp_configuration_invalid(format!("invalid mcpServers in {}", path.display()))
+            })?;
+        map.insert(id.to_string(), canonical);
+    } else {
+        if !obj.get("mcp").map(Value::is_object).unwrap_or(false) {
+            obj.insert("mcp".to_string(), Value::Object(Map::new()));
+        }
+        let converted = canonical_to_opencode_spec(spec)?;
+        let map = obj
+            .get_mut("mcp")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(|| {
+                mcp_configuration_invalid(format!("invalid mcp in {}", path.display()))
+            })?;
+        map.insert(id.to_string(), converted);
+    }
+
+    write_json_file(&path, &root)
+}
+
+pub(crate) fn remove_mimo_code_server(id: &str) -> Result<bool, AppCommandError> {
+    let path = mimo_code_config_path();
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut root = read_json_file(&path)?;
+    let Some(obj) = root.as_object_mut() else {
+        return Ok(false);
+    };
+
+    let mut removed = false;
+
+    if let Some(servers) = obj.get_mut("mcpServers").and_then(Value::as_object_mut) {
+        removed |= servers.remove(id).is_some();
+    }
+
+    if let Some(servers) = obj.get_mut("mcp").and_then(Value::as_object_mut) {
+        removed |= servers.remove(id).is_some();
+    }
+
+    if removed {
+        write_json_file(&path, &root)?;
+    }
+
+    Ok(removed)
+}
+
+// ---------------------------------------------------------------------------
 // Gemini CLI  (~/.gemini/settings.json  →  mcpServers)
 // ---------------------------------------------------------------------------
 
@@ -2252,6 +2372,13 @@ fn scan_local_servers() -> Result<Vec<LocalMcpServer>, AppCommandError> {
         entry.1.insert(McpAppType::KimiCode);
     }
 
+    for (id, spec) in read_mimo_code_servers()? {
+        let entry = merged
+            .entry(id)
+            .or_insert_with(|| (spec.clone(), BTreeSet::new()));
+        entry.1.insert(McpAppType::MimoCode);
+    }
+
     Ok(merged
         .into_iter()
         .map(|(id, (spec, apps))| LocalMcpServer {
@@ -2278,6 +2405,7 @@ fn upsert_server_for_app(app: McpAppType, id: &str, spec: &Value) -> Result<(), 
         McpAppType::Hermes => adapters::hermes::HermesAdapter.upsert_server(id, spec),
         McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.upsert_server(id, spec),
         McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.upsert_server(id, spec),
+        McpAppType::MimoCode => adapters::mimo_code::MimoCodeAdapter.upsert_server(id, spec),
     }
 }
 
@@ -2295,6 +2423,7 @@ pub fn read_servers_for_agent_type(
         AgentType::Hermes => adapters::hermes::HermesAdapter.read_servers(),
         AgentType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.read_servers(),
         AgentType::KimiCode => adapters::kimi_code::KimiCodeAdapter.read_servers(),
+        AgentType::MimoCode => adapters::mimo_code::MimoCodeAdapter.read_servers(),
         // pi-acp drops ACP-wire MCP and pi has no native MCP (it needs a
         // third-party extension), so veryagent manages no MCP servers for pi (v1).
         AgentType::Pi => Ok(BTreeMap::new()),
@@ -2658,6 +2787,7 @@ fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, AppCommandEr
         McpAppType::Hermes => adapters::hermes::HermesAdapter.remove_server(id),
         McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.remove_server(id),
         McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.remove_server(id),
+        McpAppType::MimoCode => adapters::mimo_code::MimoCodeAdapter.remove_server(id),
     }
 }
 

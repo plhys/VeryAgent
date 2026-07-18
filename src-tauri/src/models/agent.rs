@@ -14,6 +14,7 @@ pub enum AgentType {
     CodeBuddy,
     KimiCode,
     Pi,
+    MimoCode,
 }
 
 impl fmt::Display for AgentType {
@@ -29,6 +30,7 @@ impl fmt::Display for AgentType {
             AgentType::CodeBuddy => write!(f, "CodeBuddy"),
             AgentType::KimiCode => write!(f, "Kimi Code"),
             AgentType::Pi => write!(f, "Pi"),
+            AgentType::MimoCode => write!(f, "MiMo Code"),
         }
     }
 }
