@@ -258,6 +258,7 @@ function SkillCard({
   const desc = pickLocalizedText(skill.description, locale, "")
   const isToggling = togglingId === skill.id
   const iconName = skill.icon
+  const isZh = locale.toLowerCase().startsWith("zh")
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
@@ -275,20 +276,31 @@ function SkillCard({
                 </p>
               )}
             </div>
-            <Switch
-              checked={enabled}
-              onCheckedChange={() => onToggle(skill.id, skill.source)}
+            <Button
+              type="button"
+              size="sm"
+              variant={enabled ? "outline" : "default"}
+              className="h-7 shrink-0 px-2.5 text-xs"
               disabled={isToggling}
+              onClick={() => onToggle(skill.id, skill.source)}
               aria-label={
-                locale.toLowerCase().startsWith("zh")
+                isZh
                   ? enabled
-                    ? `从当前智能体停用${name}`
-                    : `对当前智能体启用${name}`
+                    ? `从当前智能体移除${name}`
+                    : `添加${name}到当前智能体`
                   : enabled
-                    ? `Disable ${name} for current agent`
-                    : `Enable ${name} for current agent`
+                    ? `Remove ${name} from current agent`
+                    : `Add ${name} to current agent`
               }
-            />
+            >
+              {isToggling ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : enabled ? (
+                isZh ? "移除" : "Remove"
+              ) : (
+                isZh ? "添加" : "Add"
+              )}
+            </Button>
           </div>
         </div>
       </div>
@@ -299,7 +311,7 @@ function SkillCard({
         {enabled && (
           <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
             <Check className="h-3 w-3" />
-            {locale.toLowerCase().startsWith("zh") ? "已启用" : "Enabled"}
+            {isZh ? "已添加" : "Added"}
           </span>
         )}
       </div>
@@ -636,11 +648,11 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
             ? currentlyEnabled
-              ? `已从${agentName}停用`
-              : `已对${agentName}启用`
+              ? `已从${agentName}移除`
+              : `已添加到${agentName}`
             : currentlyEnabled
-              ? `Disabled for ${agentName}`
-              : `Enabled for ${agentName}`
+              ? `Removed from ${agentName}`
+              : `Added to ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
         await refreshEnabledSkillIds()
@@ -946,11 +958,11 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
             ? currentlyEnabled
-              ? `已从${agentName}停用`
-              : `已对${agentName}启用`
+              ? `已从${agentName}移除`
+              : `已添加到${agentName}`
             : currentlyEnabled
-              ? `Disabled for ${agentName}`
-              : `Enabled for ${agentName}`
+              ? `Removed from ${agentName}`
+              : `Added to ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
         await refreshEnabledSkillIds()
@@ -1392,8 +1404,8 @@ export function SkillsAndToolsPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {locale.toLowerCase().startsWith("zh")
-                    ? "仅作用于当前入口智能体。技能：在输入框「+」里选用；插件（如 OpenWiki）：开启后自动生效，也可在「+ → 已启用插件」查看。"
-                    : "Scoped to the current entry agent. Skills: pick from the composer “+” menu. Plugins (e.g. OpenWiki): work automatically once enabled; check “+ → Enabled plugins”."}
+                    ? "VeryAgent 技能仓库。点「添加」即可把技能挂到当前智能体，无需去设置里勾选。"
+                    : "VeryAgent skill warehouse. Click Add to attach a skill to the current agent — no settings matrix."}
                 </p>
               </div>
             </div>
@@ -1401,7 +1413,7 @@ export function SkillsAndToolsPage() {
         )}
 
         <Tabs
-          defaultValue="enabled"
+          defaultValue="skills"
           className="flex flex-1 flex-col overflow-hidden"
         >
           <div className="shrink-0 pt-2">
@@ -1410,16 +1422,16 @@ export function SkillsAndToolsPage() {
               variant="line"
             >
               <TabsTrigger
-                value="enabled"
-                className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
-              >
-                {locale.toLowerCase().startsWith("zh") ? "已启用" : "Enabled"}
-              </TabsTrigger>
-              <TabsTrigger
                 value="skills"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "技能" : "Skills"}
+                {locale.toLowerCase().startsWith("zh") ? "技能仓库" : "Warehouse"}
+              </TabsTrigger>
+              <TabsTrigger
+                value="enabled"
+                className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
+              >
+                {locale.toLowerCase().startsWith("zh") ? "已添加" : "Added"}
               </TabsTrigger>
               <TabsTrigger
                 value="plugins"
@@ -1431,18 +1443,18 @@ export function SkillsAndToolsPage() {
           </div>
 
           <TabsContent
-            value="enabled"
-            forceMount
-            className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
-          >
-            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
-          </TabsContent>
-          <TabsContent
             value="skills"
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
             <SkillsTab onToggled={handleToggleHappened} />
+          </TabsContent>
+          <TabsContent
+            value="enabled"
+            forceMount
+            className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
+          >
+            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
           </TabsContent>
           <TabsContent
             value="plugins"
