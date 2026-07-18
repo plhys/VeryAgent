@@ -14,6 +14,7 @@ use crate::parsers::codex::CodexParser;
 use crate::parsers::gemini::GeminiParser;
 use crate::parsers::hermes::HermesParser;
 use crate::parsers::kimi_code::KimiCodeParser;
+use crate::parsers::mimo_code::MiMoCodeParser;
 use crate::parsers::pi::PiParser;
 use crate::parsers::openclaw::OpenClawParser;
 use crate::parsers::opencode::OpenCodeParser;
@@ -279,8 +280,7 @@ pub async fn get_conversation(
             AgentType::CodeBuddy => Box::new(CodeBuddyParser::new()),
             AgentType::KimiCode => Box::new(KimiCodeParser::new()),
             AgentType::Pi => Box::new(PiParser::new()),
-            // MiMo Code is an OpenCode fork; reuse OpenCode's parser.
-            AgentType::MimoCode => Box::new(OpenCodeParser::new()),
+            AgentType::MimoCode => Box::new(MiMoCodeParser::new()),
         };
 
         parser
@@ -523,7 +523,7 @@ pub async fn get_folder_conversation_core(
                 AgentType::CodeBuddy => Box::new(CodeBuddyParser::new()),
                 AgentType::KimiCode => Box::new(KimiCodeParser::new()),
                 AgentType::Pi => Box::new(PiParser::new()),
-                AgentType::MimoCode => Box::new(OpenCodeParser::new()),
+                AgentType::MimoCode => Box::new(MiMoCodeParser::new()),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None, d.summary.title)),

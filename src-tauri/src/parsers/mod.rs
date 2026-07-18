@@ -5,6 +5,7 @@ pub mod codex;
 pub mod gemini;
 pub mod hermes;
 pub mod kimi_code;
+pub mod mimo_code;
 pub mod openclaw;
 pub mod opencode;
 pub mod pi;
@@ -81,6 +82,14 @@ pub fn external_transcript_sources() -> Vec<ExternalSource> {
         ExternalSource {
             agent: "opencode",
             root: opencode::resolve_opencode_base_dir().join("opencode.db"),
+            is_file: true,
+            include_top: None,
+        },
+        ExternalSource {
+            // MiMo Code (OpenCode fork) stores its SQLite DB at
+            // ~/.local/share/mimocode/mimocode.db — same schema as OpenCode.
+            agent: "mimo-code",
+            root: mimo_code::resolve_mimo_code_base_dir().join("mimocode.db"),
             is_file: true,
             include_top: None,
         },
