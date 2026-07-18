@@ -521,6 +521,7 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "open_code",
   "pi",
   "code_buddy",
+  "mimo_code",
 ]
 
 /**

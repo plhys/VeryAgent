@@ -1847,6 +1847,230 @@ fn write_opencode_managed_provider(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// MiMo Code managed provider (OpenCode fork — same schema, different paths)
+// ---------------------------------------------------------------------------
+
+/// Managed provider id written by the unified model-provider cascade.
+/// Same value as OpenCode's — both agents use `veryagent` as the provider key.
+const MIMO_MANAGED_PROVIDER: &str = "veryagent";
+
+/// Resolve the MiMo Code config file path: `~/.config/mimocode/mimocode.jsonc`.
+/// MiMo Code (OpenCode fork) uses JSONC (JSON with comments) for its config.
+fn resolve_mimo_config_path() -> PathBuf {
+    let config_dir = std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+        .unwrap_or_else(|| PathBuf::from(".config"));
+    config_dir.join("mimocode").join("mimocode.jsonc")
+}
+
+/// Resolve the MiMo Code auth.json path: `~/.local/share/mimocode/auth.json`.
+fn mimo_auth_json_path() -> PathBuf {
+    crate::parsers::mimo_code::resolve_mimo_code_base_dir().join("auth.json")
+}
+
+/// Strip `//` line comments and `/* */` block comments from a JSONC string,
+/// producing valid JSON that serde_json can parse. String literals are
+/// preserved — `//` inside a quoted string is left untouched.
+fn strip_jsonc_comments(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().collect();
+    let mut out = String::with_capacity(raw.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        if in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+            i += 1;
+        } else if c == '"' {
+            in_string = true;
+            out.push(c);
+            i += 1;
+        } else if c == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && i + 1 < chars.len() && chars[i + 1] == '*' {
+            i += 2;
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
+                i += 1;
+            }
+            i = (i + 2).min(chars.len());
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Merge-write a managed `veryagent` provider into MiMo Code's config file
+/// (`mimocode.jsonc`) and credential file (`auth.json`).
+///
+/// Mirrors [`write_opencode_managed_provider`] but targets MiMo Code's
+/// paths. The config file is JSONC — comments are stripped before parsing
+/// and the output is written as plain JSON (comments are not preserved on
+/// rewrite, but veryAgent only manages its own `provider.veryagent` block).
+fn write_mimo_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let config_path = resolve_mimo_config_path();
+    let mut config = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .ok()
+            .map(|raw| strip_jsonc_comments(&raw))
+            .and_then(|clean| serde_json::from_str::<serde_json::Value>(&clean).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let config_obj = config
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("mimo config root must be a JSON object"))?;
+
+    let provider_root = config_obj
+        .entry("provider".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_root.is_object() {
+        *provider_root = serde_json::json!({});
+    }
+    let providers = provider_root
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid mimo provider table"))?;
+
+    let provider_item = providers
+        .entry(MIMO_MANAGED_PROVIDER.to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_item.is_object() {
+        *provider_item = serde_json::json!({});
+    }
+    let provider_obj = provider_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid mimo provider block"))?;
+
+    provider_obj.insert(
+        "npm".to_string(),
+        serde_json::Value::String(OPENCODE_OPENAI_COMPAT_NPM.to_string()),
+    );
+    provider_obj.insert(
+        "name".to_string(),
+        serde_json::Value::String(MIMO_MANAGED_PROVIDER.to_string()),
+    );
+
+    let options_item = provider_obj
+        .entry("options".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !options_item.is_object() {
+        *options_item = serde_json::json!({});
+    }
+    let options = options_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid mimo provider options"))?;
+    options.remove("apiKey");
+    if api_url.trim().is_empty() {
+        options.remove("baseURL");
+    } else {
+        let normalized = normalize_openai_compatible_base_url(api_url);
+        options.insert(
+            "baseURL".to_string(),
+            serde_json::Value::String(normalized),
+        );
+    }
+    if options.is_empty() {
+        provider_obj.remove("options");
+    }
+
+    let model_id = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.strip_prefix(&format!("{MIMO_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        });
+
+    let mut catalog_ids: Vec<String> = catalog
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.strip_prefix(&format!("{MIMO_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        })
+        .collect();
+    if let Some(ref mid) = model_id {
+        if !catalog_ids.iter().any(|id| id == mid) {
+            catalog_ids.push(mid.clone());
+        }
+    }
+    if !catalog_ids.is_empty() {
+        let mut models = serde_json::Map::new();
+        for mid in &catalog_ids {
+            models.insert(mid.clone(), serde_json::json!({ "name": mid }));
+        }
+        provider_obj.insert("models".to_string(), serde_json::Value::Object(models));
+    }
+    if let Some(ref mid) = model_id {
+        config_obj.insert(
+            "model".to_string(),
+            serde_json::Value::String(format!("{MIMO_MANAGED_PROVIDER}/{mid}")),
+        );
+    }
+
+    let config_str = serde_json::to_string_pretty(&config)
+        .map_err(|e| AcpError::protocol(format!("serialize mimo config failed: {e}")))?;
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create mimo config directory failed: {e}")))?;
+    }
+    fs::write(&config_path, format!("{config_str}\n"))
+        .map_err(|e| AcpError::protocol(format!("write mimo config failed: {e}")))?;
+
+    // auth.json: merge credential for the managed provider only.
+    let auth_path = mimo_auth_json_path();
+    let mut auth_obj = if auth_path.exists() {
+        fs::read_to_string(&auth_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    if !api_key.trim().is_empty() {
+        auth_obj[MIMO_MANAGED_PROVIDER] = serde_json::json!({
+            "type": "api",
+            "key": api_key,
+        });
+    }
+    let auth_str = serde_json::to_string_pretty(&auth_obj)
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    if let Some(parent) = auth_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create mimo auth directory failed: {e}")))?;
+    }
+    fs::write(&auth_path, format!("{auth_str}\n"))
+        .map_err(|e| AcpError::protocol(format!("write mimo auth.json failed: {e}")))?;
+    Ok(())
+}
+
 /// Managed Pi custom provider id written by the unified model-provider cascade.
 const PI_MANAGED_PROVIDER: &str = "veryagent";
 
@@ -6142,7 +6366,7 @@ pub(crate) async fn apply_model_provider_env(
     // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY hijacks the whole agent onto the
     // gateway and breaks native China/overseas Tencent models.
     let inject_openai_compat_env =
-        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy);
+        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode);
     if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
         // Agents that append `/chat/completions` themselves need a `/v1` base.
         // Shared provider rows are often bare host roots (`http://host:port`).
@@ -6217,30 +6441,35 @@ pub(crate) async fn apply_model_provider_env(
         }
     }
 
-    // Pi / OpenCode: refresh the managed `veryagent` provider on every session
-    // start so credentials + the agent-selected model stay current. Pass an
-    // empty catalog — chat should only show the configured model, not the
-    // entire gateway /models dump (embeddings / image / unused placeholders).
-    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode) {
+    // Pi / OpenCode / MiMo Code: refresh the managed `veryagent` provider on
+    // every session start so credentials + the agent-selected model stay
+    // current. Pass an empty catalog — chat should only show the configured
+    // model, not the entire gateway /models dump.
+    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode | AgentType::MimoCode) {
         let model = runtime_env
             .get(model_key)
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
         let empty_catalog: Vec<String> = Vec::new();
-        let result = if agent_type == AgentType::Pi {
-            write_pi_managed_provider(
+        let result = match agent_type {
+            AgentType::Pi => write_pi_managed_provider(
                 &provider.api_url,
                 &provider.api_key,
                 model.as_deref().unwrap_or(""),
                 &empty_catalog,
-            )
-        } else {
-            write_opencode_managed_provider(
+            ),
+            AgentType::MimoCode => write_mimo_managed_provider(
                 &provider.api_url,
                 &provider.api_key,
                 model.as_deref(),
                 &empty_catalog,
-            )
+            ),
+            _ => write_opencode_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref(),
+                &empty_catalog,
+            ),
         };
         if let Err(e) = result {
             tracing::warn!(
@@ -6655,9 +6884,14 @@ async fn cascade_update_agent_config(
         }
         AgentType::MimoCode => {
             // MiMo Code (OpenCode fork) reads provider config from
-            // ~/.config/mimocode/mimocode.json. It supports custom
-            // OpenAI-compatible providers natively via the TUI; for now
-            // we write env vars that MiMo Code respects.
+            // ~/.config/mimocode/mimocode.jsonc and credentials from
+            // ~/.local/share/mimocode/auth.json. Write a managed `veryagent`
+            // provider so the agent uses the shared model provider credentials.
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str);
+            write_mimo_managed_provider(api_url, api_key, model_name, &[])?;
         }
     }
     Ok(())
