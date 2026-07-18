@@ -16,6 +16,7 @@ pub mod logging;
 pub mod models;
 mod network;
 pub mod office_watch;
+pub mod openwiki;
 pub mod parsers;
 pub mod paths;
 pub mod pet_sessions;
