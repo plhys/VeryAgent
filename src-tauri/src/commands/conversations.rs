@@ -279,6 +279,8 @@ pub async fn get_conversation(
             AgentType::CodeBuddy => Box::new(CodeBuddyParser::new()),
             AgentType::KimiCode => Box::new(KimiCodeParser::new()),
             AgentType::Pi => Box::new(PiParser::new()),
+            // MiMo Code is an OpenCode fork; reuse OpenCode's parser.
+            AgentType::MimoCode => Box::new(OpenCodeParser::new()),
         };
 
         parser
@@ -521,6 +523,7 @@ pub async fn get_folder_conversation_core(
                 AgentType::CodeBuddy => Box::new(CodeBuddyParser::new()),
                 AgentType::KimiCode => Box::new(KimiCodeParser::new()),
                 AgentType::Pi => Box::new(PiParser::new()),
+                AgentType::MimoCode => Box::new(OpenCodeParser::new()),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None, d.summary.title)),

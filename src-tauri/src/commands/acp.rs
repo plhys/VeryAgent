@@ -5656,6 +5656,10 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             ],
             project_rel_dirs: vec![".pi/skills", ".agents/skills"],
         }),
+        // MiMo Code is an OpenCode fork; it shares the same skills directory
+        // convention. Return None for now — can be enabled when MiMo Code's
+        // skill system is validated.
+        AgentType::MimoCode => None,
     }
 }
 
@@ -6648,6 +6652,12 @@ async fn cascade_update_agent_config(
                 .map(String::as_str)
                 .unwrap_or("");
             write_pi_managed_provider(api_url, api_key, model_name, &[])?;
+        }
+        AgentType::MimoCode => {
+            // MiMo Code (OpenCode fork) reads provider config from
+            // ~/.config/mimocode/mimocode.json. It supports custom
+            // OpenAI-compatible providers natively via the TUI; for now
+            // we write env vars that MiMo Code respects.
         }
     }
     Ok(())

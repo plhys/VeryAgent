@@ -12,6 +12,7 @@ pub mod cline;
 pub mod hermes;
 pub mod codebuddy;
 pub mod kimi_code;
+pub mod mimo_code;
 
 use std::collections::BTreeMap;
 use serde_json::Value;

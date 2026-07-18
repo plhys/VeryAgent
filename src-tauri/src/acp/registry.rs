@@ -123,6 +123,7 @@ pub fn all_acp_agents() -> Vec<AgentType> {
         AgentType::CodeBuddy,
         AgentType::KimiCode,
         AgentType::Pi,
+        AgentType::MimoCode,
     ]
 }
 
@@ -138,6 +139,7 @@ pub fn registry_id_for(agent_type: AgentType) -> &'static str {
         AgentType::CodeBuddy => "codebuddy-code",
         AgentType::KimiCode => "kimi-code",
         AgentType::Pi => "pi-acp",
+        AgentType::MimoCode => "mimo-code",
     }
 }
 
@@ -153,6 +155,7 @@ pub fn from_registry_id(id: &str) -> Option<AgentType> {
         "codebuddy-code" => Some(AgentType::CodeBuddy),
         "kimi-code" => Some(AgentType::KimiCode),
         "pi-acp" => Some(AgentType::Pi),
+        "mimo-code" => Some(AgentType::MimoCode),
         _ => None,
     }
 }
@@ -373,6 +376,21 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 cmd: "pi-acp",
                 args: &[],
                 env: &[("PI_ACP_ENABLE_EMBEDDED_CONTEXT", "true")],
+                node_required: Some("22.0.0"),
+            },
+        },
+        AgentType::MimoCode => AcpAgentMeta {
+            agent_type,
+            supports_mcp: true,
+            name: "MiMo Code",
+            description: "Xiaomi's terminal-native AI coding agent with persistent memory (ACP)",
+            resident: false,
+            distribution: AgentDistribution::Npx {
+                version: "0.1.6",
+                package: "@mimo-ai/cli@0.1.6",
+                cmd: "mimo",
+                args: &["acp"],
+                env: &[],
                 node_required: Some("22.0.0"),
             },
         },
