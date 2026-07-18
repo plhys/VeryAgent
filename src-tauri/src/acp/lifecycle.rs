@@ -811,7 +811,7 @@ mod delegation_title_tests {
             None
         ));
         assert!(is_delegation_invocation(
-            "Run mcp__codeg__delegate_to_agent",
+            "Run mcp__veryagent__delegate_to_agent",
             None
         ));
     }

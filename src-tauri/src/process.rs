@@ -92,8 +92,12 @@ fn resolve_windows_program(program: &OsStr) -> Option<OsString> {
     let raw = program.to_string_lossy();
     for ext in ["exe", "cmd", "bat"] {
         let candidate = format!("{raw}.{ext}");
-        if which::which(&candidate).is_ok() {
-            return Some(OsString::from(candidate));
+        // Return the absolute path. A bare name like `npm.cmd` makes
+        // CreateProcess inherit the parent CWD, and npm.cmd then resolves its
+        // sibling node_modules relative to that CWD (not its own dir) — so
+        // spawning from src-tauri/ fails with MODULE_NOT_FOUND.
+        if let Ok(full) = which::which(&candidate) {
+            return Some(full.into_os_string());
         }
     }
     None

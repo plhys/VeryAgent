@@ -1,4 +1,4 @@
-export type AgentType =
+﻿export type AgentType =
   | "claude_code"
   | "codex"
   | "open_code"
@@ -194,6 +194,12 @@ export interface SessionStats {
   context_window_used_tokens?: number | null
   context_window_max_tokens?: number | null
   context_window_usage_percent?: number | null
+}
+
+export interface BackgroundSettledInfo {
+  task_id: string
+  status: string
+  summary?: string | null
 }
 
 export interface MessageTurn {
@@ -413,6 +419,15 @@ export interface DbConversationDetail {
    * mid-stream, which would otherwise double-render against the live reply.
    */
   in_flight_user_turn_id?: string | null
+  /** Byte offset the parser had read through when it produced this detail —
+   *  the same offset the backend's `background_activity` watcher uses to stamp
+   *  overlay entries (see `BackgroundOverlayEntry.watermark` in
+   *  conversation-runtime-store). When a refetched detail's watermark has caught
+   *  up to an overlay entry's watermark (`>=`), the detail literally contains
+   *  those bytes, so the overlay entry is retired. Null when the parser doesn't
+   *  expose a byte-offset watermark (non-Claude parsers).
+   */
+  transcript_watermark?: number | null
 }
 
 export type ConversationStatus =
@@ -487,6 +502,11 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "pi",
 ]
 
+/** Process-level resident butlers (match backend registry.resident). */
+export function isResidentAgent(agentType: AgentType): boolean {
+  return agentType === "hermes" || agentType === "open_claw"
+}
+
 export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "claude_code",
   "codex",
@@ -495,6 +515,9 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "hermes",
   "open_claw",
   "cline",
+  "open_code",
+  "pi",
+  "code_buddy",
 ]
 
 /**
@@ -766,6 +789,35 @@ export interface HermesLocalConfig {
   hermesHome?: string
   setupCommand?: string
   modelCommand?: string
+}
+
+/**
+ * Result of discovering a local OpenClaw gateway from env + openclaw.json.
+ * Empty optional fields mean "not found" — never a fabricated default.
+ */
+export interface OpenClawGatewayDiscovery {
+  gatewayUrl: string | null
+  gatewayUrlSource: string | null
+  gatewayToken: string | null
+  gatewayTokenSource: string | null
+  configPath: string
+  configExists: boolean
+  configParsed: boolean
+  gatewayPort: number | null
+  gatewayPortSource: string | null
+  /** `gateway.mode` from openclaw.json when present. */
+  gatewayMode: string | null
+  /** Live TCP probe against the resolved host:port. */
+  gatewayReachable: boolean
+}
+
+/** Result of the settings one-click OpenClaw gateway bootstrap. */
+export interface OpenClawGatewayEnsureResult {
+  ok: boolean
+  status: string
+  message: string
+  discovery: OpenClawGatewayDiscovery
+  steps: string[]
 }
 
 export const AGENT_LABELS: Record<AgentType, string> = {
@@ -1182,6 +1234,20 @@ export type AcpEvent =
       size: number
     }
   /**
+   * Out-of-turn activity surfaced from the agent's own session transcript
+   * by the background watcher (`acp::background_watch`; Claude-only today).
+   * Covers everything that happens OUTSIDE a veryAgent-driven prompt turn:
+   * async sub-agent / background-shell completions, cron//loop autonomous turns.
+   */
+  | {
+      type: "background_activity"
+      session_id: string
+      turns?: MessageTurn[]
+      outstanding: number
+      settled?: BackgroundSettledInfo[]
+      watermark: number
+    }
+  /**
    * A `delegate_to_agent` MCP tool call from the parent agent has spawned a
    * child sub-session and the child's prompt is in flight. Emitted as soon as
    * the broker registers the pending call. Frontend uses this to build the
@@ -1459,6 +1525,10 @@ export interface LiveSessionSnapshot {
   config_stale?: boolean
   /** Which settings surface drifted; present only while `config_stale`. */
   config_stale_kind?: ConfigStaleKind | null
+  /** Launched-but-unresolved background tasks (async sub-agents +
+   *  background shell tasks). Mirrored into `SessionState` to exempt the
+   *  connection from idle sweeps while work is pending. Absent → `0`. */
+  background_outstanding?: number
   event_seq: number
 }
 
@@ -1501,6 +1571,8 @@ export interface AcpAgentInfo {
   /** Raw ~/.hermes/config.yaml text, for the Hermes panel's advanced editor. */
   hermes_config_yaml: string | null
   model_provider_id: number | null
+  /** Butler-class agent kept for the life of VeryAgent. */
+  resident: boolean
 }
 
 // Lightweight agent status returned by acp_get_agent_status
@@ -1509,6 +1581,7 @@ export interface AcpAgentStatus {
   available: boolean
   enabled: boolean
   installed_version: string | null
+  resident: boolean
 }
 
 export type AgentSkillScope = "global" | "project"
@@ -1559,6 +1632,38 @@ export interface ExpertMetadata {
 
 export interface ExpertListItem {
   metadata: ExpertMetadata
+  installed_centrally: boolean
+  user_modified: boolean
+  central_path: string
+}
+
+/**
+ * Built-in scientific-research skills, curated from
+ * K-Dense-AI/scientific-agent-skills and bundled into the veryAgent binary. They
+ * share the central store (`~/.veryagent/skills/`) and link primitives with
+ * experts; link statuses reuse `ExpertInstallStatus`/`LinkOp`/`LinkOpResult`
+ * (the `expertId` field carries the science skill id).
+ */
+export interface ScienceMetadata {
+  id: string
+  category: string
+  icon: string | null
+  sort_order: number
+  /** Surface as a card in the new-session "Scientific Research" tab. */
+  featured: boolean
+  /** Color key indexing the ACCENTS map in quick-actions.tsx (featured only). */
+  accent: string | null
+  /** Primary workflow requires an external API key. */
+  needs_key: boolean
+  /** Ships scripts that may need a Python/uv environment. */
+  needs_env: boolean
+  display_name: Record<string, string>
+  description: Record<string, string>
+  bundled_hash: string
+}
+
+export interface ScienceListItem {
+  metadata: ScienceMetadata
   installed_centrally: boolean
   user_modified: boolean
   central_path: string
@@ -1627,6 +1732,17 @@ export interface SkillSyncReport {
 export interface SystemProxySettings {
   enabled: boolean
   proxy_url: string | null
+}
+
+/** Preferred release channel for app updates. */
+export type AppUpdateSource = "github" | "gitea"
+
+export interface AppUpdateSourceSettings {
+  source: AppUpdateSource
+  sourceLabel: string
+  repoUrl: string
+  releasesUrl: string
+  manifestUrl: string
 }
 
 export type AppLocale =
@@ -2206,6 +2322,20 @@ export interface OfficecliInstallEvent {
   payload: string
 }
 
+export type OpenWikiInstallEventKind =
+  | "started"
+  | "progress"
+  | "log"
+  | "completed"
+  | "failed"
+
+export interface OpenWikiInstallEvent {
+  task_id: string
+  kind: OpenWikiInstallEventKind
+  /** Log line, or JSON `{"percent":n,"label":"..."}` for progress. */
+  payload: string
+}
+
 // ─── Chat Channels ───
 
 export type ChannelType = "lark" | "telegram" | "weixin"
@@ -2259,20 +2389,17 @@ export interface ModelProviderInfo {
   api_url: string
   api_key: string
   api_key_masked: string
-  /** All agent types this provider serves. */
-  agent_types: AgentType[]
-  /** First element of agent_types for backward compat. */
-  agent_type: AgentType
-  /**
-   * Model value as a JSON object keyed by agent_type:
-   * `{"claude_code":"{\"main\":\"...\"}","codex":"gpt-5"}`
-   * Each agent_type's value follows its own format:
-   * - claude_code: JSON string of {main, reasoning, haiku, sonnet, opus, ...}
-   * - codex / gemini / others: plain model name string
-   */
+  /** Optional default model name stored on the provider row. Agent settings
+   *  now select models per-agent; this field is retained for compatibility. */
   model: string | null
   created_at: string
   updated_at: string
+}
+
+/** One model returned by a provider's OpenAI-compatible `/models` endpoint. */
+export interface ProviderModelItem {
+  id: string
+  name: string
 }
 
 /** Result of `updateModelProvider` (mirror of Rust `UpdateModelProviderResult`):

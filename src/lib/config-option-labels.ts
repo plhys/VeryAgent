@@ -13,6 +13,10 @@
  *     → lowercase + replace underscores with spaces + trim
  *   - `normalizeKind`: for protocol identifiers like "allow_once", "reject_always"
  *     → lowercase + remove underscores entirely + trim
+ *
+ * Important: OpenClaw advertises session *settings* (thought level, fast mode,
+ * verbosity, …) whose values are on/off/auto/full — these are switches, NOT
+ * permission allow/deny. Permission option names stay on allow/deny/reject only.
  */
 
 import { useTranslations } from "next-intl"
@@ -38,23 +42,29 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "approval preset": "approvalPreset",
   "default thinking mode": "defaultThinkingMode",
   "thinking level": "thinkingLevel",
+  "thought level": "thoughtLevel",
+  "fast mode": "fastMode",
+  "tool verbosity": "toolVerbosity",
+  "plugin trace": "pluginTrace",
+  "reasoning stream": "reasoningStream",
+  "usage detail": "usageDetail",
+  "elevated actions": "elevatedActions",
   "bypass": "bypass",
   "reasoning effort": "reasoningEffort",
 
   // ── Mode / preset names ──
   "default": "modeDefault",
   "accept edits": "modeAcceptEdits",
-  "auto": "modeAuto",
+  "auto": "switchAuto",
   "plan mode": "modePlanMode",
   "bypass permissions": "modeBypassPermissions",
 
-  // ── Permission option values (human-readable) ──
+  // ── Permission option values (human-readable only) ──
+  // Do NOT map on/off/enabled/disabled/true/false here — OpenClaw reuses those
+  // for session switches and they must read as 开/关, not 允许/拒绝.
   "allow once": "allowOnce",
   "allow": "allowOnce",
   "yes": "allowOnce",
-  "true": "allowOnce",
-  "on": "allowOnce",
-  "enabled": "allowOnce",
   "always allow": "allowAlways",
   "allow always": "allowAlways",
   "deny": "deny",
@@ -62,15 +72,25 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "reject once": "deny",
   "deny once": "deny",
   "no": "deny",
-  "false": "deny",
-  "off": "deny",
-  "disabled": "deny",
   "don't ask": "dontAsk",
   "dont ask": "dontAsk",
   "do not ask": "dontAsk",
   "never ask": "dontAsk",
   "reject always": "dontAsk",
   "deny always": "dontAsk",
+
+  // ── Switch / level values (OpenClaw + shared) ──
+  "off": "switchOff",
+  "on": "switchOn",
+  "enabled": "switchOn",
+  "disabled": "switchOff",
+  "true": "switchOn",
+  "false": "switchOff",
+  "full": "switchFull",
+  "stream": "switchStream",
+  "tokens": "usageTokens",
+  "ask": "elevatedAsk",
+  "adaptive": "thinkingAdaptive",
 
   // ── Mode / preset option values ──
   "read only": "readOnly",
@@ -79,11 +99,6 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "agent (full access)": "agentFullAccess",
 
   // ── Thinking level values ──
-  // "off" is ambiguous — could be "disabled" (permission context) or
-  // "thinking off" (thought-level context). The permission mapping above
-  // maps "off" → "deny". For thought-level, agents typically send the
-  // full phrase like "Off" or the value id "off" which the localizer
-  // processes; we add thought-level entries only for unambiguous labels.
   "low": "thinkingLow",
   "medium": "thinkingMedium",
   "high": "thinkingHigh",
@@ -92,13 +107,33 @@ const CONFIG_NAME_MAP: Record<string, string> = {
 
   // ── Mode / preset descriptions ──
   "ask before edits.": "modeDefaultDesc",
-  "auto-allow workspace and /tmp edits; still asks for sensitive paths.": "modeAcceptEditsDesc",
-  "auto-allow file edits for this session except sensitive paths.": "modeDontAskDesc",
+  "auto-allow workspace and /tmp edits; still asks for sensitive paths.":
+    "modeAcceptEditsDesc",
+  "auto-allow file edits for this session except sensitive paths.":
+    "modeDontAskDesc",
   "use a model classifier to approve/deny permission prompts": "modeAutoDesc",
-  "standard behavior, prompts for dangerous operations": "modeDefaultBehaviorDesc",
+  "standard behavior, prompts for dangerous operations":
+    "modeDefaultBehaviorDesc",
   "auto-accept file edit operations": "modeAcceptEditsBehaviorDesc",
   "planning mode, no actual tool execution": "modePlanModeDesc",
   "bypass all permission checks": "modeBypassPermissionsDesc",
+
+  // ── OpenClaw session setting descriptions (exact agent strings) ──
+  "controls how much deliberate reasoning openclaw requests from the gateway model.":
+    "thoughtLevelDesc",
+  "use the gateway session default thought level.": "thoughtLevelAdaptiveDesc",
+  "controls whether openai sessions use the gateway fast-mode profile.":
+    "fastModeDesc",
+  "controls how much tool progress and output detail openclaw keeps enabled for the session.":
+    "toolVerbosityDesc",
+  "controls whether plugin-owned trace lines are shown for the session.":
+    "pluginTraceDesc",
+  "controls whether reasoning-capable models emit reasoning text for the session.":
+    "reasoningStreamDesc",
+  "controls how much usage information openclaw attaches to responses for the session.":
+    "usageDetailDesc",
+  "controls how aggressively the session allows elevated execution behavior.":
+    "elevatedActionsDesc",
 }
 
 /**

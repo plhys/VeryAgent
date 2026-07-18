@@ -89,8 +89,11 @@ import {
   acpFetchKimiModels,
   acpRevealHermesHome,
   acpOpenHermesSetupTerminal,
+  acpDiscoverOpenClawGateway,
+  acpEnsureOpenClawGateway,
   codexPollDeviceCode,
   codexRequestDeviceCode,
+  fetchModelProviderModels,
   listModelProviders,
   opencodeProviderCatalog,
 } from "@/lib/api"
@@ -101,10 +104,19 @@ import type {
   FixAction,
   HermesLocalConfig,
   ModelProviderInfo,
+  OpenClawGatewayDiscovery,
   OpenCodeCatalogProvider,
   PreflightResult,
+  ProviderModelItem,
 } from "@/lib/types"
-import { HERMES_PROVIDERS, parseClaudeProviderModel, extractAgentModel } from "@/lib/types"
+import { HERMES_PROVIDERS } from "@/lib/types"
+import {
+  buildAgentReadiness,
+  isReadinessPilotAgent,
+  readinessToneClass,
+  type AgentReadiness,
+  type AgentReadinessKind,
+} from "@/lib/agent-readiness"
 import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
@@ -182,6 +194,9 @@ interface AgentDraft {
   hermesAuthMode: HermesAuthMode
   openClawAuthMode: OpenClawAuthMode
   clineAuthMode: ClineAuthMode
+  openCodeAuthMode: OpenCodeAuthMode
+  piAuthMode: PiAuthMode
+  codeBuddyAuthMode: CodeBuddyAuthMode
   // Hermes — `apiKey`/`model`/`apiBaseUrl` are reused for the active provider's
   // key, model.default, and model.base_url. These carry the rest.
   hermesProvider: string
@@ -257,6 +272,9 @@ function summarizeChecks(checks: UiCheckItem[]): CheckStatus | "unchecked" {
   if (checks.some((check) => check.status === "warn")) return "warn"
   return "pass"
 }
+
+// Re-export readiness types for any settings consumers that imported them here.
+export type { AgentReadiness, AgentReadinessKind }
 
 function envMapToText(env: Record<string, string>): string {
   return Object.entries(env)
@@ -1969,6 +1987,25 @@ function upsertTomlSectionBooleanKey(
   return lines.join("\n").trim()
 }
 
+/** Codex appends `/chat/completions` or `/responses` itself — force `/v1`. */
+function normalizeOpenAiCompatibleBaseUrl(apiBaseUrl: string): string {
+  let base = apiBaseUrl.trim().replace(/\/+$/, "")
+  if (!base) return ""
+  for (const suffix of [
+    "/chat/completions",
+    "/completions",
+    "/responses",
+    "/models",
+  ]) {
+    if (base.endsWith(suffix)) {
+      base = base.slice(0, -suffix.length).replace(/\/+$/, "")
+      break
+    }
+  }
+  if (base.endsWith("/v1")) return base
+  return `${base}/v1`
+}
+
 function patchCodexProviderBaseUrl(
   configTomlText: string,
   provider: string,
@@ -1978,6 +2015,8 @@ function patchCodexProviderBaseUrl(
   if (!trimmedProvider) return configTomlText.trim()
 
   const nextApiBaseUrl = apiBaseUrl.trim()
+    ? normalizeOpenAiCompatibleBaseUrl(apiBaseUrl)
+    : ""
   const lines = configTomlText.split(/\r?\n/)
   const sectionPattern = new RegExp(
     `^\\[\\s*model_providers\\.${escapeRegExp(trimmedProvider)}\\s*\\]$`
@@ -2094,13 +2133,13 @@ function ensureCodexProviderDefaults(
   }
   let next = configTomlText
   const current = extractCodexTomlImportantValues(next)
-  const codegBaseUrl =
+  const veryagentBaseUrl =
     current.providerBaseUrls[CODEX_DEFAULT_MODEL_PROVIDER] ?? ""
   next = patchCodexProviderField(
     next,
     CODEX_DEFAULT_MODEL_PROVIDER,
     "base_url",
-    `base_url = ${JSON.stringify(codegBaseUrl)}`
+    `base_url = ${JSON.stringify(veryagentBaseUrl)}`
   )
   next = patchCodexProviderField(
     next,
@@ -2112,6 +2151,7 @@ function ensureCodexProviderDefaults(
     next,
     CODEX_DEFAULT_MODEL_PROVIDER,
     "wire_api",
+    // Current Codex rejects `chat` at config load; only `responses` is valid.
     'wire_api = "responses"'
   )
   next = patchCodexProviderField(
@@ -2389,18 +2429,11 @@ export function applyClaudeProviderToConfigText(
   configText: string,
   provider: Pick<ModelProviderInfo, "api_url" | "api_key" | "model">
 ): string {
-  const model = parseClaudeProviderModel(provider.model ?? null)
+  const model = provider.model ?? ""
   return patchImportantConfigText("claude_code", configText, {
     apiBaseUrl: provider.api_url,
     apiKey: provider.api_key,
-    claudeMainModel: model.main ?? "",
-    claudeReasoningModel: model.reasoning ?? "",
-    claudeDefaultHaikuModel: model.haiku ?? "",
-    claudeDefaultSonnetModel: model.sonnet ?? "",
-    claudeDefaultOpusModel: model.opus ?? "",
-    claudeCustomModelOption: model.customOption ?? "",
-    claudeCustomModelOptionName: model.customOptionName ?? "",
-    claudeCustomModelOptionDescription: model.customOptionDescription ?? "",
+    claudeMainModel: model,
   }).configText
 }
 
@@ -2660,6 +2693,18 @@ function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     clineAuthMode:
       agent.agent_type === "cline" && agent.model_provider_id != null
         ? ("model_provider" as ClineAuthMode)
+        : "native",
+    openCodeAuthMode:
+      agent.agent_type === "open_code" && agent.model_provider_id != null
+        ? ("model_provider" as OpenCodeAuthMode)
+        : "native",
+    piAuthMode:
+      agent.agent_type === "pi" && agent.model_provider_id != null
+        ? ("model_provider" as PiAuthMode)
+        : "native",
+    codeBuddyAuthMode:
+      agent.agent_type === "code_buddy" && agent.model_provider_id != null
+        ? ("model_provider" as CodeBuddyAuthMode)
         : "native",
     openClawGatewayUrl: openClawImportant.gatewayUrl,
     openClawGatewayToken: openClawImportant.gatewayToken,
@@ -2954,6 +2999,8 @@ interface AgentReorderItemProps {
   selected: boolean
   reordering: boolean
   dragging: AgentType | null
+  /** Gray presentation for inactive or unusable agents. */
+  inactive?: boolean
   onDragStart: (agentType: AgentType) => void
   onDragEnd: () => void
   onSelect: (agentType: AgentType) => void
@@ -2967,6 +3014,7 @@ function AgentReorderItem({
   selected,
   reordering,
   dragging,
+  inactive = false,
   onDragStart,
   onDragEnd,
   onSelect,
@@ -2996,7 +3044,8 @@ function AgentReorderItem({
       className={cn(
         "rounded-lg border bg-card p-3 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
         selected && "border-primary/60 bg-primary/5",
-        dragging === agent.agent_type && "border-primary/60 bg-primary/5"
+        dragging === agent.agent_type && "border-primary/60 bg-primary/5",
+        inactive && "opacity-60 text-muted-foreground"
       )}
       tabIndex={0}
       onDragStart={() => {
@@ -3039,6 +3088,12 @@ export type HermesAuthMode = "native" | "model_provider"
 export type OpenClawAuthMode = "gateway" | "model_provider"
 /** Cline credential mode. `native` = existing CLINE_PROVIDERS system; `model_provider` = veryAgent unified model provider. */
 export type ClineAuthMode = "native" | "model_provider"
+/** OpenCode credential mode. `native` = multi-provider opencode.json/auth.json UI; `model_provider` = unified model provider. */
+export type OpenCodeAuthMode = "native" | "model_provider"
+/** Pi credential mode. `native` = pi settings/auth/models UI; `model_provider` = unified model provider. */
+export type PiAuthMode = "native" | "model_provider"
+/** CodeBuddy credential mode. `native` = hosted/self-hosted env panel; `model_provider` = unified model provider. */
+export type CodeBuddyAuthMode = "native" | "model_provider"
 /** The six provider `type` values Kimi's config.toml `[providers]` accepts. */
 export type KimiInterfaceType =
   | "kimi"
@@ -3226,11 +3281,23 @@ function KimiCodeConfigPanel({
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(
     () => agent.model_provider_id ?? null
   )
+  const [selectedProviderModel, setSelectedProviderModel] = useState(
+    () =>
+      findEnvValue(agent.env ?? {}, ["KIMI_MODEL_NAME", "OPENAI_MODEL"]) ||
+      config.modelId ||
+      ""
+  )
+  const [providerModels, setProviderModels] = useState<ProviderModelItem[]>([])
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false)
+  const [providerModelsError, setProviderModelsError] = useState<string | null>(
+    null
+  )
+  const [providerModelsRefreshKey, setProviderModelsRefreshKey] = useState(0)
   const [saving, setSaving] = useState(false)
 
   // Filter model providers that serve kimi_code.
   const kimiModelProviders = useMemo(
-    () => modelProviders.filter((p) => p.agent_types.includes("kimi_code")),
+    () => modelProviders,
     [modelProviders]
   )
   const [showKey, setShowKey] = useState(false)
@@ -3323,9 +3390,10 @@ function KimiCodeConfigPanel({
       setSaving(true)
       onSaveModelProvider(
         {
-          KIMI_MODEL_BASE_URL: provider.api_url,
+          // Kimi appends `/chat/completions` itself; bare host roots fail silently.
+          KIMI_MODEL_BASE_URL: normalizeOpenAiCompatibleBaseUrl(provider.api_url),
           KIMI_MODEL_API_KEY: provider.api_key,
-          KIMI_MODEL_NAME: extractAgentModel(provider.model, "kimi_code") ?? "",
+          KIMI_MODEL_NAME: selectedProviderModel.trim() || provider.model || "",
         },
         true,
         selectedProviderId
@@ -3360,6 +3428,7 @@ function KimiCodeConfigPanel({
   }, [
     mode,
     selectedProviderId,
+    selectedProviderModel,
     kimiModelProviders,
     onSaveModelProvider,
     interfaceType,
@@ -3403,6 +3472,35 @@ function KimiCodeConfigPanel({
       setFetchingModels(false)
     }
   }, [effectiveBaseUrl, apiKey, t])
+
+  useEffect(() => {
+    if (mode !== "model_provider" || selectedProviderId == null) {
+      setProviderModels([])
+      setProviderModelsError(null)
+      setProviderModelsLoading(false)
+      return
+    }
+    let cancelled = false
+    setProviderModelsLoading(true)
+    setProviderModelsError(null)
+    void fetchModelProviderModels(selectedProviderId)
+      .then((list) => {
+        if (cancelled) return
+        setProviderModels(list)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error("[KimiCode] fetch provider models failed", error)
+        setProviderModels([])
+        setProviderModelsError(toErrorMessage(error))
+      })
+      .finally(() => {
+        if (!cancelled) setProviderModelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, selectedProviderId, providerModelsRefreshKey])
 
   const keyToggle = (
     <Button
@@ -3480,38 +3578,105 @@ function KimiCodeConfigPanel({
       </div>
 
       {mode === "model_provider" && (
-        <div className="space-y-1.5">
-          <label className="text-[11px] text-muted-foreground">
-            {t("selectModelProvider")}
-          </label>
-          {kimiModelProviders.length > 0 ? (
-            <Select
-              value={
-                selectedProviderId != null
-                  ? String(selectedProviderId)
-                  : ""
-              }
-              onValueChange={(value) =>
-                setSelectedProviderId(value ? Number(value) : null)
-              }
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] text-muted-foreground">
+              {t("selectModelProvider")}
+            </label>
+            {kimiModelProviders.length > 0 ? (
+              <Select
+                value={
+                  selectedProviderId != null
+                    ? String(selectedProviderId)
+                    : ""
+                }
+                onValueChange={(value) =>
+                  setSelectedProviderId(value ? Number(value) : null)
+                }
+                disabled={saving}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("selectModelProvider")} />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {kimiModelProviders.map((provider) => (
+                    <SelectItem key={provider.id} value={String(provider.id)}>
+                      {provider.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {t("noModelProviderAvailable")}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[11px] text-muted-foreground">
+                {t("selectProviderModel")}
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                disabled={
+                  saving ||
+                  providerModelsLoading ||
+                  selectedProviderId == null
+                }
+                onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
+              >
+                {providerModelsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {t("refreshProviderModels")}
+              </Button>
+            </div>
+            <Input
+              list="kimi-provider-model-options"
+              value={selectedProviderModel}
+              onChange={(event) => setSelectedProviderModel(event.target.value)}
+              placeholder={t("selectProviderModel")}
               disabled={saving}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("selectModelProvider")} />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {kimiModelProviders.map((provider) => (
-                  <SelectItem key={provider.id} value={String(provider.id)}>
-                    {provider.name}
-                  </SelectItem>
+            />
+            {providerModels.length > 0 && (
+              <datalist id="kimi-provider-model-options">
+                {providerModels.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
                 ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              {t("noModelProviderAvailable")}
-            </p>
-          )}
+              </datalist>
+            )}
+            {providerModelsLoading ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelLoading")}
+              </p>
+            ) : providerModelsError ? (
+              <div className="space-y-0.5">
+                <p className="text-[11px] text-destructive">
+                  {t("providerModelFetchFailed")}
+                </p>
+                <p className="break-all text-[11px] text-destructive/80">
+                  {providerModelsError}
+                </p>
+              </div>
+            ) : providerModels.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelEmpty")}
+              </p>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                {t("providerModelHint")}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -3836,6 +4001,12 @@ export function AcpAgentSettings() {
     Partial<Record<AgentType, boolean>>
   >({})
   const [modelProviders, setModelProviders] = useState<ModelProviderInfo[]>([])
+  const [providerModels, setProviderModels] = useState<ProviderModelItem[]>([])
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false)
+  const [providerModelsError, setProviderModelsError] = useState<string | null>(
+    null
+  )
+  const [providerModelsRefreshKey, setProviderModelsRefreshKey] = useState(0)
   const [uninstallConfirmAgent, setUninstallConfirmAgent] =
     useState<AcpAgentInfo | null>(null)
   const [customInstallAgent, setCustomInstallAgent] =
@@ -3851,6 +4022,10 @@ export function AcpAgentSettings() {
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(
     null
   )
+  const [openClawDiscovery, setOpenClawDiscovery] =
+    useState<OpenClawGatewayDiscovery | null>(null)
+  const openClawDiscoveryAppliedRef = useRef(false)
+  const [ensuringOpenClawGateway, setEnsuringOpenClawGateway] = useState(false)
   const [drafts, setDrafts] = useState<Partial<Record<AgentType, AgentDraft>>>(
     {}
   )
@@ -4136,6 +4311,96 @@ export function AcpAgentSettings() {
       return sortedAgents[0].agent_type
     })
   }, [sortedAgents])
+
+  // Discover local OpenClaw gateway from env + openclaw.json and auto-fill
+  // empty draft fields only (never overwrite user-saved VA env values).
+  useEffect(() => {
+    if (selectedAgentType !== "open_claw") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const discovered = await acpDiscoverOpenClawGateway()
+        if (cancelled) return
+        setOpenClawDiscovery(discovered)
+      } catch (err) {
+        console.warn("[Settings] openclaw gateway discovery failed:", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAgentType])
+
+  const handleEnsureOpenClawGateway = useCallback(async () => {
+    if (ensuringOpenClawGateway) return
+    setEnsuringOpenClawGateway(true)
+    try {
+      const result = await acpEnsureOpenClawGateway()
+      openClawDiscoveryAppliedRef.current = false
+      setOpenClawDiscovery(result.discovery)
+      if (result.ok) {
+        toast.success(
+          t("openClaw.ensureGatewayOk", { message: result.message })
+        )
+      } else {
+        toast.error(
+          t("openClaw.ensureGatewayFailed", { message: result.message })
+        )
+      }
+      // Re-run preflight so sidebar badge / status card refresh with probe result.
+      await runPreflight("open_claw", true)
+    } catch (err) {
+      console.error("[Settings] openclaw ensure gateway failed:", err)
+      toast.error(
+        t("openClaw.ensureGatewayFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        })
+      )
+    } finally {
+      setEnsuringOpenClawGateway(false)
+    }
+  }, [ensuringOpenClawGateway, runPreflight, t])
+
+  useEffect(() => {
+    if (selectedAgentType !== "open_claw" || !openClawDiscovery) return
+    if (openClawDiscoveryAppliedRef.current) return
+    const discovered = openClawDiscovery
+    setDrafts((prev) => {
+      const current = prev.open_claw
+      if (!current) return prev
+      openClawDiscoveryAppliedRef.current = true
+      const nextUrl =
+        current.openClawGatewayUrl.trim() || discovered.gatewayUrl || ""
+      const nextToken =
+        current.openClawGatewayToken.trim() || discovered.gatewayToken || ""
+      if (
+        nextUrl === current.openClawGatewayUrl &&
+        nextToken === current.openClawGatewayToken
+      ) {
+        return prev
+      }
+      let envText = current.envText
+      if (!current.openClawGatewayUrl.trim() && nextUrl) {
+        envText = patchEnvText(envText, {
+          [OPENCLAW_ENV_KEYS.gatewayUrl]: nextUrl,
+        })
+      }
+      if (!current.openClawGatewayToken.trim() && nextToken) {
+        envText = patchEnvText(envText, {
+          [OPENCLAW_ENV_KEYS.gatewayToken]: nextToken,
+        })
+      }
+      return {
+        ...prev,
+        open_claw: {
+          ...current,
+          openClawGatewayUrl: nextUrl,
+          openClawGatewayToken: nextToken,
+          envText,
+        },
+      }
+    })
+  }, [selectedAgentType, openClawDiscovery, drafts.open_claw])
 
   // A settings save (env or native config) only takes effect on the NEXT agent
   // start, so any running session of that agent stays on its launch-time config
@@ -4447,6 +4712,20 @@ export function AcpAgentSettings() {
           )
         }
         const finalVersion = detectedVersion ?? installedVersion
+        // After OpenClaw install, re-discover local gateway so empty fields
+        // can pick up an existing openclaw.json / env without user re-entry.
+        if (agent.agent_type === "open_claw") {
+          openClawDiscoveryAppliedRef.current = false
+          try {
+            const discovered = await acpDiscoverOpenClawGateway()
+            setOpenClawDiscovery(discovered)
+          } catch (err) {
+            console.warn(
+              "[Settings] openclaw gateway rediscovery after install failed:",
+              err
+            )
+          }
+        }
         toast.success(
           t("toasts.agentActionCompleted", {
             name: agent.name,
@@ -4827,9 +5106,7 @@ export function AcpAgentSettings() {
 
   const selectedModelProviders = useMemo(() => {
     if (!selectedAgent) return []
-    return modelProviders.filter(
-      (p) => p.agent_types.includes(selectedAgent.agent_type)
-    )
+    return modelProviders
   }, [modelProviders, selectedAgent])
 
   const selectedNeedsModelProvider = useMemo(() => {
@@ -4854,6 +5131,11 @@ export function AcpAgentSettings() {
       return selectedDraft.openClawAuthMode === "model_provider"
     if (at === "cline")
       return selectedDraft.clineAuthMode === "model_provider"
+    if (at === "open_code")
+      return selectedDraft.openCodeAuthMode === "model_provider"
+    if (at === "pi") return selectedDraft.piAuthMode === "model_provider"
+    if (at === "code_buddy")
+      return selectedDraft.codeBuddyAuthMode === "model_provider"
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -4960,6 +5242,27 @@ export function AcpAgentSettings() {
     if (!selectedAgent || !locale) return []
     return getAgentChecks(selectedAgent, selectedCurrent)
   }, [locale, selectedAgent, selectedCurrent])
+
+  const selectedReadiness = useMemo(() => {
+    if (!selectedAgent || !selectedDraft) return null
+    if (!isReadinessPilotAgent(selectedAgent.agent_type)) return null
+    return buildAgentReadiness({
+      agent: selectedAgent,
+      draft: selectedDraft,
+      checks: selectedChecks,
+      isChecking: Boolean(checking[selectedAgent.agent_type]),
+      openClawDiscovery:
+        selectedAgent.agent_type === "open_claw" ? openClawDiscovery : null,
+      t: rawTranslator,
+    })
+  }, [
+    selectedAgent,
+    selectedDraft,
+    selectedChecks,
+    checking,
+    openClawDiscovery,
+    rawTranslator,
+  ])
 
   useEffect(() => {
     if (!selectedAgent || selectedChecks.length === 0) return
@@ -5251,18 +5554,16 @@ export function AcpAgentSettings() {
       const agentType = selectedAgent.agent_type
 
       if (agentType === "claude_code") {
-        // Provider's model fields are authoritative: missing/empty keys clear
-        // the corresponding draft + env value.
-        const claudeModel = parseClaudeProviderModel(provider?.model ?? null)
-        const claudeMain = claudeModel.main ?? ""
-        const claudeReasoning = claudeModel.reasoning ?? ""
-        const claudeHaiku = claudeModel.haiku ?? ""
-        const claudeSonnet = claudeModel.sonnet ?? ""
-        const claudeOpus = claudeModel.opus ?? ""
-        const claudeCustomOption = claudeModel.customOption ?? ""
-        const claudeCustomOptionName = claudeModel.customOptionName ?? ""
+        // Keep the agent's currently selected model; provider only supplies credentials.
+        const claudeMain = selectedDraft.claudeMainModel
+        const claudeReasoning = selectedDraft.claudeReasoningModel
+        const claudeHaiku = selectedDraft.claudeDefaultHaikuModel
+        const claudeSonnet = selectedDraft.claudeDefaultSonnetModel
+        const claudeOpus = selectedDraft.claudeDefaultOpusModel
+        const claudeCustomOption = selectedDraft.claudeCustomModelOption
+        const claudeCustomOptionName = selectedDraft.claudeCustomModelOptionName
         const claudeCustomOptionDescription =
-          claudeModel.customOptionDescription ?? ""
+          selectedDraft.claudeCustomModelOptionDescription
         const nextConfigJson = patchImportantConfigText(
           agentType,
           selectedDraft.configText,
@@ -5366,19 +5667,19 @@ export function AcpAgentSettings() {
           }
         })
       } else if (agentType === "codex") {
-        const codexModel = provider?.model?.trim() ?? ""
+        const keepModel = selectedDraft.model
         const nextAuthPatch = patchCodexAuthJsonText(
           selectedDraft.codexAuthJsonText,
           { apiKey, authMode: null }
         )
         const nextAuthJsonText = nextAuthPatch.authJsonText
-        // Always pass the provider's model (empty string clears it from the toml).
+        // Credentials only — keep the agent's currently selected model.
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
             modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
             apiBaseUrl: apiUrl,
-            model: codexModel,
+            model: keepModel,
           }
         )
         const synced = extractCodexImportantValues(
@@ -5390,7 +5691,7 @@ export function AcpAgentSettings() {
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
-          model: codexModel,
+          model: keepModel,
           codexAuthJsonText: nextAuthJsonText,
           codexConfigTomlText: nextConfigTomlText,
           codexModelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
@@ -5398,11 +5699,11 @@ export function AcpAgentSettings() {
           envText: patchEnvText(current.envText, {
             OPENAI_API_KEY: apiKey,
             OPENAI_BASE_URL: apiUrl,
-            OPENAI_MODEL: codexModel,
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "gemini") {
-        const geminiModel = provider?.model?.trim() ?? ""
+        const keepModel = selectedDraft.model
         const nextConfigJson = patchGeminiConfigText(selectedDraft.configText, {
           apiBaseUrl: apiUrl,
           geminiApiKey: apiKey,
@@ -5416,10 +5717,9 @@ export function AcpAgentSettings() {
             apiBaseUrl: apiUrl,
             geminiApiKey: apiKey,
           })
-          // Always overwrite GEMINI_MODEL with the provider's value (empty
-          // string clears it).
+          // Keep the agent's currently selected model when binding a provider.
           nextEnvText = patchEnvText(nextEnvText, {
-            GEMINI_MODEL: geminiModel,
+            GEMINI_MODEL: keepModel,
           })
           return {
             ...current,
@@ -5427,48 +5727,100 @@ export function AcpAgentSettings() {
             apiBaseUrl: apiUrl,
             apiKey,
             geminiApiKey: apiKey,
-            model: geminiModel,
+            model: keepModel,
             envText: nextEnvText,
             configText: nextConfigJson.configText,
           }
         })
       } else if (agentType === "hermes") {
-        const hermesModel = extractAgentModel(provider?.model ?? null, "hermes") ?? ""
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
-          model: hermesModel,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: hermesModel,
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "open_claw") {
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: extractAgentModel(provider?.model ?? null, "open_claw") ?? "",
+            OPENAI_MODEL: keepModel,
           }),
         }))
       } else if (agentType === "cline") {
-        const clineModel = extractAgentModel(provider?.model ?? null, "cline") ?? ""
+        const keepModel = selectedDraft.model
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
           apiBaseUrl: apiUrl,
           apiKey,
           clineApiKey: apiKey,
-          model: clineModel,
+          model: keepModel,
           envText: patchEnvText(current.envText, {
             OPENAI_BASE_URL: apiUrl,
             OPENAI_API_KEY: apiKey,
-            OPENAI_MODEL: clineModel,
+            OPENAI_MODEL: keepModel,
+          }),
+        }))
+      } else if (agentType === "open_code") {
+        // OpenCode models are `provider/model`. When binding the managed
+        // veryagent provider, keep a bare model id and let the cascade write
+        // `veryagent/<model>` into opencode.json.
+        const keepModel = selectedDraft.model
+          .replace(/^veryagent\//, "")
+          .trim()
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: keepModel,
+          }),
+        }))
+      } else if (agentType === "pi") {
+        const keepModel = selectedDraft.model
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          envText: patchEnvText(current.envText, {
+            OPENAI_BASE_URL: apiUrl,
+            OPENAI_API_KEY: apiKey,
+            OPENAI_MODEL: keepModel,
+          }),
+        }))
+      } else if (agentType === "code_buddy") {
+        const keepModel = selectedDraft.model
+        updateSelectedDraft((current) => ({
+          ...current,
+          modelProviderId: providerId,
+          apiBaseUrl: apiUrl,
+          apiKey,
+          model: keepModel,
+          // A计划 is additive via ~/.codebuddy/models.json (backend cascade).
+          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL — those
+          // own the native China/overseas Tencent catalog.
+          envText: patchEnvText(current.envText, {
+            CODEBUDDY_MODEL: keepModel,
+            CODEBUDDY_BASE_URL: "",
+            CODEBUDDY_DISABLE_BUILTIN_MODELS: "",
           }),
         }))
       } else {
@@ -5495,6 +5847,222 @@ export function AcpAgentSettings() {
     selectedModelProviders,
     handleModelProviderSelect,
   ])
+
+  // Fetch the selected provider's model list for the agent-side picker.
+  useEffect(() => {
+    if (!selectedNeedsModelProvider || selectedDraft?.modelProviderId == null) {
+      setProviderModels([])
+      setProviderModelsError(null)
+      setProviderModelsLoading(false)
+      return
+    }
+    const providerId = selectedDraft.modelProviderId
+    let cancelled = false
+    setProviderModelsLoading(true)
+    setProviderModelsError(null)
+    void fetchModelProviderModels(providerId)
+      .then((models) => {
+        if (cancelled) return
+        setProviderModels(models)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error("[Settings] fetch provider models failed:", error)
+        setProviderModels([])
+        setProviderModelsError(toErrorMessage(error))
+      })
+      .finally(() => {
+        if (!cancelled) setProviderModelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    selectedNeedsModelProvider,
+    selectedDraft?.modelProviderId,
+    providerModelsRefreshKey,
+  ])
+
+  const handleProviderModelChange = useCallback(
+    (modelId: string) => {
+      if (!selectedAgent || !selectedDraft) return
+      const agentType = selectedAgent.agent_type
+
+      if (agentType === "claude_code") {
+        handleImportantConfigChange("claudeMainModel", modelId)
+        return
+      }
+
+      if (agentType === "codex") {
+        const nextToml = patchCodexConfigTomlText(
+          selectedDraft.codexConfigTomlText,
+          {
+            model: modelId,
+            modelReasoningEffort: selectedDraft.codexReasoningEffort,
+          }
+        )
+        const synced = extractCodexImportantValues(
+          selectedDraft.codexAuthJsonText,
+          nextToml
+        )
+        updateSelectedDraft((current) => ({
+          ...applyImportantFieldToDraft(current, "model", modelId),
+          model: synced.model,
+          codexModelProvider: synced.modelProvider,
+          codexProviderOptions: synced.providerOptions,
+          codexReasoningEffort: synced.reasoningEffort,
+          codexSupportsWebsockets: synced.supportsWebsockets,
+          codexSkills: synced.skills,
+          codexServiceTierFast: synced.serviceTierFast,
+          codexConfigTomlText: nextToml,
+          envText: patchEnvText(current.envText, {
+            OPENAI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "gemini") {
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            GEMINI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (
+        agentType === "hermes" ||
+        agentType === "open_claw" ||
+        agentType === "open_code" ||
+        agentType === "pi"
+      ) {
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            OPENAI_MODEL: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "code_buddy") {
+        // Remember the A计划 selection; backend rewrites models.json on save.
+        // Do not force ANTHROPIC_MODEL / disable built-ins — native Tencent
+        // models must remain selectable (China vs overseas region).
+        updateSelectedDraft((current) => ({
+          ...current,
+          model: modelId,
+          envText: patchEnvText(current.envText, {
+            CODEBUDDY_MODEL: modelId,
+            ANTHROPIC_CUSTOM_MODEL_OPTION: modelId,
+            ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: modelId,
+          }),
+        }))
+        return
+      }
+
+      if (agentType === "cline") {
+        updateSelectedDraft((current) => {
+          const next = {
+            ...current,
+            model: modelId,
+            clineModel: modelId,
+            envText: patchEnvText(current.envText, {
+              OPENAI_MODEL: modelId,
+            }),
+          }
+          const config: Record<string, unknown> = {}
+          config.apiProvider = next.clineProvider
+          if (next.clineApiKey.trim()) config.apiKey = next.clineApiKey.trim()
+          if (modelId.trim()) config.model = modelId.trim()
+          if (next.clineBaseUrl.trim()) {
+            config.apiBaseUrl = next.clineBaseUrl.trim()
+          }
+          next.configText = JSON.stringify(config, null, 2)
+          return next
+        })
+        return
+      }
+
+      handleImportantConfigChange("model", modelId)
+    },
+    [selectedAgent, selectedDraft, handleImportantConfigChange, updateSelectedDraft]
+  )
+
+  const renderProviderModelPicker = (opts?: {
+    disabled?: boolean
+    value?: string
+    placeholder?: string
+  }) => {
+    const value = opts?.value ?? selectedDraft?.model ?? ""
+    const disabled = Boolean(opts?.disabled || selectedIsSavingConfig)
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-[11px] text-muted-foreground">
+            {t("selectProviderModel")}
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px]"
+            disabled={disabled || providerModelsLoading || selectedDraft?.modelProviderId == null}
+            onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
+          >
+            {providerModelsLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t("refreshProviderModels")}
+          </Button>
+        </div>
+        <Input
+          list="provider-model-options"
+          value={value}
+          onChange={(event) => handleProviderModelChange(event.target.value)}
+          placeholder={opts?.placeholder ?? t("selectProviderModel")}
+          disabled={disabled}
+        />
+        {providerModels.length > 0 && (
+          <datalist id="provider-model-options">
+            {providerModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </datalist>
+        )}
+        {providerModelsLoading ? (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelLoading")}
+          </p>
+        ) : providerModelsError ? (
+          <div className="space-y-0.5">
+            <p className="text-[11px] text-destructive">
+              {t("providerModelFetchFailed")}
+            </p>
+            <p className="break-all text-[11px] text-destructive/80">
+              {providerModelsError}
+            </p>
+          </div>
+        ) : providerModels.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelEmpty")}
+          </p>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            {t("providerModelHint")}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   const handleGeminiFieldChange = useCallback(
     (
@@ -5740,6 +6308,56 @@ export function AcpAgentSettings() {
       updateSelectedDraft((current) => ({
         ...current,
         hermesAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleOpenCodeAuthModeChange = useCallback(
+    (nextMode: OpenCodeAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "open_code"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        openCodeAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handlePiAuthModeChange = useCallback(
+    (nextMode: PiAuthMode) => {
+      if (!selectedAgent || !selectedDraft || selectedAgent.agent_type !== "pi")
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        piAuthMode: nextMode,
+        modelProviderId:
+          nextMode === "model_provider" ? current.modelProviderId : null,
+      }))
+    },
+    [selectedAgent, selectedDraft, updateSelectedDraft]
+  )
+
+  const handleCodeBuddyAuthModeChange = useCallback(
+    (nextMode: CodeBuddyAuthMode) => {
+      if (
+        !selectedAgent ||
+        !selectedDraft ||
+        selectedAgent.agent_type !== "code_buddy"
+      )
+        return
+      updateSelectedDraft((current) => ({
+        ...current,
+        codeBuddyAuthMode: nextMode,
         modelProviderId:
           nextMode === "model_provider" ? current.modelProviderId : null,
       }))
@@ -7002,26 +7620,44 @@ export function AcpAgentSettings() {
               const isChecking = Boolean(checking[agent.agent_type])
               const draft = drafts[agent.agent_type] ?? buildAgentDraft(agent)
               const allChecks = getAgentChecks(agent, current)
+              const pilotReadiness = isReadinessPilotAgent(agent.agent_type)
+                ? buildAgentReadiness({
+                    agent,
+                    draft,
+                    checks: allChecks,
+                    isChecking,
+                    openClawDiscovery:
+                      agent.agent_type === "open_claw"
+                        ? openClawDiscovery
+                        : null,
+                    t: rawTranslator,
+                  })
+                : null
               const summary = summarizeChecks(allChecks)
               const displaySummary: CheckStatus | "unchecked" | "checking" =
                 isChecking ? "checking" : summary
-              const statusLabel =
-                displaySummary === "unchecked"
+              const statusLabel = pilotReadiness
+                ? pilotReadiness.badge
+                : displaySummary === "unchecked"
                   ? t("status.unchecked")
                   : displaySummary === "checking"
-                    ? "Checking"
+                    ? t("readiness.badge.checking")
                     : displaySummary.toUpperCase()
-              const statusToneClass = !draft.enabled
-                ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
-                : displaySummary === "pass"
-                  ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
-                  : displaySummary === "fail"
-                    ? "border-red-500/40 bg-red-500/10 text-red-500"
-                    : displaySummary === "warn"
-                      ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                      : displaySummary === "checking"
-                        ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                        : "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+              const statusToneClass = pilotReadiness
+                ? readinessToneClass(pilotReadiness.kind)
+                : !draft.enabled
+                  ? "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+                  : displaySummary === "pass"
+                    ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
+                    : displaySummary === "fail"
+                      ? "border-red-500/40 bg-red-500/10 text-red-500"
+                      : displaySummary === "warn"
+                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        : displaySummary === "checking"
+                          ? "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          : "border-muted-foreground/30 bg-muted/30 text-muted-foreground"
+
+              const inactive = !draft.enabled || !agent.available
 
               return (
                 <AgentReorderItem
@@ -7030,6 +7666,7 @@ export function AcpAgentSettings() {
                   selected={selectedAgentType === agent.agent_type}
                   reordering={reordering}
                   dragging={dragging}
+                  inactive={inactive}
                   onDragStart={(agentType) => {
                     setDragging(agentType)
                   }}
@@ -7067,12 +7704,18 @@ export function AcpAgentSettings() {
                         </button>
                         <AgentIcon
                           agentType={agent.agent_type}
+                          muted={inactive}
                           className="h-4 w-4"
                         />
-                        <span className="text-sm font-medium truncate">
+                        <span
+                          className={cn(
+                            "text-sm font-medium truncate",
+                            inactive && "text-muted-foreground"
+                          )}
+                        >
                           {agent.name}
                         </span>
-                        {draft.enabled && (
+                        {draft.enabled && agent.available ? (
                           <span
                             className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"
                             aria-label={t("status.agentEnabledAria", {
@@ -7080,7 +7723,7 @@ export function AcpAgentSettings() {
                             })}
                             title={t("status.enabled")}
                           />
-                        )}
+                        ) : null}
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
@@ -7133,9 +7776,18 @@ export function AcpAgentSettings() {
             <div className="h-full flex flex-col">
               <div className="border-b px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "min-w-0 flex items-center gap-2",
+                      (!selectedDraft.enabled || !selectedAgent.available) &&
+                        "opacity-60 text-muted-foreground"
+                    )}
+                  >
                     <AgentIcon
                       agentType={selectedAgent.agent_type}
+                      muted={
+                        !selectedDraft.enabled || !selectedAgent.available
+                      }
                       className="h-5 w-5"
                     />
                     <h3 className="text-sm font-semibold truncate">
@@ -7219,6 +7871,117 @@ export function AcpAgentSettings() {
                     <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-start gap-2">
                       <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                       <span className="break-all">{selectedCurrent.error}</span>
+                    </div>
+                  )}
+                  {selectedReadiness && (
+                    <div
+                      className={cn(
+                        "rounded-md border px-3 py-2.5 space-y-1.5",
+                        readinessToneClass(selectedReadiness.kind)
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="text-xs font-semibold leading-snug">
+                            {selectedReadiness.title}
+                          </div>
+                          <p className="text-[11px] leading-relaxed opacity-90">
+                            {selectedReadiness.detail}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {selectedReadiness.kind === "checking" && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "h-6 px-2 text-[11px]",
+                              readinessToneClass(selectedReadiness.kind)
+                            )}
+                          >
+                            {selectedReadiness.badge}
+                          </Badge>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-current/20 hover:bg-black/5 dark:hover:bg-white/10"
+                            title={t("actions.refreshCheck")}
+                            aria-label={t("actions.refreshCheckAgent", {
+                              name: selectedAgent.name,
+                            })}
+                            onClick={() => {
+                              runPreflight(selectedAgent.agent_type, true).catch(
+                                (err) => {
+                                  console.error(
+                                    "[Settings] readiness recheck failed:",
+                                    err
+                                  )
+                                }
+                              )
+                              if (selectedAgent.agent_type === "open_claw") {
+                                openClawDiscoveryAppliedRef.current = false
+                                acpDiscoverOpenClawGateway()
+                                  .then(setOpenClawDiscovery)
+                                  .catch((err) => {
+                                    console.warn(
+                                      "[Settings] openclaw rediscovery failed:",
+                                      err
+                                    )
+                                  })
+                              }
+                            }}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      {selectedReadiness.kind === "not_installed" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.installFirst")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "dependency_blocked" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.fixDependency")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "config_needed" && (
+                        <p className="text-[11px] opacity-80">
+                          {selectedAgent.agent_type === "open_claw" &&
+                          selectedDraft.openClawAuthMode === "gateway"
+                            ? t("readiness.hint.openClawStartGateway")
+                            : t("readiness.hint.configureBelow")}
+                        </p>
+                      )}
+                      {selectedReadiness.kind === "ready" && (
+                        <p className="text-[11px] opacity-80">
+                          {t("readiness.hint.readyToChat")}
+                        </p>
+                      )}
+                      {selectedAgent.agent_type === "open_claw" &&
+                        selectedDraft.openClawAuthMode === "gateway" &&
+                        selectedReadiness.kind === "config_needed" && (
+                          <div className="pt-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 text-[11px]"
+                              disabled={ensuringOpenClawGateway}
+                              onClick={() => {
+                                handleEnsureOpenClawGateway().catch(() => {})
+                              }}
+                            >
+                              {ensuringOpenClawGateway ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  {t("openClaw.ensureGatewayRunning")}
+                                </>
+                              ) : (
+                                t("openClaw.ensureGateway")
+                              )}
+                            </Button>
+                          </div>
+                        )}
                     </div>
                   )}
                   <div className="text-[11px] text-muted-foreground flex items-center gap-1">
@@ -7357,6 +8120,12 @@ export function AcpAgentSettings() {
                             ? t("modelProviderHint")
                             : t("authModeCustomEndpointHint")}
                       </p>
+                      {selectedDraft.codexAuthMode === "model_provider" && (
+                        <div className="mt-1.5 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{t("codex.modelProviderResponsesWarning")}</span>
+                        </div>
+                      )}
                     </div>
 
                     {selectedDraft.codexAuthMode === "chatgpt_subscription" && (
@@ -7575,17 +8344,19 @@ export function AcpAgentSettings() {
                       </div>
                     )}
 
-                    {(selectedDraft.codexAuthMode === "api_key" ||
-                      selectedDraft.codexAuthMode === "model_provider") && (
+                    {selectedDraft.codexAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / gpt-5-mini",
+                      })}
+
+                    {selectedDraft.codexAuthMode === "api_key" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           {t("codex.modelName")}
                         </label>
                         <Input
                           value={selectedDraft.model}
-                          readOnly={
-                            selectedDraft.codexAuthMode === "model_provider"
-                          }
                           onChange={(event) => {
                             handleCodexImportantConfigChange(
                               "model",
@@ -7849,24 +8620,28 @@ supports_websockets = true`}
                       </div>
                     )}
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Model
-                      </label>
-                      <Input
-                        value={selectedDraft.model}
-                        readOnly={
-                          selectedDraft.geminiAuthMode === "model_provider"
-                        }
-                        onChange={(event) => {
-                          handleGeminiFieldChange("model", event.target.value)
-                        }}
-                        placeholder="gemini-3-pro-preview"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("modelHintDefault")}
-                      </p>
-                    </div>
+                    {selectedDraft.geminiAuthMode === "model_provider"
+                      ? renderProviderModelPicker({
+                          value: selectedDraft.model,
+                          placeholder: "gemini-3-pro-preview",
+                        })
+                      : (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          Model
+                        </label>
+                        <Input
+                          value={selectedDraft.model}
+                          onChange={(event) => {
+                            handleGeminiFieldChange("model", event.target.value)
+                          }}
+                          placeholder="gemini-3-pro-preview"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("modelHintDefault")}
+                        </p>
+                      </div>
+                      )}
 
                     {(selectedDraft.geminiAuthMode === "custom" ||
                       selectedDraft.geminiAuthMode === "model_provider") && (
@@ -8097,6 +8872,116 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("openCode.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.openCodeAuthMode}
+                        onValueChange={(value) =>
+                          handleOpenCodeAuthModeChange(
+                            value as OpenCodeAuthMode
+                          )
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("openCode.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("openCode.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.openCodeAuthMode === "model_provider"
+                          ? t("openCode.authModeModelProviderHint")
+                          : t("openCode.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "glm-5.1 / gpt-5",
+                      })}
+
+                    {selectedDraft.openCodeAuthMode === "model_provider" && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "open_code",
+                              selectedAgent.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.openCodeAuthMode === "native" && (
+                    <>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
@@ -8882,7 +9767,16 @@ supports_websockets = true`}
                                 selectedDraft.openCodeAuthJsonText,
                             }
                           )
-                            .then(() => {
+                            .then(async () => {
+                              // Native multi-provider save clears the shared
+                              // model_provider binding so refresh stays in
+                              // native mode (same as Hermes/Cline).
+                              await persistEnv(
+                                "open_code",
+                                selectedAgent.enabled,
+                                selectedDraft.envText,
+                                null
+                              )
                               toast.success(t("toasts.openCodeSaved"), {
                                 description: t("toasts.configSavedHint"),
                               })
@@ -8913,6 +9807,8 @@ supports_websockets = true`}
                         )}
                       </Button>
                     </div>
+                    </>
+                    )}
                   </div>
                 ) : selectedAgent.agent_type === "cline" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
@@ -8986,6 +9882,12 @@ supports_websockets = true`}
                         )}
                       </div>
                     )}
+
+                    {selectedDraft.clineAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model || selectedDraft.clineModel,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
 
                     {selectedDraft.clineAuthMode === "model_provider" && (
                       <div className="flex items-center justify-end gap-2">
@@ -9276,6 +10178,12 @@ supports_websockets = true`}
                       </div>
                     )}
 
+                    {selectedDraft.openClawAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
+
                     {selectedDraft.openClawAuthMode === "model_provider" && (
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -9307,6 +10215,65 @@ supports_websockets = true`}
 
                     {selectedDraft.openClawAuthMode === "gateway" && (
                     <>
+                    {openClawDiscovery && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-muted-foreground">
+                          {openClawDiscovery.gatewayUrl
+                            ? openClawDiscovery.gatewayReachable
+                              ? t("openClaw.discoveryReachable", {
+                                  url: openClawDiscovery.gatewayUrl,
+                                })
+                              : t("openClaw.discoveryUnreachable", {
+                                  url: openClawDiscovery.gatewayUrl,
+                                })
+                            : openClawDiscovery.configExists
+                              ? t("openClaw.discoveryConfigNoGateway", {
+                                  path: openClawDiscovery.configPath,
+                                })
+                              : t("openClaw.discoveryNotFound", {
+                                  path: openClawDiscovery.configPath,
+                                })}
+                        </p>
+                        {openClawDiscovery.gatewayUrl &&
+                          openClawDiscovery.gatewayUrlSource && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("openClaw.discoveryFound", {
+                                source:
+                                  openClawDiscovery.gatewayUrlSource ??
+                                  "config",
+                                path: openClawDiscovery.configPath,
+                              })}
+                            </p>
+                          )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          openClawDiscovery?.gatewayReachable
+                            ? "outline"
+                            : "default"
+                        }
+                        disabled={ensuringOpenClawGateway}
+                        onClick={() => {
+                          handleEnsureOpenClawGateway().catch(() => {})
+                        }}
+                      >
+                        {ensuringOpenClawGateway ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t("openClaw.ensureGatewayRunning")}
+                          </>
+                        ) : (
+                          t("openClaw.ensureGateway")
+                        )}
+                      </Button>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("readiness.hint.openClawStartGateway")}
+                      </p>
+                    </div>
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         Gateway URL
@@ -9319,7 +10286,10 @@ supports_websockets = true`}
                             event.target.value
                           )
                         }}
-                        placeholder="wss://gateway-host:18789"
+                        placeholder={
+                          openClawDiscovery?.gatewayUrl ??
+                          t("openClaw.gatewayUrlPlaceholder")
+                        }
                       />
                       <p className="text-[11px] text-muted-foreground">
                         {t("openClaw.gatewayUrlHint")}
@@ -9518,6 +10488,12 @@ supports_websockets = true`}
                         )}
                       </div>
                     )}
+
+                    {selectedDraft.hermesAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gpt-5 / claude-sonnet-5",
+                      })}
 
                     {selectedDraft.hermesAuthMode === "model_provider" && (
                       <div className="flex justify-end">
@@ -9853,18 +10829,131 @@ supports_websockets = true`}
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "code_buddy" ? (
-                  <CodeBuddyConfigPanel
-                    agent={selectedAgent}
-                    saving={Boolean(savingEnv[selectedAgent.agent_type])}
-                    onSave={(env, enabled) =>
-                      persistEnv(
-                        selectedAgent.agent_type,
-                        enabled,
-                        envMapToText(env),
-                        selectedAgent.model_provider_id
-                      )
-                    }
-                  />
+                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">
+                        {t("codebuddy.authModeLabel")}
+                      </label>
+                      <Select
+                        value={selectedDraft.codeBuddyAuthMode}
+                        onValueChange={(value) =>
+                          handleCodeBuddyAuthModeChange(
+                            value as CodeBuddyAuthMode
+                          )
+                        }
+                        disabled={selectedIsSavingConfig}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start">
+                          <SelectItem value="native">
+                            {t("codebuddy.authModeNative")}
+                          </SelectItem>
+                          <SelectItem value="model_provider">
+                            {t("codebuddy.authModeModelProvider")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        {selectedDraft.codeBuddyAuthMode === "model_provider"
+                          ? t("codebuddy.authModeModelProviderHint")
+                          : t("codebuddy.authModeNativeHint")}
+                      </p>
+                    </div>
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] text-muted-foreground">
+                          {t("selectModelProvider")}
+                        </label>
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
+                            }
+                            onValueChange={handleModelProviderSelect}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" &&
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "glm-5.1 / gpt-5",
+                      })}
+
+                    {selectedDraft.codeBuddyAuthMode === "model_provider" && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            persistEnv(
+                              "code_buddy",
+                              selectedAgent.enabled,
+                              selectedDraft.envText,
+                              selectedDraft.modelProviderId
+                            )
+                          }
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
+                        >
+                          {selectedIsSavingEnv ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("actions.saving")}
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-3.5 w-3.5" />
+                              {t("actions.saveEnvVars")}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {selectedDraft.codeBuddyAuthMode === "native" && (
+                      <CodeBuddyConfigPanel
+                        agent={selectedAgent}
+                        saving={Boolean(savingEnv[selectedAgent.agent_type])}
+                        onSave={(env, enabled) =>
+                          persistEnv(
+                            selectedAgent.agent_type,
+                            enabled,
+                            envMapToText(env),
+                            // Native save clears shared model_provider binding.
+                            null
+                          )
+                        }
+                      />
+                    )}
+                  </div>
                 ) : selectedAgent.agent_type === "kimi_code" ? (
                   <KimiCodeConfigPanel
                     agent={selectedAgent}
@@ -9886,19 +10975,154 @@ supports_websockets = true`}
                     }
                   />
                 ) : selectedAgent.agent_type === "pi" ? (
-                  <PiConfigPanel
-                    agent={selectedAgent}
-                    saving={Boolean(savingEnv[selectedAgent.agent_type])}
-                    onSaveEnv={(env, enabled) =>
-                      persistEnv(
-                        selectedAgent.agent_type,
-                        enabled,
-                        envMapToText(env),
-                        selectedAgent.model_provider_id
-                      )
-                    }
-                    onSaved={refreshAgents}
-                  />
+                  <div className="space-y-3">
+                    <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                      <div>
+                        <label className="text-xs font-medium">
+                          {t("pi.configManagement")}
+                        </label>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {t("pi.configDescription")}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">
+                          {t("pi.authModeLabel")}
+                        </label>
+                        <Select
+                          value={selectedDraft.piAuthMode}
+                          onValueChange={(value) =>
+                            handlePiAuthModeChange(value as PiAuthMode)
+                          }
+                          disabled={selectedIsSavingConfig}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectItem value="model_provider">
+                              {t("pi.authModeModelProvider")}
+                            </SelectItem>
+                            <SelectItem value="native">
+                              {t("pi.authModeNative")}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          {selectedDraft.piAuthMode === "model_provider"
+                            ? t("pi.authModeModelProviderHint")
+                            : t("pi.authModeNativeHint")}
+                        </p>
+                      </div>
+
+                      {selectedDraft.piAuthMode === "model_provider" && (
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("selectModelProvider")}
+                          </label>
+                          {selectedModelProviders.length > 0 ? (
+                            <Select
+                              value={
+                                selectedDraft.modelProviderId != null
+                                  ? String(selectedDraft.modelProviderId)
+                                  : ""
+                              }
+                              onValueChange={handleModelProviderSelect}
+                              disabled={selectedIsSavingConfig}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue
+                                  placeholder={t("selectModelProvider")}
+                                />
+                              </SelectTrigger>
+                              <SelectContent align="start">
+                                {selectedModelProviders.map((provider) => (
+                                  <SelectItem
+                                    key={provider.id}
+                                    value={String(provider.id)}
+                                  >
+                                    {provider.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("noModelProviderAvailable")}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedDraft.piAuthMode === "model_provider" &&
+                        renderProviderModelPicker({
+                          value: selectedDraft.model,
+                          placeholder: "glm-5.1 / gpt-5",
+                        })}
+
+                      {selectedDraft.piAuthMode === "model_provider" && (
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              persistEnv(
+                                "pi",
+                                selectedAgent.enabled,
+                                selectedDraft.envText,
+                                selectedDraft.modelProviderId
+                              )
+                            }
+                            disabled={
+                              selectedIsSavingEnv ||
+                              selectedMissingModelProvider
+                            }
+                          >
+                            {selectedIsSavingEnv ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveEnvVars")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedDraft.piAuthMode === "native" && (
+                      <PiConfigPanel
+                        agent={selectedAgent}
+                        saving={Boolean(savingEnv[selectedAgent.agent_type])}
+                        onSaveEnv={(env, enabled) =>
+                          persistEnv(
+                            selectedAgent.agent_type,
+                            enabled,
+                            envMapToText(env),
+                            // Native pi save clears shared model_provider
+                            // binding so refresh stays in native mode.
+                            null
+                          )
+                        }
+                        onSaved={async () => {
+                          // Credential save goes through acp_update_pi_config,
+                          // not env; still clear model_provider_id so refresh
+                          // doesn't snap back to model_provider mode.
+                          await persistEnv(
+                            "pi",
+                            selectedAgent.enabled,
+                            selectedDraft.envText,
+                            null
+                          )
+                          await refreshAgents()
+                        }}
+                      />
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
                     <div>
@@ -10075,6 +11299,12 @@ supports_websockets = true`}
 
                     {selectedAgent.agent_type === "claude_code" ? (
                       <div className="space-y-2">
+                        {selectedDraft.claudeAuthMode === "model_provider" ? (
+                          renderProviderModelPicker({
+                            value: selectedDraft.claudeMainModel,
+                            placeholder: "claude-sonnet-5",
+                          })
+                        ) : (
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-1.5">
                             <label className="text-[11px] text-muted-foreground">
@@ -10082,10 +11312,6 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeMainModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeMainModel",
@@ -10101,10 +11327,6 @@ supports_websockets = true`}
                             </label>
                             <Input
                               value={selectedDraft.claudeReasoningModel}
-                              readOnly={
-                                selectedDraft.claudeAuthMode ===
-                                "model_provider"
-                              }
                               onChange={(event) => {
                                 handleImportantConfigChange(
                                   "claudeReasoningModel",
@@ -10115,9 +11337,12 @@ supports_websockets = true`}
                             />
                           </div>
                         </div>
+                        )}
+                        {selectedDraft.claudeAuthMode !== "model_provider" && (
                         <p className="text-[11px] text-muted-foreground">
                           {t("modelHintDefault")}
                         </p>
+                        )}
                         <details className="group border-t border-border/60 pt-3">
                           <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors list-none">
                             <svg className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
@@ -10133,10 +11358,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultHaikuModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultHaikuModel",
@@ -10152,10 +11373,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultSonnetModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultSonnetModel",
@@ -10171,10 +11388,6 @@ supports_websockets = true`}
                                 </label>
                                 <Input
                                   value={selectedDraft.claudeDefaultOpusModel}
-                                  readOnly={
-                                    selectedDraft.claudeAuthMode ===
-                                    "model_provider"
-                                  }
                                   onChange={(event) => {
                                     handleImportantConfigChange(
                                       "claudeDefaultOpusModel",
@@ -10193,10 +11406,6 @@ supports_websockets = true`}
                                   </label>
                                   <Input
                                     value={selectedDraft.claudeCustomModelOption}
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
-                                    }
                                     onChange={(event) => {
                                       handleImportantConfigChange(
                                         "claudeCustomModelOption",
@@ -10214,10 +11423,6 @@ supports_websockets = true`}
                                     value={
                                       selectedDraft.claudeCustomModelOptionName
                                     }
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
-                                    }
                                     onChange={(event) => {
                                       handleImportantConfigChange(
                                         "claudeCustomModelOptionName",
@@ -10234,10 +11439,6 @@ supports_websockets = true`}
                                   <Input
                                     value={
                                       selectedDraft.claudeCustomModelOptionDescription
-                                    }
-                                    readOnly={
-                                      selectedDraft.claudeAuthMode ===
-                                      "model_provider"
                                     }
                                     onChange={(event) => {
                                       handleImportantConfigChange(

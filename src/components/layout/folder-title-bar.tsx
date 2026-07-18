@@ -4,15 +4,16 @@ import { useCallback, useEffect, useState } from "react"
 import {
   EllipsisVertical,
   Menu,
+  Moon,
   PanelLeft,
   PanelRight,
-  PawPrint,
   Settings,
   SquareTerminal,
+  Sun,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useTheme } from "next-themes"
 import { openSettingsWindow } from "@/lib/api"
-import { openPetWindow } from "@/lib/pet/api"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useActiveFolder } from "@/contexts/active-folder-context"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
@@ -33,6 +34,7 @@ import {
 } from "@/lib/keyboard-shortcuts"
 import { AppTitleBar } from "./app-title-bar"
 import { CommandDropdown } from "./command-dropdown"
+import { TitleBarUpdateButton } from "./title-bar-update-button"
 import { SearchCommandDialog } from "@/components/conversations/search-command-dialog"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -45,7 +47,7 @@ import {
 
 export function FolderTitleBar() {
   const tTitleBar = useTranslations("Folder.folderTitleBar")
-  const tPet = useTranslations("Pet")
+  const { theme, setTheme } = useTheme()
   const openFolder = useAppWorkspaceStore((s) => s.openFolder)
   const { activeFolder } = useActiveFolder()
   const isChatMode = useIsActiveChatMode()
@@ -61,20 +63,6 @@ export function FolderTitleBar() {
   // and the ⌘K shortcut so search works even when the sidebar is collapsed.
   const { open: searchOpen, setOpen: setSearchOpen } = useSearchDialog()
   const [browserOpen, setBrowserOpen] = useState(false)
-
-  const handleOpenPet = useCallback(async () => {
-    if (!isDesktop()) return
-    try {
-      await openPetWindow()
-    } catch {
-      // Window error — route the user to the manager.
-      try {
-        await openSettingsWindow("appearance")
-      } catch (err) {
-        console.warn("[Pet] open settings failed:", err)
-      }
-    }
-  }, [])
 
   const handleOpenFolder = useCallback(async () => {
     // See NewFolderDropdown / SidebarConversationList for the same logic:
@@ -208,11 +196,19 @@ export function FolderTitleBar() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 hover:text-foreground/80 border border-border rounded-md p-0.5 mt-2.5"
-                  onClick={handleOpenPet}
-                  title={tPet("manager.summon")}
+                  onClick={() =>
+                    setTheme(theme === "dark" ? "light" : "dark")
+                  }
+                  title={
+                    theme === "dark"
+                      ? tTitleBar("switchToLight")
+                      : tTitleBar("switchToDark")
+                  }
                 >
-                  <PawPrint className="h-5 w-5" />
+                  <Sun className="h-5 w-5 dark:hidden" />
+                  <Moon className="hidden h-5 w-5 dark:block" />
                 </Button>
+                <TitleBarUpdateButton />
               </div>
               <div data-tauri-drag-region className="h-8 flex-1" />
             </div>

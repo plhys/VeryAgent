@@ -158,20 +158,29 @@ fn server_rollback_available() -> bool {
     crate::update::install::rollback_available()
 }
 
-pub async fn check_app_update() -> Result<Json<AppUpdateCheckResult>, AppCommandError> {
+pub async fn check_app_update(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<AppUpdateCheckResult>, AppCommandError> {
     use crate::update::{runtime, version};
 
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    let manifest = version::fetch_latest_manifest().await?;
+    let source = crate::commands::system_settings::load_app_update_source(&state.db.conn)
+        .await
+        .unwrap_or_default();
 
-    let update = if version::is_newer(&manifest.version, &current_version) {
-        Some(AppUpdateInfo {
-            version: version::trim_v_prefix(&manifest.version).to_string(),
-            body: manifest.notes.unwrap_or_default(),
-            date: manifest.pub_date,
-        })
-    } else {
-        None
+    // Missing release channel (404 / no latest.json yet) means "no update",
+    // not a red error — same product semantics as the desktop path.
+    let update = match version::fetch_latest_manifest_from(source).await {
+        Ok(manifest) if version::is_newer(&manifest.version, &current_version) => {
+            Some(AppUpdateInfo {
+                version: version::trim_v_prefix(&manifest.version).to_string(),
+                body: manifest.notes.unwrap_or_default(),
+                date: manifest.pub_date,
+            })
+        }
+        Ok(_) => None,
+        Err(err) if is_empty_release_channel_error(&err) => None,
+        Err(err) => return Err(err),
     };
 
     Ok(Json(AppUpdateCheckResult {
@@ -184,6 +193,15 @@ pub async fn check_app_update() -> Result<Json<AppUpdateCheckResult>, AppCommand
         rollback_available: server_rollback_available(),
         live_progress: true,
     }))
+}
+
+fn is_empty_release_channel_error(err: &AppCommandError) -> bool {
+    let hay = format!("{} {}", err.message, err.detail.as_deref().unwrap_or(""))
+        .to_ascii_lowercase();
+    hay.contains("404")
+        || hay.contains("not found")
+        || hay.contains("status code 404")
+        || hay.contains("returned status 404")
 }
 
 #[derive(Serialize)]

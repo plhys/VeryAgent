@@ -1,5 +1,5 @@
-import { ModelProviderSettings } from "@/components/settings/model-provider-settings"
+import { ModelRoutingSettings } from "@/components/settings/model-routing-settings"
 
 export default function SettingsModelProvidersPage() {
-  return <ModelProviderSettings />
+  return <ModelRoutingSettings />
 }

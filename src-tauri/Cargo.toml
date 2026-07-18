@@ -1,6 +1,6 @@
 [package]
 name = "veryagent"
-version = "0.9.1"
+version = "0.9.4"
 description = "veryAgent Desktop App"
 authors = ["feitao"]
 edition = "2021"
@@ -13,7 +13,11 @@ default-run = "veryagent"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "veryagent_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# NOTE: "staticlib" removed — it blocks sccache caching (sccache refuses
+# to cache staticlib/cdylib outputs). Tauri 2 on desktop only needs cdylib
+# (WebView loads it) + rlib (bin targets link it). staticlib is only needed
+# for iOS; if you add iOS support, add it back under a cfg target.
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["tauri-runtime"]
@@ -116,6 +120,7 @@ zip = "2"
 regex = "1"
 portable-pty = "0.8"
 urlencoding = "2"
+url = "2"
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", version = "0.0.0", optional = true }
 sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }

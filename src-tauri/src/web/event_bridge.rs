@@ -176,6 +176,10 @@ pub const SESSION_INFO_SETTINGS_CHANGED_EVENT: &str = "session-info-settings://c
 /// backend broadcast. Payload: `VisionBridgeConfig`.
 pub const VISION_BRIDGE_SETTINGS_CHANGED_EVENT: &str = "vision-bridge-settings://changed";
 
+/// Global side-channel announcing an OpenWiki config save. Same cross-window
+/// rationale as [`VISION_BRIDGE_SETTINGS_CHANGED_EVENT`]. Payload: `OpenWikiConfig`.
+pub const OPENWIKI_SETTINGS_CHANGED_EVENT: &str = "openwiki-settings://changed";
+
 /// Payload for the global [`CONVERSATION_CHANGED_EVENT`] side-channel. Drives
 /// cross-client sidebar sync (membership + status) independent of the
 /// per-connection ACP attach protocol, so clients that are NOT attached to a

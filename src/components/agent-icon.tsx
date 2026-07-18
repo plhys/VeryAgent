@@ -7,6 +7,11 @@ import { cn } from "@/lib/utils"
 interface AgentIconProps {
   agentType: AgentType
   className?: string
+  /**
+   * Inactive / unusable presentation: desaturate color marks and mute mono
+   * marks so disabled agents never keep brand color.
+   */
+  muted?: boolean
 }
 
 interface IconProps {
@@ -360,11 +365,25 @@ const MONO_ICONS: Partial<Record<AgentType, AnyIcon>> = {
 // Text-color versions for Mono icons
 const AGENT_TEXT_COLORS: Partial<Record<AgentType, string>> = {}
 
-export function AgentIcon({ agentType, className }: AgentIconProps) {
+export function AgentIcon({
+  agentType,
+  className,
+  muted = false,
+}: AgentIconProps) {
   const ColorIcon = COLOR_ICONS[agentType]
   if (ColorIcon) {
     return (
-      <span className={cn("inline-flex shrink-0", className)}>
+      <span
+        className={cn(
+          "inline-flex shrink-0",
+          // Inline filter: brand SVGs use hard-coded fills/gradients; parent
+          // opacity alone still reads as colored, and class-only grayscale can
+          // be easy to miss on small marks.
+          muted && "opacity-45",
+          className
+        )}
+        style={muted ? { filter: "grayscale(1) saturate(0)" } : undefined}
+      >
         <ColorIcon size="100%" />
       </span>
     )
@@ -372,11 +391,17 @@ export function AgentIcon({ agentType, className }: AgentIconProps) {
 
   const MonoIcon = MONO_ICONS[agentType]
   if (MonoIcon) {
+    // text-foreground keeps monochrome agent marks (OpenCode, Hermes, Cline,
+    // CodeBuddy) at full strength outside hover/active. Without it they inherit
+    // the parent's muted text color via currentColor and look dim. Any explicit
+    // text-* class passed via className still overrides it (Tailwind specificity).
+    // When muted, force muted-foreground so disabled agents stay gray.
     return (
       <span
         className={cn(
           "inline-flex shrink-0",
-          AGENT_TEXT_COLORS[agentType],
+          muted ? "text-muted-foreground opacity-50" : "text-foreground",
+          !muted && AGENT_TEXT_COLORS[agentType],
           className
         )}
       >
@@ -389,7 +414,7 @@ export function AgentIcon({ agentType, className }: AgentIconProps) {
     <span
       className={cn(
         "rounded-full shrink-0",
-        AGENT_COLORS[agentType],
+        muted ? "bg-muted-foreground/40" : AGENT_COLORS[agentType],
         className
       )}
     />

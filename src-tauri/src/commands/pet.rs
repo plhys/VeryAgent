@@ -540,10 +540,15 @@ pub async fn pet_save_window_state(
     // changing scale via the right-click menu would shrink/grow the sprite
     // inside an unchanged transparent window — a 0.5x sprite floating in a
     // 1x window's worth of dead pixels that still capture clicks.
+    // Use the same base size as open_pet_window (webm 320×320), not the old
+    // 192×208 spritesheet frame.
     if scale_changed {
         if let Some(window) = tauri::Manager::get_webview_window(&app, "pet") {
             let s = new_config.scale;
-            let _ = window.set_size(tauri::LogicalSize::new(192.0_f64 * s, 208.0_f64 * s));
+            let _ = window.set_size(tauri::LogicalSize::new(
+                crate::commands::windows::PET_BASE_WIDTH * s,
+                crate::commands::windows::PET_BASE_HEIGHT * s,
+            ));
         }
     }
 

@@ -25,20 +25,9 @@ pub struct AgentSettingsUpdate {
     pub model_provider_id: Option<i32>,
 }
 
-fn default_enabled(agent_type: AgentType) -> bool {
-    matches!(
-        agent_type,
-        AgentType::ClaudeCode
-            | AgentType::Codex
-            | AgentType::Gemini
-            | AgentType::OpenCode
-            | AgentType::OpenClaw
-            | AgentType::Cline
-            | AgentType::Hermes
-            | AgentType::CodeBuddy
-            | AgentType::KimiCode
-            | AgentType::Pi
-    )
+/// Fresh installs seed every agent as disabled. Users opt in from ACP settings.
+fn default_enabled(_agent_type: AgentType) -> bool {
+    false
 }
 
 pub async fn ensure_defaults(

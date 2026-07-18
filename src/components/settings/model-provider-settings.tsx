@@ -1,20 +1,12 @@
-"use client"
+﻿"use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Loader2, Pencil, Plus, Server, Trash2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,20 +18,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { listModelProviders, deleteModelProvider } from "@/lib/api"
-import {
-  MODEL_PROVIDER_AGENT_TYPES,
-  AGENT_LABELS,
-  type AgentType,
-  type ModelProviderInfo,
-} from "@/lib/types"
+import type { ModelProviderInfo } from "@/lib/types"
 import { AddModelProviderDialog } from "./add-model-provider-dialog"
 import { EditModelProviderDialog } from "./edit-model-provider-dialog"
 
-export function ModelProviderSettings() {
+/**
+ * Model-provider list body. When `embedded` is true, omit the outer ScrollArea
+ * so a parent page can compose this with Vision Bridge under one scroller.
+ */
+export function ModelProviderSettingsBody({
+  embedded = false,
+}: {
+  embedded?: boolean
+}) {
   const t = useTranslations("ModelProviderSettings")
   const [providers, setProviders] = useState<ModelProviderInfo[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<AgentType | null>(null)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<ModelProviderInfo | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ModelProviderInfo | null>(
@@ -60,11 +54,6 @@ export function ModelProviderSettings() {
   useEffect(() => {
     loadProviders().catch(console.error)
   }, [loadProviders])
-
-  const filteredProviders = useMemo(() => {
-    if (!filter) return providers
-    return providers.filter((p) => p.agent_types.includes(filter))
-  }, [providers, filter])
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
@@ -91,11 +80,11 @@ export function ModelProviderSettings() {
     }
   }, [deleteTarget, loadProviders, t])
 
-  return (
-    <ScrollArea className="h-full">
+  const body = (
+    <>
       <section className="space-y-3 px-3 pt-3 md:px-4 md:pt-4">
         <div>
-          <h1 className="text-sm font-semibold">{t("sectionTitle")}</h1>
+          <h2 className="text-sm font-semibold">{t("sectionTitle")}</h2>
           <p className="text-sm text-muted-foreground">
             {t("sectionDescription")}
           </p>
@@ -103,25 +92,7 @@ export function ModelProviderSettings() {
       </section>
 
       <section className="mt-4 space-y-2 px-3 pb-3 md:px-4 md:pb-4">
-        <div className="flex items-center justify-between gap-2">
-          <Select
-            value={filter ?? "__all__"}
-            onValueChange={(v) =>
-              setFilter(v === "__all__" ? null : (v as AgentType))
-            }
-          >
-            <SelectTrigger className="h-8 w-40 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">{t("filterAll")}</SelectItem>
-              {MODEL_PROVIDER_AGENT_TYPES.map((at) => (
-                <SelectItem key={at} value={at}>
-                  {AGENT_LABELS[at]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center justify-end gap-2">
           <Button
             size="sm"
             className="h-8 text-xs"
@@ -136,35 +107,22 @@ export function ModelProviderSettings() {
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredProviders.length === 0 ? (
+        ) : providers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
             <Server className="h-8 w-8 mb-2 opacity-40" />
             <span className="text-xs">{t("noProviders")}</span>
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredProviders.map((p) => (
+            {providers.map((p) => (
               <div
                 key={p.id}
                 className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
               >
-                <div className="min-w-0 flex-1 flex items-center gap-3">
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="text-sm font-medium truncate">{p.name}</div>
-                    <div className="truncate text-xs text-muted-foreground font-mono">
-                      {p.api_url}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1 flex-wrap">
-                    {p.agent_types.map((at) => (
-                      <Badge
-                        key={at}
-                        variant="secondary"
-                        className="text-[10px] px-1.5 py-0"
-                      >
-                        {AGENT_LABELS[at] ?? at}
-                      </Badge>
-                    ))}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-sm font-medium truncate">{p.name}</div>
+                  <div className="truncate text-xs text-muted-foreground font-mono">
+                    {p.api_url}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
@@ -226,6 +184,13 @@ export function ModelProviderSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </ScrollArea>
+    </>
   )
+
+  if (embedded) return body
+  return <ScrollArea className="h-full">{body}</ScrollArea>
+}
+
+export function ModelProviderSettings() {
+  return <ModelProviderSettingsBody />
 }

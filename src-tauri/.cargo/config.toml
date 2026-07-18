@@ -8,17 +8,14 @@
 # sccache 未安装时编译会失败 —— 没装 sccache 的机器注释掉下面这行即可
 # （或跑 scripts/setup-dev.sh 自动安装）。
 [build]
-rustc-wrapper = "sccache"
+# rustc-wrapper = "sccache"  # temporarily disabled: Windows Defender blocks sccache
 
 # ── Windows: 用更快的链接策略 ─────────────────────────────────
 # Windows MSVC 工具链默认用 link.exe，对大型 Rust 项目链接较慢。
-# 如果安装了 lld（随 LLVM/Swift/Rust 自带），改用它可显著缩短链接时间。
-# 通过 rustup component add llvm-tools-preview 可获取 lld。
-# 以下是「条件启用」写法：如果本机有 lld-link 就用它，否则回退默认。
-# 注：若 lld-link 不在 PATH，这行不会生效也不会报错（cargo 会回退）。
+# lld（随 rustup 的 llvm-tools-preview 组件附带）可将链接时间缩短 50-70%。
+# 安装：rustup component add llvm-tools-preview
 [target.x86_64-pc-windows-msvc]
-# 暂不硬绑 lld，避免你机器没装时报错。
-# 装好后取消下面两行注释即可（rustup component add llvm-tools-preview）：
+# temporarily use default MSVC linker; rust-lld was hitting STATUS_DLL_INIT_FAILED
 # linker = "rust-lld"
 # rustflags = ["-C", "link-arg=/MANIFEST:NO"]
 

@@ -1,4 +1,4 @@
-import { toErrorMessage } from "./app-error"
+import { extractAppCommandError, toErrorMessage } from "./app-error"
 import { getTransport, isDesktop, isRemoteDesktopMode } from "./transport"
 
 // Drive the LOCAL Tauri app updater only for a genuine local desktop window.
@@ -136,9 +136,22 @@ export type AppUpdateErrorKind =
   | "install_failed"
   | "unknown"
 
+/** Why the release channel could not be used (for precise UI copy). */
+export type AppUpdateSourceFailureReason =
+  | "not_found"
+  | "network"
+  | "timeout"
+  | "unknown"
+
 export interface AppUpdateErrorInfo {
   kind: AppUpdateErrorKind
   rawMessage: string
+  /** GitHub / Gitea when detectable from the error text. */
+  sourceLabel?: string | null
+  /** Manifest URL when present in the error. */
+  manifestUrl?: string | null
+  /** Finer cause for source/network failures. */
+  failureReason?: AppUpdateSourceFailureReason | null
 }
 
 export async function getCurrentAppVersion(): Promise<string> {
@@ -167,13 +180,10 @@ export async function getCurrentAppVersion(): Promise<string> {
 }
 
 export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
-  if (!usesTauriUpdater()) {
-    return getTransport().call<AppUpdateCheckResult>("check_app_update")
-  }
-  const { getVersion } = await import("@tauri-apps/api/app")
-  const { check } = await import("@tauri-apps/plugin-updater")
-  const [currentVersion, update] = await Promise.all([getVersion(), check()])
-  return { currentVersion, update }
+  // Both desktop and server check go through the backend so the selected
+  // release channel (GitHub vs Gitea) can override endpoints. The JS plugin
+  // `check()` has no endpoints option, so desktop uses the Rust command too.
+  return getTransport().call<AppUpdateCheckResult>("check_app_update")
 }
 
 /**
@@ -299,45 +309,135 @@ export async function closeAppUpdate(
   await update.close()
 }
 
+function extractManifestUrl(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s)"']+latest\.json[^\s)"']*/i)
+  return m?.[0] ?? null
+}
+
+function extractSourceLabel(text: string): string | null {
+  if (/\bgithub\b/i.test(text) || /github\.com/i.test(text)) return "GitHub"
+  if (/\bgitea\b/i.test(text) || /10\.10\.100\.233/i.test(text)) return "Gitea"
+  return null
+}
+
+function extractFailureReason(haystack: string): AppUpdateSourceFailureReason {
+  // Order matters: network/timeout signals win over a bare "latest.json" mention
+  // so a GitHub connect failure is not mislabeled as "manifest missing".
+  if (
+    haystack.includes("timed out") ||
+    haystack.includes("timeout") ||
+    haystack.includes("deadline exceeded")
+  ) {
+    return "timeout"
+  }
+  if (
+    haystack.includes("error sending request") ||
+    haystack.includes("failed to send request") ||
+    haystack.includes("connection refused") ||
+    haystack.includes("connection reset") ||
+    haystack.includes("econnreset") ||
+    haystack.includes("dns") ||
+    haystack.includes("no such host") ||
+    haystack.includes("name or service not known") ||
+    haystack.includes("unreachable") ||
+    // Avoid matching "network_error" code alone when the body is a 404 —
+    // pure transport failures usually include one of the phrases above.
+    (haystack.includes("network") &&
+      !haystack.includes("404") &&
+      !haystack.includes("not found"))
+  ) {
+    return "network"
+  }
+  if (
+    haystack.includes("404") ||
+    haystack.includes("not found") ||
+    haystack.includes("status code 404") ||
+    haystack.includes("no release") ||
+    haystack.includes("could not fetch a valid release") ||
+    haystack.includes("empty endpoints") ||
+    haystack.includes("updater does not have any endpoints") ||
+    // Manifest path without a transport signal ≈ empty/unpublished channel.
+    haystack.includes("latest.json") ||
+    haystack.includes("/releases/latest/download/")
+  ) {
+    return "not_found"
+  }
+  return "unknown"
+}
+
 export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
+  // Prefer a combined haystack: transport often puts the useful URL/path in
+  // `message` while the plugin's raw failure lands in `detail`. Classifying on
+  // only one side mis-labels "no release yet" / 404 as a generic unknown.
+  const appError = extractAppCommandError(error)
   const rawMessage = toErrorMessage(error)
-  const normalized = rawMessage.toLowerCase()
-
-  if (
-    normalized.includes("latest.json") ||
-    normalized.includes("/releases/latest/download/") ||
-    normalized.includes("could not fetch a valid release") ||
-    normalized.includes("release json")
-  ) {
-    return { kind: "source_unreachable", rawMessage }
+  const combined = [rawMessage, appError?.message, appError?.detail, appError?.code]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .join("\n")
+  const haystack = combined.toLowerCase()
+  const sourceLabel = extractSourceLabel(combined)
+  const manifestUrl = extractManifestUrl(combined)
+  const failureReason = extractFailureReason(haystack)
+  const meta = {
+    sourceLabel,
+    manifestUrl,
+    failureReason,
   }
 
   if (
-    normalized.includes("error sending request for url") ||
-    normalized.includes("failed to send request") ||
-    normalized.includes("network") ||
-    normalized.includes("timed out") ||
-    normalized.includes("dns") ||
-    normalized.includes("connection refused")
+    haystack.includes("latest.json") ||
+    haystack.includes("/releases/latest/download/") ||
+    haystack.includes("could not fetch a valid release") ||
+    haystack.includes("release json") ||
+    haystack.includes("failed to check for updates") ||
+    haystack.includes("failed to fetch update manifest") ||
+    haystack.includes("update manifest") ||
+    haystack.includes("no release") ||
+    // 404 / empty channel before the first signed release is published
+    haystack.includes("404") ||
+    haystack.includes("not found") ||
+    haystack.includes("status code 404") ||
+    haystack.includes("empty endpoints") ||
+    haystack.includes("updater does not have any endpoints")
   ) {
-    return { kind: "network", rawMessage }
+    return { kind: "source_unreachable", rawMessage, ...meta }
   }
 
   if (
-    normalized.includes("download") ||
-    normalized.includes("checksum") ||
-    normalized.includes("content-length")
+    appError?.code === "network_error" ||
+    haystack.includes("error sending request for url") ||
+    haystack.includes("failed to send request") ||
+    haystack.includes("network") ||
+    haystack.includes("timed out") ||
+    haystack.includes("timeout") ||
+    haystack.includes("dns") ||
+    haystack.includes("connection refused") ||
+    haystack.includes("connection reset") ||
+    haystack.includes("econnreset") ||
+    haystack.includes("name or service not known") ||
+    haystack.includes("no such host") ||
+    haystack.includes("unreachable")
   ) {
-    return { kind: "download_failed", rawMessage }
+    return { kind: "network", rawMessage, ...meta }
   }
 
   if (
-    normalized.includes("install") ||
-    normalized.includes("installer") ||
-    normalized.includes("permission denied")
+    haystack.includes("download") ||
+    haystack.includes("checksum") ||
+    haystack.includes("content-length") ||
+    haystack.includes("signature") ||
+    haystack.includes("minisign")
   ) {
-    return { kind: "install_failed", rawMessage }
+    return { kind: "download_failed", rawMessage, ...meta }
   }
 
-  return { kind: "unknown", rawMessage }
+  if (
+    haystack.includes("install") ||
+    haystack.includes("installer") ||
+    haystack.includes("permission denied")
+  ) {
+    return { kind: "install_failed", rawMessage, ...meta }
+  }
+
+  return { kind: "unknown", rawMessage, ...meta }
 }

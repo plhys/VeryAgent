@@ -26,6 +26,8 @@ pub mod session_info;
 pub mod system_settings;
 pub mod terminal;
 pub mod vision_bridge;
+pub mod npm_cli;
+pub mod openwiki;
 mod upload_jail;
 pub mod version_control;
 pub mod web_server;

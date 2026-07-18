@@ -57,7 +57,7 @@ describe("isAgentLikeToolName", () => {
     expect(isAgentLikeToolName("mcp__veryagent-delegate__delegate_to_agent")).toBe(
       true
     )
-    expect(isAgentLikeToolName("mcp__codeg__delegate_to_agent")).toBe(true)
+    expect(isAgentLikeToolName("mcp__veryagent__delegate_to_agent")).toBe(true)
     // Codex live ACP style (server/tool)
     expect(isAgentLikeToolName("veryagent-mcp/delegate_to_agent")).toBe(true)
     expect(isAgentLikeToolName("veryagent-delegate/delegate_to_agent")).toBe(true)
@@ -73,7 +73,7 @@ describe("isAgentLikeToolName", () => {
       // Claude Code style (current + legacy server names)
       expect(isAgentLikeToolName(`mcp__veryagent-mcp__${tool}`)).toBe(true)
       expect(isAgentLikeToolName(`mcp__veryagent-delegate__${tool}`)).toBe(true)
-      expect(isAgentLikeToolName(`mcp__codeg__${tool}`)).toBe(true)
+      expect(isAgentLikeToolName(`mcp__veryagent__${tool}`)).toBe(true)
       // Codex live ACP + dot/colon separated forms
       expect(isAgentLikeToolName(`veryagent-mcp/${tool}`)).toBe(true)
       expect(isAgentLikeToolName(`veryagent-delegate/${tool}`)).toBe(true)
@@ -103,7 +103,7 @@ describe("isAgentLikeToolName", () => {
     expect(isAgentLikeToolName("mcp__veryagent-mcp__check_user_feedback")).toBe(
       true
     )
-    expect(isAgentLikeToolName("mcp__codeg__check_user_feedback")).toBe(true)
+    expect(isAgentLikeToolName("mcp__veryagent__check_user_feedback")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp/check_user_feedback")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp.check_user_feedback")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp:check_user_feedback")).toBe(true)

@@ -36,6 +36,8 @@
   "SettingsShell": {
     "title": "设置",
     "preferences": "偏好设置",
+    "groupGeneral": "通用设置",
+    "groupAdvanced": "专家设置",
     "nav": {
       "general": "常规",
       "appearance": "外观",
@@ -49,9 +51,11 @@
       "model_providers": "模型供应商",
       "experts": "专家",
       "office_tools": "办公工具",
+      "skill_packs": "技能包",
       "quick_messages": "快捷消息",
       "logs": "运行日志",
-      "vision_bridge": "多模态路由"
+      "vision_bridge": "多模态路由",
+      "openwiki": "OpenWiki"
     }
   },
   "AppearanceSettings": {
@@ -139,7 +143,14 @@
     "languageSaveFailed": "语言设置保存失败：{message}",
     "updateTitle": "应用升级",
     "versionTitle": "软件更新",
-    "updateDescription": "点击检查后会从配置的发布源拉取最新版本信息，有新版本时可直接下载并安装。",
+    "updateDescription": "点击检查后会从所选发布源拉取最新版本信息，有新版本时可直接下载并安装。",
+    "updateSourceTitle": "更新源",
+    "updateSourceDescription": "按网络情况选择发布仓库。GitHub 为公网仓库，Gitea 为内网仓库。",
+    "updateSourceGithub": "GitHub 仓库",
+    "updateSourceGitea": "Gitea 仓库",
+    "updateSourceGithubHint": "公网：github.com/plhys/VeryAgent",
+    "updateSourceGiteaHint": "内网：10.10.100.233 Gitea / boss/veryagent",
+    "updateSourceSaveFailed": "保存更新源失败：{message}",
     "currentVersion": "当前版本",
     "upgradableVersion": "最新版本",
     "none": "暂无",
@@ -176,8 +187,7 @@
     "rollbackSuccess": "已回滚到上一个版本，正在重新加载……",
     "rollbackFailed": "回滚失败，请检查服务器日志。",
     "updateErrors": {
-      "sourceUnavailable": "无法连接更新源，请检查网络或代理设置后重试。",
-      "network": "网络连接异常，请检查网络或代理设置后重试。",
+      "network": "网络连接异常，请检查网络或代理设置后重试。也可切换另一更新源再试。",
       "downloadFailed": "下载更新包失败，请稍后重试。",
       "installFailed": "安装更新失败，请关闭应用后重试。",
       "unknown": "更新失败，请稍后重试。"
@@ -594,13 +604,53 @@
       "agentEnabledAria": "{name} 已启用",
       "agentEnabledSwitch": "{name} 启用"
     },
+    "readiness": {
+      "badge": {
+        "checking": "检测中",
+        "disabled": "已禁用",
+        "notInstalled": "未安装",
+        "notReady": "未就绪",
+        "ready": "可用",
+        "unchecked": "未检测"
+      },
+      "title": {
+        "checking": "正在检测本机环境…",
+        "disabled": "该智能体已禁用",
+        "notInstalled": "{name} 尚未安装",
+        "dependencyBlocked": "{name} 已安装，但环境不满足",
+        "configNeeded": "{name} 已安装，还差配置",
+        "ready": "{name} 可用",
+        "unchecked": "尚未完成检测"
+      },
+      "detail": {
+        "checking": "正在检查是否已安装、依赖是否够用、配置是否完整。",
+        "disabled": "打开右上角开关后才会参与检测与会话。",
+        "notInstalled": "本机还没有这个智能体。请先点下方安装，装完会自动再检测。",
+        "dependencyBlocked": "原因：{reason}",
+        "hermesNeedProvider": "当前走模型供应商，但还没选供应商。请在下方选好并保存。",
+        "hermesNeedNativeConfig": "请在下方配置 Hermes 供应商、API 密钥和模型，然后保存。",
+        "hermesNeedApiOrOauth": "已有模型，但还没有 API 密钥。请填写密钥，或对 {provider} 走终端 OAuth 设置。",
+        "openClawNeedProvider": "当前走模型供应商，但还没选供应商。请在下方选好并保存。",
+        "openClawNeedGateway": "Gateway 模式需要本机 OpenClaw Gateway。未在 {path} 或环境变量里发现地址。请点「一键配置并启动 Gateway」，无需自己敲命令。",
+        "openClawGatewayDown": "Gateway 地址是 {url}，但当前连不上（进程没在跑）。请点「一键配置并启动 Gateway」。",
+        "ready": "环境与配置看起来正常，可以开新会话使用。",
+        "unchecked": "点刷新重新检测本机状态。"
+      },
+      "hint": {
+        "installFirst": "安装只装智能体本身，不会自动升级系统 Node/依赖。",
+        "fixDependency": "先处理下方红色/黄色检测项（例如升级 Node），再点刷新。",
+        "configureBelow": "安装成功不等于能用。请按下方配置补全后保存，再点刷新。",
+        "openClawStartGateway": "不用自己敲命令：点按钮会自动写配置并启动 Gateway。",
+        "readyToChat": "可直接去聊天窗口选择该智能体。"
+      }
+    },
     "preflight": {
       "count": "预检项：{count}",
       "notRun": "尚未执行检测。"
     },
     "codex": {
       "configDescription": "支持 API URL、API Key、模型名称、Reasoning Effort 快捷配置，并与 `auth.json` / `config.toml` 双向联动。",
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "chatgptSubscription": "官网订阅",
       "chatgptSubscriptionHint": "使用 ChatGPT 官网订阅登录，无需配置 API Key",
       "apiKeyHint": "使用 API Key 连接 OpenAI 或兼容的 API 服务",
@@ -628,12 +678,13 @@
       "loggedIn": "账号已登录",
       "loginRelogin": "重新登录 / 切换账号",
       "loginTimeout": "登录超时，请重试",
-      "loginSaveFailed": "登录成功但配置保存失败"
+      "loginSaveFailed": "登录成功但配置保存失败",
+      "modelProviderResponsesWarning": "Codex 仅支持 OpenAI Responses API（wire_api = responses）。仅实现 Chat Completions 的网关（含多数 A计划供应商）无法用于 Codex；请改用官网订阅、OpenAI 官方 API，或提供 Responses 兼容端点。"
     },
     "gemini": {
       "authConfig": "Gemini 认证配置",
       "authConfigDescription": "对齐 Gemini CLI 认证文档，支持自定义、Google 登录、Gemini API Key、Vertex AI（ADC / 服务账号 / API Key）。",
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "selectAuthMode": "选择认证方式",
       "viewAuthDoc": "查看认证文档",
       "mode": {
@@ -713,20 +764,35 @@
       },
       "refreshCatalog": "刷新目录",
       "reasoningBadge": "推理",
-      "contextWindow": "上下文窗口"
+      "contextWindow": "上下文窗口",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生多供应商",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 OpenCode 原生多供应商连接与配置。"
     },
     "openClaw": {
       "gatewayConfig": "Gateway 配置",
-      "gatewayDescription": "配置 OpenClaw Gateway 连接信息。支持本地或远程 Gateway。",
-      "gatewayUrlHint": "留空则使用 openclaw 本地配置的 gateway.remote.url。",
+      "gatewayDescription": "配置 OpenClaw Gateway 连接信息。支持本地或远程 Gateway。veryagent 会自动读取本机 openclaw.json / 环境变量，只填充空字段。",
+      "gatewayUrlHint": "留空则使用发现的本地 Gateway URL（gateway.remote.url 或 gateway.port）。已保存的值优先。",
+      "gatewayUrlPlaceholder": "ws://host:port 或 wss://host:port",
       "gatewayTokenPlaceholder": "Gateway 认证 Token",
       "gatewayTokenHint": "建议使用 token-file 替代明文 Token，可通过 openclaw 命令行配置。",
       "sessionKeyHint": "可选。指定 Gateway Session Key，留空则自动分配隔离会话。",
-      "authModeLabel": "Authentication method",
+      "authModeLabel": "认证方式",
       "authModeGateway": "Gateway",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeGatewayHint": "连接 OpenClaw Gateway。",
+      "discoveryFound": "已从 {source} 发现 Gateway（{path}）。空字段已自动填充。",
+      "discoveryConfigNoGateway": "找到 openclaw 配置 {path}，但其中未设置 gateway URL/port。",
+      "discoveryNotFound": "未找到 openclaw.json（{path}）。可点下方一键配置并启动。",
+      "discoveryReachable": "Gateway 已连通：{url}",
+      "discoveryUnreachable": "Gateway 地址 {url} 当前连不上（服务未运行）。",
+      "ensureGateway": "一键配置并启动 Gateway",
+      "ensureGatewayRunning": "正在配置/启动 Gateway…",
+      "ensureGatewayOk": "Gateway 已就绪：{message}",
+      "ensureGatewayFailed": "自动启动失败：{message}"
     },
     "hermes": {
       "configManagement": "Hermes 配置",
@@ -751,15 +817,20 @@
       "advancedTitle": "高级：编辑 config.yaml",
       "rawConfigHint": "直接编辑 ~/.hermes/config.yaml。在此保存将原样覆盖该文件。",
       "saveRawConfig": "保存 config.yaml",
-      "authModeLabel": "Authentication method",
-      "authModeNative": "Native (hermes login)",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeNativeHint": "Use the native hermes authentication flow."
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生（hermes login）",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Hermes 原生认证流程。"
     },
     "codebuddy": {
       "configManagement": "CodeBuddy 配置",
       "configDescription": "CodeBuddy 使用 API Key 进行认证。中国版还必须将环境设为“中国版（internal）”；iOA 版使用“iOA”；海外版则不设置。",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生配置",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "将已配置的模型供应商作为自定义模型追加到 CodeBuddy（写入 ~/.codebuddy/models.json），不覆盖原生中国版/海外版/iOA 模型与 CODEBUDDY_API_KEY。",
+      "authModeNativeHint": "使用 CodeBuddy 原生环境 / API Key / 私有化地址配置。",
       "apiKeyLabel": "API Key",
       "apiKeyHint": "将作为该智能体的 CODEBUDDY_API_KEY 保存。也可以在终端用 CodeBuddy CLI 登录。",
       "apiKeyHintSelfHosted": "将作为该智能体的 CODEBUDDY_API_KEY 保存。请使用你的私有化部署签发的密钥。",
@@ -816,7 +887,8 @@
       "rawEditorLabel": "高级：直接编辑 config.toml",
       "rawEditorHint": "逐字写入（保留注释）并按 TOML 校验。veryagent 同时会播种门控令牌以打开会话。",
       "rawEditorPlaceholder": "[providers.veryagent]\ntype = \"kimi\"\nbase_url = \"https://api.moonshot.cn/v1\"\napi_key = \"sk-...\"",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider."
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。"
     },
     "authModeOfficialSubscription": "官网订阅",
     "authModeCustomEndpoint": "自定义接口",
@@ -826,8 +898,14 @@
     "modelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
     "selectModelProvider": "选择模型供应商",
     "noModelProviderAvailable": "该代理未配置模型供应商。请前往模型供应商设置添加。",
+    "selectProviderModel": "选择模型",
+    "providerModelHint": "模型列表来自所选供应商。也可以手动输入自定义模型 ID。",
+    "providerModelLoading": "正在加载模型…",
+    "providerModelEmpty": "未返回模型列表，请手动输入模型 ID。",
+    "providerModelFetchFailed": "无法列出模型——请检查供应商 URL 与 Key。",
+    "refreshProviderModels": "刷新模型列表",
     "claude": {
-      "authMode": "Auth Mode",
+      "authMode": "认证方式",
       "officialSubscription": "官方订阅",
       "officialSubscriptionHint": "使用 Anthropic 官方订阅，无需 API Key。",
       "mainModel": "主模型",
@@ -845,7 +923,7 @@
       "effortLevel_medium": "中",
       "effortLevel_high": "高",
       "effortLevel_xhigh": "超高",
-      "advancedModelSettings": "Advanced model settings"
+      "advancedModelSettings": "高级模型设置"
     },
     "dialogs": {
       "confirmDeleteProvider": "确认删除 Provider {providerId}？",
@@ -944,11 +1022,11 @@
     },
     "cline": {
       "configDescription": "配置 Cline API 提供商和凭证。设置将保存到 ~/.cline/data/。",
-      "authModeLabel": "Authentication method",
-      "authModeNative": "Native (cline login)",
-      "authModeModelProvider": "Model Provider",
-      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeNativeHint": "Use the native cline authentication flow."
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生（cline login）",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Cline 原生认证流程。"
     },
     "opencodePlugins": {
       "title": "OpenCode 插件",
@@ -969,6 +1047,11 @@
     "pi": {
       "configManagement": "Pi 配置",
       "configDescription": "Pi 通过模型提供方的 API Key 鉴权。Key 写入 ~/.pi/agent/auth.json，模型选择写入 settings.json。",
+      "authModeLabel": "认证方式",
+      "authModeNative": "原生提供方",
+      "authModeModelProvider": "模型供应商",
+      "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
+      "authModeNativeHint": "使用 Pi 原生提供方与自定义端点配置。",
       "providerLabel": "提供方",
       "modelLabel": "模型",
       "thinkingLabel": "思考",
@@ -1341,7 +1424,13 @@
       "toggleAuxPanel": "切换辅助面板",
       "search": "搜索",
       "openSettings": "打开设置",
-      "withShortcut": "{label}（{shortcut}）"
+      "withShortcut": "{label}（{shortcut}）",
+      "switchToLight": "切换为浅色主题",
+      "switchToDark": "切换为深色主题",
+      "updateAvailable": "发现新版本 {version}",
+      "updateNow": "更新",
+      "restartToUpdate": "重启以更新",
+      "updating": "更新中…"
     },
     "statusBar": {
       "connection": {
@@ -2018,6 +2107,7 @@
           "spawnFailed": "启动 {agent} 失败：{message}",
           "downloadFailed": "{agent} 下载失败：{message}",
           "sessionLoadResourceNotFound": "{agent} 会话加载失败，可重新加载重试，或开始新会话。",
+          "sessionLoadUnavailable": "{agent} 无法恢复此会话 — 会话可能已结束或 Agent 已停止。可重新加载重试，或开始新会话。",
           "turnFailedRefusal": "{agent} 拒绝继续本轮回复，通常意味着后端或网关出错，请检查代理日志。",
           "turnFailedMaxTokens": "{agent} 已达到本轮回复的最大 Token 限制。",
           "turnFailedMaxTurnRequests": "{agent} 已达到本轮回复允许的最大请求次数。",
@@ -2103,8 +2193,34 @@
         "slashSearchEmpty": "没有匹配的命令",
         "experts": "专家",
         "office": "日常办公",
+        "research": "科学研究",
+        "enabledPlugins": "已启用插件",
+        "pluginsLoading": "加载插件…",
+        "pluginsEmpty": "当前智能体暂无已启用插件",
+        "pluginOpenWikiTitle": "OpenWiki",
+        "pluginOpenWikiActive": "已开启 · 自动注入",
+        "pluginOpenWikiHint": "无需手动插入。下次发送消息时，会自动附带当前工作区的只读 Code Wiki 上下文。",
+        "pluginMcpHint": "MCP 插件已对该智能体启用，会话中会按智能体配置自动挂载工具。",
         "addExpertSkill": "添加专家技能",
         "addOfficeSkill": "添加办公技能",
+        "expertCatDiscovery": "发现与设计",
+        "expertCatPlanning": "规划",
+        "expertCatExecution": "执行",
+        "expertCatQuality": "质量与测试",
+        "expertCatDebugging": "调试",
+        "expertCatReview": "评审与集成",
+        "expertCatMeta": "元技能",
+        "expertCatCreative": "创意与出图",
+        "scienceCatIdeation": "构思",
+        "scienceCatDesign": "研究设计",
+        "scienceCatAnalysis": "分析",
+        "scienceCatVisualization": "可视化",
+        "scienceCatEvaluation": "评估",
+        "scienceCatLiterature": "文献",
+        "officeCatGeneral": "通用",
+        "officeCatPresentations": "演示文稿",
+        "officeCatDocuments": "文档",
+        "officeCatSpreadsheets": "电子表格",
         "attachUploadTooLarge": "{names} 超过 {limit}MB 上传上限，已跳过。",
         "attachUploadFailed": "上传失败：{names}。",
         "attachUploadNotAFile": "{names} 不是常规文件（目录或特殊文件），已跳过。",
@@ -2136,6 +2252,7 @@
         "autoConnectFallback": "点击前往 {path} 管理安装。",
         "autoConnectAppend": "{message}，点击前往 {path} 管理安装。",
         "enableAgentFirstPlaceholder": "请先启用至少一个 Agent 后开始会话...",
+        "pickAgentFirstPlaceholder": "请先选择一个智能体后再发送...",
         "prepareSessionFailed": "无法准备聊天会话，请重试。",
         "createConversationFailed": "无法创建会话，请重试。",
         "askAnythingPlaceholder": "请开始输入..."
@@ -2193,12 +2310,42 @@
           },
           "tabs": {
             "office": "日常办公",
-            "coding": "代码开发"
+            "coding": "代码开发",
+            "research": "科学研究"
           },
           "coding": {
             "brainstormingDesc": "动手前先梳理意图与需求",
             "debuggingDesc": "先定位根因再提出修复",
             "writingSkillsDesc": "创建、编辑并验证可复用技能"
+          },
+          "scientific-brainstorming": "科学头脑风暴",
+          "scientific-brainstormingDesc": "开放式科研构思：探索跨学科联系、挑战假设、发现研究空白。",
+          "hypothesis-generation": "假设生成",
+          "hypothesis-generationDesc": "将观察转化为可检验的假设，给出预测、机制并设计验证实验。",
+          "experimental-design": "实验设计",
+          "experimental-designDesc": "在采集数据前设计严谨研究：随机化、区组、对照与析因/DOE 布局。",
+          "statistical-power": "统计功效",
+          "statistical-powerDesc": "样本量与统计功效分析：所需样本数、最小可检测效应与功效曲线。",
+          "statistical-analysis": "统计分析",
+          "statistical-analysisDesc": "引导式统计分析：检验选择、假设检查、效应量与 APA 格式报告。",
+          "exploratory-data-analysis": "探索性数据分析",
+          "exploratory-data-analysisDesc": "对 200+ 种格式的科学数据文件做自动化探索，输出质量指标与报告。",
+          "scientific-visualization": "科学可视化",
+          "scientific-visualizationDesc": "出版级图表：多面板布局、显著性标注与期刊专属格式。",
+          "scientific-critical-thinking": "批判性思维",
+          "scientific-critical-thinkingDesc": "评估科学主张与证据质量：识别偏倚与混杂，运用 GRADE 与偏倚风险框架。",
+          "paper-lookup": "论文检索",
+          "paper-lookupDesc": "检索 10 个学术 API（PubMed、arXiv、OpenAlex、Crossref…）查找论文、引用与开放获取全文。",
+          "prompts": {
+            "scientific-brainstorming": "帮我进行科研头脑风暴：探索跨学科联系、挑战假设、发现有潜力的研究空白。我正在探索的方向：",
+            "hypothesis-generation": "帮我把这些观察转化为可检验的假设：给出明确预测、合理机制，并设计验证实验。我的观察：",
+            "experimental-design": "在采集数据前帮我设计严谨的实验：设计方案、随机化、对照，以及如何避免混杂。我想研究的问题：",
+            "statistical-power": "帮我确定所需样本量：为我的设计做功效分析（效应量、显著性水平、功效）。具体信息：",
+            "statistical-analysis": "帮我正确分析这份数据：选择合适的检验、检查假设、报告效应量并撰写结论。我的数据与问题：",
+            "exploratory-data-analysis": "对我的数据文件做探索性分析：概述其结构、质量与值得注意的模式，并建议后续步骤。文件是：",
+            "scientific-visualization": "帮我制作出版级图表：清晰布局、真实误差棒、色盲友好配色，以及期刊格式。我想展示的内容：",
+            "scientific-critical-thinking": "帮我批判性评估这项研究或主张：评估证据质量、识别偏倚与混杂，并权衡结论。内容如下：",
+            "paper-lookup": "帮我在学术数据库中查找相关论文与开放获取全文，并提供可复用的引用。我要找的是："
           },
           "notEnabled": {
             "title": "「{skill}」还没有对 {agent} 配置可用",
@@ -2210,7 +2357,15 @@
       },
       "agentSelector": {
         "noEnabledAgents": "暂无已启用的 Agent",
-        "openAgentsSettings": "打开 Agents 设置"
+        "noGeneralAgents": "通用模式暂无可用管家（Hermes / OpenClaw）。请先在设置里启用并安装。",
+        "noExpertAgents": "专家模式暂无可用编程智能体。请先在设置里启用并安装。",
+        "openAgentsSettings": "打开 Agents 设置",
+        "residentBadge": "常驻管家",
+        "agentDisabled": "未激活",
+        "agentUnavailable": "不可用",
+        "modeSwitchAria": "智能体模式",
+        "modeGeneral": "通用模式",
+        "modeExpert": "专家模式"
       },
       "subAgentOverlay": {
         "title": "子智能体",
@@ -2253,6 +2408,21 @@
         "approvalPreset": "审批预设",
         "defaultThinkingMode": "默认思考模式",
         "thinkingLevel": "思考级别",
+        "thoughtLevel": "思考",
+        "thoughtLevelDesc": "模型思考多认真。越深更稳，但更慢、更费 token。不是系统权限。",
+        "thoughtLevelAdaptiveDesc": "跟随 Gateway 默认思考深度。",
+        "fastMode": "快速",
+        "fastModeDesc": "是否走快速档（主要影响 OpenAI）。更快，回答可能更短更浅。",
+        "toolVerbosity": "工具",
+        "toolVerbosityDesc": "工具执行时显示多少过程。关=少显示；开=有进度；完整=更多输出。只影响展示。",
+        "pluginTrace": "插件",
+        "pluginTraceDesc": "是否显示插件追踪日志。排查时再开。",
+        "reasoningStream": "推理",
+        "reasoningStreamDesc": "是否显示模型推理过程。关 / 开 / 流式。只影响展示。",
+        "usageDetail": "用量",
+        "usageDetailDesc": "回复里是否附带 token 用量。关 / 仅 token / 完整。",
+        "elevatedActions": "提权",
+        "elevatedActionsDesc": "是否允许更激进的执行。关=保守；开=允许；询问=每次确认；完整=最松。不是 Windows 权限。",
         "bypass": "绕过",
         "reasoningEffort": "推理力度",
         "allowOnce": "允许本次",
@@ -2262,6 +2432,14 @@
         "readOnly": "只读",
         "agentMode": "智能体",
         "agentFullAccess": "智能体（完全访问）",
+        "switchOff": "关",
+        "switchOn": "开",
+        "switchAuto": "自动",
+        "switchFull": "全",
+        "switchStream": "流式",
+        "usageTokens": "token",
+        "elevatedAsk": "询问",
+        "thinkingAdaptive": "自适应",
         "thinkingOff": "关闭",
         "thinkingLow": "低",
         "thinkingMedium": "中等",
@@ -2541,6 +2719,16 @@
           "launchNote": "已在后台运行 · {id}"
         }
       },
+      "backgroundTasks": {
+        "running": "{count, plural, other {# 个后台任务运行中}}",
+        "settling": "正在同步后台结果…",
+        "settledFallback": "后台任务完成 ({status})",
+        "cardRunning": "后台运行中",
+        "cardLaunchedPending": "已在后台启动",
+        "cardCompleted": "后台任务已完成",
+        "cardFinishedWithStatus": "后台任务完成 ({status})",
+        "cardResultPending": "尚未返回结果"
+      },
       "messageNav": {
         "title": "消息导航",
         "collapse": "收起消息导航",
@@ -2634,7 +2822,7 @@
       "noFolders": "暂无文件夹",
       "noBranches": "暂无分支",
       "noBranch": "（无分支）",
-      "chatModeLabel": "无工作区模式",
+      "chatModeLabel": "自由模式",
       "commit": "提交",
       "push": "推送",
       "merge": "合并",
@@ -2930,9 +3118,7 @@
   },
   "ModelProviderSettings": {
     "sectionTitle": "模型供应商",
-    "sectionDescription": "管理 Agent 的 API 供应商凭据。",
-    "filterAll": "全部",
-    "providerListTitle": "已配置的供应商",
+    "sectionDescription": "配置 API 供应商，所有智能体均可选用。",
     "addProvider": "添加供应商",
     "editProvider": "编辑供应商",
     "noProviders": "尚未配置模型供应商。",
@@ -2943,23 +3129,9 @@
     "apiKey": "API 密钥",
     "apiKeyPlaceholder": "sk-...",
     "apiKeyKeepCurrent": "留空则保持不变",
-    "agentTypes": "代理类型",
-    "agentTypesRequired": "至少选择一个代理类型。",
-    "agentType": "智能体类型",
-    "agentTypeRequired": "请选择智能体类型。",
-    "agentTypeImmutableHint": "智能体类型创建后不可修改。",
     "model": "模型",
-    "modelPlaceholderCodex": "gpt-5 / gpt-5-mini",
-    "modelPlaceholderGemini": "gemini-3-pro-preview",
-    "claudeMainModel": "主模型",
-    "claudeReasoningModel": "推理模型（思考）",
-    "claudeHaikuDefaultModel": "默认 Haiku 模型",
-    "claudeSonnetDefaultModel": "默认 Sonnet 模型",
-    "claudeOpusDefaultModel": "默认 Opus 模型",
-    "claudeCustomModelOption": "自定义模型 ID",
-    "claudeCustomModelOptionName": "自定义模型名称",
-    "claudeCustomModelOptionDescription": "自定义模型描述",
-    "claudeCustomModelOptionHint": "在 Claude 模型选择器中追加一个自定义条目（例如经自定义网关/代理提供的模型）。名称与描述为可选的显示信息。",
+    "modelPlaceholder": "例如 gpt-5、claude-sonnet-5",
+    "modelHint": "此供应商提供的默认模型名称，智能体引用时可覆盖。",
     "nameRequired": "供应商名称不能为空。",
     "apiUrlRequired": "API 地址不能为空。",
     "apiKeyRequired": "API 密钥不能为空。",
@@ -2975,10 +3147,7 @@
     "delete": "删除",
     "create": "创建",
     "save": "保存",
-    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改",
-    "modelPlaceholderKimi": "kimi-k2-0711",
-    "modelPlaceholderHermes": "deepseek-v3-0324",
-    "agentTypesHint": "逗号分隔的智能体类型（如 hermes, claude_code）"
+    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改"
   },
   "SkillMatrix": {
     "loading": "加载中…",
@@ -3075,6 +3244,56 @@
       "enableFailed": "启用专家失败",
       "disableFailed": "禁用专家失败",
       "openFolderFailed": "打开目录失败"
+    }
+  },
+  "ScienceSettings": {
+    "title": "科研技能",
+    "description": "为 AI 编程代理启用精选科研技能 — 假设生成、实验设计、统计分析、可视化、批判性评估和文献检索。VeryAgent 管理中央副本并将技能链接到您选择的代理。",
+    "loading": "加载科研技能…",
+    "emptySkills": "暂无科研技能。请检查应用日志。",
+    "searchPlaceholder": "按名称、ID 或描述搜索科研技能",
+    "categories": {
+      "ideation": "构思",
+      "design": "研究设计",
+      "analysis": "分析",
+      "visualization": "可视化",
+      "evaluation": "评估",
+      "literature": "文献"
+    },
+    "states": {
+      "not_linked": "未启用",
+      "linked_to_veryagent": "已启用",
+      "linked_elsewhere": "被阻止 — 存在另一个链接",
+      "blocked_by_real_directory": "被阻止 — 自定义技能已占用此名称",
+      "broken": "链接损坏"
+    },
+    "badges": {
+      "userModified": "用户已修改",
+      "needsKey": "需要 API 密钥",
+      "needsSetup": "可能需要配置"
+    },
+    "actions": {
+      "openCentralDir": "打开中央文件夹",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "openFolderFailed": "打开文件夹失败"
+    }
+  },
+  "SkillPacksSettings": {
+    "title": "技能包",
+    "description": "为 AI 编程代理启用精选技能包 — 专家工作流、科研工具和办公自动化。VeryAgent 管理中央副本并将技能链接到您选择的代理。",
+    "tabs": {
+      "experts": "专家",
+      "science": "科研",
+      "office": "办公"
+    },
+    "actions": {
+      "openCentralDir": "打开中央文件夹",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "openFolderFailed": "打开文件夹失败"
     }
   },
   "OfficeToolsSettings": {
@@ -3677,7 +3896,16 @@
     "installedPlugins": "已安装的插件",
     "noPlugins": "没有安装插件",
     "otherAvailablePlugins": "其他可用插件",
-    "managePlugins": "管理插件",
+    "managePlugins": "管理 MCP 插件",
+    "firstPartyPlugins": "内置连接器",
+    "mcpPlugins": "MCP 插件",
+    "openwikiName": "OpenWiki",
+    "openwikiDescription": "为当前智能体注入项目 Code Wiki 知识层（只读）。",
+    "openwikiConfigure": "配置 OpenWiki",
+    "openwikiEnableSuccess": "已对 {agent} 启用 OpenWiki",
+    "openwikiDisableSuccess": "已从 {agent} 停用 OpenWiki",
+    "openwikiToggleFailed": "切换 OpenWiki 失败：{error}",
+    "openwikiEnableHint": "自动生效：下次在该智能体下发消息时，会注入只读 Code Wiki 上下文。也可在输入框「+ → 已启用插件」查看。",
     "install": "安装",
     "uninstall": "卸载",
     "installSuccess": "安装成功",
@@ -3711,6 +3939,64 @@
     "agentSelectionHint": "选择哪些智能体可以通过多模态路由理解图片。",
     "saving": "保存中…",
     "save": "保存"
+  },
+  "OpenWikiSettings": {
+    "title": "OpenWiki",
+    "description": "为授权智能体维护 Code Wiki 知识层。默认关闭；仅在会话首条用户消息注入简短前言。",
+    "loading": "加载中…",
+    "loadFailed": "加载失败：{detail}",
+    "enable": "启用 OpenWiki",
+    "enableHint": "总开关。关闭后不会注入前言，也不会执行 runner 操作。",
+    "statusTitle": "状态",
+    "refreshStatus": "刷新",
+    "executable": "CLI",
+    "found": "已找到",
+    "missing": "未找到",
+    "installCli": "安装 CLI",
+    "installingCli": "安装中…",
+    "installProgress": "安装进度",
+    "installCliSuccess": "OpenWiki CLI 已安装",
+    "installCliFailed": "安装 OpenWiki CLI 失败",
+    "uninstallCli": "卸载 CLI",
+    "uninstallingCli": "卸载中…",
+    "uninstallCliSuccess": "OpenWiki CLI 已卸载",
+    "uninstallCliFailed": "卸载 OpenWiki CLI 失败",
+    "wiki": "Wiki",
+    "ready": "就绪",
+    "notInitialized": "未初始化",
+    "agentSelection": "对以下智能体生效",
+    "agentSelectionHint": "勾选的智能体可在首条用户消息获得 wiki 前言（只读）。",
+    "injectTitle": "会话注入",
+    "injectOnStart": "首条消息注入",
+    "injectOnStartHint": "对已授权智能体，在会话首条用户消息前附加有界 wiki 摘要/路径。",
+    "injectAgentsMd": "维护 AGENTS.md 标记块",
+    "injectAgentsMdHint": "init/update 成功后，在 AGENTS.md（若有则含 CLAUDE.md）中 upsert OPENWIKI 标记块。",
+    "wikiDirname": "Code wiki 目录名",
+    "executablePath": "openwiki 可执行文件",
+    "executablePlaceholder": "留空则使用 PATH",
+    "executableHint": "可选绝对路径。留空时在 PATH 中查找 openwiki。",
+    "workspaceTitle": "工作区操作",
+    "workspace": "工作区",
+    "workspacePlaceholder": "工作区绝对路径",
+    "workspaceRequired": "请先选择或填写工作区路径",
+    "init": "初始化 Wiki",
+    "update": "更新 Wiki",
+    "runnerHint": "仅运行白名单 openwiki 动作（code --init / code --update），不转发任意 shell 参数。",
+    "initSuccess": "Wiki 已初始化",
+    "initFailed": "Wiki 初始化失败",
+    "updateSuccess": "Wiki 已更新",
+    "updateFailed": "Wiki 更新失败",
+    "instructionsTitle": "INSTRUCTIONS.md",
+    "instructionsPlaceholder": "可选：写给 wiki 生成流程的说明…",
+    "saveInstructions": "保存说明",
+    "instructionsSaved": "说明已保存",
+    "instructionsSaveFailed": "保存说明失败",
+    "saved": "OpenWiki 设置已保存",
+    "saveFailed": "保存 OpenWiki 设置失败",
+    "saving": "保存中…",
+    "save": "保存",
+    "close": "关闭",
+    "movedToPlugins": "OpenWiki 已迁移到「技能和插件 → 插件」。正在跳转…"
   },
   "MarkdownImage": {
     "copyImage": "复制图片",

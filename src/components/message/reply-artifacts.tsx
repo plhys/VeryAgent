@@ -39,20 +39,18 @@ import type { MessageTurn } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 /**
- * Inline "artifacts" card shown at the end of a completed assistant reply
+ * Quiet inline artifacts disclosure at the end of a completed assistant reply
  * (above the `TurnStats` action row inside `HistoricalMessageGroup`).
  *
+ * Collapsed state matches TurnStats density: muted text, no card chrome.
+ * Expanded content stays useful but stays nested under a soft left rule
+ * instead of a full bordered panel.
+ *
  * Two independently-collapsible sections:
- *  - "New files": every file the reply created, each as its own card in a
- *    container-responsive grid. The card body opens the file in the workspace
- *    tabs (an "open in editor" tooltip on hover); a distinct side button
- *    reveals it in the OS file manager. Open by default — a freshly written
- *    file is usually the thing you want to jump into. The grid scrolls
- *    within the same bounded max-height as the changed list.
- *  - "Files changed": modified/removed files as a single-open accordion (only
- *    one diff expanded at a time). Collapsed by default. Each row expands its
- *    diff inline within the SAME bordered card (no double border), and the
- *    list scrolls within a bounded max-height.
+ *  - "New files": every file the reply created. Open by default — a freshly
+ *    written file is usually the thing you want to jump into.
+ *  - "Files changed": modified/removed files as a single-open accordion.
+ *    Collapsed by default.
  *
  * Diffs are parsed lazily and ONLY once the reply is persisted
  * (`isResponseComplete`), so the streaming hot path never runs diff parsing.
@@ -78,7 +76,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
     [isResponseComplete, sourceTurns]
   )
 
-  // Split created files (their own cards) from modified/removed files (the
+  // Split created files (their own rows) from modified/removed files (the
   // accordion). Removal wins over creation, so a create+delete in the same
   // reply lands in "changed", not "new files".
   const { addedFiles, changedFiles } = useMemo(() => {
@@ -115,25 +113,23 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
   const totalDeletions = changedFiles.reduce((sum, f) => sum + f.deletions, 0)
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
       {addedFiles.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card/40 text-card-foreground">
+        <div>
           <button
             type="button"
             aria-expanded={newFilesOpen}
             onClick={() => setNewFilesOpen((prev) => !prev)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <FilePlus className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-xs font-medium text-foreground">
-              {t("newFilesTitle")}
-            </span>
-            <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <FilePlus className="h-3 w-3 shrink-0 opacity-70" />
+            <span className="truncate">{t("newFilesTitle")}</span>
+            <span className="tabular-nums opacity-70">
               {t("fileCount", { count: addedFiles.length })}
             </span>
             <ChevronRight
               className={cn(
-                "ms-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                "h-3 w-3 shrink-0 opacity-50 transition-transform",
                 newFilesOpen && "rotate-90"
               )}
             />
@@ -141,8 +137,8 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
 
           {newFilesOpen && (
             <TooltipProvider delayDuration={300}>
-              <div className="@container max-h-80 overflow-y-auto border-t border-border p-2">
-                <div className="grid gap-2 @md:grid-cols-2">
+              <div className="@container ms-1.5 mt-0.5 max-h-80 overflow-y-auto border-s border-border/50 ps-2.5">
+                <div className="grid gap-1 @md:grid-cols-2">
                   {addedFiles.map((file) => {
                     const displayPath = toFolderRelativePath(
                       file.path,
@@ -160,7 +156,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                     return (
                       <div
                         key={file.id}
-                        className="flex items-stretch overflow-hidden rounded-md border border-green-600/30 bg-green-500/5 transition-colors hover:border-green-600/50 hover:bg-green-500/10 dark:border-green-400/30 dark:hover:border-green-400/50"
+                        className="flex min-w-0 items-center gap-0.5 rounded-md transition-colors hover:bg-muted/40"
                       >
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -171,15 +167,15 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                               aria-label={t("openFile", {
                                 filePath: displayPath,
                               })}
-                              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                              className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 px-1.5 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                             >
-                              <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              <span className="flex min-w-0 flex-1 flex-col">
-                                <span className="truncate text-xs font-medium text-foreground">
+                              <FileIcon className="h-3 w-3 shrink-0 opacity-70" />
+                              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                                <span className="truncate text-foreground/90">
                                   {name}
                                 </span>
                                 {dir && (
-                                  <span className="truncate text-[10px] text-muted-foreground">
+                                  <span className="min-w-0 flex-1 truncate text-[10px] opacity-60">
                                     {dir}
                                   </span>
                                 )}
@@ -187,7 +183,7 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                               {file.additions > 0 && (
                                 <CommitFileAdditions
                                   count={file.additions}
-                                  className="shrink-0 font-mono text-[10px]"
+                                  className="shrink-0 font-mono text-[10px] opacity-80"
                                 />
                               )}
                             </button>
@@ -204,9 +200,9 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                                 type="button"
                                 onClick={() => revealInFolder(file)}
                                 aria-label={t("revealInFolder")}
-                                className="flex w-9 shrink-0 items-center justify-center border-l border-green-600/30 text-muted-foreground transition-colors hover:bg-green-500/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:border-green-400/30"
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md opacity-60 transition-colors hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               >
-                                <ExternalLink className="h-3.5 w-3.5" />
+                                <ExternalLink className="h-3 w-3" />
                               </button>
                             </TooltipTrigger>
                             <TooltipContent side="top">
@@ -225,40 +221,38 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
       )}
 
       {changedFiles.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card/40 text-card-foreground">
+        <div>
           <button
             type="button"
             aria-expanded={changedOpen}
             onClick={() => setChangedOpen((prev) => !prev)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <FileDiff className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-xs font-medium text-foreground">
-              {t("title")}
-            </span>
-            <span className="rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <FileDiff className="h-3 w-3 shrink-0 opacity-70" />
+            <span className="truncate">{t("title")}</span>
+            <span className="tabular-nums opacity-70">
               {t("fileCount", { count: changedFiles.length })}
             </span>
             {/* Always render BOTH counts (incl. zeros) so a one-sided reply
                 still shows its +N and -N. */}
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]">
-              <span className="text-green-600 dark:text-green-400">
+            <span className="inline-flex items-center gap-1 font-mono text-[10px] tabular-nums opacity-80">
+              <span className="text-green-600/80 dark:text-green-400/80">
                 +{totalAdditions}
               </span>
-              <span className="text-red-600 dark:text-red-400">
+              <span className="text-red-600/80 dark:text-red-400/80">
                 -{totalDeletions}
               </span>
             </span>
             <ChevronRight
               className={cn(
-                "ms-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                "h-3 w-3 shrink-0 opacity-50 transition-transform",
                 changedOpen && "rotate-90"
               )}
             />
           </button>
 
           {changedOpen && (
-            <ul className="max-h-80 space-y-1.5 overflow-y-auto border-t border-border p-2">
+            <ul className="ms-1.5 mt-0.5 max-h-80 space-y-0.5 overflow-y-auto border-s border-border/50 ps-2.5">
               {changedFiles.map((file) => {
                 const displayPath = toFolderRelativePath(file.path, folderPath)
                 const name = fileNameOf(displayPath)
@@ -270,65 +264,50 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
                 const isOpen = openPath === file.path
 
                 return (
-                  <li
-                    key={file.id}
-                    className={cn(
-                      "overflow-hidden rounded-md border transition-colors",
-                      isRemoved ? "border-destructive/30" : "border-border",
-                      isOpen && "bg-muted/20"
-                    )}
-                  >
+                  <li key={file.id} className="min-w-0">
                     <button
                       type="button"
                       aria-expanded={isOpen}
                       onClick={() => setOpenPath(isOpen ? null : file.path)}
                       title={displayPath}
                       className={cn(
-                        "flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left transition-colors",
-                        isRemoved
-                          ? "hover:bg-destructive/10"
-                          : "hover:bg-accent/40",
-                        isOpen &&
-                          (isRemoved
-                            ? "border-b border-destructive/30"
-                            : "border-b border-border")
+                        "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                        isOpen && "bg-muted/30"
                       )}
                     >
                       <ChevronRight
                         className={cn(
-                          "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                          "h-3 w-3 shrink-0 opacity-50 transition-transform",
                           isOpen && "rotate-90"
                         )}
                       />
                       <FileIcon
                         className={cn(
-                          "h-3.5 w-3.5 shrink-0",
-                          isRemoved
-                            ? "text-destructive"
-                            : "text-muted-foreground"
+                          "h-3 w-3 shrink-0 opacity-70",
+                          isRemoved && "text-destructive opacity-90"
                         )}
                       />
-                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
                         <span
                           className={cn(
-                            "min-w-0 truncate text-xs",
-                            isRemoved ? "text-destructive" : "text-foreground"
+                            "min-w-0 truncate text-foreground/90",
+                            isRemoved && "text-destructive"
                           )}
                         >
                           {name}
                         </span>
                         {dir && (
-                          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
+                          <span className="min-w-0 flex-1 truncate text-[10px] opacity-60">
                             {dir}
                           </span>
                         )}
                       </span>
                       {isRemoved ? (
-                        <span className="inline-flex shrink-0 items-center rounded-md border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 font-mono text-[10px] text-destructive">
+                        <span className="shrink-0 text-[10px] text-destructive/80">
                           {t("remove")}
                         </span>
                       ) : (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                        <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10px] opacity-80">
                           <CommitFileAdditions
                             count={file.additions}
                             className="text-[10px]"
@@ -343,9 +322,11 @@ export const ReplyArtifacts = memo(function ReplyArtifacts({
 
                     {isOpen &&
                       (file.diff ? (
-                        <UnifiedDiffPreview diffText={file.diff} embedded />
+                        <div className="mt-0.5 overflow-hidden rounded-md border border-border/60">
+                          <UnifiedDiffPreview diffText={file.diff} embedded />
+                        </div>
                       ) : (
-                        <p className="px-3 py-2 text-xs text-muted-foreground">
+                        <p className="px-1.5 py-1 text-[11px] opacity-70">
                           {t("noDiffDataAvailable", { filePath: displayPath })}
                         </p>
                       ))}

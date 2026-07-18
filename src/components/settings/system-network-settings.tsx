@@ -39,12 +39,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  getAppUpdateSourceSettings,
   getSystemProxySettings,
+  updateAppUpdateSourceSettings,
   updateSystemLanguageSettings,
   updateSystemProxySettings,
 } from "@/lib/api"
 import { openUrl } from "@/lib/platform"
-import type { AppLocale } from "@/lib/types"
+import type { AppLocale, AppUpdateSource, AppUpdateSourceSettings } from "@/lib/types"
 import {
   checkAppUpdate,
   closeAppUpdate,
@@ -107,8 +109,11 @@ export function SystemNetworkSettings() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
-  const [sourceUnreachable, setSourceUnreachable] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null)
+  const [updateSource, setUpdateSource] = useState<AppUpdateSource>("github")
+  const [updateSourceMeta, setUpdateSourceMeta] =
+    useState<AppUpdateSourceSettings | null>(null)
+  const [savingUpdateSource, setSavingUpdateSource] = useState(false)
   // Server/Docker self-update capability reported by `check_app_update`
   // (absent in desktop mode). Drives whether the upgrade button performs a
   // real in-place update or just links to the release page.
@@ -225,14 +230,19 @@ export function SystemNetworkSettings() {
     setLoadError(null)
 
     try {
-      const [proxySettings, version] = await Promise.all([
+      const [proxySettings, version, sourceSettings] = await Promise.all([
         getSystemProxySettings(),
         getCurrentAppVersion(),
+        getAppUpdateSourceSettings().catch(() => null),
       ])
 
       setEnabled(proxySettings.enabled)
       setProxyUrl(proxySettings.proxy_url ?? "")
       setCurrentVersion(version)
+      if (sourceSettings) {
+        setUpdateSource(sourceSettings.source)
+        setUpdateSourceMeta(sourceSettings)
+      }
     } catch (err) {
       const message = toErrorMessage(err)
       setLoadError(message)
@@ -286,6 +296,28 @@ export function SystemNetworkSettings() {
     [t]
   )
 
+  const saveUpdateSource = useCallback(
+    async (nextSource: AppUpdateSource) => {
+      if (nextSource === updateSource && updateSourceMeta) return
+      setSavingUpdateSource(true)
+      try {
+        const next = await updateAppUpdateSourceSettings(nextSource)
+        setUpdateSource(next.source)
+        setUpdateSourceMeta(next)
+        // Clear a previous check result so the next check hits the new channel.
+        setAvailableUpdate(null)
+        setUpdateError(null)
+        setLastCheckedAt(null)
+      } catch (err) {
+        const message = toErrorMessage(err)
+        toast.error(t("updateSourceSaveFailed", { message }))
+      } finally {
+        setSavingUpdateSource(false)
+      }
+    },
+    [t, updateSource, updateSourceMeta]
+  )
+
   const saveLanguage = useCallback(
     async (lang: LanguageSelectValue) => {
       setSavingLanguage(true)
@@ -309,11 +341,14 @@ export function SystemNetworkSettings() {
 
   const formatUpdateError = useCallback(
     (error: unknown, action: UpdateAction): string => {
-      const { kind, rawMessage } = normalizeAppUpdateError(error)
+      const info = normalizeAppUpdateError(error)
+      const { kind, rawMessage } = info
 
       switch (kind) {
         case "source_unreachable":
-          return t("updateErrors.sourceUnavailable")
+          // Backend now maps empty channels to "no update"; if one still
+          // arrives (older build), treat it as already-latest, not an error.
+          return t("alreadyLatest")
         case "network":
           return t("updateErrors.network")
         case "download_failed":
@@ -335,22 +370,19 @@ export function SystemNetworkSettings() {
   // A failure inside the detached backend download/install task lands in the
   // shared update state rather than as a thrown error here, so surface it the
   // same way as a check error — and it stays visible after navigating back.
-  // source_unreachable errors are shown as a gentle hint, not a red error.
   const lifecycleError =
     updateState.status === "error" && updateState.error
-      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
-        ? null
-        : formatUpdateError(updateState.error, "install")
+      ? (() => {
+          const kind = normalizeAppUpdateError(updateState.error).kind
+          // Empty channel is not an install failure.
+          if (kind === "source_unreachable") return null
+          return formatUpdateError(updateState.error, "install")
+        })()
       : null
-  const lifecycleSourceUnreachable =
-    updateState.status === "error" && updateState.error
-      ? normalizeAppUpdateError(updateState.error).kind === "source_unreachable"
-      : false
 
   const checkForUpdates = useCallback(async () => {
     setCheckingUpdate(true)
     setUpdateError(null)
-    setSourceUnreachable(false)
 
     try {
       const previousUpdate = availableUpdate
@@ -375,15 +407,15 @@ export function SystemNetworkSettings() {
         await closeAppUpdate(previousUpdate)
       }
     } catch (err) {
-      const { kind } = normalizeAppUpdateError(err)
-      // "source_unreachable" means the update server has no published
-      // release yet (or the endpoint is misconfigured). This is expected
-      // before the first release is published — surface it as a gentle
-      // inline hint instead of a red error block.
-      if (kind === "source_unreachable") {
+      const info = normalizeAppUpdateError(err)
+      // Empty / unpublished channel: product semantics are "already latest".
+      if (info.kind === "source_unreachable") {
+        setAvailableUpdate(null)
+        setLastCheckedAt(new Date())
         setUpdateError(null)
-        setSourceUnreachable(true)
-        console.info("[Settings] update source unreachable (no release published yet)")
+        console.info(
+          "[Settings] no published update on selected source; treating as up-to-date"
+        )
       } else {
         const message = formatUpdateError(err, "check")
         setUpdateError(message)
@@ -459,7 +491,12 @@ export function SystemNetworkSettings() {
             <Button
               variant="ghost"
               className="size-5 rounded-full"
-              onClick={() => openUrl("https://github.com/veryagent-plus/veryagent")}
+              onClick={() =>
+                openUrl(
+                  updateSourceMeta?.repoUrl ??
+                    "https://github.com/plhys/VeryAgent"
+                )
+              }
             >
               <GithubMarkIcon className="size-5" />
             </Button>
@@ -486,6 +523,43 @@ export function SystemNetworkSettings() {
           <p className="text-xs text-muted-foreground leading-5">
             {t("updateDescription")}
           </p>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">{t("updateSourceTitle")}</p>
+                <p className="text-[11px] text-muted-foreground leading-5">
+                  {t("updateSourceDescription")}
+                </p>
+              </div>
+              <Select
+                value={updateSource}
+                onValueChange={(value) => {
+                  if (value === "github" || value === "gitea") {
+                    void saveUpdateSource(value)
+                  }
+                }}
+                disabled={savingUpdateSource || isBusy || checkingUpdate}
+              >
+                <SelectTrigger className="w-[11.5rem] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="github">
+                    {t("updateSourceGithub")}
+                  </SelectItem>
+                  <SelectItem value="gitea">
+                    {t("updateSourceGitea")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {updateSource === "gitea"
+                ? t("updateSourceGiteaHint")
+                : t("updateSourceGithubHint")}
+            </p>
+          </div>
 
           <div className="rounded-md border bg-muted/20 px-3 py-3 text-xs space-y-2">
             <div className="flex items-center justify-between gap-3">
@@ -540,7 +614,8 @@ export function SystemNetworkSettings() {
                     size="sm"
                     onClick={() =>
                       openUrl(
-                        "https://github.com/veryagent-plus/veryagent/releases/latest"
+                        updateSourceMeta?.releasesUrl ??
+                          "https://github.com/plhys/VeryAgent/releases/latest"
                       )
                     }
                   >
@@ -694,11 +769,6 @@ export function SystemNetworkSettings() {
                 message: updateError || lifecycleError || "",
               })}
             </div>
-          )}
-          {(sourceUnreachable || lifecycleSourceUnreachable) && !updateError && !lifecycleError && (
-            <p className="text-xs text-muted-foreground">
-              {t("updateErrors.sourceUnavailable")}
-            </p>
           )}
         </section>
 

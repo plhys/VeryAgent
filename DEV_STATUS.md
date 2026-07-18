@@ -1,0 +1,98 @@
+# veryAgent 开发状态报告
+
+> 更新日期：2026-07-16
+
+---
+
+## 一、已完成
+
+### 2026-07-16（0.9.3）
+
+- [x] 产品版本号抬升至 **0.9.3**（package / tauri.conf / Cargo.toml / Cargo.lock + CHANGELOG）
+- [x] 共享模型供应商（A计划）：Pi / CodeBuddy 可绑定；聊天仅展示可用模型
+- [x] CodeBuddy：自定义模型追加，保留原生中国/海外/iOA
+- [x] 智能体默认全关（新建 `agent_setting`）
+- [x] Codex 模型供应商 Responses API 边界提示
+- [x] 项目侧栏：文件夹 + 会话双选中；会话点击走 `openTab`
+- [x] i18n：zh-CN authMode 中英混杂清理；CodeBuddy 文案口径修正
+- [x] 模型供应商 + 视觉桥接合并设置页
+- [x] **双更新源管道**：GitHub（`plhys/VeryAgent`）/ Gitea（`10.10.100.233:3030/boss/veryagent`）可选；桌面 check 走 Rust endpoint 覆盖；`createUpdaterArtifacts` + 文档
+- [x] 标题栏主题切换旁绿色「更新」按钮（有新版本时显示，点击下载/重启）
+
+### 2026-07-15（已并入 0.9.3）
+
+- [x] OpenClaw / Hermes readiness：安装 ≠ 可用；Gateway 探测 + auto ensure
+- [x] OpenClaw resident（类 Hermes 常驻）
+- [x] 欢迎页通用 / 专家模式（通用：Hermes + OpenClaw）
+- [x] OpenClaw 会话设置中文短标签 + 说明（思考/快速/工具/插件/推理/用量/提权）
+- [x] 修正 off→「拒绝」误映射
+- [x] 独立开发启动文档与脚本（`dev-detached.ps1`，进程不随 agent 被杀）
+- [x] 补写 `CHANGELOG.md` 版本更新说明
+- [x] **移除**共享身份 / 共享记忆（后端 + 设置页 + 注入路径）
+- [x] OpenWiki 插件化：技能和插件卡片启用 + 齿轮配置弹窗；npm CLI 安装流
+- [x] 侧边栏对话/项目列表悬停绝对时间旗标
+- [x] 设置侧栏：通用设置 / 专家设置分组；shared-preferences 重定向防白屏
+- [x] 桌宠位置与气泡锚定、缩放尺寸修正；全局 pointer 光标
+- [x] 修复 MessageInput `collapsedSettings` TDZ 崩溃
+
+### codeg v0.20.0 → v0.20.2 合并（0.9.2）
+
+- [x] Icon 暗淡修复（agent-icon.tsx）
+- [x] Badge 前缀修正（restampSkillPrefixes + 测试）
+- [x] Unresumable Session Banner（classify_session_load_failure）
+- [x] Science 科研技能（13 个内置技能 + 管理模块）
+- [x] Skill Packs Hub（专家/科研/办公三合一设置页）
+- [x] 模型选择器滚动条修复（宽视图 + 窄视图）
+
+### 前端入口改造（0.9.2）
+
+- [x] "+"菜单技能改为分类套娃（专家/科研/办公 → 分类 → 技能）
+- [x] 侧边栏"技能和插件"面板：三大技能包合一 + 分类标签筛选 + 一键启用/禁用
+- [x] 办公技能 OfficeAction 加 category 字段
+
+---
+
+## 二、待定
+
+### 0.9.3 发版前
+
+- [ ] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏双选中；新库默认关智能体）
+- [ ] 正式包构建与安装/升级冒烟
+- [ ] 提交并推送工作区改动（当前尚未 commit）
+
+### OpenClaw 模型鉴权
+
+- [ ] Gateway 可用后，真实对话仍需配置模型供应商 / API Key
+- [ ] 空回复「请检查代理配置」多为模型鉴权，不是 HTTP 代理
+
+### 通用模式会话设置密度
+
+- [ ] 短标签已上；是否再默认折叠部分 OpenClaw 开关待产品确认
+
+### 项目拆分/重构
+
+- [ ] 状态：**待定**
+
+### 用户偏好记忆系统
+
+- [x] 已移除 shared identity / memory 路径（产品决策）
+- [ ] 若后续重做「跨智能体偏好」，需新方案（不再沿用已删模块）
+
+---
+
+## 三、不做
+
+- 侧边栏最大宽度 900px（用户排除）
+- 智能体版本更新（用户排除）
+- 所有 Grok 功能（用户排除）
+- Editor 假阳性错误 / Markdown 预览（用户排除）
+- QoderWork 性格预设移植（与第三方智能体冲突）
+- QoderWork HEARTBEAT 周期任务（缺少基础设施）
+
+---
+
+## 四、协作约定
+
+- **推送 / 合入 main 时必须更新 `CHANGELOG.md`**（至少写清新增 / 变更 / 修复）
+- 工作区若可能含其他智能体改动：提交前说明是「全量」还是「仅本会话」
+- 日常开发启动优先：`.\dev-detached.ps1`（见 `docs/dev-detached.zh-CN.md`）

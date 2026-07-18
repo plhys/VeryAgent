@@ -832,7 +832,7 @@ fn link_one_locked(
                 }
                 ExpertLinkState::LinkedElsewhere | ExpertLinkState::Broken => {
                     // A stale or foreign link sits in the way. This commonly
-                    // happens after a rename (e.g. `.codeg` → `.veryagent`)
+                    // happens after a rename (e.g. `.veryagent` → `.veryagent`)
                     // leaves links pointing at the old central store, or when a
                     // previous session left a dangling junction. Rather than
                     // lock the user out with a ForeignLink error they cannot
@@ -915,7 +915,7 @@ fn unlink_one_locked(expert_id: &str, agent_type: AgentType) -> Result<(), Exper
                 | ExpertLinkState::LinkedElsewhere
         ) {
             // Safe to remove: a link to our central store, a broken/dangling
-            // link, or a stale link left over from a rename (e.g. `.codeg` →
+            // link, or a stale link left over from a rename (e.g. `.veryagent` →
             // `.veryagent`). We only remove the link itself — never the contents
             // of the target — so a foreign link pointing at real user data is
             // still handled by the BlockedByRealDirectory branch below.

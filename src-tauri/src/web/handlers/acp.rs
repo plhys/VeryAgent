@@ -747,6 +747,21 @@ pub async fn acp_load_pi_config(
     Ok(Json(acp_commands::load_pi_config_core()))
 }
 
+pub async fn acp_discover_openclaw_gateway(
+) -> Result<Json<acp_commands::OpenClawGatewayDiscovery>, AppCommandError> {
+    Ok(Json(
+        acp_commands::discover_openclaw_gateway_core().await,
+    ))
+}
+
+pub async fn acp_ensure_openclaw_gateway(
+) -> Result<Json<acp_commands::OpenClawGatewayEnsureResult>, AppCommandError> {
+    let result = acp_commands::ensure_openclaw_gateway_core()
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpValidatePiCommandParams {

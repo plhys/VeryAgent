@@ -260,7 +260,10 @@ const ConversationTabView = memo(function ConversationTabView({
     number | null
   >(null)
   const dbConversationId = conversationId ?? createdConversationId
-  const [draftAgentType, setDraftAgentType] = useState<AgentType>(agentType)
+  // Draft may be null in expert mode until the user explicitly picks an agent.
+  const [draftAgentType, setDraftAgentType] = useState<AgentType | null>(
+    agentType
+  )
   const selectedAgent = conversationId != null ? agentType : draftAgentType
   // Seed from localStorage so the React state reflects the user's saved
   // mode for this agent immediately on mount. Without this seed, a reuse-
@@ -395,8 +398,13 @@ const ConversationTabView = memo(function ConversationTabView({
   // would stay frozen at its mount value and the UI/connection would not
   // follow. Persisted conversations read agentType directly from the prop
   // via selectedAgent, so they are unaffected.
+  //
+  // Skip when the draft is intentionally unselected (expert mode, no pick
+  // yet): the tab store still holds a provisional agentType, and mirroring
+  // it would re-select after AgentSelector cleared the draft.
   useEffect(() => {
     if (conversationId != null) return
+    if (selectedAgentRef.current == null) return
     if (agentType === selectedAgentRef.current) return
     setDraftAgentType(agentType)
     setModeId(getSavedModeId(agentType))
@@ -546,6 +554,9 @@ const ConversationTabView = memo(function ConversationTabView({
     () => conn.modes?.available_modes ?? [],
     [conn.modes?.available_modes]
   )
+  // Chat model picker shows only what the live agent advertises via ACP.
+  // Do not inject the shared-provider /models catalog here — placeholder
+  // entries that the session cannot switch to are unusable noise.
   const connectionConfigOptions = useMemo(
     () => conn.configOptions ?? [],
     [conn.configOptions]
@@ -818,6 +829,13 @@ const ConversationTabView = memo(function ConversationTabView({
         setAgentConnectError(tWelcome("enableAgentFirstPlaceholder"))
         return
       }
+      // Expert mode can leave the draft with no agent — refuse send until pick.
+      if (!selectedAgent) {
+        setAgentConnectError(tWelcome("pickAgentFirstPlaceholder"))
+        return
+      }
+      // Narrow for the async create path below (TS does not carry the guard).
+      const sendAgentType = selectedAgent
       // Connected AND the connection's cwd matches this tab's working dir. Bare
       // `connStatus === "connected"` is not enough: a chat draft mid-reconnect can
       // read a stale "connected" for the old cwd, and an inline send then would
@@ -929,7 +947,7 @@ const ConversationTabView = memo(function ConversationTabView({
           let sendFolderId = folderId
           if (chatSend) {
             const res = await createChatConversation(
-              selectedAgent,
+              sendAgentType,
               title,
               chatExistingDir
             )
@@ -951,7 +969,7 @@ const ConversationTabView = memo(function ConversationTabView({
             bindConversationTab(
               tabId,
               newConversationId,
-              selectedAgent,
+              sendAgentType,
               title,
               effectiveConversationId,
               res.folderId,
@@ -960,7 +978,7 @@ const ConversationTabView = memo(function ConversationTabView({
           } else {
             newConversationId = await createConversation(
               folderId,
-              selectedAgent,
+              sendAgentType,
               title
             )
             dbConvIdRef.current = newConversationId
@@ -980,7 +998,7 @@ const ConversationTabView = memo(function ConversationTabView({
             bindConversationTab(
               tabId,
               newConversationId,
-              selectedAgent,
+              sendAgentType,
               title,
               effectiveConversationId
             )
@@ -1167,14 +1185,16 @@ const ConversationTabView = memo(function ConversationTabView({
   // will re-resolve against the folder's saved default once all three
   // hydration gates are open, and overwrite this substitute if needed.
   const handleAgentFallback = useCallback(
-    (nextAgentType: AgentType) => {
+    (nextAgentType: AgentType | null) => {
       if (nextAgentType === selectedAgentRef.current) return
       if (dbConvIdRef.current) return
 
       setDraftAgentType(nextAgentType)
-      setModeId(getSavedModeId(nextAgentType))
+      setModeId(nextAgentType ? getSavedModeId(nextAgentType) : null)
       setAgentConnectError(null)
-      setDraftAgentFromFallback(tabId, nextAgentType)
+      if (nextAgentType) {
+        setDraftAgentFromFallback(tabId, nextAgentType)
+      }
     },
     [setDraftAgentFromFallback, tabId]
   )
@@ -1183,7 +1203,7 @@ const ConversationTabView = memo(function ConversationTabView({
     (newModeId: string) => {
       setModeId(newModeId)
       // Persist mode selection to localStorage immediately
-      if (conn.modes) {
+      if (conn.modes && selectedAgent) {
         saveModePreference(selectedAgent, {
           ...conn.modes,
           current_mode_id: newModeId,
@@ -1192,6 +1212,10 @@ const ConversationTabView = memo(function ConversationTabView({
     },
     [conn.modes, selectedAgent]
   )
+
+  const selectedAgentLabel = selectedAgent
+    ? AGENT_LABELS[selectedAgent]
+    : undefined
 
   const handleAnswerQuestion = useCallback(
     (answer: string) => {
@@ -1379,7 +1403,7 @@ const ConversationTabView = memo(function ConversationTabView({
       status={connStatus}
       promptCapabilities={conn.promptCapabilities}
       defaultPath={workingDirForConnection}
-      agentName={AGENT_LABELS[selectedAgent]}
+      agentName={selectedAgentLabel}
       error={conn.error}
       claudeApiRetry={conn.claudeApiRetry}
       pendingPermission={conn.pendingPermission}
@@ -1466,6 +1490,7 @@ const ConversationTabView = memo(function ConversationTabView({
                 }}
                 onOpenAgentsSettings={handleOpenAgentsSettings}
                 disabled={isConnecting || dbConversationId != null}
+                showModeSwitch
               />
             </div>
             {autoConnectError || agentConnectError ? (
@@ -1489,7 +1514,7 @@ const ConversationTabView = memo(function ConversationTabView({
               status={composerConnStatus}
               promptCapabilities={conn.promptCapabilities}
               defaultPath={workingDirForConnection}
-              agentName={AGENT_LABELS[selectedAgent]}
+              agentName={selectedAgentLabel}
               onFocus={handleFocus}
               onSend={handleSend}
               onCancel={handleCancel}
@@ -1542,6 +1567,7 @@ const ConversationTabView = memo(function ConversationTabView({
               }}
               onOpenAgentsSettings={handleOpenAgentsSettings}
               disabled={isConnecting || dbConversationId != null}
+              showModeSwitch
             />
             {autoConnectError || agentConnectError ? (
               <button
@@ -1571,7 +1597,7 @@ const ConversationTabView = memo(function ConversationTabView({
         }}
         onSubmit={feedback.submit}
         submitting={feedback.submitting}
-        agentName={AGENT_LABELS[selectedAgent]}
+        agentName={selectedAgentLabel}
       />
     </ConversationShell>
   )

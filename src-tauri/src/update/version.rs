@@ -5,6 +5,9 @@
 //! "what is the latest version". Server mode additionally downloads the
 //! platform tarball from the deterministic `releases/latest/download/`
 //! path (see `install.rs`).
+//!
+//! Manifest / download base URLs come from the selected
+//! [`crate::update::source::AppUpdateSource`] (GitHub or Gitea).
 
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -12,16 +15,14 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::app_error::AppCommandError;
+use crate::update::source::AppUpdateSource;
 
-/// Update manifest URL — mirrors the `endpoints` entry in `tauri.conf.json`
-/// so desktop and server modes consult the same source of truth.
-pub const UPDATE_MANIFEST_URL: &str =
-    "https://github.com/veryagent-plus/veryagent/releases/latest/download/latest.json";
+/// Default manifest URL (GitHub) — kept for callers that only need a static
+/// fallback when no preference has been loaded yet.
+pub const UPDATE_MANIFEST_URL: &str = crate::update::source::GITHUB_MANIFEST_URL;
 
-/// Deterministic base for "latest" release assets (server tarballs + their
-/// `.sig` detached signatures). Same channel as the manifest.
-pub const RELEASE_DOWNLOAD_BASE: &str =
-    "https://github.com/veryagent-plus/veryagent/releases/latest/download";
+/// Default download base (GitHub). Prefer [`download_base_for`].
+pub const RELEASE_DOWNLOAD_BASE: &str = crate::update::source::GITHUB_DOWNLOAD_BASE;
 
 /// Short-timeout client for the small manifest fetch. Proxy env vars are
 /// sampled at build time, so `init_proxy_from_db` must run before the first
@@ -61,6 +62,14 @@ pub fn download_client() -> Result<&'static reqwest::Client, AppCommandError> {
     })
 }
 
+pub fn manifest_url_for(source: AppUpdateSource) -> &'static str {
+    source.manifest_url()
+}
+
+pub fn download_base_for(source: AppUpdateSource) -> &'static str {
+    source.download_base()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct LatestManifest {
     pub version: String,
@@ -71,20 +80,38 @@ pub struct LatestManifest {
 }
 
 pub async fn fetch_latest_manifest() -> Result<LatestManifest, AppCommandError> {
+    fetch_latest_manifest_from(AppUpdateSource::default()).await
+}
+
+pub async fn fetch_latest_manifest_from(
+    source: AppUpdateSource,
+) -> Result<LatestManifest, AppCommandError> {
     let client = manifest_client()?;
-    let response = client.get(UPDATE_MANIFEST_URL).send().await.map_err(|e| {
-        AppCommandError::network("Failed to fetch update manifest").with_detail(e.to_string())
+    let url = manifest_url_for(source);
+    let response = client.get(url).send().await.map_err(|e| {
+        AppCommandError::network(format!(
+            "Failed to fetch update manifest from {} ({})",
+            source.label(),
+            url
+        ))
+        .with_detail(e.to_string())
     })?;
 
     if !response.status().is_success() {
         return Err(AppCommandError::network(format!(
-            "Update manifest returned status {}",
-            response.status()
+            "Update manifest from {} returned status {} ({})",
+            source.label(),
+            response.status(),
+            url
         )));
     }
 
     response.json::<LatestManifest>().await.map_err(|e| {
-        AppCommandError::network("Failed to parse update manifest").with_detail(e.to_string())
+        AppCommandError::network(format!(
+            "Failed to parse update manifest from {}",
+            source.label()
+        ))
+        .with_detail(e.to_string())
     })
 }
 
@@ -136,5 +163,17 @@ mod tests {
     fn non_semver_falls_back_to_inequality() {
         assert!(is_newer("nightly-2", "nightly-1"));
         assert!(!is_newer("same", "same"));
+    }
+
+    #[test]
+    fn urls_follow_source() {
+        assert_eq!(
+            manifest_url_for(AppUpdateSource::Github),
+            crate::update::source::GITHUB_MANIFEST_URL
+        );
+        assert_eq!(
+            download_base_for(AppUpdateSource::Gitea),
+            crate::update::source::GITEA_DOWNLOAD_BASE
+        );
     }
 }

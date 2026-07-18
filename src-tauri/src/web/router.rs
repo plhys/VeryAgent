@@ -102,6 +102,46 @@ pub fn build_router(
             post(handlers::vision_bridge::set_vision_bridge_settings),
         )
         .route(
+            "/openwiki_get_config",
+            post(handlers::openwiki::get_openwiki_config),
+        )
+        .route(
+            "/openwiki_save_config",
+            post(handlers::openwiki::set_openwiki_config),
+        )
+        .route(
+            "/openwiki_status",
+            post(handlers::openwiki::get_openwiki_status),
+        )
+        .route(
+            "/openwiki_run",
+            post(handlers::openwiki::run_openwiki),
+        )
+        .route(
+            "/openwiki_get_instructions",
+            post(handlers::openwiki::get_openwiki_instructions),
+        )
+        .route(
+            "/openwiki_save_instructions",
+            post(handlers::openwiki::set_openwiki_instructions),
+        )
+        .route(
+            "/openwiki_install_cli",
+            post(handlers::openwiki::install_openwiki_cli),
+        )
+        .route(
+            "/openwiki_uninstall_cli",
+            post(handlers::openwiki::uninstall_openwiki_cli),
+        )
+        .route(
+            "/npm_install_cli",
+            post(handlers::npm_cli::install_npm_cli),
+        )
+        .route(
+            "/npm_uninstall_cli",
+            post(handlers::npm_cli::uninstall_npm_cli),
+        )
+        .route(
             "/get_folder_conversation",
             post(handlers::conversations::get_folder_conversation),
         )
@@ -534,6 +574,14 @@ pub fn build_router(
             post(handlers::system_settings::get_system_proxy_settings),
         )
         .route(
+            "/get_app_update_source_settings",
+            post(handlers::system_settings::get_app_update_source_settings),
+        )
+        .route(
+            "/update_app_update_source_settings",
+            post(handlers::system_settings::update_app_update_source_settings),
+        )
+        .route(
             "/get_system_terminal_settings",
             post(handlers::system_settings::get_system_terminal_settings),
         )
@@ -653,6 +701,14 @@ pub fn build_router(
         .route(
             "/acp_load_pi_config",
             post(handlers::acp::acp_load_pi_config),
+        )
+        .route(
+            "/acp_discover_openclaw_gateway",
+            post(handlers::acp::acp_discover_openclaw_gateway),
+        )
+        .route(
+            "/acp_ensure_openclaw_gateway",
+            post(handlers::acp::acp_ensure_openclaw_gateway),
         )
         .route(
             "/acp_validate_pi_command",
@@ -986,6 +1042,10 @@ pub fn build_router(
         .route(
             "/delete_model_provider",
             post(handlers::model_provider::delete_model_provider),
+        )
+        .route(
+            "/fetch_provider_models",
+            post(handlers::model_provider::fetch_provider_models),
         )
         // ─── Quick Messages ───
         .route(

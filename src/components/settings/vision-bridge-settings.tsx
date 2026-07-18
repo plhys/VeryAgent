@@ -39,7 +39,15 @@ const VISION_CAPABLE_AGENT_TYPES: AgentType[] = ALL_AGENT_TYPES.filter(
   (t) => t !== "open_claw"
 )
 
-export function VisionBridgeSettings() {
+/**
+ * Vision Bridge body. When `embedded` is true, omit the outer ScrollArea and
+ * page-level chrome so a parent can compose this under Model Providers.
+ */
+export function VisionBridgeSettingsBody({
+  embedded = false,
+}: {
+  embedded?: boolean
+}) {
   const t = useTranslations("VisionBridgeSettings")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -140,163 +148,168 @@ export function VisionBridgeSettings() {
     )
   }
 
-  return (
-    <ScrollArea className="h-full">
-      <div className="space-y-6 px-1">
-        {/* Page header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-            <Eye className="h-5 w-5 text-primary" aria-hidden />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold">{t("title")}</h1>
-            <p className="text-sm text-muted-foreground">{t("description")}</p>
-          </div>
+  const body = (
+    <div className={embedded ? "space-y-4 px-3 pb-3 md:px-4 md:pb-4" : "space-y-6 px-1"}>
+      {/* Section header */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+          <Eye className="h-5 w-5 text-primary" aria-hidden />
         </div>
-
-        {loadError && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {t("loadFailed", { detail: loadError })}
-          </p>
-        )}
-
-        {/* Enable toggle */}
-        <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
-          <div className="min-w-0 space-y-1">
-            <label htmlFor="vision-bridge-enabled" className="text-sm font-medium">
-              {t("enable")}
-            </label>
-            <p className="text-xs text-muted-foreground">{t("enableHint")}</p>
-          </div>
-          <Switch
-            id="vision-bridge-enabled"
-            checked={enabled}
-            onCheckedChange={setEnabled}
-            disabled={loading}
-            className="shrink-0"
-          />
+        <div>
+          <h2 className="text-sm font-semibold">{t("title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("description")}</p>
         </div>
+      </div>
 
-        {/* Vision model config — only visible when enabled */}
-        {enabled && (
-          <div className="space-y-4">
-            <div className="space-y-4 rounded-lg border bg-card p-4">
-              <h2 className="flex items-center gap-2 text-sm font-semibold">
-                <Server className="h-4 w-4 text-muted-foreground" />
-                {t("modelConfig")}
-              </h2>
+      {loadError && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {t("loadFailed", { detail: loadError })}
+        </p>
+      )}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="vision-api-url" className="text-sm">
-                    {t("apiUrl")}
-                  </Label>
-                  <Input
-                    id="vision-api-url"
-                    placeholder={t("apiUrlPlaceholder")}
-                    value={apiUrl}
-                    onChange={(e) => {
-                      setApiUrl(e.target.value)
-                      setValidationErrors((prev) => ({ ...prev, apiUrl: "" }))
-                    }}
-                    disabled={loading || saving}
-                    className={validationErrors.apiUrl ? "border-destructive" : ""}
-                  />
-                  {validationErrors.apiUrl && (
-                    <p className="text-xs text-destructive">{validationErrors.apiUrl}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">{t("apiUrlHint")}</p>
-                </div>
+      {/* Enable toggle */}
+      <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+        <div className="min-w-0 space-y-1">
+          <label htmlFor="vision-bridge-enabled" className="text-sm font-medium">
+            {t("enable")}
+          </label>
+          <p className="text-xs text-muted-foreground">{t("enableHint")}</p>
+        </div>
+        <Switch
+          id="vision-bridge-enabled"
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          disabled={loading}
+          className="shrink-0"
+        />
+      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="vision-model-name" className="text-sm">
-                    {t("modelName")}
-                  </Label>
-                  <Input
-                    id="vision-model-name"
-                    placeholder={t("modelNamePlaceholder")}
-                    value={modelName}
-                    onChange={(e) => {
-                      setModelName(e.target.value)
-                      setValidationErrors((prev) => ({ ...prev, modelName: "" }))
-                    }}
-                    disabled={loading || saving}
-                    className={validationErrors.modelName ? "border-destructive" : ""}
-                  />
-                  {validationErrors.modelName && (
-                    <p className="text-xs text-destructive">{validationErrors.modelName}</p>
-                  )}
-                </div>
+      {/* Vision model config — only visible when enabled */}
+      {enabled && (
+        <div className="space-y-4">
+          <div className="space-y-4 rounded-lg border bg-card p-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Server className="h-4 w-4 text-muted-foreground" />
+              {t("modelConfig")}
+            </h3>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="vision-api-url" className="text-sm">
+                  {t("apiUrl")}
+                </Label>
+                <Input
+                  id="vision-api-url"
+                  placeholder={t("apiUrlPlaceholder")}
+                  value={apiUrl}
+                  onChange={(e) => {
+                    setApiUrl(e.target.value)
+                    setValidationErrors((prev) => ({ ...prev, apiUrl: "" }))
+                  }}
+                  disabled={loading || saving}
+                  className={validationErrors.apiUrl ? "border-destructive" : ""}
+                />
+                {validationErrors.apiUrl && (
+                  <p className="text-xs text-destructive">{validationErrors.apiUrl}</p>
+                )}
+                <p className="text-xs text-muted-foreground">{t("apiUrlHint")}</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="vision-api-key" className="text-sm">
-                  {t("apiKey")}
+                <Label htmlFor="vision-model-name" className="text-sm">
+                  {t("modelName")}
                 </Label>
                 <Input
-                  id="vision-api-key"
-                  type="password"
-                  placeholder={t("apiKeyPlaceholder")}
-                  value={apiKey}
+                  id="vision-model-name"
+                  placeholder={t("modelNamePlaceholder")}
+                  value={modelName}
                   onChange={(e) => {
-                    setApiKey(e.target.value)
-                    setValidationErrors((prev) => ({ ...prev, apiKey: "" }))
+                    setModelName(e.target.value)
+                    setValidationErrors((prev) => ({ ...prev, modelName: "" }))
                   }}
                   disabled={loading || saving}
-                  className={validationErrors.apiKey ? "border-destructive" : ""}
+                  className={validationErrors.modelName ? "border-destructive" : ""}
                 />
-                {validationErrors.apiKey && (
-                  <p className="text-xs text-destructive">{validationErrors.apiKey}</p>
+                {validationErrors.modelName && (
+                  <p className="text-xs text-destructive">{validationErrors.modelName}</p>
                 )}
               </div>
             </div>
 
-            {/* Agent types selection */}
-            <div className="space-y-3 rounded-lg border bg-card p-4">
-              <h2 className="text-sm font-semibold">{t("agentSelection")}</h2>
-              <p className="text-xs text-muted-foreground">{t("agentSelectionHint")}</p>
-              {validationErrors.agentSelection && (
-                <p className="text-xs text-destructive">{validationErrors.agentSelection}</p>
+            <div className="space-y-2">
+              <Label htmlFor="vision-api-key" className="text-sm">
+                {t("apiKey")}
+              </Label>
+              <Input
+                id="vision-api-key"
+                type="password"
+                placeholder={t("apiKeyPlaceholder")}
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value)
+                  setValidationErrors((prev) => ({ ...prev, apiKey: "" }))
+                }}
+                disabled={loading || saving}
+                className={validationErrors.apiKey ? "border-destructive" : ""}
+              />
+              {validationErrors.apiKey && (
+                <p className="text-xs text-destructive">{validationErrors.apiKey}</p>
               )}
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {VISION_CAPABLE_AGENT_TYPES.map((agentType) => (
-                  <div
-                    key={agentType}
-                    className="flex items-center gap-2 rounded-md border px-3 py-2"
-                  >
-                    <Checkbox
-                      id={`vision-agent-${agentType}`}
-                      checked={selectedAgents.includes(agentType)}
-                      onCheckedChange={() => toggleAgent(agentType)}
-                      disabled={loading || saving}
-                    />
-                    <label
-                      htmlFor={`vision-agent-${agentType}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {AGENT_LABELS[agentType]}
-                    </label>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
-        )}
 
-        {/* Save button */}
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={loading || saving}>
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t("saving")}
-              </>
-            ) : (
-              t("save")
+          {/* Agent types selection */}
+          <div className="space-y-3 rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-semibold">{t("agentSelection")}</h3>
+            <p className="text-xs text-muted-foreground">{t("agentSelectionHint")}</p>
+            {validationErrors.agentSelection && (
+              <p className="text-xs text-destructive">{validationErrors.agentSelection}</p>
             )}
-          </Button>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {VISION_CAPABLE_AGENT_TYPES.map((agentType) => (
+                <div
+                  key={agentType}
+                  className="flex items-center gap-2 rounded-md border px-3 py-2"
+                >
+                  <Checkbox
+                    id={`vision-agent-${agentType}`}
+                    checked={selectedAgents.includes(agentType)}
+                    onCheckedChange={() => toggleAgent(agentType)}
+                    disabled={loading || saving}
+                  />
+                  <label
+                    htmlFor={`vision-agent-${agentType}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {AGENT_LABELS[agentType]}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Save button */}
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={loading || saving}>
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("saving")}
+            </>
+          ) : (
+            t("save")
+          )}
+        </Button>
       </div>
-    </ScrollArea>
+    </div>
   )
+
+  if (embedded) return body
+  return <ScrollArea className="h-full">{body}</ScrollArea>
+}
+
+export function VisionBridgeSettings() {
+  return <VisionBridgeSettingsBody />
 }

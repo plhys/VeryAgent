@@ -31,6 +31,8 @@ import type {
   QuestionAnswer,
   AcpAgentInfo,
   AcpAgentStatus,
+  OpenClawGatewayDiscovery,
+  OpenClawGatewayEnsureResult,
   AgentSkillScope,
   AgentSkillLayout,
   AgentSkillItem,
@@ -41,6 +43,7 @@ import type {
   ExpertLinkState,
   LinkOp,
   LinkOpResult,
+  ScienceListItem,
   FolderHistoryEntry,
   FolderDetail,
   CreateChatConversationResult,
@@ -78,6 +81,8 @@ import type {
   WorkspaceSnapshotResponse,
   GitLogResult,
   AvailableTerminalShells,
+  AppUpdateSource,
+  AppUpdateSourceSettings,
   SystemLanguageSettings,
   SystemProxySettings,
   SystemRenderingSettings,
@@ -103,6 +108,7 @@ import type {
   ChatChannelMessageLog,
   WebhookConfig,
   ModelProviderInfo,
+  ProviderModelItem,
   UpdateModelProviderResult,
   PluginCheckSummary,
   OpenCodeCatalogProvider,
@@ -538,6 +544,26 @@ export async function loadPiConfig(): Promise<{
 }
 
 /**
+ * Discover OpenClaw gateway URL/token from process env and local
+ * `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`). Empty fields mean
+ * "not found" — never a fabricated default port.
+ */
+export async function acpDiscoverOpenClawGateway(): Promise<
+  OpenClawGatewayDiscovery
+> {
+  return getTransport().call("acp_discover_openclaw_gateway", {})
+}
+
+/**
+ * One-click local OpenClaw gateway bootstrap for settings: create baseline
+ * config if needed, set gateway.mode=local, install/start service (or
+ * detached run), then re-probe reachability.
+ */
+export async function acpEnsureOpenClawGateway(): Promise<OpenClawGatewayEnsureResult> {
+  return getTransport().call("acp_ensure_openclaw_gateway", {})
+}
+
+/**
  * Validate a user-supplied custom pi binary (BYO-pi): resolve it (path or
  * `PATH`) and best-effort read its `--version`. A not-found binary returns
  * `{ found: false, resolvedPath: null, version: null }` (not an error).
@@ -729,14 +755,14 @@ export async function expertsListAllInstallStatuses(): Promise<
   const result = (await getTransport().call(
     "experts_list_all_install_statuses"
   )) as ExpertInstallStatus[]
-  // 后端序列化为 "linked_to_app"（linked_to_codeg 为旧版兼容名），前端统一用
+  // 后端序列化为 "linked_to_app"（linked_to_veryagent 为旧版兼容名），前端统一用
   // "linked_to_veryagent" —— 保留后端返回的真实状态，不能覆盖成统一的值，
   // 否则矩阵显示与文件系统脱节、toggleCell 会走错启用/禁用分支。
   return result.map((item) => ({
     ...item,
     state:
       item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_codeg" as ExpertLinkState)
+      item.state === ("linked_to_veryagent" as ExpertLinkState)
         ? ("linked_to_veryagent" as const)
         : item.state,
   }))
@@ -775,6 +801,74 @@ export async function expertsReadContent(expertId: string): Promise<string> {
 
 export async function expertsOpenCentralDir(): Promise<string> {
   return getTransport().call("experts_open_central_dir")
+}
+
+// ─── Science (built-in scientific-research skills) ──────────────────────
+// Link statuses reuse the Expert* DTOs (like office tools do): the
+// `expertId` field carries the science skill id.
+
+export async function scienceList(): Promise<ScienceListItem[]> {
+  return getTransport().call("science_list")
+}
+
+export async function scienceGetInstallStatus(
+  skillId: string
+): Promise<ExpertInstallStatus[]> {
+  return getTransport().call("science_get_install_status", { skillId })
+}
+
+/** One round-trip snapshot of every (science skill, agent) link state. */
+export async function scienceListAllInstallStatuses(): Promise<
+  ExpertInstallStatus[]
+> {
+  const result = (await getTransport().call(
+    "science_list_all_install_statuses"
+  )) as ExpertInstallStatus[]
+  // Same state normalization as experts: backend may serialize as
+  // "linked_to_app" or "linked_to_veryagent", frontend uses "linked_to_veryagent".
+  return result.map((item) => ({
+    ...item,
+    state:
+      item.state === ("linked_to_app" as ExpertLinkState) ||
+      item.state === ("linked_to_veryagent" as ExpertLinkState)
+        ? ("linked_to_veryagent" as const)
+        : item.state,
+  }))
+}
+
+/** Apply a batch of enable/disable ops; returns one result per op. */
+export async function scienceApplyLinks(
+  ops: LinkOp[]
+): Promise<LinkOpResult[]> {
+  return getTransport().call("science_apply_links", { ops })
+}
+
+export async function scienceLinkToAgent(params: {
+  skillId: string
+  agentType: AgentType
+}): Promise<ExpertInstallStatus> {
+  return getTransport().call("science_link_to_agent", {
+    skillId: params.skillId,
+    agentType: params.agentType,
+  })
+}
+
+export async function scienceUnlinkFromAgent(params: {
+  skillId: string
+  agentType: AgentType
+}): Promise<void> {
+  return getTransport().call("science_unlink_from_agent", {
+    skillId: params.skillId,
+    agentType: params.agentType,
+  })
+}
+
+export async function scienceReadContent(skillId: string): Promise<string> {
+  return getTransport().call("science_read_content", { skillId })
+}
+
+export async function scienceOpenCentralDir(): Promise<string> {
+  return getTransport().call("science_open_central_dir")
 }
 
 // ─── Office tools ───
@@ -837,12 +931,12 @@ export async function officecliSkillListAllInstallStatuses(): Promise<
     "officecli_skill_list_all_install_statuses"
   )) as ExpertInstallStatus[]
   // 同 expertsListAllInstallStatuses：只做命名映射，保留真实状态。
-  // 同时兼容新版 "linked_to_app" 和旧版 "linked_to_codeg" 序列化名。
+  // 同时兼容新版 "linked_to_app" 和旧版 "linked_to_veryagent" 序列化名。
   return result.map((item) => ({
     ...item,
     state:
       item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_codeg" as ExpertLinkState)
+      item.state === ("linked_to_veryagent" as ExpertLinkState)
         ? ("linked_to_veryagent" as const)
         : item.state,
   }))
@@ -906,6 +1000,16 @@ export async function updateSystemProxySettings(
   settings: SystemProxySettings
 ): Promise<SystemProxySettings> {
   return getTransport().call("update_system_proxy_settings", { settings })
+}
+
+export async function getAppUpdateSourceSettings(): Promise<AppUpdateSourceSettings> {
+  return getTransport().call("get_app_update_source_settings")
+}
+
+export async function updateAppUpdateSourceSettings(
+  source: AppUpdateSource
+): Promise<AppUpdateSourceSettings> {
+  return getTransport().call("update_app_update_source_settings", { source })
 }
 
 export async function getSystemLanguageSettings(): Promise<SystemLanguageSettings> {
@@ -1726,6 +1830,7 @@ export type SettingsSection =
   | "mcp"
   | "skills"
   | "experts"
+  | "science"
   | "office-tools"
   | "shortcuts"
   | "system"
@@ -3102,15 +3207,11 @@ export async function createModelProvider(params: {
   name: string
   apiUrl: string
   apiKey: string
-  agentTypes: string[]
-  models: Record<string, string>
 }): Promise<ModelProviderInfo> {
   return getTransport().call("create_model_provider", {
     name: params.name,
     apiUrl: params.apiUrl,
     apiKey: params.apiKey,
-    agentTypes: params.agentTypes,
-    models: params.models,
   })
 }
 
@@ -3119,21 +3220,27 @@ export async function updateModelProvider(params: {
   name?: string | null
   apiUrl?: string | null
   apiKey?: string | null
-  agentTypes?: string[] | null
-  models?: Record<string, string> | null
 }): Promise<UpdateModelProviderResult> {
   return getTransport().call("update_model_provider", {
     id: params.id,
     name: params.name ?? null,
     apiUrl: params.apiUrl ?? null,
     apiKey: params.apiKey ?? null,
-    agentTypes: params.agentTypes ?? null,
-    models: params.models ?? null,
   })
 }
 
 export async function deleteModelProvider(id: number): Promise<void> {
   return getTransport().call("delete_model_provider", { id })
+}
+
+/**
+ * List models a saved provider can serve (GET `<api_url>/models` with its key).
+ * Used by agent settings after a model provider is selected.
+ */
+export async function fetchModelProviderModels(
+  id: number
+): Promise<ProviderModelItem[]> {
+  return getTransport().call("fetch_provider_models", { id })
 }
 
 // ─── Delegation settings ───────────────────────────────────────────────
@@ -3248,6 +3355,214 @@ export async function visionBridgeSaveConfig(
   settings: VisionBridgeSettings
 ): Promise<VisionBridgeConfig> {
   return getTransport().call("vision_bridge_save_config", { settings })
+}
+
+/** Mirror of Rust `OpenWikiAgentCapability`. */
+export type OpenWikiAgentCapability =
+  | "read_wiki"
+  | "request_update"
+  | "request_init"
+  | "request_chat"
+
+/** Mirror of Rust `OpenWikiAgentPermission`. */
+export interface OpenWikiAgentPermission {
+  agent_type: string
+  capabilities: OpenWikiAgentCapability[]
+}
+
+/** Mirror of Rust `OpenWikiInjectMode`. */
+export type OpenWikiInjectMode = "summary_and_path" | "summary" | "path_only"
+
+/** Mirror of Rust `OpenWikiConfig`. */
+export interface OpenWikiConfig {
+  enabled: boolean
+  modes: {
+    code: boolean
+    personal: boolean
+  }
+  agent_types_list: string[]
+  agent_permissions: OpenWikiAgentPermission[]
+  inject: {
+    on_session_start: boolean
+    inject_agents_md: boolean
+    inject_mode: OpenWikiInjectMode
+  }
+  auto_update: {
+    enabled: boolean
+    on_git_change: boolean
+    schedule_cron?: string | null
+  }
+  model: {
+    use_openwiki_env: boolean
+    provider?: string | null
+    model_id?: string | null
+    api_key: string
+    base_url?: string | null
+  }
+  paths: {
+    code_wiki_dirname: string
+    personal_wiki_root?: string | null
+    executable: string
+  }
+  commands: {
+    allow_init: boolean
+    allow_update: boolean
+    allow_chat: boolean
+    allow_ingest: boolean
+    allow_cron: boolean
+    allow_auth: boolean
+    advanced_enabled: boolean
+  }
+  ignore_patterns: string[]
+}
+
+/** Mirror of Rust `OpenWikiStatus`. */
+export interface OpenWikiStatus {
+  enabled: boolean
+  executable_found: boolean
+  executable_path?: string | null
+  wiki_exists: boolean
+  wiki_path?: string | null
+  last_update_path?: string | null
+  instructions_exists: boolean
+  message: string
+}
+
+/** Mirror of Rust `OpenWikiAction`. */
+export type OpenWikiAction = "code_init" | "code_update" | "status"
+
+/** Mirror of Rust `OpenWikiRunResult`. */
+export interface OpenWikiRunResult {
+  action: string
+  success: boolean
+  exit_code?: number | null
+  stdout: string
+  stderr: string
+  executable: string
+  working_dir: string
+  duration_ms: number
+}
+
+export interface OpenWikiInstructions {
+  content: string
+  path: string
+}
+
+export async function openwikiGetConfig(): Promise<OpenWikiConfig> {
+  return getTransport().call("openwiki_get_config")
+}
+
+export async function openwikiSaveConfig(
+  settings: OpenWikiConfig
+): Promise<OpenWikiConfig> {
+  return getTransport().call("openwiki_save_config", { settings })
+}
+
+export async function openwikiStatus(
+  workspace?: string | null
+): Promise<OpenWikiStatus> {
+  return getTransport().call("openwiki_status", { workspace: workspace ?? null })
+}
+
+export async function openwikiRun(
+  action: OpenWikiAction,
+  workspace?: string | null
+): Promise<OpenWikiRunResult> {
+  return getTransport().call("openwiki_run", {
+    params: { action, workspace: workspace ?? null },
+  })
+}
+
+export async function openwikiGetInstructions(
+  workspace: string
+): Promise<OpenWikiInstructions> {
+  return getTransport().call("openwiki_get_instructions", {
+    params: { workspace },
+  })
+}
+
+export async function openwikiSaveInstructions(
+  workspace: string,
+  content: string
+): Promise<OpenWikiInstructions> {
+  return getTransport().call("openwiki_save_instructions", {
+    update: { workspace, content },
+  })
+}
+
+/** Mirror of Rust `OpenWikiInstallResult`. */
+export interface OpenWikiInstallResult {
+  success: boolean
+  executable_path: string | null
+  message: string
+}
+
+/**
+ * Install the OpenWiki CLI via `npm install -g openwiki` (user-prefix fallback).
+ * Streams progress/logs on `app://openwiki-install` tagged with `taskId`.
+ * Long timeout: npm may download a large dependency tree.
+ */
+export async function openwikiInstallCli(
+  taskId: string
+): Promise<OpenWikiInstallResult> {
+  return getTransport().call(
+    "openwiki_install_cli",
+    { taskId },
+    { timeoutMs: 630_000 }
+  )
+}
+
+/** Uninstall OpenWiki CLI from default global + user npm prefixes. */
+export async function openwikiUninstallCli(): Promise<OpenWikiInstallResult> {
+  return getTransport().call("openwiki_uninstall_cli", undefined, {
+    timeoutMs: 120_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Generic npm CLI install / uninstall — shared by any npm-based plugin.
+// Adding a new plugin no longer requires a Rust recompile.
+// ---------------------------------------------------------------------------
+
+export interface NpmInstallParams {
+  packageName: string
+  binaryName: string
+  eventChannel: string
+  taskId: string
+  includeOptional?: boolean
+}
+
+export interface NpmUninstallParams {
+  packageName: string
+  binaryName: string
+}
+
+/** Mirror of Rust `NpmInstallResult`. */
+export interface NpmInstallResult {
+  success: boolean
+  executablePath: string | null
+  message: string
+}
+
+/**
+ * Install an npm-based CLI globally (user-prefix first, default global fallback).
+ * Streams progress/logs on the event channel specified in `params.eventChannel`.
+ */
+export async function npmInstallCli(
+  params: NpmInstallParams
+): Promise<NpmInstallResult> {
+  return getTransport().call("npm_install_cli", { params }, {
+    timeoutMs: 630_000,
+  })
+}
+
+/** Uninstall an npm-based CLI from default global + user npm prefixes. */
+export async function npmUninstallCli(
+  params: NpmUninstallParams
+): Promise<NpmInstallResult> {
+  return getTransport().call("npm_uninstall_cli", { params }, {
+    timeoutMs: 120_000,
+  })
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what

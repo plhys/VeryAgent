@@ -409,36 +409,6 @@ pt = "Define como descobrir e usar habilidades no início de qualquer conversa."
 ar = "يحدد كيفية اكتشاف واستخدام المهارات في بداية أي محادثة."
 
 
-[[expert]]
-id = "multimodal-vision"
-category = "meta"
-icon = "Eye"
-sort_order = 220
-
-[expert.display_name]
-en = "Multimodal Vision"
-"zh-CN" = "多模态视觉"
-"zh-TW" = "多模態視覺"
-ja = "マルチモーダル視覚"
-ko = "멀티모달 시각"
-es = "Visión multimodal"
-de = "Multimodale Vision"
-fr = "Vision multimodale"
-pt = "Visão multimodal"
-ar = "الرؤية متعددة الوسائط"
-
-[expert.description]
-en = "Analyze images and visual content via a vision model — lets text-only agents \"see\" screenshots, diagrams, charts, and UI layouts."
-"zh-CN" = "通过视觉模型分析图片和视觉内容——让纯文字智能体也能\"看\"截图、图表、图示和 UI 界面。"
-"zh-TW" = "透過視覺模型分析圖片和視覺內容——讓純文字智能體也能「看」截圖、圖表、圖示和 UI 界面。"
-ja = "視覚モデルで画像や視覚コンテンツを分析 — テキストのみのエージェントもスクリーンショット、図表、UIレイアウトを「見る」ことができます。"
-ko = "시각 모델로 이미지와 시각 콘텐츠를 분석 — 텍스트 전용 에이전트도 스크린샷, 다이어그램, 차트, UI 레이아웃을 \"볼\" 수 있습니다."
-es = "Analiza imágenes y contenido visual mediante un modelo de visión — permite a los agentes de solo texto \"ver\" capturas, diagramas, gráficos y layouts UI."
-de = "Analysiert Bilder und visuelle Inhalte über ein Vision-Modell — ermöglicht text-only-Agenten \"Sehen\" von Screenshots, Diagrammen, Charts und UI-Layouts."
-fr = "Analyse les images et contenus visuels via un modèle de vision — permet aux agents textuels de \"voir\" captures, diagrammes, graphiques et layouts UI."
-pt = "Analisa imagens e conteúdo visual via um modelo de visão — permite que agentes textuais \"vejam\" capturas, diagramas, gráficos e layouts UI."
-ar = "يحلل الصور والمحتوى البصري عبر نموذج رؤية — يتيح للعملاء النصيين فقط \"رؤية\" لقطات الشاشة والمخططات والرسوم البيانية وتخطيطات واجهة المستخدم."
-
 
 [[expert]]
 id = "writing-skills"
@@ -490,8 +460,8 @@ pt = "Geração de imagens Gemini"
 ar = "إنشاء صور Gemini"
 
 [expert.description]
-en = "Generate, modify, and compose images via Gemini — text-to-image, image-to-image, and iterative editing with transparent prompt pass-through."
-"zh-CN" = "通过 Gemini 生成、修改和合成图片——文生图、图生图、迭代改图，用户原话透传不经润色。"
+en = "Generate, modify, and compose images via Gemini or Doubao — text-to-image, image-to-image, and iterative editing with transparent prompt pass-through."
+"zh-CN" = "通过 Gemini 或豆包生成、修改和合成图片——文生图、图生图、迭代改图，用户原话透传不经润色。支持 model 参数切换模型。"
 "zh-TW" = "透過 Gemini 生成、修改和合成圖片——文生圖、圖生圖、迭代改圖，使用者原話透傳不經潤色。"
 ja = "Gemini で画像を生成・変更・合成 — テキストから画像、画像から画像、反復編集。ユーザーの言葉を直接透過。"
 ko = "Gemini로 이미지 생성, 수정, 합성 — 텍스트→이미지, 이미지→이미지, 반복 편집. 사용자 원문 투과 전달."
@@ -500,3 +470,67 @@ de = "Bilder via Gemini generieren, modifizieren und komponieren — Text-zu-Bil
 fr = "Génère, modifie et compose des images via Gemini — texte-vers-image, image-vers-image, édition itérative avec transmission transparente du prompt."
 pt = "Gera, modifica e compõe imagens via Gemini — texto-para-imagem, imagem-para-imagem, edição iterativa com pass-through transparente do prompt."
 ar = "إنشاء وتعديل وتجميع الصور عبر Gemini — من نص إلى صورة، من صورة إلى صورة، تعديل تكراري مع تمرير شفاف للمستخدم."
+
+
+[[expert]]
+id = "doubao-image"
+category = "creative"
+icon = "Paintbrush"
+sort_order = 305
+
+[expert.display_name]
+en = "Doubao Image Generation"
+"zh-CN" = "豆包图片生成"
+"zh-TW" = "豆包圖片生成"
+ja = "Doubao 画像生成"
+ko = "Doubao 이미지 생성"
+es = "Generación de imágenes Doubao"
+de = "Doubao Bildgenerierung"
+fr = "Génération d'images Doubao"
+pt = "Geração de imagens Doubao"
+ar = "إنشاء صور Doubao"
+
+[expert.description]
+en = "Generate, modify, and compose images via Doubao — text-to-image, image-to-image, and iterative editing. Use generate_image with model=doubao."
+"zh-CN" = "通过豆包模型生成、修改和合成图片——文生图、图生图、迭代改图。使用 generate_image 工具并指定 model=doubao。"
+"zh-TW" = "透過豆包模型生成、修改和合成圖片——文生圖、圖生圖、迭代改圖。使用 generate_image 工具並指定 model=doubao。"
+ja = "Doubao モデルで画像を生成・変更・合成 — テキストから画像、画像から画像、反復編集。generate_image ツールで model=doubao を指定。"
+ko = "Doubao 모델로 이미지 생성, 수정, 합성 — 텍스트→이미지, 이미지→이미지, 반복 편집. generate_image 도구에서 model=doubao 지정."
+es = "Genera, modifica y compone imágenes vía Doubao — texto-a-imagen, imagen-a-imagen, edición iterativa. Usa generate_image con model=doubao."
+de = "Bilder via Doubao generieren, modifizieren und komponieren — Text-zu-Bild, Bild-zu-Bild, iteratives Bearbeiten. Nutze generate_image mit model=doubao."
+fr = "Génère, modifie et compose des images via Doubao — texte-vers-image, image-vers-image, édition itérative. Utilise generate_image avec model=doubao."
+pt = "Gera, modifica e compõe imagens via Doubao — texto-para-imagem, imagem-para-imagem, edição iterativa. Use generate_image com model=doubao."
+ar = "إنشاء وتعديل وتجميع الصور عبر Doubao — من نص إلى صورة، من صورة إلى صورة، تعديل تكراري. استخدم generate_image مع model=doubao."
+
+
+[[expert]]
+id = "web-search"
+category = "discovery"
+icon = "Search"
+sort_order = 310
+
+[expert.display_name]
+en = "Web Search"
+"zh-CN" = "网页搜索"
+"zh-TW" = "網頁搜尋"
+ja = "ウェブ検索"
+ko = "웹 검색"
+es = "Búsqueda web"
+de = "Websuche"
+fr = "Recherche web"
+pt = "Pesquisa web"
+ar = "بحث الويب"
+
+[expert.description]
+en = "Search the web for up-to-date information — Chinese-first search engine with web search, image search, and time filtering. The user's search query is passed verbatim."
+"zh-CN" = "搜索网页获取最新信息——中文优先搜索引擎，支持网页搜索、图片搜索、时间过滤。用户搜索词原样透传。"
+"zh-TW" = "搜尋網頁獲取最新資訊——中文優先搜尋引擎，支援網頁搜尋、圖片搜尋、時間過濾。使用者搜尋詞原樣透傳。"
+ja = "ウェブを検索して最新情報を取得 — 中国語優先の検索エンジン。ウェブ検索、画像検索、時間フィルタリングに対応。ユーザーの検索語をそのまま透過。"
+ko = "웹에서 최신 정보를 검색 — 중국어 우선 검색 엔진. 웹 검색, 이미지 검색, 시간 필터링 지원. 사용자 검색어를 그대로 전달."
+es = "Busca en la web información actualizada — motor de búsqueda con prioridad en chino, búsqueda web, de imágenes y filtrado por tiempo. La consulta del usuario se pasa sin cambios."
+de = "Durchsucht das Web nach aktuellen Informationen — chinesisch-priorisierte Suchmaschine mit Websuche, Bildersuche und Zeitfilter. Die Suchanfrage des Nutzers wird unverändert übergeben."
+fr = "Recherche sur le web des informations à jour — moteur de recherche priorisant le chinois, avec recherche web, recherche d'images et filtrage temporel. La requête de l'utilisateur est transmise telle quelle."
+pt = "Pesquisa na web por informações atualizadas — buscador com prioridade em chinês, pesquisa web, pesquisa de imagens e filtro temporal. A consulta do usuário é passada sem alterações."
+ar = "يبحث في الويب عن معلومات محدثة — محرك بحث يعطي الأولوية للصينية، مع بحث الويب وبحث الصور وتصفية الوقت. يتم تمرير استعلام المستخدم كما هو."
+
+

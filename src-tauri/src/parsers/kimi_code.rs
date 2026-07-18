@@ -1025,7 +1025,7 @@ mod tests {
 
     fn unique_root(tag: &str) -> PathBuf {
         std::env::temp_dir()
-            .join(format!("codeg-kimi-{tag}-{}", uuid::Uuid::new_v4()))
+            .join(format!("veryagent-kimi-{tag}-{}", uuid::Uuid::new_v4()))
             .join(".kimi-code")
             .join("sessions")
     }

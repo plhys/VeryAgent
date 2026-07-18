@@ -38,6 +38,7 @@ function agent(
     cline_secrets_json: null,
     hermes_config_yaml: null,
     model_provider_id: null,
+    resident: false,
     ...overrides,
   }
 }
@@ -64,6 +65,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   mockUseAcpAgents.mockReset()
+  // Mode switch persists last choice; isolate each test to general default.
+  window.localStorage.removeItem("workspace:chat-agent-mode")
 })
 
 describe("AgentSelector", () => {
@@ -179,5 +182,180 @@ describe("AgentSelector", () => {
     const calls = onAgentsLoaded.mock.calls
     const lastCall = calls[calls.length - 1]?.[0]
     expect(lastCall).toEqual([codex])
+  })
+
+  it("general mode only lists Hermes and OpenClaw when mode switch is on", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="hermes"
+        onSelect={() => {}}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    await waitFor(() => {
+      expect(onAgentsLoaded).toHaveBeenCalled()
+    })
+    const last =
+      onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+    expect(last?.map((a: AcpAgentInfo) => a.agent_type).sort()).toEqual([
+      "hermes",
+      "open_claw",
+    ])
+    expect(screen.getByRole("tab", { name: "General" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Expert" })).toBeInTheDocument()
+  })
+
+  it("expert mode hides general butlers", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="codex"
+        onSelect={() => {}}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    await waitFor(() => {
+      const last =
+        onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+      expect(last?.map((a: AcpAgentInfo) => a.agent_type).sort()).toEqual([
+        "claude_code",
+        "codex",
+      ])
+    })
+  })
+
+  it("expert mode clears selection instead of auto-picking a coding agent", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { resident: true }),
+        agent("codex"),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onSelect = vi.fn()
+    const onFallback = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="hermes"
+        onSelect={onSelect}
+        onFallback={onFallback}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    // Expert mode intentionally does not auto-pick and does not emit
+    // onFallback(null), so the parent can keep draftAgentType across a
+    // general → expert → general round-trip.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Codex/i })
+      ).toBeInTheDocument()
+    })
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onFallback).not.toHaveBeenCalled()
+    expect(onFallback.mock.calls.some((c) => c[0] === "codex")).toBe(false)
+    expect(onFallback.mock.calls.some((c) => c[0] === "claude_code")).toBe(
+      false
+    )
+  })
+
+  it("hides inactive agents and grays out activated-but-unavailable ones", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { resident: true }),
+        agent("open_claw", { enabled: false, resident: true }),
+        agent("codex", { available: false }),
+        agent("claude_code"),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    const onSelect = vi.fn()
+    const onAgentsLoaded = vi.fn()
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType="claude_code"
+        onSelect={onSelect}
+        onAgentsLoaded={onAgentsLoaded}
+        showModeSwitch
+      />
+    )
+    fireEvent.click(screen.getByRole("tab", { name: "Expert" }))
+    await waitFor(() => {
+      const last =
+        onAgentsLoaded.mock.calls[onAgentsLoaded.mock.calls.length - 1]?.[0]
+      // Parent only receives usable agents.
+      expect(last?.map((a: AcpAgentInfo) => a.agent_type)).toEqual([
+        "claude_code",
+      ])
+    })
+
+    // Inactive open_claw must not appear. Expert list shows unavailable
+    // codex (gray) + usable claude_code.
+    expect(screen.queryByTitle(/OpenClaw/i)).not.toBeInTheDocument()
+
+    const codexBtn = screen.getByTitle(/Codex · Unavailable/i)
+    expect(codexBtn).toBeDisabled()
+    fireEvent.click(codexBtn)
+    expect(onSelect).not.toHaveBeenCalledWith("codex")
+
+    const claudeBtn = screen.getByTitle("Claude Code")
+    expect(claudeBtn).not.toBeDisabled()
+    fireEvent.click(claudeBtn)
+    expect(onSelect).toHaveBeenCalledWith("claude_code")
+  })
+
+  it("hides inactive agents and grays unavailable ones in general mode", async () => {
+    mockUseAcpAgents.mockReturnValue({
+      agents: [
+        agent("hermes", { enabled: false, resident: true }),
+        agent("open_claw", { available: false, resident: true }),
+      ],
+      fresh: true,
+      refresh: async () => {},
+    })
+    renderWithIntl(
+      <AgentSelector
+        defaultAgentType={null}
+        onSelect={() => {}}
+        showModeSwitch
+      />
+    )
+    // Not activated → hidden.
+    expect(screen.queryByTitle(/Hermes Agent/i)).not.toBeInTheDocument()
+    // Activated but unavailable → grayed, not selectable.
+    expect(screen.getByTitle(/OpenClaw · Unavailable/i)).toBeDisabled()
+    expect(
+      screen.getByText(
+        "No general-mode butlers available (Hermes / OpenClaw). Enable and install them in Settings."
+      )
+    ).toBeInTheDocument()
   })
 })

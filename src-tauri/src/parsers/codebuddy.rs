@@ -998,7 +998,7 @@ mod tests {
 
     #[test]
     fn parses_item_format_text_session() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-text-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-text-{}", uuid::Uuid::new_v4()));
         let sid = "sess-text";
         write_session(
             &root,
@@ -1070,7 +1070,7 @@ mod tests {
 
     #[test]
     fn parses_tool_calls_with_error_detection() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-tool-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-tool-{}", uuid::Uuid::new_v4()));
         let sid = "sess-tool";
         write_session(
             &root,
@@ -1145,7 +1145,7 @@ mod tests {
 
     #[test]
     fn empty_session_file_is_handled() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-empty-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-empty-{}", uuid::Uuid::new_v4()));
         let dir = root.join("Users-demo-app");
         std::fs::create_dir_all(&dir).expect("create dir");
         std::fs::File::create(dir.join("empty.jsonl")).expect("create empty");
@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn metadata_only_session_is_not_listed() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-meta-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-meta-{}", uuid::Uuid::new_v4()));
         let sid = "sess-meta";
         write_session(
             &root,
@@ -1186,7 +1186,7 @@ mod tests {
 
     #[test]
     fn model_falls_back_to_model_id_when_request_model_name_blank() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-model-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-model-{}", uuid::Uuid::new_v4()));
         let sid = "sess-model";
         write_session(
             &root,
@@ -1216,7 +1216,7 @@ mod tests {
 
     #[test]
     fn read_tool_output_is_structurized() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-read-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-read-{}", uuid::Uuid::new_v4()));
         let sid = "sess-read";
         write_session(
             &root,
@@ -1262,7 +1262,7 @@ mod tests {
 
     #[test]
     fn subagent_task_is_rewritten_to_agent() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-agent-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-agent-{}", uuid::Uuid::new_v4()));
         let sid = "sess-agent";
         write_session(
             &root,
@@ -1398,7 +1398,7 @@ mod tests {
 
     #[test]
     fn subagent_tool_calls_loaded_into_agent_stats() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-substats-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-substats-{}", uuid::Uuid::new_v4()));
         let sid = "sess-substats";
         write_session(
             &root,
@@ -1548,7 +1548,7 @@ mod tests {
 
     #[test]
     fn deferred_mcp_tool_is_unwrapped() {
-        let root = std::env::temp_dir().join(format!("codeg-cb-defer-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-defer-{}", uuid::Uuid::new_v4()));
         let sid = "sess-defer";
         write_session(
             &root,
@@ -1665,7 +1665,7 @@ mod tests {
         // inside the recursively-scanned projects tree. It must feed ONLY the
         // Agent result's agent_stats — never surface as a top-level conversation,
         // nor be openable by its own id via get_conversation.
-        let root = std::env::temp_dir().join(format!("codeg-cb-sublist-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-sublist-{}", uuid::Uuid::new_v4()));
         let sid = "sess-list";
         write_session(
             &root,
@@ -1747,7 +1747,7 @@ mod tests {
         // (`<projects>/subagents/<sessionId>.jsonl`, 2 components) must still be
         // listed/opened — the nested sub-agent transcript shape is one level
         // deeper (`<project>/<session>/subagents/<agent>.jsonl`, 4 components).
-        let root = std::env::temp_dir().join(format!("codeg-cb-subdir-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("veryagent-cb-subdir-{}", uuid::Uuid::new_v4()));
         let sid = "sess-in-subagents-dir";
         write_session(
             &root,

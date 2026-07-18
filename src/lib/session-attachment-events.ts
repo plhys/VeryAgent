@@ -48,7 +48,7 @@ export interface AttachImageReferenceToSessionDetail {
   tabId: string
   imageUrl: string
   alt: string
-  /** Skill id to pair with the image reference (e.g. "gemini-image"). */
+  /** Skill id to pair with the image reference. */
   skillId?: string
   skillLabel?: string
 }

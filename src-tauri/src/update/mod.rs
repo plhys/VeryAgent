@@ -12,6 +12,7 @@
 
 pub mod install;
 pub mod runtime;
+pub mod source;
 pub mod state;
 pub mod verify;
 pub mod version;
@@ -20,6 +21,7 @@ use std::time::Duration;
 
 pub use install::{InstallOutcome, UpdatePhase};
 pub use runtime::{capability, restart_delay_ms, runtime_label, UpdateCapability};
+pub use source::{AppUpdateSource, AppUpdateSourceSettings};
 pub use state::{new_handle as new_update_state_handle, AppUpdateState, AppUpdateStateHandle};
 
 /// Schedule a restart that fires *after* the current HTTP response has had

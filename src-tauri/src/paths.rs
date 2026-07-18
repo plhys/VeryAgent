@@ -118,7 +118,7 @@ pub fn veryagent_logs_root() -> PathBuf {
 /// Always returns an absolute path (`absolutize` re-bases against the
 /// process CWD if needed). Callers should treat the result as
 /// authoritative and not re-read `VERYAGENT_DATA_DIR` themselves; the
-/// startup code in `lib.rs` / `bin/codeg_server.rs` writes the
+/// startup code in `lib.rs` / `bin/veryagent_server.rs` writes the
 /// resolved value back to the env so subprocess inheritance works,
 /// but the in-process source of truth is this function.
 ///
