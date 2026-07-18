@@ -12,6 +12,7 @@ use base64::Engine as _;
 use serde::Serialize;
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
+#[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
 use crate::app_error::AppCommandError;
 use crate::db::error::DbError;

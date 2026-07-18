@@ -1,4 +1,5 @@
 // git/remote.rs
+#[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
 use crate::app_error::AppCommandError;
 use crate::db::AppDatabase;
