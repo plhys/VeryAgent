@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState, useMemo } from "react"
+import { useCallback, useState, useMemo, useRef, type RefObject } from "react"
 import { ChevronDown, Folder, GitBranch, MessageSquare, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useShallow } from "zustand/react/shallow"
@@ -12,6 +12,7 @@ import { normalizeFolderThemeColor } from "@/lib/theme-presets"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import type { FolderDetail, DbConversationSummary } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 
 /**
  * 侧边栏"项目"选项卡：可展开的文件夹列表，默认全部展开。
@@ -30,7 +31,7 @@ export function SidebarProjectList() {
     )
   const { activeFolderId } = useActiveFolder()
   const { openConversations } = useWorkbenchRoute()
-  const switchTab = useTabStore((s) => s.switchTab)
+  const openTab = useTabStore((s) => s.openTab)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const openNewConversationTab = useTabStore(
@@ -81,24 +82,13 @@ export function SidebarProjectList() {
 
   const handleConversationClick = useCallback(
     (conv: DbConversationSummary) => {
+      // Align with the Sessions tab: open/focus this conversation so both the
+      // parent folder and the conversation row can show selected state.
       setActiveFolderId(conv.folder_id)
       openConversations()
-      // 找到该会话对应的 tab 并切换
-      const tab = tabs.find(
-        (t) =>
-          t.conversationId === conv.id && t.folderId === conv.folder_id
-      )
-      if (tab) {
-        switchTab(tab.id)
-      } else {
-        // 没有打开的 tab，新建会话 tab
-        const folder = folders.find((f) => f.id === conv.folder_id)
-        if (folder) {
-          openNewConversationTab(folder.id, folder.path)
-        }
-      }
+      openTab(conv.folder_id, conv.id, conv.agent_type, false)
     },
-    [setActiveFolderId, openConversations, switchTab, tabs, folders, openNewConversationTab]
+    [setActiveFolderId, openConversations, openTab]
   )
 
   if (folders.length === 0) {
@@ -127,87 +117,18 @@ export function SidebarProjectList() {
 
         return (
           <div key={folder.id}>
-            {/* 文件夹头部 */}
-            <button
-              type="button"
-              onClick={() => toggleFolder(folder.id)}
-              onDoubleClick={() => handleOpenFolder(folder)}
-              className={cn(
-                "group flex h-9 w-full items-center gap-[0.5rem] rounded-full pl-[0.625rem] pr-1.5",
-                "text-left outline-none transition-colors duration-150",
-                "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
-                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                isActive ? "bg-sidebar-border dark:bg-[#3D3D3D]" : ""
-              )}
-            >
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-150",
-                  isCollapsed && "-rotate-90"
-                )}
-              />
-              <span className="relative flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center">
-                <Folder
-                  className={cn(
-                    "h-[0.875rem] w-[0.875rem]",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )}
-                />
-                {themeColor !== "neutral" && (
-                  <span
-                    className="absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-sidebar"
-                    style={{
-                      backgroundColor: `var(--color-${themeColor}, var(--primary))`,
-                    }}
-                  />
-                )}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span
-                  className={cn(
-                    "truncate text-[0.875rem] leading-tight",
-                    isActive
-                      ? "font-medium text-foreground"
-                      : "text-sidebar-foreground"
-                  )}
-                >
-                  {folder.name}
-                </span>
-                {folder.git_branch && (
-                  <span className="flex items-center gap-0.5 text-[0.6875rem] leading-tight text-muted-foreground/70">
-                    <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">{folder.git_branch}</span>
-                  </span>
-                )}
-              </span>
-              {/* hover 时显示操作按钮 */}
-              <span className="hidden items-center gap-px group-hover:flex">
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleNewConversation(folder)
-                  }}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[0.375rem] text-muted-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  title={t("newConversation")}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </span>
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRemove(folder.id)
-                  }}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[0.375rem] text-muted-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  title={t("removeFromWorkspace")}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </span>
-              </span>
-            </button>
+            <ProjectFolderHeader
+              folder={folder}
+              isActive={isActive}
+              isCollapsed={isCollapsed}
+              themeColor={themeColor}
+              onToggle={() => toggleFolder(folder.id)}
+              onOpen={() => handleOpenFolder(folder)}
+              onNewConversation={() => handleNewConversation(folder)}
+              onRemove={() => handleRemove(folder.id)}
+              newConversationTitle={t("newConversation")}
+              removeTitle={t("removeFromWorkspace")}
+            />
 
             {/* 展开的会话列表 — 树形子弹线 */}
             {!isCollapsed && (
@@ -217,26 +138,28 @@ export function SidebarProjectList() {
                     {t("emptyFolderHint")}
                   </p>
                 ) : (() => {
-                  // 找到选中项的索引
+                  // Prefer the active tab's conversationId so selection survives
+                  // agent-type / tab-id edge cases and highlights with the folder.
+                  const activeTab =
+                    activeTabId != null
+                      ? tabs.find((tab) => tab.id === activeTabId)
+                      : undefined
                   const activeIdx = folderConvs.findIndex(
                     (c) =>
-                      activeTabId != null &&
-                      tabs.find(
-                        (tab) =>
-                          tab.conversationId === c.id &&
-                          tab.folderId === c.folder_id
-                      )?.id === activeTabId
+                      activeTab != null &&
+                      activeTab.conversationId === c.id &&
+                      activeTab.folderId === c.folder_id
                   )
                   return (
                     <div className="flex flex-col">
                       {folderConvs.map((conv, idx) => {
                         const isConvActive = idx === activeIdx
                         const isLast = idx === folderConvs.length - 1
-                        // 竖线：选中项以上(含)白色，以下浅灰色
+                        // 竖线：选中项以上(含)主色，以下浅灰色
                         const trunkActive = activeIdx >= 0 && idx <= activeIdx
-                        // 下方竖线：选中项以上白色，以下浅灰色
+                        // 下方竖线：选中项以上主色，以下浅灰色
                         const belowActive = activeIdx >= 0 && idx < activeIdx
-                        // 水平分支：仅选中项白色
+                        // 水平分支：仅选中项主色
                         const branchActive = isConvActive
                         const trunkColor = trunkActive
                           ? "var(--color-primary, var(--primary))"
@@ -286,27 +209,12 @@ export function SidebarProjectList() {
                                 }}
                               />
                             )}
-                            <button
-                              type="button"
+                            <ProjectConversationRow
+                              conv={conv}
+                              isActive={isConvActive}
+                              untitledLabel={t("untitledConversation")}
                               onClick={() => handleConversationClick(conv)}
-                              className={cn(
-                                "flex h-8 w-full items-center gap-1.5 rounded-full pl-2 pr-2",
-                                "text-left text-[0.875rem] transition-colors duration-150",
-                                "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
-                                isConvActive
-                                  ? "bg-sidebar-border dark:bg-[#3D3D3D] text-primary font-medium"
-                                  : "text-sidebar-foreground/80"
-                              )}
-                            >
-                              <MessageSquare className={cn(
-                                "h-3 w-3 shrink-0",
-                                isConvActive ? "text-primary" : "text-muted-foreground"
-                              )} />
-                              <span className="truncate">
-                                {formatConversationTitle(conv.title) ||
-                                  t("untitledConversation")}
-                              </span>
-                            </button>
+                            />
                           </div>
                         )
                       })}
@@ -319,5 +227,175 @@ export function SidebarProjectList() {
         )
       })}
     </div>
+  )
+}
+
+function ProjectFolderHeader({
+  folder,
+  isActive,
+  isCollapsed,
+  themeColor,
+  onToggle,
+  onOpen,
+  onNewConversation,
+  onRemove,
+  newConversationTitle,
+  removeTitle,
+}: {
+  folder: FolderDetail
+  isActive: boolean
+  isCollapsed: boolean
+  themeColor: string
+  onToggle: () => void
+  onOpen: () => void
+  onNewConversation: () => void
+  onRemove: () => void
+  newConversationTitle: string
+  removeTitle: string
+}) {
+  const rowRef = useRef<HTMLButtonElement>(null)
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <>
+      <button
+        ref={rowRef}
+        type="button"
+        onClick={onToggle}
+        onDoubleClick={onOpen}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          "group flex h-9 w-full items-center gap-[0.5rem] rounded-full pl-[0.625rem] pr-1.5",
+          "text-left outline-none transition-colors duration-150",
+          "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
+          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          isActive ? "bg-sidebar-border dark:bg-[#3D3D3D]" : ""
+        )}
+      >
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-150",
+            isCollapsed && "-rotate-90"
+          )}
+        />
+        <span className="relative flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center">
+          <Folder
+            className={cn(
+              "h-[0.875rem] w-[0.875rem]",
+              isActive ? "text-primary" : "text-muted-foreground"
+            )}
+          />
+          {themeColor !== "neutral" && (
+            <span
+              className="absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-sidebar"
+              style={{
+                backgroundColor: `var(--color-${themeColor}, var(--primary))`,
+              }}
+            />
+          )}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span
+            className={cn(
+              "truncate text-[0.875rem] leading-tight",
+              isActive
+                ? "font-medium text-foreground"
+                : "text-sidebar-foreground"
+            )}
+          >
+            {folder.name}
+          </span>
+          {folder.git_branch && (
+            <span className="flex items-center gap-0.5 text-[0.6875rem] leading-tight text-muted-foreground/70">
+              <GitBranch className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{folder.git_branch}</span>
+            </span>
+          )}
+        </span>
+        {/* hover 时显示操作按钮 */}
+        <span className="hidden items-center gap-px group-hover:flex">
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onNewConversation()
+            }}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[0.375rem] text-muted-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            title={newConversationTitle}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+          </span>
+          <span
+            role="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[0.375rem] text-muted-foreground/90 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            title={removeTitle}
+          >
+            <X className="h-3.5 w-3.5" />
+          </span>
+        </span>
+      </button>
+      <SidebarHoverTimeFlag
+        hostRef={rowRef as RefObject<HTMLElement | null>}
+        isHovered={isHovered}
+        rawTimestamp={folder.last_opened_at}
+      />
+    </>
+  )
+}
+
+function ProjectConversationRow({
+  conv,
+  isActive,
+  untitledLabel,
+  onClick,
+}: {
+  conv: DbConversationSummary
+  isActive: boolean
+  untitledLabel: string
+  onClick: () => void
+}) {
+  const rowRef = useRef<HTMLButtonElement>(null)
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <>
+      <button
+        ref={rowRef}
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={cn(
+          "flex h-8 w-full items-center gap-1.5 rounded-full pl-2 pr-2",
+          "text-left text-[0.875rem] transition-colors duration-150",
+          "hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
+          isActive
+            ? "bg-sidebar-border dark:bg-[#3D3D3D] text-primary font-medium"
+            : "text-sidebar-foreground/80"
+        )}
+      >
+        <MessageSquare
+          className={cn(
+            "h-3 w-3 shrink-0",
+            isActive ? "text-primary" : "text-muted-foreground"
+          )}
+        />
+        <span className="truncate">
+          {formatConversationTitle(conv.title) || untitledLabel}
+        </span>
+      </button>
+      <SidebarHoverTimeFlag
+        hostRef={rowRef as RefObject<HTMLElement | null>}
+        isHovered={isHovered}
+        rawTimestamp={conv.updated_at || conv.created_at}
+      />
+    </>
   )
 }

@@ -34,6 +34,8 @@ export interface SessionSelectorSearch {
 export interface SessionSelectorSetting {
   key: string
   title: string
+  /** Optional plain-language explanation of what this setting does. */
+  description?: string | null
   currentValue: string
   currentLabel: string
   groups: SessionSelectorGroup[]
@@ -47,7 +49,12 @@ interface SessionSelectorsPanelProps {
   settings: SessionSelectorSetting[]
   /** Accessible label for the left-hand settings rail. */
   settingsLabel: string
-  /** Invoked after a value is chosen (used to close the surrounding popover). */
+  /**
+   * Invoked after a value is chosen. Optional — callers that want a
+   * single-shot pick can close a surrounding popover here. The chat
+   * "agent settings" popover intentionally omits this so users can set
+   * model, mode, effort, etc. without reopening the menu each time.
+   */
   onAfterSelect?: () => void
 }
 
@@ -61,7 +68,8 @@ interface SessionSelectorsPanelProps {
 // and the whole picker lives inside the single cog popover (one layer only).
 //
 // Left rail = the settings (title + current value, left-aligned). Right pane =
-// the active setting's options. Selecting commits immediately and closes.
+// the active setting's options. Selecting commits immediately; the menu stays
+// open so multiple settings can be adjusted in one pass.
 export function SessionSelectorsPanel({
   settings,
   settingsLabel,
@@ -116,9 +124,9 @@ export function SessionSelectorsPanel({
 
       {/* Right pane: the active setting's options (the "sub-options").
           Each option is a plain <button>, not a role="radio"/native radio: this
-          picker commits-and-closes on choose, which is *menu* semantics, whereas
-          a radio group selects-on-focus — arrow-keying a radio would commit and
-          close on every keypress. The correct widget (a Radix menu) is the very
+          picker commits on choose without forcing the outer popover closed.
+          A radio group would select-on-focus — arrow-keying would commit on
+          every keypress. The correct widget (a Radix menu) is the very
           portal/dismissable-layer that drops the selection on WKWebView, which is
           the bug we're fixing. So: plain buttons (full native Tab/Enter/Space
           operability) with `aria-current` marking the chosen value — the same,
@@ -127,6 +135,11 @@ export function SessionSelectorsPanel({
         // Long model lists: a searchable + virtualized list (its own scroller),
         // so no surrounding `overflow-y-auto` wrapper here.
         <div className="flex min-w-0 flex-1 flex-col pl-1">
+          {active.description ? (
+            <p className="px-2 pb-2 text-xs leading-relaxed text-muted-foreground">
+              {localizer.localize(active.description)}
+            </p>
+          ) : null}
           <ModelOptionList
             groups={active.groups}
             currentValue={active.currentValue}
@@ -146,6 +159,11 @@ export function SessionSelectorsPanel({
           aria-label={active.title}
           className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto pl-1"
         >
+          {active.description ? (
+            <p className="px-2 pb-2 text-xs leading-relaxed text-muted-foreground">
+              {localizer.localize(active.description)}
+            </p>
+          ) : null}
           {active.groups.map((group, groupIndex) => (
             <div key={group.key} className="flex flex-col gap-0.5">
               {group.name ? (

@@ -217,7 +217,11 @@ function DetectionCard({
 
 // ─── Main component ───────────────────────────────────────────────────
 
-export function OfficeToolsSettings() {
+export function OfficeToolsBody({
+  onRegisterRefresh,
+}: {
+  onRegisterRefresh?: (refresh: () => void) => void
+}) {
   const t = useTranslations("OfficeToolsSettings")
   const locale = useLocale()
   const [autoPreview, setAutoPreview] = useState(() => loadOfficeAutoPreview())
@@ -306,6 +310,16 @@ export function OfficeToolsSettings() {
       console.error("[OfficeToolsSettings] initial load failed:", err)
     })
   }, [detect, refreshSkills])
+
+  // Publish the reload handler so the hub's fixed "Refresh" button can drive
+  // this pack while it is the active tab.
+  useEffect(() => {
+    onRegisterRefresh?.(() => {
+      Promise.all([detect(), refreshSkills()]).catch((err) => {
+        console.error("[OfficeToolsSettings] refresh failed:", err)
+      })
+    })
+  }, [onRegisterRefresh, detect, refreshSkills])
 
   // Tear down the install log subscription when the panel unmounts.
   useEffect(() => {
@@ -521,4 +535,9 @@ export function OfficeToolsSettings() {
       </div>
     </div>
   )
+}
+
+/** Standalone Office Tools settings page (backward-compatible route). */
+export function OfficeToolsSettings() {
+  return <OfficeToolsBody />
 }

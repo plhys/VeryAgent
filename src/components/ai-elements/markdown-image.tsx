@@ -29,10 +29,11 @@ import { Download, ImageIcon, LinkIcon, SparklesIcon } from "lucide-react"
  *                    `navigator.clipboard.write()` with `ClipboardItem` is
  *                    not supported.
  *  - Copy URL     — copies the image `src` URL to the clipboard as text.
+ *  - Download Image — saves the image to a local file via system save dialog.
  *  - Reference for Re-creation — inserts an image reference badge and a
- *                    `/gemini-image` skill badge into the current session's
- *                    composer, so the agent receives both the reference image
- *                    and the skill invocation for iterative editing.
+ *                    skill badge into the current session's composer, so the
+ *                    agent receives the reference image URL for use with
+ *                    `generate_image` (ref_urls) or `modify_image`.
  *
  * Left click opens the existing full-screen preview dialog used elsewhere in
  * the app; right click still opens the context menu.
@@ -101,11 +102,12 @@ export function MarkdownImage({
   const handleReferenceToChat = useCallback(() => {
     if (!src || !activeTabId) return
     // Emit a custom event that the composer listens for. The handler inserts
-    // two badges into the editor: an image reference badge (cyan, showing the
-    // image URL) and a skill badge for `/gemini-image` (rose). When sent, the
-    // image badge serializes as `![alt](url)` markdown and the skill badge
-    // as `/gemini-image`, so the agent receives both the reference image and
-    // the skill invocation.
+    // an image reference badge (cyan, showing the image URL) and a skill badge
+    // (rose) into the editor. When sent, the image badge serializes as
+    // `![alt](url)` markdown and the skill badge as `/gemini-image`, so the
+    // agent receives both the reference image URL and the skill invocation.
+    // The agent then uses `generate_image` with `ref_urls` for image-to-image
+    // or `modify_image` for iterative editing.
     emitAttachImageReferenceToSession({
       tabId: activeTabId,
       imageUrl: String(src),

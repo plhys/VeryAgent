@@ -10,6 +10,7 @@ use crate::commands::system_settings::{
     LANGUAGE_SETTINGS_UPDATED_EVENT, SYSTEM_LANGUAGE_SETTINGS_KEY, SYSTEM_PROXY_SETTINGS_KEY,
     SYSTEM_TERMINAL_SETTINGS_KEY, TERMINAL_SETTINGS_UPDATED_EVENT,
 };
+use crate::update::source::{AppUpdateSource, AppUpdateSourceSettings};
 use crate::db::service::app_metadata_service;
 use crate::models::*;
 use crate::network::proxy;
@@ -21,6 +22,11 @@ use crate::network::proxy;
 #[derive(Deserialize)]
 pub struct UpdateProxySettingsParams {
     pub settings: SystemProxySettings,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAppUpdateSourceParams {
+    pub source: AppUpdateSource,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +48,23 @@ pub async fn get_system_proxy_settings(
 ) -> Result<Json<SystemProxySettings>, AppCommandError> {
     let db = &state.db;
     let settings = settings_commands::load_system_proxy_settings(&db.conn).await?;
+    Ok(Json(settings))
+}
+
+pub async fn get_app_update_source_settings(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<AppUpdateSourceSettings>, AppCommandError> {
+    let settings =
+        settings_commands::load_app_update_source_settings(&state.db.conn).await?;
+    Ok(Json(settings))
+}
+
+pub async fn update_app_update_source_settings(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<UpdateAppUpdateSourceParams>,
+) -> Result<Json<AppUpdateSourceSettings>, AppCommandError> {
+    let settings =
+        settings_commands::store_app_update_source(&state.db.conn, params.source).await?;
     Ok(Json(settings))
 }
 

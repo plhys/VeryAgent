@@ -242,8 +242,11 @@ fn check_writable(dir: &Path) -> Result<(), AppCommandError> {
 /// verify + extract the platform bundle, then atomically swap the three
 /// artifacts (keeping `.bak`). On success the new files are in place and
 /// the caller should trigger a restart.
+///
+/// `source` selects GitHub vs Gitea for the manifest and asset download base.
 pub async fn perform_update(
     data_dir: &Path,
+    source: crate::update::source::AppUpdateSource,
     on_progress: &ProgressFn<'_>,
 ) -> Result<InstallOutcome, AppCommandError> {
     let asset = asset_basename().ok_or_else(|| {
@@ -269,7 +272,7 @@ pub async fn perform_update(
     let targets = resolve_targets()?;
     preflight_writable(&targets)?;
 
-    let manifest = version::fetch_latest_manifest().await?;
+    let manifest = version::fetch_latest_manifest_from(source).await?;
     let new_version = version::trim_v_prefix(&manifest.version).to_string();
 
     // Refuse a non-newer target before touching the network or disk. A stale
@@ -285,7 +288,8 @@ pub async fn perform_update(
     }
 
     let ext = archive_ext();
-    let archive_url = format!("{}/{}{}", version::RELEASE_DOWNLOAD_BASE, asset, ext);
+    let download_base = version::download_base_for(source);
+    let archive_url = format!("{}/{}{}", download_base, asset, ext);
     let sig_url = format!("{archive_url}.sig");
 
     // 1. Download archive (with progress) and its detached signature.

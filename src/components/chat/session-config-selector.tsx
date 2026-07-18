@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
+import { useScrollbarSafeDismiss } from "@/hooks/use-scrollbar-safe-dismiss"
 import type { ModelOptionGroup } from "@/lib/model-config-groups"
 import type { SessionConfigOptionInfo } from "@/lib/types"
 import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
@@ -35,6 +36,8 @@ export function InlineSessionConfigSelector({
   derivedGroups,
 }: SessionConfigSelectorProps) {
   const localizer = useConfigOptionLocalizer()
+  const { contentRef, onPointerDownOutside, onFocusOutside } =
+    useScrollbarSafeDismiss()
   if (option.kind.type !== "select") return null
 
   // Unified group list rendered in the dropdown body. Derived (model) groups
@@ -63,6 +66,17 @@ export function InlineSessionConfigSelector({
   const rawLabel = selected?.name ?? option.kind.current_value
   const currentLabel = localizer.localize(rawLabel)
   const optionName = localizer.localize(option.name)
+  // Always show "Setting · Value" on the chip so a row of bare "Off/On"
+  // values doesn't look like anonymous permission denies.
+  const triggerLabel = currentLabel
+    ? `${optionName} · ${currentLabel}`
+    : optionName
+  const optionDescription = option.description
+    ? localizer.localize(option.description)
+    : null
+  const triggerTitle = optionDescription
+    ? `${optionName}: ${optionDescription}`
+    : triggerLabel
 
   return (
     <DropdownMenu>
@@ -70,19 +84,20 @@ export function InlineSessionConfigSelector({
         <Button
           variant="ghost"
           size="xs"
-          title={optionName}
-          aria-label={
-            currentLabel ? `${optionName}: ${currentLabel}` : optionName
-          }
-          className="min-w-0 gap-0.5 px-1 text-muted-foreground"
+          title={triggerTitle}
+          aria-label={triggerLabel}
+          className="min-w-0 gap-0.5 px-1.5 text-muted-foreground"
         >
-          <span className="max-w-[10rem] truncate">{currentLabel}</span>
+          <span className="max-w-[9rem] truncate">{triggerLabel}</span>
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        ref={contentRef}
         side="top"
         align="start"
+        onPointerDownOutside={onPointerDownOutside}
+        onFocusOutside={onFocusOutside}
         className="min-w-72 overflow-y-auto"
         style={{
           maxWidth: "min(20rem, calc(100vw - 1rem))",
@@ -90,6 +105,14 @@ export function InlineSessionConfigSelector({
             "min(60vh, var(--radix-dropdown-menu-content-available-height))",
         }}
       >
+        {optionDescription ? (
+          <div className="max-w-72 px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+            <div className="font-medium text-foreground">{optionName}</div>
+            <p className="mt-0.5">{optionDescription}</p>
+          </div>
+        ) : (
+          <DropdownMenuLabel>{optionName}</DropdownMenuLabel>
+        )}
         <DropdownMenuRadioGroup
           value={option.kind.current_value}
           onValueChange={(value) => onSelect(option.id, value)}
@@ -123,7 +146,11 @@ export function InlineSessionConfigSelector({
                 >
                   <DropdownRadioItemContent
                     label={localizer.localize(item.name)}
-                    description={item.description}
+                    description={
+                      item.description
+                        ? localizer.localize(item.description)
+                        : item.description
+                    }
                   />
                 </DropdownMenuRadioItem>
               ))}

@@ -32,6 +32,10 @@ import {
   acpFindConnectionForConversation,
 } from "@/lib/api"
 import { denormalizeSnapshot } from "@/lib/snapshot-denormalize"
+import {
+  getConversationIdByExternalIdFromStore,
+  useConversationRuntimeStore,
+} from "@/stores/conversation-runtime-store"
 import { buildDelegationSeedEnvelopes } from "@/lib/delegation-seed"
 import type {
   AgentType,
@@ -55,7 +59,7 @@ import type {
   ToolCallImageWire,
   UserMessageBlock,
 } from "@/lib/types"
-import { AGENT_LABELS } from "@/lib/types"
+import { AGENT_LABELS, isResidentAgent } from "@/lib/types"
 import {
   CONNECTION_IDLE_TIMEOUT_MS,
   CONNECTION_KEEPALIVE_INTERVAL_MS,
@@ -253,6 +257,14 @@ export interface ConnectionState {
    * the snapshot — dismissal is per-client UI state.
    */
   configStaleDismissed: boolean
+  /** Launched-but-unresolved background tasks (async sub-agents + background
+   *  shell tasks), accounted from transcript acks by the backend watcher.
+   *  Mirrored into `SessionState` to exempt the connection from idle sweeps
+   *  while work is pending. */
+  backgroundOutstanding: number
+  /** Timestamp (epoch ms) when the outstanding count last dropped to zero with
+   *  settle-syncing still in progress. Drives the "syncing results" chip. */
+  backgroundSettleSyncingSince: number | null
 }
 
 type ConnectRequest = {
@@ -460,6 +472,13 @@ type Action =
       type: "USAGE_UPDATE"
       contextKey: string
       usage: SessionUsageUpdateInfo
+    }
+  | {
+      type: "SET_BACKGROUND_OUTSTANDING"
+      contextKey: string
+      outstanding: number
+      settledCount: number
+      turnsCount: number
     }
   | {
       type: "EVENT_APPLIED"
@@ -988,6 +1007,14 @@ function applyStreamingAction(
   }
 }
 
+/// Overlay fold constants: when background overlay turns exceed the threshold,
+/// refetch detail to fold them into persisted turns (the watermark rule retires
+/// covered entries). Guarded by interval so a failing backend can't turn this
+/// into a 1Hz fetch loop.
+const OVERLAY_FOLD_THRESHOLD = 60
+const OVERLAY_FOLD_MIN_INTERVAL_MS = 30_000
+const overlayFoldRefetchAt = new Map<number, number>()
+
 function connectionsReducer(
   state: ConnectionsMap,
   action: Action
@@ -1029,6 +1056,8 @@ function connectionsReducer(
         configStale: false,
         configStaleKind: null,
         configStaleDismissed: false,
+        backgroundOutstanding: 0,
+        backgroundSettleSyncingSince: null,
       })
       return next
     }
@@ -1082,6 +1111,8 @@ function connectionsReducer(
         configStale: false,
         configStaleKind: null,
         configStaleDismissed: false,
+        backgroundOutstanding: 0,
+        backgroundSettleSyncingSince: null,
       })
       return next
     }
@@ -1183,6 +1214,7 @@ function connectionsReducer(
         // preserved via `...current`.
         configStale: action.patch.configStale,
         configStaleKind: action.patch.configStaleKind,
+        backgroundOutstanding: action.patch.backgroundOutstanding,
         lastAppliedSeq: action.patch.eventSeq,
       })
       return next
@@ -1724,6 +1756,35 @@ function connectionsReducer(
       return next
     }
 
+    case "SET_BACKGROUND_OUTSTANDING": {
+      const conn = state.get(action.contextKey)
+      if (!conn) return state
+      // Settle-syncing bridge: a settlement means the agent's reaction turn
+      // is being generated (the task-notification always triggers one) — arm
+      // the indicator. The first turns-only event is that reaction arriving —
+      // disarm. An event carrying BOTH (reaction to task A + settlement of
+      // task B) re-arms: another reaction is still pending.
+      const syncingSince =
+        action.settledCount > 0
+          ? Date.now()
+          : action.turnsCount > 0
+            ? null
+            : conn.backgroundSettleSyncingSince
+      if (
+        conn.backgroundOutstanding === action.outstanding &&
+        conn.backgroundSettleSyncingSince === syncingSince
+      ) {
+        return state
+      }
+      const next = new Map(state)
+      next.set(action.contextKey, {
+        ...conn,
+        backgroundOutstanding: action.outstanding,
+        backgroundSettleSyncingSince: syncingSince,
+      })
+      return next
+    }
+
     case "SELECTORS_READY": {
       const conn = state.get(action.contextKey)
       if (!conn || conn.selectorsReady) return state
@@ -2205,6 +2266,22 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
   // bypass this entirely — their events are routed by the per-subscription
   // handlers registered in `attachSubscriptionsRef`.
   const reverseMapRef = useRef(new Map<string, string>())
+
+  // Resident butlers (Hermes / OpenClaw) stay warm after UI detach. When
+  // disconnect() drops the tab mapping, park the connectionId here so the
+  // next connect for the same agentType can rebind without acpConnect
+  // (avoids a full "connecting" handshake when switching general ↔ expert).
+  const parkedResidentRef = useRef(
+    new Map<
+      AgentType,
+      {
+        connectionId: string
+        workingDir: string | null
+        sessionId: string | null
+        lastAppliedSeq: number
+      }
+    >()
+  )
 
   // contextKey → active EventStream subscription handle. Populated only for
   // connections established via the Subscribe-with-Snapshot attach
@@ -2797,6 +2874,97 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           })
           break
         }
+        case "background_activity": {
+          // Out-of-turn transcript activity from the backend watcher: async
+          // task completions, the agent's continued work after them, cron//
+          // loop turns. Three consumers:
+          // 1. the outstanding mirror (idle-sweep exemption + chip) plus the
+          //    settle-syncing bridge inputs;
+          dispatch({
+            type: "SET_BACKGROUND_OUTSTANDING",
+            contextKey,
+            outstanding: e.outstanding,
+            settledCount: e.settled?.length ?? 0,
+            turnsCount: e.turns?.length ?? 0,
+          })
+          // 2. overlay turns → the conversation runtime store (resolved via
+          //    the external-id index; unresolved = this conversation was never
+          //    opened in this client, and its cold detail fetch covers it);
+          if (e.turns && e.turns.length > 0) {
+            const conversationId = getConversationIdByExternalIdFromStore(
+              e.session_id
+            )
+            if (conversationId != null) {
+              const runtime = useConversationRuntimeStore.getState()
+              runtime.actions.applyBackgroundActivity(
+                conversationId,
+                e.turns,
+                e.watermark
+              )
+              // Self-healing bound: cron//loop turns never settle, so nothing
+              // else would ever refetch — the overlay would grow for as long
+              // as the tab stays open. Past the threshold, fold what's
+              // accumulated into persisted turns (the watermark rule retires
+              // covered entries). Guarded by the in-flight flag and a
+              // per-conversation interval so a failing backend can't turn
+              // this into a 1Hz fetch loop.
+              const session = useConversationRuntimeStore
+                .getState()
+                .byConversationId.get(conversationId)
+              const now = Date.now()
+              const lastAt = overlayFoldRefetchAt.get(conversationId) ?? 0
+              if (
+                session &&
+                session.backgroundTurns.length > OVERLAY_FOLD_THRESHOLD &&
+                !session.detailLoading &&
+                now - lastAt > OVERLAY_FOLD_MIN_INTERVAL_MS
+              ) {
+                overlayFoldRefetchAt.set(conversationId, now)
+                const oc = storeRef.current.connections.get(contextKey)
+                runtime.actions.refetchDetail(conversationId, {
+                  preserveLive: oc?.status === "prompting",
+                })
+              }
+            }
+          }
+          // 3. one OS notification per settled task (matches the permission
+          //    notification's shape; `document.hidden` gating lives inside
+          //    sendSystemNotification).
+          if (e.settled && e.settled.length > 0) {
+            const nc = storeRef.current.connections.get(contextKey)
+            const agentLabel = nc ? AGENT_LABELS[nc.agentType] : "Agent"
+            const fn = folderNameRef.current
+            const title = fn ? `${fn} - VeryAgent` : "VeryAgent"
+            for (const settled of e.settled) {
+              const body =
+                settled.summary ??
+                tChat("backgroundTasks.settledFallback", {
+                  status: settled.status,
+                })
+              sendSystemNotification(title, `${agentLabel}: ${body}`).catch(
+                () => {}
+              )
+            }
+            // 4. fold the settlement into persisted turns: a refetch flips
+            //    the launching card from "result pending" to its terminal
+            //    state (the parser joins the ack with the notification) and
+            //    retires covered overlay turns via the watermark rule. Rare
+            //    (once per task settling), so a full detail parse is fine.
+            //    preserveLive while a foreground turn is in flight so the
+            //    refetch can't clobber the streaming buffers it races.
+            const conversationId = getConversationIdByExternalIdFromStore(
+              e.session_id
+            )
+            if (conversationId != null) {
+              useConversationRuntimeStore
+                .getState()
+                .actions.refetchDetail(conversationId, {
+                  preserveLive: nc?.status === "prompting",
+                })
+            }
+          }
+          break
+        }
         case "selectors_ready": {
           flushStreamingQueue()
           dispatch({
@@ -2983,6 +3151,10 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             switch (e.code) {
               case "resource_not_found":
                 return t("backendErrors.sessionLoadResourceNotFound", {
+                  agent: agentLabel,
+                })
+              case "session_unavailable":
+                return t("backendErrors.sessionLoadUnavailable", {
                   agent: agentLabel,
                 })
               default:
@@ -3347,6 +3519,14 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // would kill another client's agent. The viewer is torn down when its
         // tab unmounts (disconnect's isViewer branch detaches it).
         if (conn.isViewer) continue
+        // Resident butlers stay warm for the app lifetime.
+        if (isResidentAgent(conn.agentType)) continue
+        // Launched-but-unresolved background work (async sub-agent /
+        // background shell): disconnecting would kill the agent CLI and the
+        // background task with it. The backend watcher settles or max-age
+        // expires the accounting and emits `outstanding: 0`, which re-arms
+        // this sweep for the connection.
+        if (conn.backgroundOutstanding > 0) continue
         const lastActive = lastActivityRef.current.get(contextKey) ?? 0
         if (now - lastActive > CONNECTION_IDLE_TIMEOUT_MS) {
           toDisconnect.push({
@@ -3393,6 +3573,8 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // acpDisconnect it on our unmount. The attach-sub detach loop below
         // releases our read-only subscription cleanly.
         if (conn?.isViewer) continue
+        // Resident butlers outlive the React tree.
+        if (conn && isResidentAgent(conn.agentType)) continue
         acpDisconnect(connectionId).catch(() => {})
       }
       for (const [, sub] of attachSubs) {
@@ -3591,7 +3773,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             // A viewer doesn't own the backend connection — detach only, never
             // acpDisconnect (that would kill the owner's agent). Owners are
             // disconnected normally before re-spawning under new params.
-            if (!existing.isViewer) {
+            // Residents: park so a later reconnect can rebind without spawn.
+            if (existing.isViewer) {
+              // detach only below
+            } else if (isResidentAgent(existing.agentType)) {
+              parkedResidentRef.current.set(existing.agentType, {
+                connectionId: existing.connectionId,
+                workingDir: existing.workingDir,
+                sessionId: existing.sessionId,
+                lastAppliedSeq: existing.lastAppliedSeq,
+              })
+            } else {
               await acpDisconnect(existing.connectionId).catch(() => {})
             }
             reverseMapRef.current.delete(existing.connectionId)
@@ -3599,6 +3791,78 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
             lastActivityRef.current.delete(contextKey)
             pendingUnmappedEventsRef.current.delete(existing.connectionId)
           }
+        }
+
+        // Resident rebind: after expert-mode clear (or agent switch away),
+        // disconnect() parked the warm butler under agentType. Re-attach the
+        // same connectionId to this contextKey instead of acpConnect (which
+        // still reuses the process backend-side, but forces a UI reconnect).
+        if (
+          !existing &&
+          !sessionId &&
+          isResidentAgent(agentType) &&
+          parkedResidentRef.current.has(agentType)
+        ) {
+          const parked = parkedResidentRef.current.get(agentType)!
+          parkedResidentRef.current.delete(agentType)
+          lastActivityRef.current.set(contextKey, Date.now())
+          dispatch({
+            type: "CONNECTION_CREATED",
+            contextKey,
+            connectionId: parked.connectionId,
+            agentType,
+            workingDir: nextWorkingDir ?? parked.workingDir,
+          })
+          // Promote out of "connecting" immediately — the process is already live.
+          dispatch({
+            type: "STATUS_CHANGED",
+            contextKey,
+            status: "connected",
+          })
+          if (parked.sessionId) {
+            dispatch({
+              type: "SESSION_STARTED",
+              contextKey,
+              sessionId: parked.sessionId,
+            })
+          }
+
+          const attachSub = setupAttachSubscription(
+            contextKey,
+            parked.connectionId,
+            parked.lastAppliedSeq
+          )
+          if (!attachSub) {
+            // Tauri / remote-desktop: hydrate selectors + modes from snapshot
+            // so send is not stuck on selectorsReady=false after rebind.
+            try {
+              const snapshot = await acpGetSessionSnapshot(parked.connectionId)
+              if (snapshot) {
+                const snapshotPatch = denormalizeSnapshot(snapshot)
+                dispatch({
+                  type: "HYDRATE_FROM_SNAPSHOT",
+                  contextKey,
+                  patch: snapshotPatch,
+                })
+                seedDelegationsFromSnapshot(
+                  snapshotPatch.connectionId,
+                  snapshotPatch.activeDelegations,
+                  snapshotPatch.eventSeq
+                )
+              }
+            } catch (e: unknown) {
+              console.warn(
+                "[acp-context] resident rebind snapshot failed for",
+                parked.connectionId,
+                e
+              )
+            }
+            reverseMapRef.current.set(parked.connectionId, contextKey)
+            // Backend already has a live session; mark selectors ready even if
+            // snapshot lacked them so the composer is usable immediately.
+            dispatch({ type: "SELECTORS_READY", contextKey })
+          }
+          return
         }
 
         // Orphan rescue: when no entry exists at this contextKey but an
@@ -3745,12 +4009,17 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         // If disconnect was requested while connect was in flight,
         // tear down immediately instead of registering the connection.
         if (abandonedKeysRef.current.delete(contextKey)) {
-          acpDisconnect(connectionId).catch(() => {})
+          // Keep resident warm across agent-switch / unmount races.
+          if (!isResidentAgent(agentType)) {
+            acpDisconnect(connectionId).catch(() => {})
+          }
           return
         }
         const pendingRequest = pendingConnectRequestsRef.current.get(contextKey)
         if (pendingRequest && !sameConnectRequest(pendingRequest, request)) {
-          acpDisconnect(connectionId).catch(() => {})
+          if (!isResidentAgent(agentType)) {
+            acpDisconnect(connectionId).catch(() => {})
+          }
           return
         }
 
@@ -3917,12 +4186,24 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
         }
         return
       }
-      if (conn.isViewer) {
+      if (conn.isViewer || isResidentAgent(conn.agentType)) {
         // Viewer teardown: drop our read-only attachment WITHOUT
         // `acpDisconnect` — the backend connection belongs to another client,
         // and disconnecting it would kill the owner's agent mid-turn. Mirrors
         // detachDelegationChild. The owner's own disconnect / the idle sweep
         // governs the connection's real lifetime.
+        //
+        // Resident butlers (Hermes / OpenClaw): same detach-only policy.
+        // App-lifetime process; real teardown is app exit or reapplyConfig.
+        // Park the mapping so the next general-mode connect rebinds instantly.
+        if (isResidentAgent(conn.agentType) && !conn.isViewer) {
+          parkedResidentRef.current.set(conn.agentType, {
+            connectionId: conn.connectionId,
+            workingDir: conn.workingDir,
+            sessionId: conn.sessionId,
+            lastAppliedSeq: conn.lastAppliedSeq,
+          })
+        }
         teardownAttachSubscription(contextKey)
         reverseMapRef.current.delete(conn.connectionId)
         pendingUnmappedEventsRef.current.delete(conn.connectionId)
@@ -3950,8 +4231,15 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       if (!conn || conn.isViewer || conn.isDelegationChild) return false
       // Capture identity BEFORE teardown. `sessionId` is what makes the new
       // process resume this conversation (session/load) rather than start fresh.
-      const { agentType, workingDir, sessionId } = conn
-      await disconnect(contextKey)
+      const { agentType, workingDir, sessionId, connectionId } = conn
+      // Force-kill even residents: reapplyConfig is explicit restart.
+      parkedResidentRef.current.delete(agentType)
+      await acpDisconnect(connectionId).catch(() => {})
+      reverseMapRef.current.delete(connectionId)
+      teardownAttachSubscription(contextKey)
+      lastActivityRef.current.delete(contextKey)
+      pendingUnmappedEventsRef.current.delete(connectionId)
+      dispatch({ type: "CONNECTION_REMOVED", contextKey })
       await connect(
         contextKey,
         agentType,
@@ -3960,7 +4248,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       )
       return true
     },
-    [connect, disconnect]
+    [connect, dispatch, teardownAttachSubscription]
   )
 
   const dismissConfigStale = useCallback(
@@ -3977,7 +4265,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       // Viewers attach to a connection another client owns — detach our
       // read-only subscription but never acpDisconnect (that would kill the
       // owner's agent). Owners are torn down normally.
-      if (!conn.isViewer) {
+      if (!conn.isViewer && !isResidentAgent(conn.agentType)) {
         promises.push(acpDisconnect(conn.connectionId).catch(() => {}))
       }
       reverseMapRef.current.delete(conn.connectionId)

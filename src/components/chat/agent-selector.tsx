@@ -7,9 +7,15 @@ import type { AgentType, AcpAgentInfo } from "@/lib/types"
 import { AGENT_LABELS } from "@/lib/types"
 import { AgentIcon } from "@/components/agent-icon"
 import { cn } from "@/lib/utils"
+import {
+  isGeneralModeAgent,
+  loadChatAgentMode,
+  saveChatAgentMode,
+  type ChatAgentMode,
+} from "@/lib/chat-agent-mode-storage"
 
 interface AgentSelectorProps {
-  defaultAgentType?: AgentType
+  defaultAgentType?: AgentType | null
   /** Fires on user click. The caller should treat this as confirmation. */
   onSelect: (agentType: AgentType) => void
   /**
@@ -18,11 +24,19 @@ interface AgentSelectorProps {
    * caller can avoid promoting a system pick to a confirmed user choice
    * (which would otherwise mask a stale-default correction upstream).
    * When omitted, falls back to `onSelect` for backwards compatibility.
+   *
+   * Expert mode with the mode switch on never auto-picks: callers get
+   * `null` so the welcome/draft UI stays unselected until the user clicks.
    */
-  onFallback?: (agentType: AgentType) => void
+  onFallback?: (agentType: AgentType | null) => void
   onAgentsLoaded?: (agents: AcpAgentInfo[]) => void
   onOpenAgentsSettings?: () => void
   disabled?: boolean
+  /**
+   * When true (welcome / draft header), show the general/expert mode switch
+   * and filter the agent list. Existing conversations keep the full list.
+   */
+  showModeSwitch?: boolean
 }
 
 export function AgentSelector({
@@ -32,29 +46,65 @@ export function AgentSelector({
   onAgentsLoaded,
   onOpenAgentsSettings,
   disabled = false,
+  showModeSwitch = false,
 }: AgentSelectorProps) {
   const t = useTranslations("Folder.chat.agentSelector")
   const { agents: rawAgents } = useAcpAgents()
-  const agents = useMemo<AcpAgentInfo[]>(
-    () => rawAgents.filter((a) => a.enabled),
-    [rawAgents]
-  )
+  const [mode, setMode] = useState<ChatAgentMode>("general")
+
+  useEffect(() => {
+    if (!showModeSwitch) return
+    setMode(loadChatAgentMode())
+  }, [showModeSwitch])
+
+  const handleModeChange = useCallback((next: ChatAgentMode) => {
+    setMode(next)
+    saveChatAgentMode(next)
+  }, [])
+
+  // Expert mode never auto-selects — user must pick a coding agent.
+  const autoSelectEnabled = !showModeSwitch || mode === "general"
+
+  // Activation switch rules for the chat picker:
+  // 1. Not activated (`!enabled`) → hide completely.
+  // 2. Activated but unavailable → keep visible, grayed out, not selectable.
+  // Only enabled+available agents are selectable / auto-picked.
+  const agents = useMemo<AcpAgentInfo[]>(() => {
+    const activated = rawAgents.filter((a) => a.enabled)
+    const filtered = !showModeSwitch
+      ? activated
+      : mode === "general"
+        ? activated.filter((a) => isGeneralModeAgent(a.agent_type))
+        : activated.filter((a) => !isGeneralModeAgent(a.agent_type))
+    return filtered
+      .slice()
+      .sort((a, b) => {
+        // Usable first, then resident butlers, keep relative order otherwise.
+        const usableA = Number(a.available)
+        const usableB = Number(b.available)
+        if (usableA !== usableB) return usableB - usableA
+        return Number(!!b.resident) - Number(!!a.resident)
+      })
+  }, [rawAgents, showModeSwitch, mode])
   const onSelectRef = useRef(onSelect)
   const onFallbackRef = useRef(onFallback)
   const onAgentsLoadedRef = useRef(onAgentsLoaded)
 
-  // Effective selection. Priority: prop default (when still available) →
-  // first available. Derived so we don't have to call setState inside an
-  // effect. Click handling lives on the parent — `handleSelect` just
-  // forwards via `onSelect`, which patches `defaultAgentType` upstream.
+  const isUsable = useCallback((a: AcpAgentInfo) => a.available, [])
+
+  // Effective selection. Priority: prop default (when still usable) →
+  // first usable (general / full list only). Expert mode stays null
+  // until the user clicks. Click handling lives on the parent —
+  // `handleSelect` just forwards via `onSelect`.
   const selected = useMemo<AgentType | null>(() => {
     const found = defaultAgentType
-      ? agents.find((a) => a.agent_type === defaultAgentType && a.available)
+      ? agents.find((a) => a.agent_type === defaultAgentType && isUsable(a))
       : null
     if (found) return found.agent_type
-    const first = agents.find((a) => a.available)
+    if (!autoSelectEnabled) return null
+    const first = agents.find(isUsable)
     return first?.agent_type ?? null
-  }, [agents, defaultAgentType])
+  }, [agents, defaultAgentType, autoSelectEnabled, isUsable])
 
   // Sliding indicator state
   const containerRef = useRef<HTMLDivElement>(null)
@@ -122,7 +172,7 @@ export function AgentSelector({
   }, [onAgentsLoaded])
 
   // Notify parent when the agent list changes, and emit a *fallback* event
-  // (not onSelect) when the requested preferred agent is unavailable and
+  // (not onSelect) when the requested preferred agent is unusable and
   // we had to pick a substitute. Splitting the channel matters: the caller
   // treats `onSelect` as a confirmed user choice and clears any "this is a
   // provisional default" flag upstream — if the auto-fallback came through
@@ -131,13 +181,25 @@ export function AgentSelector({
   // effect has a chance to apply the folder's saved default. Callers that
   // don't supply `onFallback` get the legacy behavior (fallback as
   // onSelect) so this prop stays optional.
+  //
+  // Expert mode is intentional "no default": when the preferred agent is
+  // outside the expert list, the `selected` memo already returns null so
+  // nothing is highlighted — no onFallback(null) needed. Silently skipping
+  // lets the parent keep its draftAgentType, which preserves the user's
+  // general-mode pick across a mode round-trip (general → expert → general).
   useEffect(() => {
-    onAgentsLoadedRef.current?.(agents)
+    // Parent "available agents" consumers still want usable-only lists.
+    onAgentsLoadedRef.current?.(agents.filter(isUsable))
     const found = defaultAgentType
-      ? agents.find((a) => a.agent_type === defaultAgentType && a.available)
+      ? agents.find((a) => a.agent_type === defaultAgentType && isUsable(a))
       : null
     if (found) return
-    const first = agents.find((a) => a.available)
+
+    // Expert / non-auto-select mode: visual shows nothing (via `selected`
+    // memo), parent keeps its state — no fallback to emit.
+    if (!autoSelectEnabled) return
+
+    const first = agents.find(isUsable)
     if (!first) return
     const fallback = onFallbackRef.current
     if (fallback) {
@@ -145,10 +207,11 @@ export function AgentSelector({
     } else {
       onSelectRef.current(first.agent_type)
     }
-  }, [agents, defaultAgentType])
+  }, [agents, defaultAgentType, autoSelectEnabled, isUsable])
 
-  const handleSelect = (agentType: AgentType) => {
-    onSelect(agentType)
+  const handleSelect = (agent: AcpAgentInfo) => {
+    if (!isUsable(agent)) return
+    onSelect(agent.agent_type)
   }
 
   const setItemRef = useCallback(
@@ -162,80 +225,187 @@ export function AgentSelector({
     []
   )
 
-  if (agents.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
-        <div>{t("noEnabledAgents")}</div>
-        {onOpenAgentsSettings ? (
+  const modeSwitch = showModeSwitch ? (
+    <div
+      role="tablist"
+      aria-label={t("modeSwitchAria")}
+      className="inline-flex items-center self-center rounded-full border border-border/50 bg-muted/40 p-0.5"
+    >
+      {(
+        [
+          ["general", t("modeGeneral")] as const,
+          ["expert", t("modeExpert")] as const,
+        ] as const
+      ).map(([value, label]) => {
+        const active = mode === value
+        return (
           <button
+            key={value}
             type="button"
-            onClick={onOpenAgentsSettings}
-            className="mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent cursor-pointer"
+            role="tab"
+            aria-selected={active}
+            disabled={disabled}
+            onClick={() => handleModeChange(value)}
+            className={cn(
+              "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
+              disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+              active
+                ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                : "text-muted-foreground hover:text-foreground/80"
+            )}
           >
-            {t("openAgentsSettings")}
+            {label}
           </button>
+        )
+      })}
+    </div>
+  ) : null
+
+  const hasUsableAgent = agents.some(isUsable)
+
+  if (agents.length === 0 || !hasUsableAgent) {
+    return (
+      <div className="flex flex-col items-center gap-3">
+        {modeSwitch}
+        {agents.length > 0 ? (
+          <div
+            ref={containerRef}
+            className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
+          >
+            {agents.map((agent) => {
+              const label = AGENT_LABELS[agent.agent_type]
+              // List already excludes inactive agents; remaining entries are
+              // activated but unavailable (or empty usable set).
+              const reason = t("agentUnavailable")
+              return (
+                <button
+                  key={agent.agent_type}
+                  ref={setItemRef(agent.agent_type)}
+                  type="button"
+                  title={`${label} · ${reason}`}
+                  disabled
+                  className="relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-xs font-medium text-muted-foreground cursor-not-allowed opacity-50"
+                >
+                  <AgentIcon
+                    agentType={agent.agent_type}
+                    muted
+                    className="w-4 h-4 shrink-0"
+                  />
+                </button>
+              )
+            })}
+          </div>
         ) : null}
+        <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-center text-sm text-muted-foreground">
+          <div>
+            {showModeSwitch
+              ? mode === "general"
+                ? t("noGeneralAgents")
+                : t("noExpertAgents")
+              : t("noEnabledAgents")}
+          </div>
+          {onOpenAgentsSettings ? (
+            <button
+              type="button"
+              onClick={onOpenAgentsSettings}
+              className="mt-2 inline-flex items-center rounded-md border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent cursor-pointer"
+            >
+              {t("openAgentsSettings")}
+            </button>
+          ) : null}
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
-    >
-      {/* Sliding droplet indicator */}
-      {indicator && (
-        <div
-          className="absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{
-            left: indicator.left,
-            width: indicator.width,
-          }}
-        />
-      )}
-      {agents.map((agent) => {
-        const isSelected = selected === agent.agent_type
-        return (
-          <button
-            key={agent.agent_type}
-            ref={setItemRef(agent.agent_type)}
-            title={!isSelected ? AGENT_LABELS[agent.agent_type] : undefined}
-            disabled={disabled || !agent.available}
-            onClick={() => handleSelect(agent.agent_type)}
-            className={cn(
-              "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-300",
-              isSelected ? "px-3 py-2" : "px-2 py-2",
-              disabled || !agent.available
-                ? "cursor-not-allowed opacity-40"
-                : "cursor-pointer",
-              isSelected
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground/70"
-            )}
-          >
-            <AgentIcon
-              agentType={agent.agent_type}
-              className="w-4 h-4 shrink-0"
-            />
-            <span
+    <div className="flex flex-col items-center gap-3">
+      {modeSwitch}
+      <div
+        ref={containerRef}
+        className="relative inline-flex items-center self-center rounded-full bg-muted/50 p-0.5 border border-border/50"
+      >
+        {/* Sliding droplet indicator */}
+        {indicator && (
+          <div
+            className="absolute top-0.5 bottom-0.5 rounded-full bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            style={{
+              left: indicator.left,
+              width: indicator.width,
+            }}
+          />
+        )}
+        {agents.map((agent) => {
+          const isSelected = selected === agent.agent_type
+          const usable = isUsable(agent)
+          const label = AGENT_LABELS[agent.agent_type]
+          // Activated-but-unavailable only — disabled agents are filtered out.
+          const inactiveReason = !agent.available
+            ? t("agentUnavailable")
+            : null
+          const title = (() => {
+            if (inactiveReason) return `${label} · ${inactiveReason}`
+            if (!isSelected) {
+              return agent.resident
+                ? `${label} · ${t("residentBadge")}`
+                : label
+            }
+            return agent.resident ? t("residentBadge") : undefined
+          })()
+          return (
+            <button
+              key={agent.agent_type}
+              ref={setItemRef(agent.agent_type)}
+              type="button"
+              title={title}
+              disabled={disabled || !usable}
+              onClick={() => handleSelect(agent)}
               className={cn(
-                "grid transition-[grid-template-columns] duration-300",
-                isSelected ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
+                "relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-300",
+                isSelected ? "px-3 py-2" : "px-2 py-2",
+                disabled || !usable
+                  ? "cursor-not-allowed opacity-50 text-muted-foreground"
+                  : "cursor-pointer",
+                usable && isSelected
+                  ? "text-foreground"
+                  : usable
+                    ? "text-muted-foreground hover:text-foreground/70"
+                    : null
               )}
             >
+              <span className="relative inline-flex shrink-0">
+                <AgentIcon
+                  agentType={agent.agent_type}
+                  muted={!usable}
+                  className="w-4 h-4 shrink-0"
+                />
+                {agent.resident && usable ? (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-background"
+                    title={t("residentBadge")}
+                    aria-label={t("residentBadge")}
+                  />
+                ) : null}
+              </span>
               <span
                 className={cn(
-                  "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
-                  isSelected ? "opacity-100" : "opacity-0"
+                  "grid transition-[grid-template-columns] duration-300",
+                  isSelected ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
                 )}
               >
-                {AGENT_LABELS[agent.agent_type]}
+                <span
+                  className={cn(
+                    "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-300",
+                    isSelected ? "opacity-100" : "opacity-0"
+                  )}
+                >
+                  {label}
+                </span>
               </span>
-            </span>
-          </button>
-        )
-      })}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

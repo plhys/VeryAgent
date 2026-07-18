@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from "vitest"
 // stripped `veryagent://` hrefs and rendered them as "[blocked]". The isolated
 // MarkdownLink unit test runs after that layer, so it could not catch the
 // regression. Only the link-safety hook is stubbed (irrelevant to badges).
+//
+// These are ASSISTANT-path guards: `veryagent://` reference links render as inline
+// badges via MarkdownLink + rehype-allow-veryagent regardless of role. (User messages
+// no longer go through MessageResponse — see message/plain-text-with-badges.tsx.)
 vi.mock("@/components/ai-elements/link-safety", () => ({
   useStreamdownLinkSafety: () => ({ enabled: false }),
 }))
@@ -15,7 +19,7 @@ import { MessageResponse } from "./message"
 describe("MessageResponse — veryagent references survive sanitization (real Streamdown)", () => {
   it("renders an agent reference inline as a badge, not as '[blocked]'", async () => {
     const { container } = render(
-      <MessageResponse softBreaks>
+      <MessageResponse>
         {"[@Codex CLI](veryagent://agent/codex) hi"}
       </MessageResponse>
     )
@@ -31,7 +35,7 @@ describe("MessageResponse — veryagent references survive sanitization (real St
 
   it("renders a session reference inline as a badge", async () => {
     const { container } = render(
-      <MessageResponse softBreaks>
+      <MessageResponse>
         {"see [#42](veryagent://session/claude_code_abc)"}
       </MessageResponse>
     )
@@ -48,7 +52,7 @@ describe("MessageResponse — veryagent references survive sanitization (real St
 
   it("renders a commit reference inline as a badge", async () => {
     const { container } = render(
-      <MessageResponse softBreaks>
+      <MessageResponse>
         {"[a1b2c3d](veryagent://commit/%2Frepo@a1b2c3ddeadbeef)"}
       </MessageResponse>
     )
@@ -63,7 +67,7 @@ describe("MessageResponse — veryagent references survive sanitization (real St
     expect(container.textContent).not.toContain("[blocked]")
   })
 
-  it("still renders a plain http link as a button (regression guard for non-codeg links)", async () => {
+  it("still renders a plain http link as a button (regression guard for non-veryagent links)", async () => {
     const { container } = render(
       <MessageResponse>{"[docs](https://example.com)"}</MessageResponse>
     )

@@ -210,6 +210,10 @@ pub struct ConnectionManager {
     /// no cap, no cumulative growth; entries are removed on answer / cancel /
     /// connection teardown.
     pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
+    /// Hot-swappable OpenWiki config used at first-prompt inject time.
+    /// Wrapped in `Arc<Mutex<…>>` so `clone_ref` clones share the same slot and
+    /// bootstrap can install after the manager is already managed by Tauri.
+    openwiki_config: Arc<Mutex<Option<crate::openwiki::OpenWikiRuntimeConfig>>>,
 }
 
 /// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
@@ -236,6 +240,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            openwiki_config: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -248,6 +253,7 @@ impl ConnectionManager {
             delegation_injection: self.delegation_injection.clone(),
             probe_locks: self.probe_locks.clone(),
             pending_questions: self.pending_questions.clone(),
+            openwiki_config: self.openwiki_config.clone(),
         }
     }
 
@@ -258,8 +264,22 @@ impl ConnectionManager {
         let _ = self.delegation_injection.set(injection);
     }
 
+    /// Install the OpenWiki runtime config used for first-prompt injection.
+    /// Shared across `clone_ref` clones via the Arc slot.
+    pub fn install_openwiki_config(&self, config: crate::openwiki::OpenWikiRuntimeConfig) {
+        // Bootstrap is synchronous; use blocking_lock so a contended try_lock
+        // cannot silently leave injection disabled for the process lifetime.
+        *self.openwiki_config.blocking_lock() = Some(config);
+    }
+
     fn delegation_snapshot(&self) -> Option<crate::acp::connection::DelegationInjection> {
         self.delegation_injection.get().cloned()
+    }
+
+    /// Snapshot the OpenWiki runtime config for session inject.
+    /// Returns `None` when not installed (unit tests / bare managers).
+    async fn openwiki_runtime(&self) -> Option<crate::openwiki::OpenWikiRuntimeConfig> {
+        self.openwiki_config.lock().await.clone()
     }
 
     /// Test-only constructor that overrides the spawn-handshake timeout.
@@ -273,6 +293,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
+            openwiki_config: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -515,6 +536,11 @@ impl ConnectionManager {
             let connections = self.connections.lock().await;
             let mut victims = Vec::new();
             for (id, conn) in connections.iter() {
+                // Resident butlers (Hermes) stay up for the life of the app;
+                // idle sweep must not treat "no open tab" as abandon.
+                if crate::acp::registry::is_resident_agent(conn.agent_type) {
+                    continue;
+                }
                 let Ok(state) = conn.state.try_read() else {
                     // Per-state writer holds the lock; a future tick will
                     // re-evaluate this entry. Don't block the connections
@@ -616,7 +642,15 @@ impl ConnectionManager {
         working_dir: Option<&PathBuf>,
         session_id: Option<&str>,
     ) -> Option<String> {
-        // No session_id → caller is opening a fresh session; never dedup.
+        // Resident butlers (Hermes): when the UI opens a fresh chat without a
+        // resume id, attach to the warm resident process instead of spawning a
+        // second one. Durable memory still lives in the agent's own home; this
+        // only keeps the ACP process continuous.
+        if session_id.is_none() && crate::acp::registry::is_resident_agent(agent_type) {
+            return self.find_live_resident_connection(agent_type).await;
+        }
+
+        // No session_id → non-resident fresh session; never dedup.
         let session_id = session_id?;
         let connections = self.connections.lock().await;
         for (id, conn) in connections.iter() {
@@ -630,6 +664,31 @@ impl ConnectionManager {
             if state.working_dir.as_ref() != working_dir {
                 continue;
             }
+            if matches!(
+                state.status,
+                ConnectionStatus::Disconnected | ConnectionStatus::Error
+            ) {
+                continue;
+            }
+            return Some(id.clone());
+        }
+        None
+    }
+
+    /// Live connection for a resident agent, if any (any working_dir).
+    pub(crate) async fn find_live_resident_connection(
+        &self,
+        agent_type: AgentType,
+    ) -> Option<String> {
+        if !crate::acp::registry::is_resident_agent(agent_type) {
+            return None;
+        }
+        let connections = self.connections.lock().await;
+        for (id, conn) in connections.iter() {
+            if conn.agent_type != agent_type {
+                continue;
+            }
+            let state = conn.state.read().await;
             if matches!(
                 state.status,
                 ConnectionStatus::Disconnected | ConnectionStatus::Error
@@ -817,7 +876,7 @@ impl ConnectionManager {
         // + DB write + emit + cmd_tx.send sequence. Two concurrent prompts
         // (multiple browser tabs of the same conversation; chat-channel
         // racing the UI) are now strictly serialized — the second waiter
-        // observes `already_linked == true` after the first commits, so
+        // observes `needs_link == false` after the first commits, so
         // it can't double-create a conversation row.
         let prompt_lock = self.clone_prompt_lock(conn_id).await?;
         let _prompt_guard = prompt_lock.lock_owned().await;
@@ -825,20 +884,34 @@ impl ConnectionManager {
         // Snapshot what we need from the connection map under one short lock.
         // The conversation-linked check happens INSIDE the prompt lock so
         // any racing send sees a consistent post-link state.
-        let (state_arc, emitter, agent_type, already_linked, turn_in_flight) = {
+        //
+        // `needs_link` is true when:
+        //   - state has no conversation_id yet (classic first-prompt path), OR
+        //   - caller supplies a conversation_id that differs from the bound one
+        //     (resident warm reuse: the process was previously attached to chat
+        //     A; UI opened chat B and reuses the same connection). Without the
+        //     re-link arm, prompts for B would keep writing status / external_id
+        //     onto A, and a subsequent SessionStarted/external_id persist for B
+        //     collides with A's UNIQUE(external_id, agent_type).
+        let (state_arc, emitter, agent_type, needs_link, turn_in_flight) = {
             let connections = self.connections.lock().await;
             let conn = connections
                 .get(conn_id)
                 .ok_or_else(|| AcpError::ConnectionNotFound(conn_id.into()))?;
-            let (already, in_flight) = {
+            let (needs, in_flight) = {
                 let s = conn.state.read().await;
-                (s.conversation_id.is_some(), s.turn_in_flight)
+                let needs = match (s.conversation_id, conversation_id) {
+                    (None, _) => true,
+                    (Some(bound), Some(caller)) if bound != caller => true,
+                    _ => false,
+                };
+                (needs, s.turn_in_flight)
             };
             (
                 conn.state.clone(),
                 conn.emitter.clone(),
                 conn.agent_type,
-                already,
+                needs,
                 in_flight,
             )
         };
@@ -855,9 +928,12 @@ impl ConnectionManager {
             return Err(AcpError::TurnInProgress);
         }
 
-        if !already_linked {
+        if needs_link {
             match (conversation_id, folder_id) {
-                // Branch A: caller already owns a row — adopt it. No DB write.
+                // Branch A: caller already owns a row — adopt / re-bind it.
+                // No DB write for the row itself; ConversationLinked rewrites
+                // state.conversation_id (and folder_id). The external_id
+                // persist below then transfers UNIQUE ownership onto this row.
                 (Some(caller_conv_id), Some(caller_folder_id)) => {
                     emit_with_state(
                         &state_arc,
@@ -1032,6 +1108,10 @@ impl ConnectionManager {
         // separately) and a bound conversation row (a sidebar-visible turn). The
         // `message_id` prefers the sender's client-supplied id (exact echo
         // dedup), falling back to a connection-scoped id for non-UI senders.
+        //
+        // Build UI blocks from the ORIGINAL user input first. Shared identity
+        // injection (below) mutates only the wire `blocks` so the chat bubble
+        // stays free of the body preamble.
         let user_message: Option<(String, Vec<crate::acp::UserMessageBlock>)> =
             if delegation.is_none() && conversation_id_for_status.is_some() {
                 let user_blocks = crate::acp::user_blocks_from_prompt(&blocks);
@@ -1055,6 +1135,48 @@ impl ConnectionManager {
                 None
             };
 
+        // Shared identity (body) preamble: first user prompt only, per connection,
+        // and only for brains the user opted in. Skip delegation children — their
+        // parent already carries body context, and the task text is not a user
+        // utterance. Wire blocks are mutated; UI `user_message` was built above
+        // from the clean original so the chat bubble stays free of the preamble.
+        //
+        // Read all inject-latch fields in ONE read lock so the guard is dropped
+        // before any write lock below. Holding a tokio RwLock read guard across
+        // an await while later acquiring write on the same lock causes a deadlock
+        // (or, under concurrent traffic, an Arc assert_unchecked crash).
+        let mut blocks = blocks;
+        let mut did_inject_openwiki = false;
+        if delegation.is_none() {
+            // Single read — guard drops at the end of this block.
+            let (already_wiki, working_dir) = {
+                let s = state_arc.read().await;
+                (
+                    s.openwiki_injected,
+                    s.working_dir.clone(),
+                )
+            };
+
+            // OpenWiki preamble: first-prompt latch, authorized agents only.
+            // Uses the hot-swappable runtime config when present on AppState; when
+            // the manager is exercised without it (unit tests), injection is a no-op.
+            if let Some(runtime) = self.openwiki_runtime().await {
+                let config = runtime.snapshot().await;
+                match crate::openwiki::maybe_inject_openwiki(
+                    &config,
+                    agent_type,
+                    already_wiki,
+                    working_dir.as_ref().map(|p| p.as_path()),
+                ) {
+                    crate::openwiki::OpenWikiInjectDecision::Inject { preamble } => {
+                        crate::openwiki::inject::prepend_preamble(&mut blocks, preamble);
+                        did_inject_openwiki = true;
+                    }
+                    crate::openwiki::OpenWikiInjectDecision::Skip => {}
+                }
+            }
+        }
+
         // We hold `_prompt_guard` here, so call the lock-free inner helper —
         // re-entering `send_prompt` would try to acquire the same mutex and
         // deadlock. The helper reserves channel capacity FIRST and only then
@@ -1068,6 +1190,19 @@ impl ConnectionManager {
         // row would be stuck until a follow-up `send_prompt_linked` re-flipped it.
         match self.send_prompt_inner(conn_id, blocks, user_message).await {
             Ok(()) => {
+                // Latch only after the prompt actually reached the agent so a
+                // failed enqueue can still inject on the next attempt.
+                // Single write lock for both flags — avoids two consecutive
+                // write acquisitions that could race with concurrent readers.
+                if did_inject_openwiki {
+                    let mut s = state_arc.write().await;
+                    if did_inject_openwiki {
+                        s.openwiki_injected = true;
+                        tracing::info!(
+                            "[openwiki] injected wiki preamble for conn={conn_id} agent={agent_type:?}"
+                        );
+                    }
+                }
                 // The prompt reached the agent: surface it to the chat-channel
                 // "user message" event feed. Notification-only — never gates the
                 // send result.
@@ -3843,6 +3978,97 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn send_prompt_linked_relinks_resident_to_different_conversation() {
+        // Warm resident connection was bound to chat A (with external_id S).
+        // UI opens chat B and reuses the same process; the first prompt for B
+        // must re-bind state.conversation_id and transfer UNIQUE ownership of
+        // S onto B — otherwise B collides with A on update_external_id.
+        use crate::db::test_helpers;
+        use sea_orm::EntityTrait;
+
+        let db = test_helpers::fresh_in_memory_db().await;
+        let folder_id = test_helpers::seed_folder(&db, "/tmp/resident-relink").await;
+        let a = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::OpenClaw,
+            Some("A".into()),
+            None,
+        )
+        .await
+        .unwrap();
+        let b = conversation_service::create(
+            &db.conn,
+            folder_id,
+            AgentType::OpenClaw,
+            Some("B".into()),
+            None,
+        )
+        .await
+        .unwrap();
+        conversation_service::update_external_id(&db.conn, a.id, "sess-S".into())
+            .await
+            .unwrap();
+
+        let mgr = ConnectionManager::new();
+        let (broadcaster, _rx) = make_test_broadcaster();
+        let conn_id = "conn-resident-relink";
+        insert_fake_connection(
+            &mgr,
+            conn_id,
+            AgentType::OpenClaw,
+            Some(PathBuf::from("/tmp/resident-relink")),
+            EventEmitter::test_web_only(broadcaster.clone()),
+        )
+        .await;
+        {
+            let state = mgr.get_state(conn_id).await.unwrap();
+            let mut s = state.write().await;
+            s.conversation_id = Some(a.id);
+            s.external_id = Some("sess-S".into());
+        }
+
+        // cmd_tx receiver is dropped → prompt send fails after link, but the
+        // re-bind + external_id transfer already completed under prompt_lock.
+        let _ = mgr
+            .send_prompt_linked(
+                &db,
+                conn_id,
+                one_text_block(),
+                Some(folder_id),
+                Some(b.id),
+                None,
+            )
+            .await;
+
+        let bound = mgr
+            .get_state(conn_id)
+            .await
+            .unwrap()
+            .read()
+            .await
+            .conversation_id;
+        assert_eq!(bound, Some(b.id), "state must re-bind to B");
+
+        let a_row = conversation::Entity::find_by_id(a.id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .unwrap();
+        let b_row = conversation::Entity::find_by_id(b.id)
+            .one(&db.conn)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(a_row.external_id, None, "A must release S");
+        assert_eq!(
+            b_row.external_id.as_deref(),
+            Some("sess-S"),
+            "B must own S after re-link"
+        );
+    }
+
     // ---------- Phase: status centralization ----------
 
     #[tokio::test]
@@ -4114,6 +4340,73 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn find_connection_for_reuse_resident_without_session_id() {
+        let mgr = ConnectionManager::new();
+        let existing_id = "hermes-resident";
+        insert_fake_connection(
+            &mgr,
+            existing_id,
+            AgentType::Hermes,
+            Some(PathBuf::from("/tmp/hermes-home")),
+            EventEmitter::Noop,
+        )
+        .await;
+        {
+            let state = mgr.get_state(existing_id).await.unwrap();
+            state.write().await.status = ConnectionStatus::Connected;
+        }
+
+        // Fresh chat (no session_id) must attach to warm Hermes, not spawn.
+        let found = mgr
+            .find_connection_for_reuse(
+                AgentType::Hermes,
+                Some(&PathBuf::from("/tmp/other-cwd")),
+                None,
+            )
+            .await;
+        assert_eq!(found.as_deref(), Some(existing_id));
+
+        // Working_dir is ignored for resident warm attach.
+        let found2 = mgr.find_live_resident_connection(AgentType::Hermes).await;
+        assert_eq!(found2.as_deref(), Some(existing_id));
+
+        // Non-resident still never dedups without session_id.
+        assert!(mgr
+            .find_connection_for_reuse(
+                AgentType::ClaudeCode,
+                Some(&PathBuf::from("/tmp/hermes-home")),
+                None,
+            )
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn find_live_resident_connection_skips_dead() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "dead-hermes",
+            AgentType::Hermes,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        {
+            let state = mgr.get_state("dead-hermes").await.unwrap();
+            state.write().await.status = ConnectionStatus::Disconnected;
+        }
+        assert!(mgr
+            .find_live_resident_connection(AgentType::Hermes)
+            .await
+            .is_none());
+        assert!(mgr
+            .find_connection_for_reuse(AgentType::Hermes, None, None)
+            .await
+            .is_none());
+    }
+
     /// Helper that backdates a connection's `last_activity_at` so the
     /// idle sweep sees it as having crossed its threshold.
     async fn backdate_last_activity(mgr: &ConnectionManager, conn_id: &str, secs_ago: i64) {
@@ -4141,6 +4434,38 @@ mod tests {
             mgr.connections.lock().await.get("stale").is_none(),
             "Idle connection must be removed after sweep"
         );
+    }
+
+    #[tokio::test]
+    async fn sweep_idle_skips_resident_agent() {
+        let mgr = ConnectionManager::new();
+        insert_fake_connection(
+            &mgr,
+            "hermes-idle",
+            AgentType::Hermes,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        insert_fake_connection(
+            &mgr,
+            "claude-idle",
+            AgentType::ClaudeCode,
+            None,
+            EventEmitter::Noop,
+        )
+        .await;
+        backdate_last_activity(&mgr, "hermes-idle", 600).await;
+        backdate_last_activity(&mgr, "claude-idle", 600).await;
+
+        let n = mgr.sweep_idle(Duration::from_secs(300)).await;
+        assert_eq!(n, 1, "only non-resident idle connection should be swept");
+        let map = mgr.connections.lock().await;
+        assert!(
+            map.contains_key("hermes-idle"),
+            "resident Hermes must survive idle sweep"
+        );
+        assert!(!map.contains_key("claude-idle"));
     }
 
     #[tokio::test]
@@ -4272,7 +4597,7 @@ mod tests {
     /// Two concurrent `send_prompt_linked` calls on the SAME connection
     /// must serialize through the per-connection `prompt_lock` so the
     /// backend-creates branch can't fire twice and produce duplicate
-    /// conversation rows. The second call observes `already_linked == true`
+    /// conversation rows. The second call observes `needs_link == false`
     /// (set by the first under the lock) and skips creation.
     #[tokio::test]
     async fn send_prompt_linked_serializes_concurrent_callers() {

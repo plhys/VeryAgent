@@ -2,8 +2,16 @@
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB)](https://tauri.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![Version](https://img.shields.io/badge/version-0.9.3-blue)](./CHANGELOG.md)
 
 一个多智能体协作编程桌面应用。把多个 AI 编程助手（Claude Code、Codex CLI、Gemini CLI、OpenCode 等）整合到一个工作空间里，支持会话聚合、多智能体协作、以及丰富的开发工具链。
+
+**仓库**
+
+- GitHub（公网）：https://github.com/plhys/VeryAgent
+- Gitea（内网）：http://10.10.100.233:3030/boss/veryagent
+
+应用内「系统管理 → 软件更新」可按网络选择上述任一发布源；标题栏主题切换旁在有新版本时会显示绿色「更新」按钮。发布产物与 `latest.json` 说明见 [`docs/updater-release.zh-CN.md`](docs/updater-release.zh-CN.md)。
 
 ## 主要功能
 
@@ -41,6 +49,16 @@ pnpm tauri build
 
 产物在 `src-tauri/target/release/bundle/` 下，Windows 会生成 `.exe` 安装包。
 
+### 推荐的本地 EXE 构建方式
+
+如果你只是想在本机改完代码后尽快生成一个可双击运行的 exe，优先使用项目根目录下的脚本：
+
+- `build-exe.bat`：快速模式，默认复用已有 `out/`，直接构建 exe
+- `build-exe.bat full`：完整模式，先重建前端再构建 exe
+- `prepare-release-assets.bat`：整理 `out/` 和 sidecar，便于上传到仓库 Release 附件
+
+详细说明见：[`docs/build-recovery.zh-CN.md`](docs/build-recovery.zh-CN.md)
+
 ### 服务端 (Docker)
 
 ```bash
@@ -49,11 +67,20 @@ docker compose up -d
 
 ### 开发
 
+**推荐（Windows 日常）**：前后端拆开、桌面进程独立，避免 `pnpm tauri dev` 每次冷启动，也避免关终端/agent 时把桌面端一起杀掉。
+
+```powershell
+# 一键：后台前端 + 按需增量编 debug + Start-Process 独立拉起 exe
+.\dev-detached.ps1
+```
+
+说明见：[`docs/dev-detached.zh-CN.md`](docs/dev-detached.zh-CN.md)
+
 ```bash
 # 前端开发 (Next.js dev server)
 pnpm dev
 
-# 完整桌面应用
+# 完整桌面应用（偶发排查用；日常更推荐 dev-detached）
 pnpm tauri dev
 
 # 独立服务器

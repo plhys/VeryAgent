@@ -7,6 +7,9 @@
 //! `perform_app_update`, then reflects whatever the `app_update_state`
 //! event/snapshot reports, exactly like the standalone-server path.
 //!
+//! Check also runs in Rust so the selected update source (GitHub vs Gitea) can
+//! override the plugin endpoints — the JS `check()` API has no endpoints option.
+//!
 //! These mirror the server-mode axum handlers in
 //! `web::handlers::app_update` (same command names, so the transport layer
 //! routes `perform_app_update` / `restart_app` / `app_update_state` to the
@@ -16,13 +19,129 @@
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_error::AppCommandError;
+use crate::commands::system_settings::load_app_update_source;
+use crate::db::AppDatabase;
+use crate::update::source::AppUpdateSource;
 use crate::update::state::{self as update_state, AppUpdateState, AppUpdateStateHandle};
 use crate::web::event_bridge::EventEmitter;
+
+/// Minimal update info returned to the renderer (matches server-mode shape so
+/// the frontend can use one code path for both runtimes).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopUpdateInfo {
+    pub version: String,
+    pub body: String,
+    pub date: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopUpdateCheckResult {
+    pub current_version: String,
+    pub update: Option<DesktopUpdateInfo>,
+}
+
+/// Build an updater that consults the user-selected release channel.
+///
+/// Gitea is plain HTTP on the LAN. `tauri.conf.json` enables
+/// `dangerousInsecureTransportProtocol` so the plugin accepts that endpoint
+/// when we override it here; GitHub stays HTTPS.
+fn build_updater_for_source(
+    app: &tauri::AppHandle,
+    source: AppUpdateSource,
+) -> Result<tauri_plugin_updater::Updater, AppCommandError> {
+    let endpoint = url::Url::parse(source.manifest_url()).map_err(|e| {
+        AppCommandError::configuration_invalid("Invalid update endpoint URL")
+            .with_detail(format!("{}: {e}", source.manifest_url()))
+    })?;
+
+    app.updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(|e| {
+            AppCommandError::configuration_invalid("Failed to set update endpoints")
+                .with_detail(e.to_string())
+        })?
+        .build()
+        .map_err(|e| {
+            AppCommandError::configuration_invalid("Failed to build updater")
+                .with_detail(e.to_string())
+        })
+}
 
 /// Current update snapshot, for the renderer to re-sync on mount.
 #[tauri::command]
 pub fn app_update_state(state: tauri::State<'_, AppUpdateStateHandle>) -> AppUpdateState {
     update_state::snapshot(state.inner())
+}
+
+/// Check the selected release channel for a newer version. Does not download.
+#[tauri::command]
+pub async fn check_app_update(
+    app: tauri::AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<DesktopUpdateCheckResult, AppCommandError> {
+    let source = load_app_update_source(&db.conn).await.unwrap_or_default();
+    let current_version = app.package_info().version.to_string();
+    let updater = build_updater_for_source(&app, source)?;
+
+    let update = match updater.check().await {
+        Ok(Some(u)) => Some(DesktopUpdateInfo {
+            version: u.version.clone(),
+            body: u.body.clone().unwrap_or_default(),
+            date: u.date.map(|d| d.to_string()),
+        }),
+        Ok(None) => None,
+        Err(e) => {
+            // Empty / unpublished release channel is not a user-facing failure:
+            // product UX is simply "no update available" (already latest).
+            // Real transport failures still surface so the user can switch
+            // sources or fix the network.
+            let detail = format!(
+                "{} — {} ({})",
+                e,
+                source.label(),
+                source.manifest_url()
+            );
+            if is_empty_update_channel(&detail) {
+                tracing::info!(
+                    "update check: no release on {} ({}); treating as up-to-date",
+                    source.label(),
+                    source.manifest_url()
+                );
+                None
+            } else {
+                return Err(AppCommandError::network(format!(
+                    "Failed to check for updates from {} ({})",
+                    source.label(),
+                    source.manifest_url()
+                ))
+                .with_detail(detail));
+            }
+        }
+    };
+
+    Ok(DesktopUpdateCheckResult {
+        current_version,
+        update,
+    })
+}
+
+/// 404 / missing release assets / empty endpoints → no published update yet.
+fn is_empty_update_channel(message: &str) -> bool {
+    let m = message.to_ascii_lowercase();
+    m.contains("404")
+        || m.contains("not found")
+        || m.contains("could not fetch a valid release")
+        || m.contains("no release")
+        || m.contains("empty endpoints")
+        || m.contains("does not have any endpoints")
+        // Common before the first signed release is uploaded.
+        || (m.contains("latest.json")
+            && (m.contains("404")
+                || m.contains("not found")
+                || m.contains("could not fetch")
+                || m.contains("failed to fetch")))
 }
 
 /// Begin (or attach to) a download+install of the available update. Returns
@@ -32,6 +151,7 @@ pub fn app_update_state(state: tauri::State<'_, AppUpdateStateHandle>) -> AppUpd
 pub async fn perform_app_update(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppUpdateStateHandle>,
+    db: tauri::State<'_, AppDatabase>,
 ) -> Result<AppUpdateState, AppCommandError> {
     let handle = state.inner().clone();
     let emitter = EventEmitter::Tauri(app.clone());
@@ -42,8 +162,10 @@ pub async fn perform_app_update(
         return Ok(snap);
     }
 
+    let source = load_app_update_source(&db.conn).await.unwrap_or_default();
+
     tauri::async_runtime::spawn(async move {
-        if let Err(message) = run_download(app, handle.clone(), emitter.clone()).await {
+        if let Err(message) = run_download(app, handle.clone(), emitter.clone(), source).await {
             update_state::set_error(&handle, &emitter, message);
         }
     });
@@ -58,8 +180,9 @@ async fn run_download(
     app: tauri::AppHandle,
     handle: AppUpdateStateHandle,
     emitter: EventEmitter,
+    source: AppUpdateSource,
 ) -> Result<(), String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    let updater = build_updater_for_source(&app, source).map_err(|e| e.to_string())?;
     let update = updater
         .check()
         .await

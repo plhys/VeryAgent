@@ -173,7 +173,11 @@ async fn perform_impl(state: Arc<AppState>) -> Result<AppUpdateState, AppCommand
         // while still holding the lock would let a concurrent restart claim it,
         // fail to acquire the lock, and bounce a genuinely-staged update to
         // `Error`.
-        let outcome = crate::update::install::perform_update(&state.data_dir, &progress).await;
+        let source = crate::commands::system_settings::load_app_update_source(&state.db.conn)
+            .await
+            .unwrap_or_default();
+        let outcome =
+            crate::update::install::perform_update(&state.data_dir, source, &progress).await;
         publish_after_releasing(guard, || match outcome {
             Ok(o) => {
                 update_state::set_ready(

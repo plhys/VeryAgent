@@ -1048,6 +1048,11 @@ const PET_HOVER_LEAVE_EVENT: &str = "pet://hover-leave";
 /// needs a larger viewport than the old 192×208 spritesheet frame.
 pub const PET_BASE_WIDTH: f64 = 320.0;
 pub const PET_BASE_HEIGHT: f64 = 320.0;
+/// Default pet placement offset from the flush bottom-right of the work
+/// area (logical px). Positive X moves the pet right; positive Y moves it
+/// down. Applied after the Aero-border margin compensation.
+pub const PET_DEFAULT_OFFSET_X: f64 = 40.0;
+pub const PET_DEFAULT_OFFSET_Y: f64 = 10.0;
 /// Bubble window dimensions (shown next to the pet when AI is responding).
 /// The width is fixed; the height is a small default that gets resized
 /// dynamically by the frontend once the content is measured, eliminating
@@ -1142,14 +1147,17 @@ pub async fn open_pet_window(
 
     let url = WebviewUrl::App(format!("pet?petId={pet_id}").into());
 
-    // Calculate bottom-right position from the primary monitor's work area
-    // BEFORE building the window, so the position is set in the builder and
-    // doesn't depend on current_monitor() which can return None on a new window.
+    // Prefer the last dragged position (persisted in pet.config). Fall back to
+    // the bottom-right work-area default when none is saved. Position is set
+    // on the builder so we don't depend on current_monitor() of a new window.
     let win_w = PET_BASE_WIDTH * scale;
     let win_h = PET_BASE_HEIGHT * scale;
     let mut pos_x = 100.0f64;
     let mut pos_y = 100.0f64;
-    if let Ok(Some(monitor)) = app.primary_monitor() {
+    if let (Some(x), Some(y)) = (config.x, config.y) {
+        pos_x = x;
+        pos_y = y;
+    } else if let Ok(Some(monitor)) = app.primary_monitor() {
         let sf = monitor.scale_factor();
         let area_pos: tauri::LogicalPosition<f64> =
             monitor.work_area().position.to_logical(sf);
@@ -1161,8 +1169,8 @@ pub async fn open_pet_window(
         // small negative margin compensates and makes the visible content
         // area truly flush with the screen edge.
         let margin = -7.0;
-        pos_x = area_pos.x + area_size.width - win_w - margin;
-        pos_y = area_pos.y + area_size.height - win_h - margin;
+        pos_x = area_pos.x + area_size.width - win_w - margin + PET_DEFAULT_OFFSET_X;
+        pos_y = area_pos.y + area_size.height - win_h - margin + PET_DEFAULT_OFFSET_Y;
     }
 
     let builder = WebviewWindowBuilder::new(&app, PET_WINDOW_LABEL, url)
@@ -1493,9 +1501,10 @@ const PET_BUBBLE_H_OFFSET: f64 = 20.0;
 /// logical rect, the current monitor's logical rect, and the bubble size.
 ///
 /// Strategy:
-/// - **Vertical**: anchor the bubble's top edge just above the pet's top
-///   edge (`PET_BUBBLE_OVERLAY` px overlap). Content grows downward. If
-///   clipped by the monitor top, clamp to the monitor edge.
+/// - **Vertical**: keep the bubble's **bottom** edge fixed relative to the
+///   pet (same resting place as the empty-state height). Content growth
+///   therefore expands **upward**. If clipped by the monitor top, clamp
+///   and let the bottom slide down only as needed to stay on-screen.
 /// - **Horizontal**: right-align with the pet, then shift right by the
 ///   `PET_BUBBLE_H_OFFSET`. Clamp into the monitor.
 ///
@@ -1506,8 +1515,8 @@ const PET_BUBBLE_H_OFFSET: f64 = 20.0;
 fn compute_pet_bubble_origin(
     px: f64,
     py: f64,
-    _ph: f64,
     pw: f64,
+    _ph: f64,
     mon_x: f64,
     mon_y: f64,
     mon_w: f64,
@@ -1515,20 +1524,17 @@ fn compute_pet_bubble_origin(
     bubble_w: f64,
     bubble_h: f64,
 ) -> (f64, f64) {
-    // Anchor the TOP of the bubble just above the pet's top edge so the
-    // card always starts near the pet. As content grows the bubble
-    // extends *downward* rather than pushing upward toward the monitor
-    // top. A small overlap (PET_BUBBLE_OVERLAY) creates a visual
-    // "attachment" between the card and the pet.
-    let mut bubble_y = py - PET_BUBBLE_OVERLAY + PET_BUBBLE_V_OFFSET;
+    // Empty-state top was `py - OVERLAY + V_OFFSET`. Pin the bottom edge at
+    // that top + PET_BUBBLE_HEIGHT so the initial resting place is unchanged
+    // and taller content only grows upward (y decreases as bubble_h grows).
+    let fixed_bottom =
+        py - PET_BUBBLE_OVERLAY + PET_BUBBLE_V_OFFSET + PET_BUBBLE_HEIGHT;
+    let mut bubble_y = fixed_bottom - bubble_h;
     if bubble_y < mon_y {
-        // If clipped by the monitor top, start from the monitor top edge
-        // instead so the bubble stays visible.
+        // Clip at the monitor top; the bottom may drop below the fixed
+        // anchor so the full card remains visible.
         bubble_y = mon_y;
     }
-    // If the bottom of the bubble would extend past the monitor bottom
-    // (e.g. very tall content), clamp so the last visible line is at
-    // the monitor edge.
     let max_y = mon_y + mon_h - bubble_h;
     if bubble_y > max_y {
         bubble_y = max_y.max(mon_y);
@@ -1999,7 +2005,16 @@ pub fn install_tray_icon(
                 ..
             } = event
             {
-                show_main_window(tray.app_handle());
+                // Spawn the window show off the tray callback to avoid
+                // "RefCell already borrowed" panics on Windows — tray-icon
+                // 0.21.x holds an internal RefCell borrow during the
+                // callback, and `show_main_window` can re-enter the tray
+                // (e.g. via `set_tooltip` or `set_icon`), triggering a
+                // double-borrow panic. Spawning breaks the borrow chain.
+                let app = tray.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    show_main_window(&app);
+                });
             }
         })
         .build(app)?;

@@ -29,6 +29,7 @@ export function InlineModeSelector({
   const localizer = useConfigOptionLocalizer()
   const selected = modes.find((mode) => mode.id === selectedModeId)
   const currentLabel = localizer.localize(selected?.name ?? selectedModeId ?? "")
+  const triggerLabel = currentLabel ? `${label} · ${currentLabel}` : label
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -36,10 +37,10 @@ export function InlineModeSelector({
           variant="ghost"
           size="xs"
           title={label}
-          aria-label={currentLabel ? `${label}: ${currentLabel}` : label}
-          className="min-w-0 gap-0.5 px-1 text-muted-foreground"
+          aria-label={triggerLabel}
+          className="min-w-0 gap-0.5 px-1.5 text-muted-foreground"
         >
-          <span className="max-w-[10rem] truncate">{currentLabel}</span>
+          <span className="max-w-[9rem] truncate">{triggerLabel}</span>
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>

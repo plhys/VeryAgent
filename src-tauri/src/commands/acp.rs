@@ -1547,7 +1547,9 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
         .ok_or_else(|| AcpError::protocol("invalid model provider table"))?;
     match trim_non_empty(api_base_url) {
         Some(base_url) => {
-            provider_table.insert("base_url".to_string(), toml::Value::String(base_url));
+            // Codex appends the wire path itself; force OpenAI-compatible `/v1`.
+            let normalized = normalize_openai_compatible_base_url(&base_url);
+            provider_table.insert("base_url".to_string(), toml::Value::String(normalized));
         }
         None => {
             provider_table.remove("base_url");
@@ -1555,6 +1557,8 @@ fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), Acp
     }
     if provider_name == "veryagent" {
         provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
+        // Current Codex rejects `wire_api = "chat"` at config load time; only
+        // `responses` is accepted. The gateway must implement Responses API.
         provider_table.insert(
             "wire_api".to_string(),
             toml::Value::String("responses".to_string()),
@@ -1685,6 +1689,445 @@ fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
     Ok(())
 }
 
+/// Managed OpenCode provider id written by the unified model-provider cascade.
+const OPENCODE_MANAGED_PROVIDER: &str = "veryagent";
+const OPENCODE_OPENAI_COMPAT_NPM: &str = "@ai-sdk/openai-compatible";
+
+/// Merge-write a `provider.veryagent` block into opencode.json and the matching
+/// credential into auth.json. Preserves every other provider / top-level key.
+///
+/// `model` is the agent-selected default. Chat only shows models the agent
+/// actually loads, so the managed provider table is limited to that selection
+/// (plus any explicit `catalog` entries callers still pass). Do not dump the
+/// entire gateway `/models` list — embeddings / image / unused ids are noise.
+fn write_opencode_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let config_path = resolve_opencode_config_path();
+    let mut config = if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let config_obj = config
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("opencode config root must be a JSON object"))?;
+
+    let provider_root = config_obj
+        .entry("provider".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_root.is_object() {
+        *provider_root = serde_json::json!({});
+    }
+    let providers = provider_root
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider table"))?;
+
+    let provider_item = providers
+        .entry(OPENCODE_MANAGED_PROVIDER.to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !provider_item.is_object() {
+        *provider_item = serde_json::json!({});
+    }
+    let provider_obj = provider_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider block"))?;
+
+    provider_obj.insert(
+        "npm".to_string(),
+        serde_json::Value::String(OPENCODE_OPENAI_COMPAT_NPM.to_string()),
+    );
+    provider_obj.insert(
+        "name".to_string(),
+        serde_json::Value::String(OPENCODE_MANAGED_PROVIDER.to_string()),
+    );
+
+    let options_item = provider_obj
+        .entry("options".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !options_item.is_object() {
+        *options_item = serde_json::json!({});
+    }
+    let options = options_item
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("invalid opencode provider options"))?;
+    // Secrets never belong in opencode.json.
+    options.remove("apiKey");
+    if api_url.trim().is_empty() {
+        options.remove("baseURL");
+    } else {
+        let normalized = normalize_openai_compatible_base_url(api_url);
+        options.insert(
+            "baseURL".to_string(),
+            serde_json::Value::String(normalized),
+        );
+    }
+    if options.is_empty() {
+        provider_obj.remove("options");
+    }
+
+    let model_id = model
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        // OpenCode model values are `provider/model`; accept either form.
+        .map(|s| {
+            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        });
+
+    // Managed models table = configured selection only (and any explicit extras).
+    // Always replace so stale gateway dump entries cannot linger in chat.
+    let mut catalog_ids: Vec<String> = catalog
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
+                .unwrap_or(s)
+                .to_string()
+        })
+        .collect();
+    if let Some(ref mid) = model_id {
+        if !catalog_ids.iter().any(|id| id == mid) {
+            catalog_ids.push(mid.clone());
+        }
+    }
+    if !catalog_ids.is_empty() {
+        let mut models = serde_json::Map::new();
+        for mid in &catalog_ids {
+            models.insert(mid.clone(), serde_json::json!({ "name": mid }));
+        }
+        provider_obj.insert("models".to_string(), serde_json::Value::Object(models));
+    }
+    if let Some(ref mid) = model_id {
+        config_obj.insert(
+            "model".to_string(),
+            serde_json::Value::String(format!("{OPENCODE_MANAGED_PROVIDER}/{mid}")),
+        );
+    }
+
+    let config_str = serde_json::to_string_pretty(&config)
+        .map_err(|e| AcpError::protocol(format!("serialize opencode config failed: {e}")))?;
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create opencode directory failed: {e}")))?;
+    }
+    fs::write(&config_path, format!("{config_str}\n"))
+        .map_err(|e| AcpError::protocol(format!("write opencode config failed: {e}")))?;
+
+    // auth.json: merge credential for the managed provider only.
+    let auth_path = opencode_auth_json_path();
+    let mut auth_obj = if auth_path.exists() {
+        fs::read_to_string(&auth_path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    if !api_key.trim().is_empty() {
+        auth_obj[OPENCODE_MANAGED_PROVIDER] = serde_json::json!({
+            "type": "api",
+            "key": api_key,
+        });
+    }
+    let auth_str = serde_json::to_string_pretty(&auth_obj)
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    persist_opencode_auth_json(&auth_str)?;
+    Ok(())
+}
+
+/// Managed Pi custom provider id written by the unified model-provider cascade.
+const PI_MANAGED_PROVIDER: &str = "veryagent";
+
+/// Default context window / output budget for managed Pi models.
+/// Pi rejects incomplete custom-model entries; match the schema used by a
+/// working hand-authored `a-plan` provider and by OpenClaw's managed write.
+const PI_MANAGED_MODEL_CONTEXT_WINDOW: u64 = 131_072;
+const PI_MANAGED_MODEL_MAX_TOKENS: u64 = 8_192;
+
+/// Build one Pi `models.json` model object with the fields pi requires.
+fn pi_managed_model_object(id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "name": id,
+        "reasoning": false,
+        "input": ["text"],
+        "contextWindow": PI_MANAGED_MODEL_CONTEXT_WINDOW,
+        "maxTokens": PI_MANAGED_MODEL_MAX_TOKENS,
+        "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+        }
+    })
+}
+
+/// Merge-write a custom `veryagent` provider into pi's native settings/auth/models.
+///
+/// `model` is the default selection written to settings.json. `catalog` is an
+/// optional extra list of model ids the caller wants loaded; chat only shows
+/// what pi actually loads, so callers should pass the agent-selected model
+/// rather than the entire gateway `/models` dump.
+fn write_pi_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let model = model.trim();
+    // settings.json — defaultProvider / defaultModel
+    let settings_path = pi_settings_json_path();
+    let mut settings = read_json_object_or_empty(&settings_path);
+    settings.insert(
+        "defaultProvider".to_string(),
+        serde_json::Value::String(PI_MANAGED_PROVIDER.to_string()),
+    );
+    if !model.is_empty() {
+        settings.insert(
+            "defaultModel".to_string(),
+            serde_json::Value::String(model.to_string()),
+        );
+    }
+    write_json_object_pretty(&settings_path, &settings)?;
+
+    // auth.json — provider credential
+    if !api_key.trim().is_empty() {
+        let auth_path = pi_auth_json_path();
+        let mut auth = read_json_object_or_empty(&auth_path);
+        let mut entry = serde_json::Map::new();
+        entry.insert(
+            "type".to_string(),
+            serde_json::Value::String("api_key".to_string()),
+        );
+        entry.insert(
+            "key".to_string(),
+            serde_json::Value::String(api_key.to_string()),
+        );
+        auth.insert(
+            PI_MANAGED_PROVIDER.to_string(),
+            serde_json::Value::Object(entry),
+        );
+        write_json_object_pretty(&auth_path, &auth)?;
+    }
+
+    // models.json — custom provider definition (baseUrl + openai-completions)
+    if !api_url.trim().is_empty() {
+        let models_path = pi_models_json_path();
+        let mut models_doc = read_json_object_or_empty(&models_path);
+        let mut providers = match models_doc.remove("providers") {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        let mut entry = match providers.remove(PI_MANAGED_PROVIDER) {
+            Some(serde_json::Value::Object(map)) => map,
+            _ => serde_json::Map::new(),
+        };
+        let normalized = normalize_openai_compatible_base_url(api_url);
+        entry.insert(
+            "baseUrl".to_string(),
+            serde_json::Value::String(normalized),
+        );
+        entry.insert(
+            "api".to_string(),
+            serde_json::Value::String("openai-completions".to_string()),
+        );
+        // Display name for the managed provider in pi's model picker.
+        entry.insert(
+            "name".to_string(),
+            serde_json::Value::String("A计划".to_string()),
+        );
+        // Pi's model-registry rejects non-built-in providers that define models
+        // without an inline `apiKey` (auth.json alone is not enough). Without
+        // this field the entire custom provider fails to load, and set_model
+        // returns "Model not found: veryagent/<id>" even though models.json
+        // lists the id. Match the working hand-authored a-plan provider.
+        if !api_key.trim().is_empty() {
+            entry.insert(
+                "apiKey".to_string(),
+                serde_json::Value::String(api_key.to_string()),
+            );
+        }
+        // Gateway models rarely support OpenAI's developer role / reasoning
+        // effort; match the working hand-authored a-plan provider.
+        entry.insert(
+            "compat".to_string(),
+            serde_json::json!({
+                "supportsDeveloperRole": false,
+                "supportsReasoningEffort": false
+            }),
+        );
+
+        // Only the configured selection (and any explicit extras). Rebuild the
+        // array so stale gateway dump entries cannot linger in chat.
+        // Always use the full pi schema — bare `{id,name}` entries are ignored.
+        let mut models_arr: Vec<serde_json::Value> = Vec::new();
+        let mut push_model = |id: &str| {
+            let id = id.trim();
+            if id.is_empty() {
+                return;
+            }
+            let already = models_arr
+                .iter()
+                .any(|m| m.get("id").and_then(serde_json::Value::as_str) == Some(id));
+            if !already {
+                models_arr.push(pi_managed_model_object(id));
+            }
+        };
+        for id in catalog {
+            push_model(id);
+        }
+        if !model.is_empty() {
+            push_model(model);
+        }
+        entry.insert("models".to_string(), serde_json::Value::Array(models_arr));
+        providers.insert(
+            PI_MANAGED_PROVIDER.to_string(),
+            serde_json::Value::Object(entry),
+        );
+        models_doc.insert(
+            "providers".to_string(),
+            serde_json::Value::Object(providers),
+        );
+        write_json_object_pretty(&models_path, &models_doc)?;
+    }
+
+    Ok(())
+}
+
+/// Managed custom-model vendor tag written by veryagent into CodeBuddy's
+/// `~/.codebuddy/models.json`. CodeBuddy supports two independent paths:
+///   1. Native Tencent models — `CODEBUDDY_API_KEY` + region
+///      (`CODEBUDDY_INTERNET_ENVIRONMENT`: unset/overseas, `internal`, `ioa`)
+///   2. Additive custom models — entries in `models.json` with their own
+///      `url`/`apiKey` (OpenAI-compatible full `/chat/completions` path)
+///
+/// A计划 must use path (2) only. Hijacking `CODEBUDDY_BASE_URL` or setting
+/// `CODEBUDDY_DISABLE_BUILTIN_MODELS` / `availableModels` would hide or break
+/// the native China/overseas built-ins the user still needs.
+const CODEBUDDY_MANAGED_MODEL_VENDOR: &str = "A计划";
+const CODEBUDDY_MANAGED_MODEL_MAX_INPUT: u64 = 131_072;
+const CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT: u64 = 8_192;
+
+fn codebuddy_models_json_path() -> PathBuf {
+    crate::parsers::codebuddy::resolve_codebuddy_config_dir().join("models.json")
+}
+
+/// Build the full chat-completions URL CodeBuddy requires for custom models.
+/// Docs require a complete path ending in `/chat/completions` (not a bare `/v1`).
+fn codebuddy_chat_completions_url(api_url: &str) -> String {
+    let base = normalize_openai_compatible_base_url(api_url);
+    if base.is_empty() {
+        return String::new();
+    }
+    format!("{base}/chat/completions")
+}
+
+/// Merge-write the agent-selected A计划 model into CodeBuddy's native
+/// `~/.codebuddy/models.json` as an additive custom model.
+///
+/// Built-in Tencent models stay visible: we never write `availableModels` and
+/// never set `CODEBUDDY_DISABLE_BUILTIN_MODELS`. Previous veryagent-managed
+/// entries (vendor `A计划`) are replaced; other custom entries are preserved.
+/// A stale `availableModels` key left by older builds is removed so native
+/// models reappear in the picker.
+fn write_codebuddy_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+    catalog: &[String],
+) -> Result<(), AcpError> {
+    let model = model.trim();
+    let chat_url = codebuddy_chat_completions_url(api_url);
+    if chat_url.is_empty() {
+        return Ok(());
+    }
+
+    let mut ids: Vec<String> = catalog
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    if !model.is_empty() && !ids.iter().any(|id| id == model) {
+        ids.push(model.to_string());
+    }
+
+    let path = codebuddy_models_json_path();
+    let mut doc = read_json_object_or_empty(&path);
+
+    // Keep non-managed custom models; drop previous veryagent-managed ones so
+    // the list tracks only the currently configured selection.
+    let mut models: Vec<serde_json::Value> = match doc.remove("models") {
+        Some(serde_json::Value::Array(arr)) => arr
+            .into_iter()
+            .filter(|entry| {
+                entry
+                    .get("vendor")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(CODEBUDDY_MANAGED_MODEL_VENDOR)
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    for id in &ids {
+        // Replace same-id entries even if they were user-authored so bind wins.
+        models.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id.as_str()));
+        let mut entry = serde_json::Map::new();
+        entry.insert("id".to_string(), serde_json::Value::String(id.clone()));
+        entry.insert("name".to_string(), serde_json::Value::String(id.clone()));
+        entry.insert(
+            "vendor".to_string(),
+            serde_json::Value::String(CODEBUDDY_MANAGED_MODEL_VENDOR.to_string()),
+        );
+        entry.insert("url".to_string(), serde_json::Value::String(chat_url.clone()));
+        if !api_key.trim().is_empty() {
+            entry.insert(
+                "apiKey".to_string(),
+                serde_json::Value::String(api_key.to_string()),
+            );
+        }
+        entry.insert(
+            "maxInputTokens".to_string(),
+            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_INPUT.into()),
+        );
+        entry.insert(
+            "maxOutputTokens".to_string(),
+            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT.into()),
+        );
+        entry.insert("supportsToolCall".to_string(), serde_json::Value::Bool(true));
+        models.push(serde_json::Value::Object(entry));
+    }
+
+    if models.is_empty() {
+        doc.remove("models");
+    } else {
+        doc.insert("models".to_string(), serde_json::Value::Array(models));
+    }
+    // Older builds wrote availableModels=[A计划 only], which hid every native
+    // Tencent model. Clear it so the picker merges built-ins + customs again.
+    doc.remove("availableModels");
+    if doc.is_empty() {
+        // Nothing left to keep — remove the file rather than write `{}`.
+        let _ = fs::remove_file(&path);
+        return Ok(());
+    }
+    write_json_object_pretty(&path, &doc)?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Kimi Code config helpers
 //
@@ -1708,10 +2151,10 @@ fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
 //   2. `credentials/kimi-code.json` — a synthetic gate token veryagent seeds so the
 //      ACP session opens. It is purely local: because `default_model` points at
 //      the API-key provider, the managed/OAuth endpoint is never called and this
-//      token is never transmitted. It carries a `_codeg_synthetic` marker so we
+//      token is never transmitted. It carries a `_veryagent_synthetic` marker so we
 //      only ever remove OUR token, never a real login the user performed.
 //
-// The veryagent-managed block is keyed by the fixed names `codeg` / `veryagent-managed`
+// The veryagent-managed block is keyed by the fixed names `veryagent` / `veryagent-managed`
 // so it is recognizable and removable without disturbing any provider/model the
 // user added by hand. The raw config.toml editor is the comment/format escape
 // hatch. A stale `KIMI_MODEL_*` env override would silently win over config.toml,
@@ -1723,7 +2166,7 @@ const KIMI_MANAGED_MODEL_ALIAS: &str = "veryagent-managed";
 const KIMI_MODEL_API_KEY_ENV: &str = "KIMI_MODEL_API_KEY";
 const KIMI_MODEL_BASE_URL_ENV: &str = "KIMI_MODEL_BASE_URL";
 const KIMI_MODEL_NAME_ENV: &str = "KIMI_MODEL_NAME";
-/// Sentinel `access_token` value (and `_codeg_synthetic` marker) identifying the
+/// Sentinel `access_token` value (and `_veryagent_synthetic` marker) identifying the
 /// gate token veryagent seeds, so we never clobber a real OAuth login.
 const KIMI_SYNTHETIC_TOKEN_ACCESS: &str = "veryagent-local-gate";
 /// Fallback context window for the managed model. Kimi's config schema **requires**
@@ -1935,7 +2378,7 @@ fn read_kimi_token() -> Option<serde_json::Value> {
 
 /// Whether a token document is veryagent's synthetic gate token (vs a real OAuth
 /// login the user performed via `kimi login`). Matches either the sentinel
-/// `access_token` or the explicit `_codeg_synthetic` marker.
+/// `access_token` or the explicit `_veryagent_synthetic` marker.
 fn kimi_token_is_synthetic(token: &serde_json::Value) -> bool {
     token
         .get("_veryagent_synthetic")
@@ -2266,7 +2709,7 @@ async fn clear_kimi_model_env(db: &AppDatabase) -> Result<(), AcpError> {
     let setting = agent_setting_service::get_by_agent_type(&db.conn, AgentType::KimiCode)
         .await
         .map_err(|e| AcpError::protocol(e.to_string()))?;
-    let enabled = setting.as_ref().map(|m| m.enabled).unwrap_or(true);
+    let enabled = setting.as_ref().map(|m| m.enabled).unwrap_or(false);
     let _model_provider_id = setting.as_ref().and_then(|m| m.model_provider_id);
     let mut env: BTreeMap<String, String> = setting
         .and_then(|m| m.env_json)
@@ -2843,6 +3286,862 @@ pub struct PiCommandValidation {
     pub found: bool,
     pub resolved_path: Option<String>,
     pub version: Option<String>,
+}
+
+/// Local OpenClaw gateway discovery result for the settings UI.
+///
+/// Values come from process env and/or `~/.openclaw/openclaw.json` (or
+/// `OPENCLAW_CONFIG_PATH`). Empty fields mean "not found" — we never invent a
+/// default port as an authoritative URL. `gateway_reachable` is a live TCP
+/// probe and is the only signal that may justify a "ready" badge.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenClawGatewayDiscovery {
+    /// Resolved gateway WebSocket URL, if any.
+    pub gateway_url: Option<String>,
+    /// Where `gateway_url` came from (`env`, `config_remote_url`, `config_port`, …).
+    pub gateway_url_source: Option<String>,
+    /// Gateway auth token, if any.
+    pub gateway_token: Option<String>,
+    /// Where `gateway_token` came from (`env`, `config_remote_token`,
+    /// `config_auth_token`, `config_token_file`, …).
+    pub gateway_token_source: Option<String>,
+    /// Config file path that was consulted (resolved path, even if missing).
+    pub config_path: String,
+    /// Whether that config file exists on disk.
+    pub config_exists: bool,
+    /// Whether the config file was readable as JSON/JSON5-ish.
+    pub config_parsed: bool,
+    /// Port observed from env or `gateway.port` (informational; may be None).
+    pub gateway_port: Option<u16>,
+    /// Source of `gateway_port` when present.
+    pub gateway_port_source: Option<String>,
+    /// `gateway.mode` from config when present (`local` / `remote` / …).
+    pub gateway_mode: Option<String>,
+    /// Live TCP probe against the resolved host:port. False when unreachable
+    /// or when no host/port can be resolved.
+    pub gateway_reachable: bool,
+}
+
+/// Result of the settings "one-click" OpenClaw local gateway bootstrap.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenClawGatewayEnsureResult {
+    pub ok: bool,
+    /// Short machine-ish status: already_running / started / configured / failed.
+    pub status: String,
+    pub message: String,
+    pub discovery: OpenClawGatewayDiscovery,
+    pub steps: Vec<String>,
+}
+
+/// OpenClaw's own default local port when nothing is configured.
+const OPENCLAW_DEFAULT_LOCAL_PORT: u16 = 18789;
+/// Managed custom provider id written into `~/.openclaw/openclaw.json` when the
+/// user binds a shared model provider. OpenClaw's gateway (not the ACP client)
+/// performs inference, so credentials must live in gateway config — env on the
+/// `openclaw acp` process alone is ignored.
+const OPENCLAW_MANAGED_PROVIDER: &str = "veryagent";
+
+fn openclaw_config_path() -> PathBuf {
+    let configured = std::env::var("OPENCLAW_CONFIG_PATH").ok().and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    match configured {
+        Some(value) => {
+            if value == "~" {
+                home_dir_or_default()
+            } else if let Some(remain) = value.strip_prefix("~/") {
+                home_dir_or_default().join(remain)
+            } else {
+                PathBuf::from(value)
+            }
+        }
+        None => home_dir_or_default()
+            .join(".openclaw")
+            .join("openclaw.json"),
+    }
+}
+
+/// Best-effort strip of JSON5-ish features (line/block comments + trailing
+/// commas) so OpenClaw's JSON5 configs still parse with `serde_json`.
+fn strip_json5_noise(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let bytes = raw.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut escape = false;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if in_string {
+            out.push(b as char);
+            if escape {
+                escape = false;
+            } else if b == b'\\' {
+                escape = true;
+            } else if b == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        // line comment
+        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        // block comment
+        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            continue;
+        }
+        if b == b'"' {
+            in_string = true;
+            out.push('"');
+            i += 1;
+            continue;
+        }
+        // trailing comma before } or ]
+        if b == b',' {
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if j < bytes.len() && (bytes[j] == b'}' || bytes[j] == b']') {
+                i += 1;
+                continue;
+            }
+        }
+        out.push(b as char);
+        i += 1;
+    }
+    out
+}
+
+fn openclaw_read_config_value(path: &Path) -> Option<serde_json::Value> {
+    let raw = fs::read_to_string(path).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return Some(value);
+    }
+    let stripped = strip_json5_noise(trimmed);
+    serde_json::from_str::<serde_json::Value>(&stripped).ok()
+}
+
+/// OpenClaw's openai-completions transport expects a base that already ends in
+/// `/v1` (it appends `/chat/completions` itself). Strip common chat suffixes and
+/// append `/v1` when missing so shared model-provider URLs work either way.
+fn normalize_openclaw_openai_base_url(api_url: &str) -> String {
+    normalize_openai_compatible_base_url(api_url)
+}
+
+/// Shared OpenAI-compatible base-url normalizer for Codex / OpenClaw / similar
+/// clients that append `/chat/completions` (or `/responses`) themselves.
+///
+/// Shared model-provider URLs are often pasted as a bare host root
+/// (`http://gateway:18080`). Without `/v1`, Codex ends up calling
+/// `/chat/completions` on the HTML root and appears to "retry forever".
+fn normalize_openai_compatible_base_url(api_url: &str) -> String {
+    let trimmed = api_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let without_suffix = trimmed
+        .strip_suffix("/chat/completions")
+        .or_else(|| trimmed.strip_suffix("/completions"))
+        .or_else(|| trimmed.strip_suffix("/responses"))
+        .or_else(|| trimmed.strip_suffix("/models"))
+        .unwrap_or(trimmed)
+        .trim_end_matches('/');
+    if without_suffix.ends_with("/v1") {
+        without_suffix.to_string()
+    } else {
+        format!("{without_suffix}/v1")
+    }
+}
+
+/// Write (or update) the veryagent-managed custom provider block in openclaw.json
+/// so the local gateway can authenticate against a shared model provider.
+///
+/// Shape matches OpenClaw's custom openai-compatible providers:
+/// `models.providers.veryagent` + optional `agents.defaults.model.primary`.
+fn write_openclaw_managed_provider(
+    api_url: &str,
+    api_key: &str,
+    model: Option<&str>,
+) -> Result<(), AcpError> {
+    let path = openclaw_config_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            AcpError::protocol(format!(
+                "create openclaw config dir failed ({}): {e}",
+                parent.display()
+            ))
+        })?;
+    }
+
+    let mut root = openclaw_read_config_value(&path).unwrap_or_else(|| serde_json::json!({}));
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    let base_url = normalize_openclaw_openai_base_url(api_url);
+    let model = model.map(str::trim).filter(|s| !s.is_empty());
+
+    let obj = root.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!("invalid openclaw.json root in {}", path.display()))
+    })?;
+
+    let models_value = obj
+        .entry("models".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let models_obj = models_value.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!("invalid models object in {}", path.display()))
+    })?;
+    models_obj
+        .entry("mode".to_string())
+        .or_insert_with(|| serde_json::json!("merge"));
+
+    let providers_value = models_obj
+        .entry("providers".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    let providers_obj = providers_value.as_object_mut().ok_or_else(|| {
+        AcpError::protocol(format!(
+            "invalid models.providers object in {}",
+            path.display()
+        ))
+    })?;
+
+    // Keep any previously managed model list when this write is credentials-only
+    // (cascade from provider URL/key edit without a model change).
+    let existing_models = providers_obj
+        .get(OPENCLAW_MANAGED_PROVIDER)
+        .and_then(|p| p.get("models"))
+        .cloned();
+
+    let mut provider = serde_json::Map::new();
+    if !base_url.is_empty() {
+        provider.insert(
+            "baseUrl".to_string(),
+            serde_json::Value::String(base_url),
+        );
+    }
+    if !api_key.trim().is_empty() {
+        provider.insert(
+            "apiKey".to_string(),
+            serde_json::Value::String(api_key.to_string()),
+        );
+    }
+    provider.insert(
+        "api".to_string(),
+        serde_json::Value::String("openai-completions".to_string()),
+    );
+
+    if let Some(model_id) = model {
+        provider.insert(
+            "models".to_string(),
+            serde_json::json!([{
+                "id": model_id,
+                "name": model_id,
+                "reasoning": false,
+                "input": ["text"],
+                "contextWindow": 200000,
+                "maxTokens": 8192
+            }]),
+        );
+    } else if let Some(existing) = existing_models {
+        provider.insert("models".to_string(), existing);
+    } else {
+        provider.insert("models".to_string(), serde_json::json!([]));
+    }
+    providers_obj.insert(
+        OPENCLAW_MANAGED_PROVIDER.to_string(),
+        serde_json::Value::Object(provider),
+    );
+
+    if let Some(model_id) = model {
+        let primary = format!("{OPENCLAW_MANAGED_PROVIDER}/{model_id}");
+        let agents_value = obj
+            .entry("agents".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        let agents_obj = agents_value.as_object_mut().ok_or_else(|| {
+            AcpError::protocol(format!("invalid agents object in {}", path.display()))
+        })?;
+        let defaults_value = agents_obj
+            .entry("defaults".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        let defaults_obj = defaults_value.as_object_mut().ok_or_else(|| {
+            AcpError::protocol(format!(
+                "invalid agents.defaults object in {}",
+                path.display()
+            ))
+        })?;
+        defaults_obj.insert(
+            "model".to_string(),
+            serde_json::json!({ "primary": primary }),
+        );
+        let allow_value = defaults_obj
+            .entry("models".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(allow_obj) = allow_value.as_object_mut() {
+            allow_obj.insert(
+                primary,
+                serde_json::json!({ "alias": "veryagent" }),
+            );
+        }
+    }
+
+    let text = serde_json::to_string_pretty(&root)
+        .map_err(|e| AcpError::protocol(format!("serialize openclaw.json failed: {e}")))?;
+    fs::write(&path, format!("{text}\n")).map_err(|e| {
+        AcpError::protocol(format!(
+            "write openclaw.json failed ({}): {e}",
+            path.display()
+        ))
+    })?;
+
+    Ok(())
+}
+
+/// Best-effort restart so a running gateway reloads managed provider credentials.
+async fn restart_openclaw_gateway_after_provider_write() {
+    match run_openclaw_cli(&["gateway", "restart"], 45).await {
+        Ok((ok, out)) if !ok => {
+            tracing::warn!("[OpenClaw] gateway restart after provider write: {out}");
+        }
+        Err(e) => {
+            tracing::warn!("[OpenClaw] gateway restart after provider write failed: {e}");
+        }
+        _ => {}
+    }
+}
+
+fn openclaw_json_str(value: &serde_json::Value, path: &[&str]) -> Option<String> {
+    let mut cur = value;
+    for key in path {
+        cur = cur.get(*key)?;
+    }
+    cur.as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn openclaw_json_port(value: &serde_json::Value) -> Option<u16> {
+    let port = value.get("gateway")?.get("port")?;
+    if let Some(n) = port.as_u64() {
+        return u16::try_from(n).ok().filter(|p| *p != 0);
+    }
+    if let Some(s) = port.as_str() {
+        return s.trim().parse::<u16>().ok().filter(|p| *p != 0);
+    }
+    None
+}
+
+fn openclaw_env_nonempty(key: &str) -> Option<String> {
+    std::env::var(key).ok().and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn openclaw_expand_path(raw: &str) -> PathBuf {
+    let trimmed = raw.trim();
+    if trimmed == "~" {
+        home_dir_or_default()
+    } else if let Some(remain) = trimmed.strip_prefix("~/") {
+        home_dir_or_default().join(remain)
+    } else {
+        PathBuf::from(trimmed)
+    }
+}
+
+fn openclaw_read_token_file(raw_path: &str) -> Option<String> {
+    let path = openclaw_expand_path(raw_path);
+    let contents = fs::read_to_string(path).ok()?;
+    let token = contents.trim();
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+fn openclaw_local_ws_url(port: u16) -> String {
+    format!("ws://127.0.0.1:{port}")
+}
+
+/// Discover OpenClaw gateway URL/token from process env + local openclaw.json.
+/// Never fabricates a default port as truth — only reports what is configured.
+/// Live reachability is filled by `discover_openclaw_gateway_core`.
+pub(crate) async fn discover_openclaw_gateway_core() -> OpenClawGatewayDiscovery {
+    let mut discovery = discover_openclaw_gateway_from(
+        openclaw_config_path(),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_URL"),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_PORT"),
+        openclaw_env_nonempty("OPENCLAW_GATEWAY_TOKEN"),
+    );
+    discovery.gateway_reachable = probe_openclaw_gateway_reachable(&discovery).await;
+    discovery
+}
+
+/// Injectable discovery core (used by unit tests and the public wrapper).
+/// Does not perform network I/O; `gateway_reachable` is always false here.
+fn discover_openclaw_gateway_from(
+    config_path: PathBuf,
+    env_url: Option<String>,
+    env_port: Option<String>,
+    env_token: Option<String>,
+) -> OpenClawGatewayDiscovery {
+    let config_exists = config_path.is_file();
+    let config_value = if config_exists {
+        openclaw_read_config_value(&config_path)
+    } else {
+        None
+    };
+    let config_parsed = config_value.is_some();
+
+    // URL priority:
+    // 1) OPENCLAW_GATEWAY_URL env
+    // 2) gateway.remote.url in config
+    // 3) construct from OPENCLAW_GATEWAY_PORT env
+    // 4) construct from gateway.port in config (only when that port is present)
+    let mut gateway_url: Option<String> = None;
+    let mut gateway_url_source: Option<String> = None;
+    let mut gateway_port: Option<u16> = None;
+    let mut gateway_port_source: Option<String> = None;
+    let mut gateway_mode: Option<String> = None;
+
+    if let Some(url) = env_url.filter(|v| !v.trim().is_empty()) {
+        gateway_url = Some(url.trim().to_string());
+        gateway_url_source = Some("env".to_string());
+    }
+
+    if let Some(port_raw) = env_port {
+        if let Ok(port) = port_raw.trim().parse::<u16>() {
+            if port != 0 {
+                gateway_port = Some(port);
+                gateway_port_source = Some("env".to_string());
+            }
+        }
+    }
+
+    if let Some(ref value) = config_value {
+        if gateway_url.is_none() {
+            if let Some(url) = openclaw_json_str(value, &["gateway", "remote", "url"]) {
+                gateway_url = Some(url);
+                gateway_url_source = Some("config_remote_url".to_string());
+            }
+        }
+        if gateway_port.is_none() {
+            if let Some(port) = openclaw_json_port(value) {
+                gateway_port = Some(port);
+                gateway_port_source = Some("config_port".to_string());
+            }
+        }
+        gateway_mode = openclaw_json_str(value, &["gateway", "mode"]);
+    }
+
+    if gateway_url.is_none() {
+        if let Some(port) = gateway_port {
+            gateway_url = Some(openclaw_local_ws_url(port));
+            gateway_url_source = Some(if gateway_port_source.as_deref() == Some("env") {
+                "env_port".to_string()
+            } else {
+                "config_port".to_string()
+            });
+        }
+    }
+
+    // Token priority (client-side):
+    // OPENCLAW_GATEWAY_TOKEN → gateway.remote.token → gateway.auth.token
+    // → gateway.auth.tokenFile / token-file (read contents)
+    let mut gateway_token: Option<String> = None;
+    let mut gateway_token_source: Option<String> = None;
+
+    if let Some(token) = env_token.filter(|v| !v.trim().is_empty()) {
+        gateway_token = Some(token.trim().to_string());
+        gateway_token_source = Some("env".to_string());
+    }
+
+    if gateway_token.is_none() {
+        if let Some(ref value) = config_value {
+            if let Some(token) = openclaw_json_str(value, &["gateway", "remote", "token"]) {
+                gateway_token = Some(token);
+                gateway_token_source = Some("config_remote_token".to_string());
+            } else if let Some(token) = openclaw_json_str(value, &["gateway", "auth", "token"]) {
+                // Skip env-substitution placeholders like \${OPENCLAW_GATEWAY_TOKEN}
+                // when the env itself was empty — they are not real tokens.
+                if !token.starts_with("${") {
+                    gateway_token = Some(token);
+                    gateway_token_source = Some("config_auth_token".to_string());
+                }
+            }
+
+            if gateway_token.is_none() {
+                let file_path = openclaw_json_str(value, &["gateway", "auth", "tokenFile"])
+                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token_file"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token-file"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "tokenFile"]))
+                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "token_file"]));
+                if let Some(path) = file_path {
+                    if let Some(token) = openclaw_read_token_file(&path) {
+                        gateway_token = Some(token);
+                        gateway_token_source = Some("config_token_file".to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    OpenClawGatewayDiscovery {
+        gateway_url,
+        gateway_url_source,
+        gateway_token,
+        gateway_token_source,
+        config_path: config_path.display().to_string(),
+        config_exists,
+        config_parsed,
+        gateway_port,
+        gateway_port_source,
+        gateway_mode,
+        gateway_reachable: false,
+    }
+}
+
+fn openclaw_probe_target(discovery: &OpenClawGatewayDiscovery) -> Option<(String, u16)> {
+    if let Some(url) = discovery.gateway_url.as_deref() {
+        if let Some(parsed) = parse_openclaw_ws_host_port(url) {
+            return Some(parsed);
+        }
+    }
+    if let Some(port) = discovery.gateway_port.filter(|p| *p != 0) {
+        return Some(("127.0.0.1".to_string(), port));
+    }
+    None
+}
+
+fn parse_openclaw_ws_host_port(raw: &str) -> Option<(String, u16)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let without_scheme = trimmed
+        .strip_prefix("ws://")
+        .or_else(|| trimmed.strip_prefix("wss://"))
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .or_else(|| trimmed.strip_prefix("https://"))
+        .unwrap_or(trimmed);
+    let host_port = without_scheme.split('/').next().unwrap_or("").trim();
+    if host_port.is_empty() {
+        return None;
+    }
+    // IPv6 in brackets: [::1]:18789
+    if let Some(rest) = host_port.strip_prefix('[') {
+        let end = rest.find(']')?;
+        let host = rest[..end].to_string();
+        let after = &rest[end + 1..];
+        let port = if let Some(p) = after.strip_prefix(':') {
+            p.parse::<u16>().ok().filter(|p| *p != 0)?
+        } else {
+            OPENCLAW_DEFAULT_LOCAL_PORT
+        };
+        return Some((host, port));
+    }
+    if let Some((host, port_raw)) = host_port.rsplit_once(':') {
+        if !host.is_empty() {
+            if let Ok(port) = port_raw.parse::<u16>() {
+                if port != 0 {
+                    return Some((host.to_string(), port));
+                }
+            }
+        }
+    }
+    // Host only — OpenClaw default local port.
+    Some((host_port.to_string(), OPENCLAW_DEFAULT_LOCAL_PORT))
+}
+
+async fn probe_openclaw_gateway_reachable(discovery: &OpenClawGatewayDiscovery) -> bool {
+    let Some((host, port)) = openclaw_probe_target(discovery) else {
+        return false;
+    };
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(400),
+        tokio::net::TcpStream::connect((host.as_str(), port)),
+    )
+    .await
+    {
+        Ok(Ok(_)) => true,
+        _ => false,
+    }
+}
+
+async fn resolve_openclaw_cli() -> Result<PathBuf, AcpError> {
+    if let Some(path) = resolve_npx_command("openclaw").await {
+        return Ok(path);
+    }
+    if let Ok(path) = which::which("openclaw") {
+        return Ok(path);
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(path) = which::which("openclaw.cmd") {
+            return Ok(path);
+        }
+    }
+    Err(AcpError::protocol(
+        "openclaw CLI not found. Install OpenClaw in Settings first.".to_string(),
+    ))
+}
+
+async fn run_openclaw_cli(args: &[&str], timeout_secs: u64) -> Result<(bool, String), AcpError> {
+    let cli = resolve_openclaw_cli().await?;
+    let mut cmd = crate::process::tokio_command(&cli);
+    cmd.args(args);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let child = cmd
+        .spawn()
+        .map_err(|e| AcpError::protocol(format!("failed to spawn openclaw: {e}")))?;
+    let output = match tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_secs),
+        child.wait_with_output(),
+    )
+    .await
+    {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
+            return Err(AcpError::protocol(format!("openclaw command failed: {e}")));
+        }
+        Err(_) => {
+            return Err(AcpError::protocol(format!(
+                "openclaw {} timed out after {timeout_secs}s",
+                args.join(" ")
+            )));
+        }
+    };
+    let mut text = String::new();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stdout.trim().is_empty() {
+        text.push_str(stdout.trim());
+    }
+    if !stderr.trim().is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(stderr.trim());
+    }
+    Ok((output.status.success(), text))
+}
+
+async fn spawn_openclaw_gateway_run(port: u16) -> Result<(), AcpError> {
+    let cli = resolve_openclaw_cli().await?;
+    let mut cmd = crate::process::tokio_command(&cli);
+    cmd.args([
+        "gateway",
+        "run",
+        "--port",
+        &port.to_string(),
+        "--force",
+        "--allow-unconfigured",
+    ]);
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
+    // Detach: we only care that the process starts; it keeps running.
+    cmd.spawn()
+        .map_err(|e| AcpError::protocol(format!("failed to start openclaw gateway: {e}")))?;
+    Ok(())
+}
+
+/// Configure a minimal local OpenClaw gateway (if needed) and start it.
+/// Intended for the settings one-click button — no terminal required.
+pub(crate) async fn ensure_openclaw_gateway_core() -> Result<OpenClawGatewayEnsureResult, AcpError> {
+    let mut steps: Vec<String> = Vec::new();
+    let mut discovery = discover_openclaw_gateway_core().await;
+    if discovery.gateway_reachable {
+        steps.push("Gateway already reachable".into());
+        return Ok(OpenClawGatewayEnsureResult {
+            ok: true,
+            status: "already_running".into(),
+            message: "OpenClaw Gateway is already running.".into(),
+            discovery,
+            steps,
+        });
+    }
+
+    // 1) Baseline config/workspace without interactive wizard.
+    if !discovery.config_exists {
+        steps.push("Creating OpenClaw baseline config".into());
+        match run_openclaw_cli(
+            &[
+                "setup",
+                "--non-interactive",
+                "--accept-risk",
+                "--mode",
+                "local",
+            ],
+            90,
+        )
+        .await
+        {
+            Ok((ok, out)) => {
+                if ok {
+                    steps.push("openclaw setup completed".into());
+                } else {
+                    steps.push(format!("openclaw setup reported an issue: {out}"));
+                }
+            }
+            Err(e) => steps.push(format!("openclaw setup failed: {e}")),
+        }
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // 2) Ensure gateway.mode=local so service start is allowed.
+    let mode = discovery.gateway_mode.as_deref().unwrap_or("").trim();
+    if mode.is_empty() || mode != "local" {
+        steps.push("Setting gateway.mode=local".into());
+        match run_openclaw_cli(&["config", "set", "gateway.mode", "local"], 30).await {
+            Ok((ok, out)) => {
+                if ok {
+                    steps.push("gateway.mode set to local".into());
+                } else {
+                    steps.push(format!("config set gateway.mode failed: {out}"));
+                }
+            }
+            Err(e) => steps.push(format!("config set gateway.mode error: {e}")),
+        }
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // Prefer configured port; else OpenClaw default 18789.
+    let port = discovery
+        .gateway_port
+        .filter(|p| *p != 0)
+        .unwrap_or(OPENCLAW_DEFAULT_LOCAL_PORT);
+    if discovery.gateway_url.is_none() {
+        // Write port so discovery and the UI can fill OPENCLAW_GATEWAY_URL.
+        steps.push(format!("Setting gateway.port={port}"));
+        let _ = run_openclaw_cli(
+            &["config", "set", "gateway.port", &port.to_string()],
+            30,
+        )
+        .await;
+        discovery = discover_openclaw_gateway_core().await;
+    }
+
+    // 3) Try managed service start first (Windows Scheduled Task / launchd / systemd).
+    steps.push("Starting OpenClaw Gateway service".into());
+    let mut started = false;
+    match run_openclaw_cli(&["gateway", "install", "--port", &port.to_string()], 60).await {
+        Ok((ok, out)) => {
+            if ok {
+                steps.push("gateway service installed".into());
+            } else if !out.trim().is_empty() {
+                steps.push(format!("gateway install: {out}"));
+            }
+        }
+        Err(e) => steps.push(format!("gateway install skipped: {e}")),
+    }
+    match run_openclaw_cli(&["gateway", "start"], 45).await {
+        Ok((ok, out)) => {
+            if ok {
+                steps.push("gateway start ok".into());
+                started = true;
+            } else {
+                steps.push(format!("gateway start: {out}"));
+            }
+        }
+        Err(e) => steps.push(format!("gateway start error: {e}")),
+    }
+
+    // Wait briefly for the service to bind.
+    for _ in 0..20 {
+        discovery = discover_openclaw_gateway_core().await;
+        if discovery.gateway_reachable {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    }
+
+    // 4) Fallback: foreground-style detached gateway run.
+    if !discovery.gateway_reachable {
+        steps.push(format!(
+            "Service not reachable; launching openclaw gateway run on {port}"
+        ));
+        if let Err(e) = spawn_openclaw_gateway_run(port).await {
+            steps.push(format!("gateway run failed: {e}"));
+        } else {
+            started = true;
+            for _ in 0..30 {
+                discovery = discover_openclaw_gateway_core().await;
+                if discovery.gateway_reachable {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+        }
+    }
+
+    // If discovery still has no URL but we know the local port, surface it.
+    if discovery.gateway_url.is_none() {
+        discovery.gateway_url = Some(openclaw_local_ws_url(port));
+        discovery.gateway_url_source = Some("default_local".to_string());
+        discovery.gateway_port = Some(port);
+        discovery.gateway_port_source = discovery
+            .gateway_port_source
+            .or_else(|| Some("default_local".to_string()));
+        discovery.gateway_reachable = probe_openclaw_gateway_reachable(&discovery).await;
+    }
+
+    if discovery.gateway_reachable {
+        steps.push("Gateway is reachable".into());
+        return Ok(OpenClawGatewayEnsureResult {
+            ok: true,
+            status: if started {
+                "started".into()
+            } else {
+                "configured".into()
+            },
+            message: format!(
+                "OpenClaw Gateway is running at {}.",
+                discovery
+                    .gateway_url
+                    .clone()
+                    .unwrap_or_else(|| openclaw_local_ws_url(port))
+            ),
+            discovery,
+            steps,
+        });
+    }
+
+    Ok(OpenClawGatewayEnsureResult {
+        ok: false,
+        status: "failed".into(),
+        message: "Could not start OpenClaw Gateway. Check Node/openclaw install, then retry.".into(),
+        discovery,
+        steps,
+    })
 }
 
 /// Best-effort check that `resolved` looks executable on unix (any execute bit
@@ -4748,6 +6047,14 @@ fn agent_env_keys(agent_type: AgentType) -> (&'static str, &'static str, &'stati
         // non-interactive credential path is the `KIMI_MODEL_*` family, which
         // also takes priority over `~/.kimi-code/config.toml`.
         AgentType::KimiCode => ("KIMI_MODEL_BASE_URL", "KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME"),
+        // CodeBuddy self-hosted / shared-provider path uses CODEBUDDY_BASE_URL +
+        // CODEBUDDY_API_KEY. Hosted region is CODEBUDDY_INTERNET_ENVIRONMENT and
+        // is cleared when a model provider is bound.
+        AgentType::CodeBuddy => (
+            "CODEBUDDY_BASE_URL",
+            "CODEBUDDY_API_KEY",
+            "CODEBUDDY_MODEL",
+        ),
         _ => ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"),
     }
 }
@@ -4820,12 +6127,132 @@ pub(crate) async fn apply_model_provider_env(
         Ok(Some(p)) => p,
         _ => return,
     };
-    let (url_key, key_key, _) = agent_env_keys(agent_type);
-    if !provider.api_url.trim().is_empty() {
-        runtime_env.insert(url_key.to_string(), provider.api_url.clone());
+    let (url_key, key_key, model_key) = agent_env_keys(agent_type);
+    // Pi authenticates the managed A计划 provider via models.json/auth.json,
+    // not process env. Injecting OPENAI_API_KEY unlocks pi's entire built-in
+    // OpenAI catalog (~40 placeholder models) in the chat picker even though
+    // they are not configured for A计划 and cannot be used.
+    //
+    // CodeBuddy is the same class of problem: A计划 credentials belong in
+    // ~/.codebuddy/models.json as additive custom models. Writing them into
+    // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY hijacks the whole agent onto the
+    // gateway and breaks native China/overseas Tencent models.
+    let inject_openai_compat_env =
+        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy);
+    if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
+        // Agents that append `/chat/completions` themselves need a `/v1` base.
+        // Shared provider rows are often bare host roots (`http://host:port`).
+        let api_url = match agent_type {
+            AgentType::KimiCode
+            | AgentType::Codex
+            | AgentType::OpenClaw
+            | AgentType::Cline
+            | AgentType::Hermes => normalize_openai_compatible_base_url(&provider.api_url),
+            _ => provider.api_url.clone(),
+        };
+        runtime_env.insert(url_key.to_string(), api_url);
     }
-    if !provider.api_key.trim().is_empty() {
+    if inject_openai_compat_env && !provider.api_key.trim().is_empty() {
         runtime_env.insert(key_key.to_string(), provider.api_key.clone());
+    }
+    if agent_type == AgentType::CodeBuddy {
+        // Scrub leftover "replace native endpoint" knobs from older binds so
+        // Tencent built-ins work again alongside A计划 custom models.
+        runtime_env.remove("CODEBUDDY_BASE_URL");
+        runtime_env.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+        // Keep CODEBUDDY_INTERNET_ENVIRONMENT / CODEBUDDY_API_KEY if present —
+        // those are the native China/overseas/iOA path, independent of A计划.
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        if let Some(ref model) = model {
+            // Optional default selection + Claude-derived custom option label.
+            runtime_env.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+            runtime_env.insert(
+                "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                model.clone(),
+            );
+        }
+        // Additive custom model in models.json (own url/apiKey). Native models
+        // stay available from CodeBuddy's built-in catalog + region auth.
+        if let Err(e) = write_codebuddy_managed_provider(
+            &provider.api_url,
+            &provider.api_key,
+            model.as_deref().unwrap_or(""),
+            &[],
+        ) {
+            tracing::warn!(
+                "[CodeBuddy] write managed models.json for shared model provider failed: {e}"
+            );
+        }
+    }
+
+    // OpenClaw's gateway owns inference. Keep openclaw.json in sync even when
+    // the user bound a provider before this write path existed (no re-save).
+    if agent_type == AgentType::OpenClaw {
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                let agent_type_str = serde_json::to_value(&agent_type)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_else(|| agent_type.to_string());
+                extract_agent_model(provider.model.as_deref(), &agent_type_str)
+            });
+        if let Err(e) = write_openclaw_managed_provider(
+            &provider.api_url,
+            &provider.api_key,
+            model.as_deref(),
+        ) {
+            tracing::warn!(
+                "[OpenClaw] write managed provider into openclaw.json failed: {e}"
+            );
+        }
+    }
+
+    // Pi / OpenCode: refresh the managed `veryagent` provider on every session
+    // start so credentials + the agent-selected model stay current. Pass an
+    // empty catalog — chat should only show the configured model, not the
+    // entire gateway /models dump (embeddings / image / unused placeholders).
+    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode) {
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let empty_catalog: Vec<String> = Vec::new();
+        let result = if agent_type == AgentType::Pi {
+            write_pi_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref().unwrap_or(""),
+                &empty_catalog,
+            )
+        } else {
+            write_opencode_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref(),
+                &empty_catalog,
+            )
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                "[{agent_type}] write managed provider for shared model provider failed: {e}"
+            );
+        }
+    }
+
+    // After writing Pi's managed files, scrub any leftover OPENAI_* credentials
+    // from env_json so the spawned pi process cannot unlock built-in openai/*.
+    // Keep OPENAI_MODEL in env_json for settings UI bookkeeping only — strip it
+    // from the runtime process as well; defaultModel lives in settings.json.
+    if agent_type == AgentType::Pi {
+        runtime_env.remove("OPENAI_BASE_URL");
+        runtime_env.remove("OPENAI_API_KEY");
+        runtime_env.remove("OPENAI_MODEL");
     }
 }
 
@@ -4897,6 +6324,12 @@ pub(crate) fn parse_provider_model(
                 trimmed_raw.map(str::to_string),
             );
         }
+        AgentType::CodeBuddy => {
+            out.insert(
+                "CODEBUDDY_MODEL".to_string(),
+                trimmed_raw.map(str::to_string),
+            );
+        }
         _ => {
             out.insert("OPENAI_MODEL".to_string(), trimmed_raw.map(str::to_string));
         }
@@ -4933,7 +6366,10 @@ pub(crate) fn provider_codex_model_action(
 /// For `model_env`: entries with `Some(value)` are written; entries with `None`
 /// are explicitly cleared (overwritten with empty string in the env-patch, so
 /// `persist_agent_local_config_json` removes them).
-fn cascade_update_agent_config(
+///
+/// Async so Pi/OpenCode can best-effort fetch the shared provider's full model
+/// catalog and inject it into the managed provider entry (chat model picker).
+async fn cascade_update_agent_config(
     agent_type: AgentType,
     api_url: &str,
     api_key: &str,
@@ -4968,7 +6404,14 @@ fn cascade_update_agent_config(
             persist_agent_local_config_json(agent_type, Some(&patch_str))?;
         }
         AgentType::OpenClaw => {
-            // agent_local_config_path returns None for OpenClaw — no-op
+            // OpenClaw inference runs inside the local gateway process, not the
+            // ACP client. Persist credentials + model into openclaw.json so the
+            // gateway can actually call the shared provider.
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str);
+            write_openclaw_managed_provider(api_url, api_key, model_name)?;
         }
         AgentType::Hermes => {
             // When a model_provider_id is set, cascade the provider's credentials
@@ -5080,13 +6523,15 @@ fn cascade_update_agent_config(
             if api_url.trim().is_empty() {
                 provider_table.remove("base_url");
             } else {
+                let normalized = normalize_openai_compatible_base_url(api_url);
                 provider_table.insert(
                     "base_url".to_string(),
-                    toml::Value::String(api_url.to_string()),
+                    toml::Value::String(normalized),
                 );
             }
             if provider_name == "veryagent" {
                 provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
+                // Codex 2026+ only accepts `responses` (chat was removed).
                 provider_table.insert(
                     "wire_api".to_string(),
                     toml::Value::String("responses".to_string()),
@@ -5111,27 +6556,21 @@ fn cascade_update_agent_config(
             persist_codex_native_config_files(Some(&auth_str), Some(&toml_str))?;
         }
         AgentType::OpenCode => {
-            let auth_path = opencode_auth_json_path();
-            let mut auth_obj = if auth_path.exists() {
-                fs::read_to_string(&auth_path)
-                    .ok()
-                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-                    .filter(|v| v.is_object())
-                    .unwrap_or_else(|| serde_json::json!({}))
-            } else {
-                serde_json::json!({})
-            };
-            if !api_key.trim().is_empty() {
-                auth_obj["api_key"] = serde_json::Value::String(api_key.to_string());
-            }
-            let auth_str = serde_json::to_string_pretty(&auth_obj)
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_opencode_auth_json(&auth_str)?;
-
-            let patch = serde_json::json!({ "apiBaseUrl": api_url });
-            let patch_str =
-                serde_json::to_string(&patch).map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_agent_local_config_json(agent_type, Some(&patch_str))?;
+            // OpenCode stores credentials per provider id in auth.json
+            // (`{ type: "api", key }`) and non-secret provider defs in
+            // opencode.json (`provider.<id>`). Write a managed `veryagent`
+            // provider so the unified model-provider selector works the same
+            // as Hermes/Cline/Kimi. Only the agent-selected model is loaded —
+            // settings remains the place to pick from the full A计划 catalog.
+            write_opencode_managed_provider(
+                api_url,
+                api_key,
+                model_env
+                    .get("OPENAI_MODEL")
+                    .and_then(|v| v.as_ref())
+                    .map(String::as_str),
+                &[],
+            )?;
         }
         AgentType::Cline => {
             // When a model_provider_id is set, cascade the provider's credentials
@@ -5153,10 +6592,16 @@ fn cascade_update_agent_config(
             persist_cline_local_config(Some(&patch_str))?;
         }
         AgentType::CodeBuddy => {
-            // CodeBuddy authenticates via env vars (CODEBUDDY_API_KEY /
-            // CODEBUDDY_INTERNET_ENVIRONMENT) managed by its dedicated settings
-            // panel through `acpUpdateAgentEnv`; it does not participate in the
-            // model-provider credential cascade.
+            // A计划 is additive: write a custom model into models.json with its
+            // own OpenAI-compatible url/apiKey. Do not touch CODEBUDDY_BASE_URL
+            // / region / native API key — those own the Tencent built-in catalog
+            // (China vs overseas).
+            let model_name = model_env
+                .get("CODEBUDDY_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str)
+                .unwrap_or("");
+            write_codebuddy_managed_provider(api_url, api_key, model_name, &[])?;
         }
         AgentType::KimiCode => {
             // When a model_provider_id is set, the cascade injects provider
@@ -5171,10 +6616,12 @@ fn cascade_update_agent_config(
                 .unwrap_or_default();
             let spec = KimiManagedSpec {
                 interface_type: "openai".to_string(),
+                // Kimi's openai transport appends `/chat/completions` to base_url.
+                // Shared providers are often bare host roots; force `/v1`.
                 base_url: if api_url.trim().is_empty() {
                     None
                 } else {
-                    Some(api_url.to_string())
+                    Some(normalize_openai_compatible_base_url(api_url))
                 },
                 api_key: if api_key.trim().is_empty() {
                     None
@@ -5189,10 +6636,18 @@ fn cascade_update_agent_config(
             seed_kimi_synthetic_credential()?;
         }
         AgentType::Pi => {
-            // Pi authenticates via its own `~/.pi/agent/auth.json` + model
-            // selection in `~/.pi/agent/settings.json`, managed by the dedicated
-            // Pi settings panel (`acp_update_pi_config`); it does not participate
-            // in the model-provider credential cascade.
+            // Pi authenticates via `~/.pi/agent/{settings,auth,models}.json`.
+            // When bound to a shared model provider, write a managed custom
+            // provider (`veryagent`) so the agent uses the same credentials as
+            // every other agent that selected "A计划"/model provider. Only the
+            // agent-selected model is written — chat shows what pi loads, and
+            // settings is where the full A计划 catalog is chosen.
+            let model_name = model_env
+                .get("OPENAI_MODEL")
+                .and_then(|v| v.as_ref())
+                .map(String::as_str)
+                .unwrap_or("");
+            write_pi_managed_provider(api_url, api_key, model_name, &[])?;
         }
     }
     Ok(())
@@ -5232,9 +6687,19 @@ pub(crate) fn extract_agent_model(
             // Heuristic: check if any key looks like an agent_type (contains underscore
             // or matches known types).
             let has_agent_key = obj.keys().any(|k| {
-                k.contains('_') || k == "claude_code" || k == "codex" || k == "gemini"
-                    || k == "kimi_code" || k == "hermes" || k == "openhands"
-                    || k == "openclaw" || k == "cline" || k == "augment"
+                k.contains('_')
+                    || k == "claude_code"
+                    || k == "codex"
+                    || k == "gemini"
+                    || k == "kimi_code"
+                    || k == "hermes"
+                    || k == "openhands"
+                    || k == "openclaw"
+                    || k == "open_claw"
+                    || k == "cline"
+                    || k == "open_code"
+                    || k == "pi"
+                    || k == "augment"
             });
             if has_agent_key {
                 // Multi-agent format but this agent_type has no entry.
@@ -5254,7 +6719,6 @@ pub(crate) async fn cascade_update_model_provider(
     new_api_url: &str,
     new_api_key: &str,
     new_model: Option<&str>,
-    agent_types: &[String],
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
     let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, provider_id)
@@ -5267,12 +6731,11 @@ pub(crate) async fn cascade_update_model_provider(
             Err(_) => continue,
         };
 
-        // Extract this agent's model from the multi-agent model JSON.
-        let agent_type_str = serde_json::to_value(&agent_type)
-            .ok()
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_else(|| agent_type.to_string());
-        let agent_model = extract_agent_model(new_model, &agent_type_str);
+        // Provider rows no longer own a model name; models are chosen per-agent.
+        // Only cascade a model when the caller explicitly supplies one.
+        let agent_model = new_model
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
 
         // 1. Update env_json in database (uses agent_env_keys for consistent key names)
         let (url_key, key_key, _) = agent_env_keys(agent_type);
@@ -5282,24 +6745,50 @@ pub(crate) async fn cascade_update_model_provider(
             .and_then(|raw| serde_json::from_str(raw).ok())
             .unwrap_or_default();
 
-        if !new_api_url.trim().is_empty() {
-            env_map.insert(url_key.to_string(), new_api_url.to_string());
-        }
-        if !new_api_key.trim().is_empty() {
-            env_map.insert(key_key.to_string(), new_api_key.to_string());
-        }
-
-        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
-        for (k, v) in &model_env {
-            match v {
-                Some(value) => {
-                    env_map.insert(k.clone(), value.clone());
-                }
-                None => {
-                    env_map.remove(k);
-                }
+        // CodeBuddy: A计划 credentials go into models.json only. Do not overwrite
+        // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY — that breaks native Tencent
+        // models (China/overseas/iOA).
+        if agent_type != AgentType::CodeBuddy {
+            if !new_api_url.trim().is_empty() {
+                env_map.insert(url_key.to_string(), new_api_url.to_string());
+            }
+            if !new_api_key.trim().is_empty() {
+                env_map.insert(key_key.to_string(), new_api_key.to_string());
             }
         }
+        if agent_type == AgentType::CodeBuddy {
+            env_map.remove("CODEBUDDY_BASE_URL");
+            env_map.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+            if let Some(model) = env_map
+                .get("CODEBUDDY_MODEL")
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                env_map.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+                env_map.insert(
+                    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                    model.clone(),
+                );
+            }
+        }
+
+        // Preserve each agent's currently selected model when credentials change.
+        let model_env = if agent_model.is_some() {
+            let parsed = parse_provider_model(agent_type, agent_model);
+            for (k, v) in &parsed {
+                match v {
+                    Some(value) => {
+                        env_map.insert(k.clone(), value.clone());
+                    }
+                    None => {
+                        env_map.remove(k);
+                    }
+                }
+            }
+            parsed
+        } else {
+            BTreeMap::new()
+        };
 
         let patch = agent_setting_service::AgentSettingsUpdate {
             enabled: setting.enabled,
@@ -5311,52 +6800,28 @@ pub(crate) async fn cascade_update_model_provider(
             .map_err(|e| AcpError::protocol(e.to_string()))?;
 
         // 2. Update on-disk config files
-        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
+        let codex_action = if agent_model.is_some() {
+            provider_codex_model_action(agent_type, agent_model)
+        } else {
+            CodexModelAction::NoOp
+        };
         if let Err(e) = cascade_update_agent_config(
             agent_type,
             new_api_url,
             new_api_key,
             &model_env,
             &codex_action,
-        ) {
+        )
+        .await
+        {
             tracing::warn!(
                 "[ModelProvider] cascade_update_agent_config({agent_type}) failed: {e}, skipping config update"
             );
+        } else if agent_type == AgentType::OpenClaw {
+            restart_openclaw_gateway_after_provider_write().await;
         }
 
         emit_acp_agents_updated(emitter, "env_updated", Some(agent_type));
-    }
-
-    // Also cascade to agent_types that are in the provider but don't yet have
-    // a dependent agent_setting row (e.g. newly added agent_type). We need to
-    // ensure their on-disk configs get updated too if they exist.
-    let dependent_agent_types: std::collections::HashSet<String> = dependents
-        .iter()
-        .filter_map(|s| serde_json::from_str::<AgentType>(&s.agent_type).ok())
-        .map(|at| at.to_string())
-        .collect();
-    for at_str in agent_types {
-        if dependent_agent_types.contains(at_str) {
-            continue; // already handled above
-        }
-        let agent_type: AgentType = match serde_json::from_str(at_str) {
-            Ok(at) => at,
-            Err(_) => continue,
-        };
-        let agent_model = extract_agent_model(new_model, at_str);
-        let model_env = parse_provider_model(agent_type, agent_model.as_deref());
-        let codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
-        if let Err(e) = cascade_update_agent_config(
-            agent_type,
-            new_api_url,
-            new_api_key,
-            &model_env,
-            &codex_action,
-        ) {
-            tracing::warn!(
-                "[ModelProvider] cascade_update_agent_config({agent_type}) for new agent_type failed: {e}, skipping"
-            );
-        }
     }
 
     Ok(())
@@ -5430,11 +6895,72 @@ pub(crate) async fn build_session_runtime_env(
         }
     }
 
-    if agent_type == AgentType::OpenClaw && session_id.is_none() {
-        runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
+    if agent_type == AgentType::OpenClaw {
+        // OpenClaw ACP is always a gateway client. Model-provider mode still
+        // needs a reachable local gateway — it only changes how that gateway
+        // authenticates to the LLM (via openclaw.json), not whether gateway is
+        // required. Skipping ensure here caused silent empty turns after the
+        // user selected a shared provider.
+        ensure_openclaw_gateway_for_session(&mut runtime_env).await?;
+        if session_id.is_none() {
+            runtime_env.insert("OPENCLAW_RESET_SESSION".into(), "1".into());
+        }
     }
 
     Ok(runtime_env)
+}
+
+/// Best-effort ensure + fill OpenClaw gateway URL/token into session env.
+/// Fail hard only when the gateway is still unreachable after ensure — that is
+/// exactly the ECONNREFUSED the user would hit a moment later from openclaw-acp.
+async fn ensure_openclaw_gateway_for_session(
+    runtime_env: &mut BTreeMap<String, String>,
+) -> Result<(), AcpError> {
+    let result = ensure_openclaw_gateway_core().await?;
+    let discovery = &result.discovery;
+
+    if let Some(url) = discovery
+        .gateway_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        // Saved settings win if the user deliberately set a remote URL.
+        runtime_env
+            .entry("OPENCLAW_GATEWAY_URL".into())
+            .or_insert_with(|| url.to_string());
+    }
+    if let Some(token) = discovery
+        .gateway_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        runtime_env
+            .entry("OPENCLAW_GATEWAY_TOKEN".into())
+            .or_insert_with(|| token.to_string());
+    }
+
+    if !discovery.gateway_reachable {
+        return Err(AcpError::protocol(format!(
+            "OpenClaw Gateway is not reachable ({}). {}",
+            discovery
+                .gateway_url
+                .clone()
+                .unwrap_or_else(|| openclaw_local_ws_url(OPENCLAW_DEFAULT_LOCAL_PORT)),
+            result.message
+        )));
+    }
+
+    if !result.ok {
+        tracing::warn!(
+            "[OpenClaw] ensure reported not-ok but probe is reachable: {} steps={:?}",
+            result.message,
+            result.steps
+        );
+    }
+
+    Ok(())
 }
 
 /// Per-launch env keys that vary by session/run but don't represent user
@@ -5942,8 +7468,9 @@ pub(crate) async fn acp_get_agent_status_core(
     Ok(crate::acp::types::AcpAgentStatus {
         agent_type,
         available,
-        enabled: setting.map(|m| m.enabled).unwrap_or(true),
+        enabled: setting.map(|m| m.enabled).unwrap_or(false),
         installed_version,
+        resident: meta.resident,
     })
 }
 
@@ -6073,7 +7600,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
         // Hermes is self-managed: project its own ~/.hermes/.env + config.yaml
         // into config_json (read-only) and attach the raw config.yaml for the
         // advanced editor. The env-merge block above is skipped because
-        // `load_agent_local_config_json` returns None for Hermes (no codeg
+        // `load_agent_local_config_json` returns None for Hermes (no veryagent
         // local config path), so no Hermes credential leaks into process env.
         let (config_json, hermes_config_yaml) = if agent_type == AgentType::Hermes {
             (
@@ -6092,7 +7619,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             description: meta.description.to_string(),
             available,
             distribution_type: dist_type.to_string(),
-            enabled: setting.map(|m| m.enabled).unwrap_or(true),
+            enabled: setting.map(|m| m.enabled).unwrap_or(false),
             sort_order,
             installed_version: local_installed_version,
             env,
@@ -6105,12 +7632,15 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             cline_secrets_json,
             hermes_config_yaml,
             model_provider_id: setting.and_then(|m| m.model_provider_id),
+            resident: meta.resident,
         });
     }
 
+    // Resident butlers first, then user sort_order, then name.
     agents.sort_by(|a, b| {
-        a.sort_order
-            .cmp(&b.sort_order)
+        b.resident
+            .cmp(&a.resident)
+            .then_with(|| a.sort_order.cmp(&b.sort_order))
             .then_with(|| a.name.cmp(&b.name))
     });
     Ok(agents)
@@ -6308,48 +7838,76 @@ pub(crate) async fn acp_update_agent_env_core(
             .map_err(|e| AcpError::protocol(e.to_string()))?
             .ok_or_else(|| AcpError::protocol(format!("model provider not found: {pid}")))?;
 
-        // A provider can serve multiple agent_types. Verify the agent is in the
-        // provider's agent_types list (or the legacy single agent_type column).
+        // Model providers are shared credentials for every agent. Legacy rows may
+        // still carry agent_types_json / agent_type restrictions from older builds;
+        // those fields are ignored so any agent can bind any provider.
         let agent_type_str = serde_json::to_value(&agent_type)
             .ok()
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_else(|| agent_type.to_string());
-        let provider_agent_types = crate::models::model_provider::parse_agent_types_from_row(
-            &provider.agent_types_json,
-            &provider.agent_type,
-        );
-        if !provider_agent_types.contains(&agent_type_str) {
-            return Err(AcpError::protocol(format!(
-                "model provider {pid} is for [{}], cannot be bound to {agent_type}",
-                provider_agent_types.join(", ")
-            )));
-        }
 
-        // Extract this agent's model from the multi-agent model JSON.
-        let agent_model = extract_agent_model(provider.model.as_deref(), &agent_type_str);
+        // Prefer the model the agent already selected in env (per-agent choice).
+        // Fall back to any legacy value still stored on the provider row.
+        let env_model = {
+            let (_, _, model_key) = agent_env_keys(agent_type);
+            merged_env
+                .get(model_key)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        let agent_model = env_model.or_else(|| {
+            extract_agent_model(provider.model.as_deref(), &agent_type_str)
+        });
 
         let model_env = parse_provider_model(agent_type, agent_model.as_deref());
+        // Only apply set values from the provider model field. Do not clear an
+        // agent-chosen model when the provider row has no model of its own.
         for (k, v) in &model_env {
-            match v {
-                Some(value) => {
-                    merged_env.insert(k.clone(), value.clone());
-                }
-                None => {
-                    merged_env.remove(k);
-                }
+            if let Some(value) = v {
+                merged_env.insert(k.clone(), value.clone());
+            }
+        }
+        // CodeBuddy has no separate config file: env_json is the source of truth.
+        // Bind writes the shared provider into CODEBUDDY_* and clears the hosted
+        // region selector so it cannot fight a custom endpoint. Also mirror the
+        // selected model into Claude-derived custom-option env so the ACP
+        // model picker surfaces the A计划 model in chat.
+        if agent_type == AgentType::CodeBuddy {
+            // A计划 is additive custom models only. Keep native CODEBUDDY_API_KEY
+            // + CODEBUDDY_INTERNET_ENVIRONMENT (China/overseas/iOA). Strip any
+            // leftover endpoint hijack from older binds.
+            let (_, _, model_key) = agent_env_keys(agent_type);
+            merged_env.remove("CODEBUDDY_BASE_URL");
+            merged_env.remove("CODEBUDDY_DISABLE_BUILTIN_MODELS");
+            if let Some(model) = merged_env
+                .get(model_key)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
+                merged_env.insert("ANTHROPIC_CUSTOM_MODEL_OPTION".to_string(), model.clone());
+                merged_env.insert(
+                    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME".to_string(),
+                    model.clone(),
+                );
             }
         }
         codex_action = provider_codex_model_action(agent_type, agent_model.as_deref());
         // Codex's on-disk config is handled by `apply_codex_root_model_action`
         // below; Gemini's analogous config.env gap is pre-existing and out of
-        // scope here. Claude, KimiCode, Hermes, and Cline need the local-config
-        // cascade on bind so that their on-disk config files are updated immediately.
+        // scope here. Claude, KimiCode, Hermes, Cline, and OpenClaw need the
+        // local-config cascade on bind so that their on-disk config files are
+        // updated immediately (OpenClaw writes gateway model auth into
+        // openclaw.json — ACP env alone cannot authenticate inference).
         if matches!(
             agent_type,
             AgentType::ClaudeCode
                 | AgentType::KimiCode
                 | AgentType::Hermes
                 | AgentType::Cline
+                | AgentType::OpenClaw
+                | AgentType::OpenCode
+                | AgentType::Pi
+                | AgentType::CodeBuddy
         ) {
             claude_local_cascade = Some((provider.api_url.clone(), provider.api_key.clone(), model_env));
         }
@@ -6374,8 +7932,13 @@ pub(crate) async fn acp_update_agent_env_core(
             &api_key,
             &model_env,
             &CodexModelAction::NoOp,
-        ) {
+        )
+        .await
+        {
             eprintln!("[acp_update_agent_env] cascade_update_agent_config({agent_type}) failed: {e}");
+        } else if agent_type == AgentType::OpenClaw {
+            // Gateway may already be running with old credentials; nudge a restart.
+            restart_openclaw_gateway_after_provider_write().await;
         }
     }
 
@@ -6730,6 +8293,24 @@ pub async fn acp_update_pi_config(
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_load_pi_config() -> Result<PiConfigProjection, AcpError> {
     Ok(load_pi_config_core())
+}
+
+/// Discover local OpenClaw gateway URL/token from env + openclaw.json, then
+/// TCP-probe reachability. Never invents a default port as truth; empty fields
+/// mean "not found". Desktop command; the web handler awaits the same core.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_discover_openclaw_gateway() -> Result<OpenClawGatewayDiscovery, AcpError> {
+    Ok(discover_openclaw_gateway_core().await)
+}
+
+/// One-click local OpenClaw gateway bootstrap for the settings UI: create
+/// baseline config if missing, set gateway.mode=local, install/start service
+/// (or fall back to detached `gateway run`), then re-probe.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_ensure_openclaw_gateway() -> Result<OpenClawGatewayEnsureResult, AcpError> {
+    ensure_openclaw_gateway_core().await
 }
 
 /// Validate a user-supplied custom pi binary (BYO-pi): resolve it (path or
@@ -7949,6 +9530,283 @@ pub(crate) async fn codex_poll_device_code_core(
 mod tests {
     use super::*;
 
+    #[test]
+    fn openclaw_strip_json5_noise_handles_comments_and_trailing_commas() {
+        let raw = r#"{
+          // comment
+          "gateway": {
+            "port": 19001, /* block */
+            "remote": { "url": "ws://127.0.0.1:19001", },
+          },
+        }"#;
+        let cleaned = strip_json5_noise(raw);
+        let value: serde_json::Value = serde_json::from_str(&cleaned).expect("json");
+        assert_eq!(openclaw_json_port(&value), Some(19001));
+        assert_eq!(
+            openclaw_json_str(&value, &["gateway", "remote", "url"]).as_deref(),
+            Some("ws://127.0.0.1:19001")
+        );
+    }
+
+    #[test]
+    fn normalize_openclaw_openai_base_url_adds_v1_and_strips_chat() {
+        assert_eq!(
+            normalize_openclaw_openai_base_url("https://api.example.com"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            normalize_openclaw_openai_base_url("https://api.example.com/v1/"),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(
+            normalize_openclaw_openai_base_url(
+                "https://api.example.com/v1/chat/completions"
+            ),
+            "https://api.example.com/v1"
+        );
+        assert_eq!(normalize_openclaw_openai_base_url("  "), "");
+    }
+
+    #[test]
+    fn write_openclaw_managed_provider_merges_custom_provider_and_default_model() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "mode": "local", "port": 18789 }, "agents": { "defaults": { "workspace": "W" } } }"#,
+        )
+        .expect("seed");
+        // openclaw_config_path honors OPENCLAW_CONFIG_PATH.
+        // SAFETY: test-only env mutation; serialized by cargo test default.
+        unsafe {
+            std::env::set_var("OPENCLAW_CONFIG_PATH", &path);
+        }
+        write_openclaw_managed_provider(
+            "https://proxy.example.com",
+            "sk-test",
+            Some("my-model"),
+        )
+        .expect("write");
+        unsafe {
+            std::env::remove_var("OPENCLAW_CONFIG_PATH");
+        }
+
+        let raw = fs::read_to_string(&path).expect("read");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("json");
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["baseUrl"].as_str(),
+            Some("https://proxy.example.com/v1")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["apiKey"].as_str(),
+            Some("sk-test")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["api"].as_str(),
+            Some("openai-completions")
+        );
+        assert_eq!(
+            value["models"]["providers"]["veryagent"]["models"][0]["id"].as_str(),
+            Some("my-model")
+        );
+        assert_eq!(
+            value["agents"]["defaults"]["model"]["primary"].as_str(),
+            Some("veryagent/my-model")
+        );
+        // Existing gateway settings preserved.
+        assert_eq!(value["gateway"]["port"].as_u64(), Some(18789));
+        assert_eq!(
+            value["agents"]["defaults"]["workspace"].as_str(),
+            Some("W")
+        );
+    }
+
+    #[test]
+    fn write_codebuddy_managed_provider_writes_chat_completions_model() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        // resolve_codebuddy_config_dir honors CODEBUDDY_CONFIG_DIR.
+        // SAFETY: test-only env mutation.
+        unsafe {
+            std::env::set_var("CODEBUDDY_CONFIG_DIR", tmp.path());
+        }
+        // Preserve a non-managed custom model; replace a previous A计划 entry.
+        let seed = serde_json::json!({
+            "models": [
+                {
+                    "id": "user-custom",
+                    "name": "User Custom",
+                    "vendor": "OpenAI",
+                    "url": "https://other.example.com/v1/chat/completions",
+                    "apiKey": "sk-user"
+                },
+                {
+                    "id": "stale-model",
+                    "name": "stale-model",
+                    "vendor": "A计划",
+                    "url": "https://old.example.com/v1/chat/completions",
+                    "apiKey": "sk-old"
+                }
+            ]
+        });
+        fs::write(
+            tmp.path().join("models.json"),
+            serde_json::to_string_pretty(&seed).unwrap(),
+        )
+        .expect("seed");
+
+        write_codebuddy_managed_provider(
+            "https://gateway.example.com",
+            "sk-a-plan",
+            "MiniMax-M2.7",
+            &[],
+        )
+        .expect("write");
+        unsafe {
+            std::env::remove_var("CODEBUDDY_CONFIG_DIR");
+        }
+
+        let raw = fs::read_to_string(tmp.path().join("models.json")).expect("read");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("json");
+        let models = value["models"].as_array().expect("models array");
+        // Stale A计划 entry gone; user custom kept; new selection present.
+        assert_eq!(models.len(), 2);
+        let managed = models
+            .iter()
+            .find(|m| m["id"].as_str() == Some("MiniMax-M2.7"))
+            .expect("managed model");
+        assert_eq!(
+            managed["url"].as_str(),
+            Some("https://gateway.example.com/v1/chat/completions")
+        );
+        assert_eq!(managed["apiKey"].as_str(), Some("sk-a-plan"));
+        assert_eq!(managed["vendor"].as_str(), Some("A计划"));
+        assert!(
+            models
+                .iter()
+                .any(|m| m["id"].as_str() == Some("user-custom")),
+            "non-managed custom model must be preserved"
+        );
+        assert!(
+            !models
+                .iter()
+                .any(|m| m["id"].as_str() == Some("stale-model")),
+            "previous A计划 entry must be replaced"
+        );
+        // availableModels must stay absent so native Tencent built-ins remain
+        // visible alongside additive custom models.
+        assert!(
+            value.get("availableModels").is_none(),
+            "must not write availableModels (would hide native models)"
+        );
+    }
+
+    #[test]
+    fn codebuddy_chat_completions_url_normalizes_base() {
+        assert_eq!(
+            codebuddy_chat_completions_url("https://api.example.com"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            codebuddy_chat_completions_url("https://api.example.com/v1/"),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            codebuddy_chat_completions_url(
+                "https://api.example.com/v1/chat/completions"
+            ),
+            "https://api.example.com/v1/chat/completions"
+        );
+        assert_eq!(codebuddy_chat_completions_url("  "), "");
+    }
+
+    #[test]
+    fn openclaw_discovery_uses_config_remote_url_and_token() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{
+              "gateway": {
+                "port": 19002,
+                "remote": {
+                  "url": "ws://192.168.1.10:19002",
+                  "token": "remote-tok"
+                }
+              }
+            }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(path.clone(), None, None, None);
+        assert!(d.config_exists);
+        assert!(d.config_parsed);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://192.168.1.10:19002"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("config_remote_url"));
+        assert_eq!(d.gateway_token.as_deref(), Some("remote-tok"));
+        assert_eq!(
+            d.gateway_token_source.as_deref(),
+            Some("config_remote_token")
+        );
+        assert_eq!(d.gateway_port, Some(19002));
+    }
+
+    #[test]
+    fn openclaw_discovery_builds_url_from_config_port_only() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(&path, r#"{ "gateway": { "port": 19003 } }"#).unwrap();
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://127.0.0.1:19003"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("config_port"));
+        assert_eq!(d.gateway_port, Some(19003));
+        assert!(d.gateway_token.is_none());
+    }
+
+    #[test]
+    fn openclaw_discovery_env_url_wins_over_config() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "remote": { "url": "ws://from-config:1", "token": "cfg" } } }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(
+            path,
+            Some("ws://from-env:2".into()),
+            None,
+            Some("env-tok".into()),
+        );
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://from-env:2"));
+        assert_eq!(d.gateway_url_source.as_deref(), Some("env"));
+        assert_eq!(d.gateway_token.as_deref(), Some("env-tok"));
+        assert_eq!(d.gateway_token_source.as_deref(), Some("env"));
+    }
+
+    #[test]
+    fn openclaw_discovery_missing_config_is_empty_not_default_port() {
+        let path = PathBuf::from("/definitely/missing/openclaw-no-such.json");
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert!(!d.config_exists);
+        assert!(!d.config_parsed);
+        assert!(d.gateway_url.is_none());
+        assert!(d.gateway_token.is_none());
+        assert!(d.gateway_port.is_none());
+    }
+
+    #[test]
+    fn openclaw_discovery_skips_env_placeholder_auth_token() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("openclaw.json");
+        fs::write(
+            &path,
+            r#"{ "gateway": { "auth": { "token": "${OPENCLAW_GATEWAY_TOKEN}" }, "port": 19004 } }"#,
+        )
+        .unwrap();
+        let d = discover_openclaw_gateway_from(path, None, None, None);
+        assert_eq!(d.gateway_url.as_deref(), Some("ws://127.0.0.1:19004"));
+        assert!(d.gateway_token.is_none());
+    }
+
     /// Build a `runtime_env` whose `PI_CODING_AGENT_DIR` points at `agent_dir`,
     /// so trust seeding writes a tempdir's `trust.json` instead of `~/.pi/agent`.
     fn pi_env_for(agent_dir: &Path) -> BTreeMap<String, String> {
@@ -8226,11 +10084,11 @@ wire_api = "chat"
             "model_provider = \"other\"",
         );
 
-        let p_codeg = codex_config_projection_from_toml(veryagent);
+        let p_veryagent = codex_config_projection_from_toml(veryagent);
         let p_other = codex_config_projection_from_toml(&other);
 
         assert_eq!(
-            p_codeg.get("modelProvider").and_then(|v| v.as_str()),
+            p_veryagent.get("modelProvider").and_then(|v| v.as_str()),
             Some("veryagent")
         );
         assert_eq!(
@@ -8238,19 +10096,19 @@ wire_api = "chat"
             Some("other")
         );
         // Same endpoint resolved for both providers...
-        assert_eq!(p_codeg.get("apiBaseUrl"), p_other.get("apiBaseUrl"));
+        assert_eq!(p_veryagent.get("apiBaseUrl"), p_other.get("apiBaseUrl"));
         // ...yet the projections differ, so the launch-config fingerprint does too.
-        assert_ne!(p_codeg, p_other);
+        assert_ne!(p_veryagent, p_other);
 
         // Deterministic for identical input.
-        assert_eq!(codex_config_projection_from_toml(veryagent), p_codeg);
+        assert_eq!(codex_config_projection_from_toml(veryagent), p_veryagent);
 
         // `modelProvider` must NOT be an AgentRuntimeConfig key, or
         // build_runtime_env_from_setting would mirror it back into a runtime env
         // var (reintroducing the very MODEL_PROVIDER pin we removed).
         assert!(
             serde_json::from_value::<AgentRuntimeConfig>(serde_json::Value::Object(
-                p_codeg.clone()
+                p_veryagent.clone()
             ))
             .is_ok()
         );

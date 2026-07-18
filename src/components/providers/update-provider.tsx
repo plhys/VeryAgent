@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import {
   type AppUpdateState,
+  checkAppUpdate,
   confirmRollbackVersion,
   getAppUpdateState,
   getRunningServerVersion,
@@ -69,6 +70,10 @@ export interface UpdateContextValue {
   /** Any action (update / restart / rollback) is in flight — for disabling
    * controls without each consumer re-deriving it. */
   isBusy: boolean
+  /** Newer release version reported by the last successful check, or null. */
+  availableVersion: string | null
+  /** True while a background availability check is in flight. */
+  checkingAvailable: boolean
   /** Begin (or attach to) a background download+install of the available
    * update. Progress arrives via {@link state}. */
   startUpdate: () => Promise<void>
@@ -78,6 +83,8 @@ export interface UpdateContextValue {
   restart: () => Promise<void>
   /** Revert to the previously-installed server bundle (server mode only). */
   rollback: () => Promise<void>
+  /** Re-check the selected release channel for a newer version (quiet). */
+  checkForUpdates: () => Promise<void>
 }
 
 const UpdateContext = createContext<UpdateContextValue | null>(null)
@@ -101,6 +108,10 @@ function countdown(
   })
 }
 
+/** Quiet availability poll interval (title-bar green affordance). */
+const AVAILABILITY_POLL_MS = 6 * 60 * 60 * 1000
+const AVAILABILITY_INITIAL_DELAY_MS = 4_000
+
 export function UpdateProvider({ children }: { children: React.ReactNode }) {
   const t = useTranslations("SystemSettings")
   const [state, setState] = useState<AppUpdateState>(IDLE_STATE)
@@ -115,6 +126,8 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
   // then `state` is the default `idle` placeholder, which consumers must not
   // treat as a real "idle" backend status (e.g. offering rollback).
   const [hydrated, setHydrated] = useState(false)
+  const [availableVersion, setAvailableVersion] = useState<string | null>(null)
+  const [checkingAvailable, setCheckingAvailable] = useState(false)
 
   // Mirror state into a ref so the action callbacks read the latest snapshot
   // without being re-created on every transition.
@@ -202,6 +215,42 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
       offReconnect?.()
     }
   }, [applyState])
+
+  // ─── Availability (title-bar green button) ───────────────────────────────
+  // Quiet check against the selected release channel. Failures stay silent so
+  // a missing/unreachable release source never spams the main UI.
+
+  const checkForUpdates = useCallback(async () => {
+    setCheckingAvailable(true)
+    try {
+      const result = await checkAppUpdate()
+      const version = result.update?.version
+      setAvailableVersion(
+        typeof version === "string" && version.trim() ? version.trim() : null
+      )
+    } catch (err) {
+      // Keep the last known available version; a transient network blip must
+      // not hide a real update the user already saw.
+      console.info("[Update] availability check failed:", err)
+    } finally {
+      setCheckingAvailable(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const initial = setTimeout(() => {
+      if (!cancelled) void checkForUpdates()
+    }, AVAILABILITY_INITIAL_DELAY_MS)
+    const interval = setInterval(() => {
+      if (!cancelled) void checkForUpdates()
+    }, AVAILABILITY_POLL_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(initial)
+      clearInterval(interval)
+    }
+  }, [checkForUpdates])
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -415,9 +464,12 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
       isRestarting,
       hydrated,
       isBusy,
+      availableVersion,
+      checkingAvailable,
       startUpdate,
       restart,
       rollback,
+      checkForUpdates,
     }),
     [
       state,
@@ -427,9 +479,12 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
       isRestarting,
       hydrated,
       isBusy,
+      availableVersion,
+      checkingAvailable,
       startUpdate,
       restart,
       rollback,
+      checkForUpdates,
     ]
   )
 

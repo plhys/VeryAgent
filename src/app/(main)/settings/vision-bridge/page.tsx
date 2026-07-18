@@ -1,5 +1,6 @@
-import { VisionBridgeSettings } from "@/components/settings/vision-bridge-settings"
+import { redirect } from "next/navigation"
 
+/** Legacy route — multimodal routing now lives under Model Providers. */
 export default function SettingsVisionBridgePage() {
-  return <VisionBridgeSettings />
+  redirect("/settings/model-providers")
 }

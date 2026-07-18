@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, type CSSProperties } from "react"
+import { memo, useState, useCallback, useRef, type CSSProperties } from "react"
 import {
   Pencil,
   Trash2,
@@ -15,6 +15,7 @@ import {
   ChevronRight,
   LayoutGrid,
 } from "lucide-react"
+import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
 import { STATUS_ORDER } from "@/lib/types"
@@ -107,6 +108,7 @@ interface SidebarConversationCardProps {
   isSelected: boolean
   isOpenInTab?: boolean
   timeLabel?: string
+  rawTimestamp?: string
   onSelect: (id: number, agentType: string, folderId: number) => void
   onDoubleClick?: (id: number, agentType: string, folderId: number) => void
   onRename: (id: number, newTitle: string) => Promise<void>
@@ -130,6 +132,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   isSelected,
   isOpenInTab = false,
   timeLabel,
+  rawTimestamp,
   onSelect,
   onDoubleClick,
   onRename,
@@ -153,6 +156,8 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [renameValue, setRenameValue] = useState("")
+  const [isHovered, setIsHovered] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const handleClick = useCallback(() => {
     onSelect(conversation.id, conversation.agent_type, conversation.folder_id)
@@ -219,6 +224,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
+            ref={cardRef}
 	            className="relative h-[2.125rem] bg-sidebar"
             data-conv-key={`${conversation.agent_type}:${conversation.id}`}
             // Per-level indent: shift the shared rail axis right by one step per
@@ -243,6 +249,8 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   ? "bg-sidebar-border dark:bg-[#3D3D3D]"
                   : "hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
               )}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
             >
               <button
                 data-conversation-id={conversation.id}
@@ -250,7 +258,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 onDoubleClick={handleDblClick}
                 className={cn(
                   "relative flex h-full min-w-0 flex-1 items-center gap-[0.625rem] text-left outline-none",
-                  "rounded-full",
+                  "rounded-full cursor-pointer",
                   "pr-[0.25rem]"
                 )}
                 // Rail-axis-relative left padding (was a fixed `pl-7`): at depth 0
@@ -619,6 +627,12 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           summary={conversation}
         />
       )}
+
+      <SidebarHoverTimeFlag
+        hostRef={cardRef}
+        isHovered={isHovered}
+        rawTimestamp={rawTimestamp}
+      />
     </>
   )
 })

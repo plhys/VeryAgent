@@ -5,7 +5,11 @@ import dynamic from "next/dynamic"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { DiffOnMount } from "@monaco-editor/react"
 import type { editor as MonacoEditorNs } from "monaco-editor"
-import { defineMonacoThemes, useMonacoThemeSync } from "@/lib/monaco-themes"
+import {
+  defineMonacoThemes,
+  MONACO_UNICODE_HIGHLIGHT_OPTIONS,
+  useMonacoThemeSync,
+} from "@/lib/monaco-themes"
 import { useZoomLevel, useEditorFont } from "@/hooks/use-appearance"
 import { cn } from "@/lib/utils"
 
@@ -198,6 +202,7 @@ export function DiffViewer({
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             renderOverviewRuler: false,
+            unicodeHighlight: MONACO_UNICODE_HIGHLIGHT_OPTIONS,
             ignoreTrimWhitespace: true,
             renderIndicators: true,
             originalEditable: false,

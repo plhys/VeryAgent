@@ -1,9 +1,8 @@
 //! Image proxy — fetches an image from a URL and returns it as base64.
 //!
-//! Used by the gemini-image expert skill's workflow: the agent calls the
-//! gemini-image API, receives an internal-network image URL, then invokes
-//! `fetch_image_as_base64` to download and encode the image so it can be
-//! displayed in the chat transcript or saved via `save_binary_file`.
+//! Used by the `generate_image` / `modify_image` workflow: the agent receives
+//! image data from the MCP endpoint, and the frontend uses this to display
+//! images in the chat transcript, copy to clipboard, or save to disk.
 //!
 //! Also provides `write_image_to_clipboard` which decodes base64 image data
 //! and writes it to the system clipboard as a PNG bitmap — the only reliable
@@ -122,7 +121,7 @@ fn extract_filename(url: &str, mime_type: &str) -> String {
     let ext = mime_type
         .strip_prefix("image/")
         .unwrap_or("jpeg");
-    format!("gemini-output.{}", ext)
+    format!("image-output.{}", ext)
 }
 
 /// Write base64-encoded image data to the system clipboard as a bitmap.

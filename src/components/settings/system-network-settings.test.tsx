@@ -24,6 +24,15 @@ vi.mock("@/lib/api", () => ({
   getSystemProxySettings: vi.fn(),
   updateSystemProxySettings: vi.fn(),
   updateSystemLanguageSettings: vi.fn(),
+  getAppUpdateSourceSettings: vi.fn(async () => ({
+    source: "github",
+    sourceLabel: "GitHub",
+    repoUrl: "https://github.com/plhys/VeryAgent",
+    releasesUrl: "https://github.com/plhys/VeryAgent/releases/latest",
+    manifestUrl:
+      "https://github.com/plhys/VeryAgent/releases/latest/download/latest.json",
+  })),
+  updateAppUpdateSourceSettings: vi.fn(),
   // The System page now embeds <BackupSettings/>, which subscribes to backup
   // progress on mount and imports the backup API surface; stub it all.
   listenBackupProgress: vi.fn(async () => () => {}),

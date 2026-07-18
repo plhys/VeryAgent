@@ -36,6 +36,8 @@
   "SettingsShell": {
     "title": "Settings",
     "preferences": "Preferences",
+    "groupGeneral": "General",
+    "groupAdvanced": "Advanced",
     "nav": {
       "general": "General",
       "appearance": "Appearance",
@@ -49,9 +51,11 @@
       "model_providers": "Model Providers",
       "experts": "Experts",
       "office_tools": "Office Tools",
+      "skill_packs": "Skill Packs",
       "quick_messages": "Quick Messages",
       "logs": "Runtime Logs",
-      "vision_bridge": "Vision Bridge"
+      "vision_bridge": "Vision Bridge",
+      "openwiki": "OpenWiki"
     }
   },
   "AppearanceSettings": {
@@ -139,7 +143,14 @@
     "languageSaveFailed": "Failed to save language settings: {message}",
     "updateTitle": "App Update",
     "versionTitle": "Software Update",
-    "updateDescription": "Check the configured release source for newer versions and install directly when available.",
+    "updateDescription": "Check the selected release source for newer versions and install directly when available.",
+    "updateSourceTitle": "Update source",
+    "updateSourceDescription": "Pick the release repository that matches your network. GitHub is public; Gitea is the internal mirror.",
+    "updateSourceGithub": "GitHub repository",
+    "updateSourceGitea": "Gitea repository",
+    "updateSourceGithubHint": "Public: github.com/plhys/VeryAgent",
+    "updateSourceGiteaHint": "Internal: 10.10.100.233 Gitea / boss/veryagent",
+    "updateSourceSaveFailed": "Failed to save update source: {message}",
     "currentVersion": "Current version",
     "upgradableVersion": "Latest version",
     "none": "None",
@@ -176,8 +187,7 @@
     "rollbackSuccess": "Rolled back to the previous version. Reloading...",
     "rollbackFailed": "Rollback failed. Check the server logs.",
     "updateErrors": {
-      "sourceUnavailable": "Cannot reach the update source. Check your network or proxy and try again.",
-      "network": "Network connection failed. Check your network or proxy and try again.",
+      "network": "Network connection failed. Check your network or proxy, or try the other update source.",
       "downloadFailed": "Failed to download update package. Please try again later.",
       "installFailed": "Failed to install update. Please close the app and try again.",
       "unknown": "Update failed. Please try again later."
@@ -594,6 +604,46 @@
       "agentEnabledAria": "{name} enabled",
       "agentEnabledSwitch": "{name} enable switch"
     },
+    "readiness": {
+      "badge": {
+        "checking": "Checking",
+        "disabled": "Disabled",
+        "notInstalled": "Not installed",
+        "notReady": "Not ready",
+        "ready": "Ready",
+        "unchecked": "Unchecked"
+      },
+      "title": {
+        "checking": "Checking this machine…",
+        "disabled": "This agent is disabled",
+        "notInstalled": "{name} is not installed",
+        "dependencyBlocked": "{name} is installed, but dependencies fail",
+        "configNeeded": "{name} is installed, config still needed",
+        "ready": "{name} is ready",
+        "unchecked": "Checks have not finished"
+      },
+      "detail": {
+        "checking": "Checking install state, dependency versions, and configuration.",
+        "disabled": "Turn on the switch above to include this agent in checks and chats.",
+        "notInstalled": "This agent is not on this machine yet. Install below; we re-check automatically after install.",
+        "dependencyBlocked": "Reason: {reason}",
+        "hermesNeedProvider": "Model Provider mode is selected, but no provider is chosen. Pick one below and save.",
+        "hermesNeedNativeConfig": "Configure Hermes provider, API key, and model below, then save.",
+        "hermesNeedApiOrOauth": "A model is set, but no API key yet. Add a key, or finish terminal OAuth for {provider}.",
+        "openClawNeedProvider": "Model Provider mode is selected, but no provider is chosen. Pick one below and save.",
+        "openClawNeedGateway": "Gateway mode needs a local OpenClaw Gateway. No URL was found in {path} or env. Click “Set up & start Gateway” — no terminal commands required.",
+        "openClawGatewayDown": "Gateway URL is {url}, but it is not reachable (process not running). Click “Set up & start Gateway”.",
+        "ready": "Environment and config look good. You can start a new chat with this agent.",
+        "unchecked": "Refresh to re-check this machine."
+      },
+      "hint": {
+        "installFirst": "Install only installs the agent package — it does not upgrade system Node/dependencies.",
+        "fixDependency": "Fix the red/yellow checks below first (for example upgrade Node), then refresh.",
+        "configureBelow": "Installed is not the same as usable. Finish the config below, save, then refresh.",
+        "openClawStartGateway": "No terminal needed: the button writes config and starts the Gateway for you.",
+        "readyToChat": "You can select this agent in chat now."
+      }
+    },
     "preflight": {
       "count": "Preflight items: {count}",
       "notRun": "Checks have not run yet."
@@ -628,7 +678,8 @@
       "loggedIn": "Account logged in",
       "loginRelogin": "Re-login / Switch account",
       "loginTimeout": "Login timed out, please try again",
-      "loginSaveFailed": "Login succeeded but failed to save config"
+      "loginSaveFailed": "Login succeeded but failed to save config",
+      "modelProviderResponsesWarning": "Codex only supports the OpenAI Responses API (wire_api = responses). Gateways that only implement Chat Completions — including most A计划 providers — will not work with Codex. Use ChatGPT subscription, the official OpenAI API, or a Responses-compatible endpoint."
     },
     "gemini": {
       "authConfig": "Gemini Auth Config",
@@ -713,12 +764,18 @@
       },
       "refreshCatalog": "Refresh catalog",
       "reasoningBadge": "reasoning",
-      "contextWindow": "Context window"
+      "contextWindow": "Context window",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native multi-provider",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use OpenCode's native multi-provider connect and config UI."
     },
     "openClaw": {
       "gatewayConfig": "Gateway Config",
-      "gatewayDescription": "Configure OpenClaw Gateway connection. Supports local or remote gateway.",
-      "gatewayUrlHint": "Leave empty to use gateway.remote.url from local openclaw config.",
+      "gatewayDescription": "Configure OpenClaw Gateway connection. Supports local or remote gateway. veryagent discovers local openclaw.json / env automatically and only fills empty fields.",
+      "gatewayUrlHint": "Leave empty to use the discovered local gateway URL (gateway.remote.url or gateway.port). Saved values always win.",
+      "gatewayUrlPlaceholder": "ws://host:port or wss://host:port",
       "gatewayTokenPlaceholder": "Gateway auth token",
       "gatewayTokenHint": "Use token-file instead of plain token when possible; configure via openclaw CLI.",
       "sessionKeyHint": "Optional. Specify gateway session key; leave empty to auto-assign isolated session.",
@@ -726,7 +783,16 @@
       "authModeGateway": "Gateway",
       "authModeModelProvider": "Model Provider",
       "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
-      "authModeGatewayHint": "Connect to an OpenClaw Gateway."
+      "authModeGatewayHint": "Connect to an OpenClaw Gateway.",
+      "discoveryFound": "Discovered gateway from {source} ({path}). Empty fields were auto-filled.",
+      "discoveryConfigNoGateway": "Found openclaw config at {path}, but no gateway URL/port is set there.",
+      "discoveryNotFound": "No openclaw.json at {path}. Use Set up & start Gateway below.",
+      "discoveryReachable": "Gateway is reachable: {url}",
+      "discoveryUnreachable": "Gateway URL {url} is not reachable (service not running).",
+      "ensureGateway": "Set up & start Gateway",
+      "ensureGatewayRunning": "Setting up / starting Gateway…",
+      "ensureGatewayOk": "Gateway ready: {message}",
+      "ensureGatewayFailed": "Auto-start failed: {message}"
     },
     "hermes": {
       "configManagement": "Hermes Configuration",
@@ -760,6 +826,11 @@
     "codebuddy": {
       "configManagement": "CodeBuddy Configuration",
       "configDescription": "CodeBuddy authenticates with an API key. Mainland China builds also require the environment set to “China (internal)”; iOA builds use “iOA”. The overseas build leaves it unset.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native config",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Append the selected model provider as a CodeBuddy custom model (~/.codebuddy/models.json). Native China / overseas / iOA models and CODEBUDDY_API_KEY are left unchanged.",
+      "authModeNativeHint": "Use CodeBuddy's native environment / API key / deployment URL settings.",
       "apiKeyLabel": "API Key",
       "apiKeyHint": "Saved as CODEBUDDY_API_KEY for this agent. Alternatively, sign in with the CodeBuddy CLI in a terminal.",
       "apiKeyHintSelfHosted": "Saved as CODEBUDDY_API_KEY for this agent. Use the key issued by your private deployment.",
@@ -827,6 +898,12 @@
     "modelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
     "selectModelProvider": "Select Model Provider",
     "noModelProviderAvailable": "No model provider configured for this agent. Go to Model Provider Settings to add one.",
+    "selectProviderModel": "Select Model",
+    "providerModelHint": "Models are listed from the selected provider. You can also type a custom model id.",
+    "providerModelLoading": "Loading models…",
+    "providerModelEmpty": "No models returned. Type a model id manually.",
+    "providerModelFetchFailed": "Couldn't list models — check the provider URL and key.",
+    "refreshProviderModels": "Refresh models",
     "claude": {
       "authMode": "Auth Mode",
       "officialSubscription": "Official Subscription",
@@ -970,6 +1047,11 @@
     "pi": {
       "configManagement": "Pi Configuration",
       "configDescription": "Pi authenticates with your model provider's API key. The key is written to ~/.pi/agent/auth.json and the model selection to settings.json.",
+      "authModeLabel": "Authentication method",
+      "authModeNative": "Native providers",
+      "authModeModelProvider": "Model Provider",
+      "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
+      "authModeNativeHint": "Use Pi's native providers and custom endpoint configuration.",
       "providerLabel": "Provider",
       "modelLabel": "Model",
       "thinkingLabel": "Thinking",
@@ -1336,13 +1418,19 @@
       "untitledConversation": "Untitled conversation"
     },
     "folderTitleBar": {
-      "showSidebar": "Show Sidebar",
-      "hideSidebar": "Hide Sidebar",
-      "toggleTerminal": "Toggle Terminal",
-      "toggleAuxPanel": "Toggle Auxiliary Panel",
+      "showSidebar": "Show sidebar",
+      "hideSidebar": "Hide sidebar",
+      "toggleTerminal": "Toggle terminal",
+      "toggleAuxPanel": "Toggle aux panel",
       "search": "Search",
-      "openSettings": "Open Settings",
-      "withShortcut": "{label} ({shortcut})"
+      "openSettings": "Open settings",
+      "withShortcut": "{label} ({shortcut})",
+      "switchToLight": "Switch to light theme",
+      "switchToDark": "Switch to dark theme",
+      "updateAvailable": "Update available {version}",
+      "updateNow": "Update",
+      "restartToUpdate": "Restart to update",
+      "updating": "Updating…"
     },
     "statusBar": {
       "connection": {
@@ -2019,6 +2107,7 @@
           "spawnFailed": "Failed to start {agent}: {message}",
           "downloadFailed": "{agent} download failed: {message}",
           "sessionLoadResourceNotFound": "{agent} session failed to load. Reload to retry, or start a new conversation.",
+          "sessionLoadUnavailable": "{agent} couldn't restore this session — it may have ended or the agent stopped. Reload to retry, or start a new conversation.",
           "turnFailedRefusal": "{agent} refused to continue this turn. This often indicates a backend or gateway error — check the agent's logs.",
           "turnFailedMaxTokens": "{agent} reached the maximum token limit for this turn.",
           "turnFailedMaxTurnRequests": "{agent} reached the maximum number of allowed requests for this turn.",
@@ -2104,8 +2193,34 @@
         "slashSearchEmpty": "No matching commands",
         "experts": "Experts",
         "office": "Office Work",
+        "research": "Scientific Research",
+        "enabledPlugins": "Enabled plugins",
+        "pluginsLoading": "Loading plugins…",
+        "pluginsEmpty": "No plugins enabled for this agent",
+        "pluginOpenWikiTitle": "OpenWiki",
+        "pluginOpenWikiActive": "On · auto-inject",
+        "pluginOpenWikiHint": "No manual insert needed. The next message will automatically include a read-only Code Wiki context for this workspace.",
+        "pluginMcpHint": "This MCP plugin is enabled for the agent and tools mount automatically from its agent config.",
         "addExpertSkill": "Add expert skill",
         "addOfficeSkill": "Add office skill",
+        "expertCatDiscovery": "Discovery & Design",
+        "expertCatPlanning": "Planning",
+        "expertCatExecution": "Execution",
+        "expertCatQuality": "Quality & Testing",
+        "expertCatDebugging": "Debugging",
+        "expertCatReview": "Review & Integration",
+        "expertCatMeta": "Meta Skills",
+        "expertCatCreative": "Creative & Graphics",
+        "scienceCatIdeation": "Ideation",
+        "scienceCatDesign": "Research Design",
+        "scienceCatAnalysis": "Analysis",
+        "scienceCatVisualization": "Visualization",
+        "scienceCatEvaluation": "Evaluation",
+        "scienceCatLiterature": "Literature",
+        "officeCatGeneral": "General",
+        "officeCatPresentations": "Presentations",
+        "officeCatDocuments": "Documents",
+        "officeCatSpreadsheets": "Spreadsheets",
         "attachUploadTooLarge": "{names} exceeds the {limit}MB upload limit and was skipped.",
         "attachUploadFailed": "Failed to upload {names}.",
         "attachUploadNotAFile": "{names} isn't a regular file (directory or special file) and was skipped.",
@@ -2137,6 +2252,7 @@
         "autoConnectFallback": "Click to open {path} and manage installation.",
         "autoConnectAppend": "{message}. Click to open {path} and manage installation.",
         "enableAgentFirstPlaceholder": "Enable at least one agent before starting a session...",
+        "pickAgentFirstPlaceholder": "Select an agent before sending...",
         "prepareSessionFailed": "Couldn't prepare the chat session. Please try again.",
         "createConversationFailed": "Couldn't create the conversation. Please try again.",
         "askAnythingPlaceholder": "Ask anything..."
@@ -2194,12 +2310,42 @@
           },
           "tabs": {
             "office": "Office Work",
-            "coding": "Code Development"
+            "coding": "Code Development",
+            "research": "Scientific Research"
           },
           "coding": {
             "brainstormingDesc": "Explore intent & requirements before building",
             "debuggingDesc": "Find the root cause before proposing fixes",
             "writingSkillsDesc": "Create, edit & verify reusable skills"
+          },
+          "scientific-brainstorming": "Scientific Brainstorming",
+          "scientific-brainstormingDesc": "Open-ended research ideation — explore interdisciplinary links, challenge assumptions, and surface research gaps.",
+          "hypothesis-generation": "Hypothesis Generation",
+          "hypothesis-generationDesc": "Turn observations into testable hypotheses with predictions, mechanisms, and experiments to test them.",
+          "experimental-design": "Experimental Design",
+          "experimental-designDesc": "Design rigorous studies before collecting data — randomization, blocking, controls, and factorial/DOE layouts.",
+          "statistical-power": "Statistical Power",
+          "statistical-powerDesc": "Sample-size and power analysis — how many subjects you need, minimum detectable effects, and power curves.",
+          "statistical-analysis": "Statistical Analysis",
+          "statistical-analysisDesc": "Guided statistical analysis — test selection, assumption checks, effect sizes, and APA-style reporting.",
+          "exploratory-data-analysis": "Exploratory Data Analysis",
+          "exploratory-data-analysisDesc": "Automated exploration of scientific data files across 200+ formats with quality metrics and reports.",
+          "scientific-visualization": "Scientific Visualization",
+          "scientific-visualizationDesc": "Publication-ready figures — multi-panel layouts, significance annotations, and journal-specific formatting.",
+          "scientific-critical-thinking": "Critical Thinking",
+          "scientific-critical-thinkingDesc": "Appraise scientific claims and evidence quality — spot biases and confounders, apply GRADE and risk-of-bias frameworks.",
+          "paper-lookup": "Paper Lookup",
+          "paper-lookupDesc": "Search 10 scholarly APIs (PubMed, arXiv, OpenAlex, Crossref…) for papers, citations, and open-access full text.",
+          "prompts": {
+            "scientific-brainstorming": "Help me brainstorm research directions — explore interdisciplinary connections, challenge assumptions, and surface promising gaps. The area I'm exploring: ",
+            "hypothesis-generation": "Help me turn these observations into testable hypotheses — with clear predictions, plausible mechanisms, and experiments to test them. My observations: ",
+            "experimental-design": "Help me design a rigorous experiment before I collect data — the design, randomization, controls, and how to avoid confounding. What I want to study: ",
+            "statistical-power": "Help me determine the sample size I need — walk me through a power analysis (effect size, alpha, power) for my design. Details: ",
+            "statistical-analysis": "Help me analyze this data properly — choose the right test, check assumptions, report effect sizes, and write it up. My data and question: ",
+            "exploratory-data-analysis": "Do an exploratory analysis of my data file — summarize its structure, quality, and notable patterns, then suggest next steps. The file is: ",
+            "scientific-visualization": "Help me make a publication-quality figure — clear layout, honest error bars, a colorblind-safe palette, and journal formatting. What I want to show: ",
+            "scientific-critical-thinking": "Help me critically appraise this study or claim — assess the evidence quality, spot biases and confounders, and weigh the conclusions. Here it is: ",
+            "paper-lookup": "Help me find relevant papers and open-access full text across scholarly databases, with citations I can reuse. I'm looking for: "
           },
           "notEnabled": {
             "title": "“{skill}” isn’t available to {agent} yet",
@@ -2211,7 +2357,15 @@
       },
       "agentSelector": {
         "noEnabledAgents": "No enabled agents",
-        "openAgentsSettings": "Open Agents settings"
+        "noGeneralAgents": "No general-mode butlers available (Hermes / OpenClaw). Enable and install them in Settings.",
+        "noExpertAgents": "No expert coding agents available. Enable and install them in Settings.",
+        "openAgentsSettings": "Open Agents settings",
+        "residentBadge": "Resident butler",
+        "agentDisabled": "Inactive",
+        "agentUnavailable": "Unavailable",
+        "modeSwitchAria": "Agent mode",
+        "modeGeneral": "General",
+        "modeExpert": "Expert"
       },
       "subAgentOverlay": {
         "title": "Sub-agents",
@@ -2254,6 +2408,21 @@
         "approvalPreset": "Approval Preset",
         "defaultThinkingMode": "Default thinking mode",
         "thinkingLevel": "Thinking level",
+        "thoughtLevel": "Think",
+        "thoughtLevelDesc": "How hard the model thinks. Deeper is slower and uses more tokens. Not a permission.",
+        "thoughtLevelAdaptiveDesc": "Follow the Gateway default thought level.",
+        "fastMode": "Fast",
+        "fastModeDesc": "Use fast mode (mainly OpenAI). Faster, often shorter answers.",
+        "toolVerbosity": "Tools",
+        "toolVerbosityDesc": "How much tool progress you see. Off / On / Full. Display only.",
+        "pluginTrace": "Plugin",
+        "pluginTraceDesc": "Show plugin trace logs. Leave off unless debugging.",
+        "reasoningStream": "Reason",
+        "reasoningStreamDesc": "Show model reasoning. Off / On / Stream. Display only.",
+        "usageDetail": "Usage",
+        "usageDetailDesc": "How much token usage is shown. Off / Tokens / Full.",
+        "elevatedActions": "Elevate",
+        "elevatedActionsDesc": "Elevated execution policy. Off / On / Ask / Full. Not a Windows permission.",
         "bypass": "Bypass",
         "reasoningEffort": "Reasoning effort",
         "allowOnce": "Allow once",
@@ -2263,6 +2432,14 @@
         "readOnly": "Read-only",
         "agentMode": "Agent",
         "agentFullAccess": "Agent (full access)",
+        "switchOff": "Off",
+        "switchOn": "On",
+        "switchAuto": "Auto",
+        "switchFull": "Full",
+        "switchStream": "Stream",
+        "usageTokens": "Tokens",
+        "elevatedAsk": "Ask each time",
+        "thinkingAdaptive": "Adaptive",
         "thinkingOff": "Off",
         "thinkingLow": "Low",
         "thinkingMedium": "Medium",
@@ -2542,6 +2719,16 @@
           "launchNote": "Running in background · {id}"
         }
       },
+      "backgroundTasks": {
+        "running": "{count, plural, one {# background task running} other {# background tasks running}}",
+        "settling": "Syncing background results…",
+        "settledFallback": "Background task finished ({status})",
+        "cardRunning": "Running in background",
+        "cardLaunchedPending": "Launched in background",
+        "cardCompleted": "Background task completed",
+        "cardFinishedWithStatus": "Background task finished ({status})",
+        "cardResultPending": "Result not returned yet"
+      },
       "messageNav": {
         "title": "Message navigation",
         "collapse": "Collapse message navigation",
@@ -2635,7 +2822,7 @@
       "noFolders": "No folders",
       "noBranches": "No branches",
       "noBranch": "(no branch)",
-      "chatModeLabel": "No-folder mode",
+      "chatModeLabel": "Free mode",
       "commit": "Commit",
       "push": "Push",
       "merge": "Merge",
@@ -2931,9 +3118,7 @@
   },
   "ModelProviderSettings": {
     "sectionTitle": "Model Providers",
-    "sectionDescription": "Manage API provider credentials for agents.",
-    "filterAll": "All",
-    "providerListTitle": "Configured Providers",
+    "sectionDescription": "Configure API providers available to all agents.",
     "addProvider": "Add Provider",
     "editProvider": "Edit Provider",
     "noProviders": "No model providers configured yet.",
@@ -2944,23 +3129,9 @@
     "apiKey": "API Key",
     "apiKeyPlaceholder": "sk-...",
     "apiKeyKeepCurrent": "Leave blank to keep current",
-    "agentTypes": "Agent Types",
-    "agentTypesRequired": "At least one agent type is required.",
-    "agentType": "Agent Type",
-    "agentTypeRequired": "Agent type is required.",
-    "agentTypeImmutableHint": "Agent type cannot be changed after creation.",
     "model": "Model",
-    "modelPlaceholderCodex": "gpt-5 / gpt-5-mini",
-    "modelPlaceholderGemini": "gemini-3-pro-preview",
-    "claudeMainModel": "Main Model",
-    "claudeReasoningModel": "Reasoning Model (thinking)",
-    "claudeHaikuDefaultModel": "Default Haiku Model",
-    "claudeSonnetDefaultModel": "Default Sonnet Model",
-    "claudeOpusDefaultModel": "Default Opus Model",
-    "claudeCustomModelOption": "Custom Model ID",
-    "claudeCustomModelOptionName": "Custom Model Name",
-    "claudeCustomModelOptionDescription": "Custom Model Description",
-    "claudeCustomModelOptionHint": "Adds a single custom entry to Claude's model picker (e.g. a model behind a custom gateway/proxy). Name and description are optional display overrides.",
+    "modelPlaceholder": "e.g. gpt-5, claude-sonnet-5",
+    "modelHint": "Default model name served by this provider. Agents can override when selecting.",
     "nameRequired": "Provider name is required.",
     "apiUrlRequired": "API URL is required.",
     "apiKeyRequired": "API Key is required.",
@@ -2976,10 +3147,7 @@
     "delete": "Delete",
     "create": "Create",
     "save": "Save",
-    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}",
-    "modelPlaceholderKimi": "kimi-k2-0711",
-    "modelPlaceholderHermes": "deepseek-v3-0324",
-    "agentTypesHint": "Comma-separated agent types (e.g. hermes, claude_code)"
+    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}"
   },
   "SkillMatrix": {
     "loading": "Loading…",
@@ -3075,6 +3243,56 @@
       "disabled": "Expert disabled for this agent",
       "enableFailed": "Failed to enable expert",
       "disableFailed": "Failed to disable expert",
+      "openFolderFailed": "Failed to open folder"
+    }
+  },
+  "ScienceSettings": {
+    "title": "Scientific Research Skills",
+    "description": "Enable curated scientific-research skills for your AI coding agents — hypothesis generation, experimental design, statistics, visualization, critical appraisal, and literature search. VeryAgent manages a central copy and links each skill into the agents you choose.",
+    "loading": "Loading science skills…",
+    "emptySkills": "No science skills available. Check the application logs.",
+    "searchPlaceholder": "Search science skills by name, id, or description",
+    "categories": {
+      "ideation": "Ideation",
+      "design": "Study Design",
+      "analysis": "Analysis",
+      "visualization": "Visualization",
+      "evaluation": "Evaluation",
+      "literature": "Literature"
+    },
+    "states": {
+      "not_linked": "Not enabled",
+      "linked_to_veryagent": "Enabled",
+      "linked_elsewhere": "Blocked — another link exists",
+      "blocked_by_real_directory": "Blocked — a custom skill occupies this name",
+      "broken": "Broken link"
+    },
+    "badges": {
+      "userModified": "User modified",
+      "needsKey": "Needs API key",
+      "needsSetup": "May need setup"
+    },
+    "actions": {
+      "openCentralDir": "Open central folder",
+      "refresh": "Refresh"
+    },
+    "toasts": {
+      "openFolderFailed": "Failed to open folder"
+    }
+  },
+  "SkillPacksSettings": {
+    "title": "Skill Packs",
+    "description": "Enable curated skill packs for your AI coding agents — expert workflows, scientific research tools, and office automation. VeryAgent manages a central copy and links each skill into the agents you choose.",
+    "tabs": {
+      "experts": "Experts",
+      "science": "Science",
+      "office": "Office"
+    },
+    "actions": {
+      "openCentralDir": "Open central folder",
+      "refresh": "Refresh"
+    },
+    "toasts": {
       "openFolderFailed": "Failed to open folder"
     }
   },
@@ -3678,7 +3896,16 @@
     "installedPlugins": "Installed Plugins",
     "noPlugins": "No plugins installed",
     "otherAvailablePlugins": "Other available plugins",
-    "managePlugins": "Manage Plugins",
+    "managePlugins": "Manage MCP plugins",
+    "firstPartyPlugins": "Built-in connectors",
+    "mcpPlugins": "MCP plugins",
+    "openwikiName": "OpenWiki",
+    "openwikiDescription": "Inject a read-only Code Wiki knowledge layer for the current agent.",
+    "openwikiConfigure": "Configure OpenWiki",
+    "openwikiEnableSuccess": "Enabled OpenWiki for {agent}",
+    "openwikiDisableSuccess": "Disabled OpenWiki for {agent}",
+    "openwikiToggleFailed": "Failed to toggle OpenWiki: {error}",
+    "openwikiEnableHint": "Works automatically: the next message to this agent injects a read-only Code Wiki context. You can also check “+ → Enabled plugins” in the composer.",
     "install": "Install",
     "uninstall": "Uninstall",
     "installSuccess": "Installed successfully",
@@ -3712,6 +3939,64 @@
     "agentSelectionHint": "Choose which agents can route image understanding through Vision Bridge.",
     "saving": "Saving…",
     "save": "Save"
+  },
+  "OpenWikiSettings": {
+    "title": "OpenWiki",
+    "description": "Maintain a Code Wiki knowledge layer for authorized agents. Opt-in only; injects a short preamble on the first prompt.",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load: {detail}",
+    "enable": "Enable OpenWiki",
+    "enableHint": "Master switch. When off, nothing is injected and runner actions are blocked.",
+    "statusTitle": "Status",
+    "refreshStatus": "Refresh",
+    "executable": "CLI",
+    "found": "found",
+    "missing": "not found",
+    "installCli": "Install CLI",
+    "installingCli": "Installing…",
+    "installProgress": "Install progress",
+    "installCliSuccess": "OpenWiki CLI installed",
+    "installCliFailed": "Failed to install OpenWiki CLI",
+    "uninstallCli": "Uninstall CLI",
+    "uninstallingCli": "Uninstalling…",
+    "uninstallCliSuccess": "OpenWiki CLI uninstalled",
+    "uninstallCliFailed": "Failed to uninstall OpenWiki CLI",
+    "wiki": "Wiki",
+    "ready": "ready",
+    "notInitialized": "not initialized",
+    "agentSelection": "Available to agents",
+    "agentSelectionHint": "Agents with read access get the wiki preamble on the first user prompt.",
+    "injectTitle": "Session inject",
+    "injectOnStart": "Inject on first prompt",
+    "injectOnStartHint": "Prepend a bounded wiki summary/path to the first user message for opted-in agents.",
+    "injectAgentsMd": "Maintain AGENTS.md block",
+    "injectAgentsMdHint": "After init/update, upsert an OPENWIKI marker block in AGENTS.md (and CLAUDE.md if present).",
+    "wikiDirname": "Code wiki directory name",
+    "executablePath": "openwiki executable",
+    "executablePlaceholder": "Leave empty to use PATH",
+    "executableHint": "Optional absolute path to the openwiki CLI. Empty means look up openwiki on PATH.",
+    "workspaceTitle": "Workspace actions",
+    "workspace": "Workspace",
+    "workspacePlaceholder": "Absolute workspace path",
+    "workspaceRequired": "Select or enter a workspace path first",
+    "init": "Initialize wiki",
+    "update": "Update wiki",
+    "runnerHint": "Runs whitelisted openwiki CLI actions only (code --init / code --update). No arbitrary shell args.",
+    "initSuccess": "Wiki initialized",
+    "initFailed": "Wiki init failed",
+    "updateSuccess": "Wiki updated",
+    "updateFailed": "Wiki update failed",
+    "instructionsTitle": "INSTRUCTIONS.md",
+    "instructionsPlaceholder": "Optional instructions for wiki generation…",
+    "saveInstructions": "Save instructions",
+    "instructionsSaved": "Instructions saved",
+    "instructionsSaveFailed": "Failed to save instructions",
+    "saved": "OpenWiki settings saved",
+    "saveFailed": "Failed to save OpenWiki settings",
+    "saving": "Saving…",
+    "save": "Save",
+    "close": "Close",
+    "movedToPlugins": "OpenWiki moved to Skills & Plugins → Plugins. Redirecting…"
   },
   "MarkdownImage": {
     "copyImage": "Copy Image",

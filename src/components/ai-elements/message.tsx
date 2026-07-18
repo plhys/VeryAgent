@@ -28,9 +28,7 @@ import {
   defaultRehypePlugins,
   defaultRemarkPlugins,
 } from "streamdown"
-import remarkBreaks from "remark-breaks"
 import { markdownLinkComponents } from "./markdown-link"
-import { rehypeCommandBadges } from "./rehype-command-badges"
 import { rehypePluginsAllowingVeryAgent } from "./rehype-allow-veryagent"
 import { remarkRewriteFileUriLinks } from "./remark-file-uri-links"
 import { useStreamdownPlugins } from "./streamdown-plugins"
@@ -331,15 +329,11 @@ export const MessageBranchPage = ({
   )
 }
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
-  /**
-   * Render single newlines as hard line breaks (GitHub-comment flavor). Used
-   * for user-authored messages so their literal line breaks survive Markdown
-   * rendering. Assistant output leaves this off so it follows standard
-   * Markdown, where soft breaks collapse to spaces.
-   */
-  softBreaks?: boolean
-}
+// MessageResponse renders ASSISTANT / agent Markdown. User messages no longer
+// use it — they render as plain text + reference badges via PlainTextWithBadges
+// (see message/plain-text-with-badges.tsx) — so the former user-only `softBreaks`
+// / `/slash`-badging hooks were removed.
+export type MessageResponseProps = ComponentProps<typeof Streamdown>
 
 // remark-math only supports `$` delimiters. Convert LaTeX-style
 // `\[...\]` / `\(...\)` to `$$...$$` / `$...$` so they are recognized.
@@ -368,24 +362,14 @@ const remarkPlugins = [
   remarkRewriteFileUriLinks,
 ]
 
-// User messages opt in to this set so single newlines render as <br>.
-const remarkPluginsWithBreaks = [...remarkPlugins, remarkBreaks]
-
 // Streamdown's default rehype pipeline strips `veryagent://` reference hrefs in
 // sanitization (rendering them as "[blocked]"); re-derive it so they survive to
 // MarkdownLink → ReferenceBadge. See rehype-allow-veryagent for the full rationale.
 const rehypePlugins = rehypePluginsAllowingVeryAgent(defaultRehypePlugins)
 
-// User messages additionally badge bare `/slash` / `$skill` invocation tokens.
-// Appended AFTER harden so the injected `veryagent://skill/…` links aren't stripped,
-// and it runs before Streamdown's math (katex) rehype plugin so `$x$` math (by
-// then a `.math` element) is skipped, not mistaken for a `$skill` token.
-const rehypePluginsForUser = [...rehypePlugins, rehypeCommandBadges]
-
 function MessageResponseImpl({
   className,
   children,
-  softBreaks = false,
   ...props
 }: MessageResponseProps) {
   const normalized = useMemo(
@@ -406,8 +390,8 @@ function MessageResponseImpl({
         className
       )}
       plugins={plugins}
-      remarkPlugins={softBreaks ? remarkPluginsWithBreaks : remarkPlugins}
-      rehypePlugins={softBreaks ? rehypePluginsForUser : rehypePlugins}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
       {...props}
       // Merge after spreading props so a caller can still override other
       // elements, but the link icon + safety routing on `a` always wins.
@@ -421,8 +405,7 @@ function MessageResponseImpl({
 export const MessageResponse = memo(
   MessageResponseImpl,
   (prevProps, nextProps) =>
-    prevProps.children === nextProps.children &&
-    prevProps.softBreaks === nextProps.softBreaks
+    prevProps.children === nextProps.children
 )
 
 MessageResponse.displayName = "MessageResponse"

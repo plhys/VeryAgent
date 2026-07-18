@@ -100,7 +100,7 @@ describe("rehypeCommandBadges", () => {
         el("p", [el("a", [text("/review")], { href: "https://example.com" })]),
       ])
     )
-    // Only the original non-codeg link remains; no veryagent://skill anchor added.
+    // Only the original non-veryagent link remains; no veryagent://skill anchor added.
     expect(skillAnchors(tree)).toEqual([])
   })
 

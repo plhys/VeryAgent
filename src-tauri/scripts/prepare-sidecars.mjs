@@ -43,13 +43,15 @@ function die(msg) {
 }
 
 function parseArgs(argv) {
-  const args = { target: null }
+  const args = { target: null, dev: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === "--target" && argv[i + 1]) {
       args.target = argv[++i]
     } else if (a.startsWith("--target=")) {
       args.target = a.slice("--target=".length)
+    } else if (a === "--dev") {
+      args.dev = true
     }
   }
   return args
@@ -72,39 +74,50 @@ function main() {
     return
   }
 
-  const { target: cliTarget } = parseArgs(process.argv.slice(2))
+  const { target: cliTarget, dev: cliDev } = parseArgs(process.argv.slice(2))
   const target =
     cliTarget || process.env.TAURI_TARGET_TRIPLE || resolveHostTriple()
   const isWindows = target.includes("windows")
   const ext = isWindows ? ".exe" : ""
 
+  // ── Dev vs Release profile ──────────────────────────────────
+  // `tauri dev` (beforeDevCommand) uses dev profile for the sidecar:
+  //   - opt-level=0, no LTO, incremental — compiles 3-5x faster than release.
+  //   - Sidecar is a CLI tool, not user-facing, so runtime perf doesn't matter.
+  // `tauri build` (beforeBuildCommand) uses release profile for shipping.
+  // Triggered via `--dev` flag (from tauri:before-dev script) or
+  // VERYAGENT_SIDECAR_DEV=1 env var (for non-pnpm setups).
+  const isDev = cliDev || process.env.VERYAGENT_SIDECAR_DEV === "1"
+  const profile = isDev ? "dev" : "release"
+  const profileDir = isDev ? "debug" : "release"
+
   log(`target triple: ${target}`)
-  log(`building ${BIN_NAME} (--release --no-default-features)`)
+  log(`building ${BIN_NAME} (--profile ${profile} --no-default-features)`)
 
   // cargo build needs to run from src-tauri so it resolves the local manifest
   // and shares the swatinem/rust-cache key with other cargo invocations.
   // `--no-default-features` keeps veryagent-mcp free of the Tauri runtime deps —
   // the bin's required-features is empty, so this just enables cross-compile
   // without dragging in macOS-private-api / Linux WebKit / Windows WebView2.
-  execFileSync(
-    "cargo",
-    [
-      "build",
-      "--release",
-      "--bin",
-      BIN_NAME,
-      "--no-default-features",
-      "--target",
-      target,
-    ],
-    { stdio: "inherit", cwd: SRC_TAURI }
-  )
+  const cargoArgs = [
+    "build",
+    "--bin",
+    BIN_NAME,
+    "--no-default-features",
+    "--target",
+    target,
+  ]
+  if (!isDev) {
+    cargoArgs.push("--release")
+  }
+
+  execFileSync("cargo", cargoArgs, { stdio: "inherit", cwd: SRC_TAURI })
 
   const built = join(
     SRC_TAURI,
     "target",
     target,
-    "release",
+    profileDir,
     `${BIN_NAME}${ext}`
   )
   if (!existsSync(built)) {

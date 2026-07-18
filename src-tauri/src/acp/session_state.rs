@@ -210,6 +210,9 @@ pub struct SessionState {
     pub connection_id: String,
     pub conversation_id: Option<i32>,
     pub external_id: Option<String>,
+    /// When `external_id` was last changed (None→Some or value changed).
+    /// Used by `background_watch` to detect session transitions.
+    pub external_id_changed_at: Option<std::time::SystemTime>,
     pub agent_type: AgentType,
     pub working_dir: Option<PathBuf>,
     pub owner_window_label: String,
@@ -368,6 +371,20 @@ pub struct SessionState {
     /// Which settings surface drifted, for the banner's wording. `Some` iff
     /// `config_stale`; reset to `None` when staleness clears.
     pub config_stale_kind: Option<ConfigStaleKind>,
+    /// Launched-but-unresolved background tasks (async sub-agents + background
+    /// shell tasks). Mirrored into the snapshot so the frontend can exempt the
+    /// connection from idle sweeps while background work is pending.
+    pub background_outstanding: u32,
+    /// Instant of the most recent `BackgroundActivity` event. Bounds the sweep
+    /// exemption: if the watcher stops reporting (task died, bug) the exemption
+    /// lapses after `background_keepalive_max_age()` instead of pinning the
+    /// connection alive forever. Backend-internal; not serialized.
+    pub background_activity_at: Option<DateTime<Utc>>,
+
+    /// Whether the OpenWiki preamble has already been injected on this
+    /// connection. Once-per-connection latch so follow-up prompts do not
+    /// re-send the wiki context. Backend-internal; not serialized.
+    pub openwiki_injected: bool,
 }
 
 impl SessionState {
@@ -382,6 +399,7 @@ impl SessionState {
             connection_id,
             conversation_id: None,
             external_id: None,
+            external_id_changed_at: None,
             agent_type,
             working_dir,
             owner_window_label,
@@ -415,6 +433,9 @@ impl SessionState {
             turn_in_flight: false,
             config_stale: false,
             config_stale_kind: None,
+            background_outstanding: 0,
+            background_activity_at: None,
+            openwiki_injected: false,
         }
     }
 
@@ -461,6 +482,9 @@ impl SessionState {
     pub fn apply_event(&mut self, payload: &AcpEvent) {
         match payload {
             AcpEvent::SessionStarted { session_id } => {
+                if self.external_id.as_deref() != Some(session_id.as_str()) {
+                    self.external_id_changed_at = Some(std::time::SystemTime::now());
+                }
                 self.external_id = Some(session_id.clone());
                 self.status = ConnectionStatus::Connected;
                 // Fire the dedup waiter (if any). Take()-and-send is
@@ -499,6 +523,13 @@ impl SessionState {
             AcpEvent::SessionConfigStale { stale, kind } => {
                 self.config_stale = *stale;
                 self.config_stale_kind = if *stale { Some(*kind) } else { None };
+            }
+            AcpEvent::BackgroundActivity { outstanding, .. } => {
+                // Mirror the watcher's authoritative accounting so the idle
+                // sweeps can exempt this connection while background work is
+                // pending. The turns/settled payloads are frontend-only.
+                self.background_outstanding = *outstanding;
+                self.background_activity_at = Some(Utc::now());
             }
             AcpEvent::PromptCapabilities {
                 prompt_capabilities,
@@ -1086,6 +1117,7 @@ impl SessionState {
             selectors_ready: self.selectors_ready,
             config_stale: self.config_stale,
             config_stale_kind: self.config_stale_kind,
+            background_outstanding: self.background_outstanding,
             event_seq: self.event_seq,
         }
     }
@@ -1152,7 +1184,24 @@ pub struct LiveSessionSnapshot {
     /// byte-identical with the pre-feature wire shape.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_stale_kind: Option<ConfigStaleKind>,
+    /// Launched-but-unresolved background tasks (async sub-agents + background
+    /// shell tasks), mirrored from `SessionState.background_outstanding`. Used
+    /// by the frontend to exempt the connection from idle sweeps. Defaults to 0.
+    #[serde(default)]
+    pub background_outstanding: u32,
     pub event_seq: u64,
+}
+
+pub(crate) fn background_keepalive_max_age() -> chrono::Duration {
+    static SECS: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
+    let secs = *SECS.get_or_init(|| {
+        std::env::var("VERYAGENT_ACP_BACKGROUND_KEEPALIVE_MAX_SECS")
+            .ok()
+            .and_then(|v| v.trim().parse::<i64>().ok())
+            .filter(|v| *v >= 0)
+            .unwrap_or(3600)
+    });
+    chrono::Duration::seconds(secs)
 }
 
 /// Last non-empty line of `s`, trimmed. `None` if every line is blank.

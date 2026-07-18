@@ -17,6 +17,7 @@ pub mod logging;
 pub mod mcp;
 pub mod model_provider;
 pub mod office_tools;
+pub mod science;
 #[cfg(feature = "tauri-runtime")]
 pub mod notification;
 pub mod pet;
@@ -35,5 +36,7 @@ pub mod version_control;
 pub mod windows;
 pub mod workspace_state;
 pub mod vision_bridge;
+pub mod npm_cli;
+pub mod openwiki;
 #[cfg(feature = "tauri-runtime")]
 pub mod image_proxy;

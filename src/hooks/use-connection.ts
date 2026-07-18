@@ -66,6 +66,10 @@ export interface UseConnectionReturn {
   configStaleKind: ConfigStaleKind | null
   /** Client-local: the user dismissed the stale banner for the current drift. */
   configStaleDismissed: boolean
+  /** Launched-but-unresolved background tasks (async sub-agents + background shell). */
+  backgroundOutstanding: number
+  /** Epoch ms when outstanding dropped to zero with settle-syncing still in progress. */
+  backgroundSettleSyncingSince: number | null
   /** True for a delegation-spawned child connection (broker-owned). The stale
    *  banner hides for these — the user can't restart a broker-owned process. */
   isDelegationChild: boolean
@@ -203,6 +207,8 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const configStale = connection?.configStale ?? false
   const configStaleKind = connection?.configStaleKind ?? null
   const configStaleDismissed = connection?.configStaleDismissed ?? false
+  const backgroundOutstanding = connection?.backgroundOutstanding ?? 0
+  const backgroundSettleSyncingSince = connection?.backgroundSettleSyncingSince ?? null
   const isDelegationChild = connection?.isDelegationChild ?? false
 
   const connect = useCallback(
@@ -301,6 +307,8 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       configStale,
       configStaleKind,
       configStaleDismissed,
+      backgroundOutstanding,
+      backgroundSettleSyncingSince,
       isDelegationChild,
       connect,
       disconnect,
@@ -336,6 +344,8 @@ export function useConnection(contextKey: string): UseConnectionReturn {
       configStale,
       configStaleKind,
       configStaleDismissed,
+      backgroundOutstanding,
+      backgroundSettleSyncingSince,
       isDelegationChild,
       connect,
       disconnect,
