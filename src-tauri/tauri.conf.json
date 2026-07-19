@@ -41,7 +41,7 @@
     "updater": {
       "active": true,
       "dangerousInsecureTransportProtocol": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE2Qzc5MEI4NEQwNERBMEQKUldRTjJnUk51SkRIcHY1WmwzeEF3bkxLTlBGVTBST0JuWmErQXF3UU1ESWU3YWlYWStUNUxiY2YK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUyODJFMkE5NjNGQjEzOUEKUldTYUUvdGpxZUtDVWs0UVpFVVVZdHUva0UvL1RPbHVHYndiV1RGNzhOcFlpL2FGcXQ0UVpuczYK",
       "endpoints": [
         "https://github.com/plhys/VeryAgent/releases/latest/download/latest.json"
       ],

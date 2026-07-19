@@ -38,18 +38,22 @@ VeryAgent 支持从两个发布源检查并安装更新，用户可在 **系统�
 
 ## 签名密钥
 
+**完整保管说明（路径、换钥、备份、作废表）见：[updater-signing-keys.zh-CN.md](./updater-signing-keys.zh-CN.md)。**
+
 - 公钥已写入 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`，并同步 `src-tauri/src/update/verify.rs`
 - 私钥**不入库**。本机发布默认路径：`%USERPROFILE%\.veryagent\keys\veryagent-updater.key`
 - 构建前设置：
 
 ```bat
 set TAURI_SIGNING_PRIVATE_KEY_PATH=%USERPROFILE%\.veryagent\keys\veryagent-updater.key
-set TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<password for that key>
+set /p TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<%USERPROFILE%\.veryagent\keys\veryagent-updater.password
 ```
 
 本机密码另存于 `%USERPROFILE%\.veryagent\keys\veryagent-updater.password`（切勿提交仓库）。
 
-丢失私钥后无法再为旧公钥签名；只能换钥并重新发版（旧客户端无法校验新钥签名）。
+丢失私钥后无法再为旧公钥签名；只能换钥并重新发版（旧客户端无法校验新钥签名，用户须手动重装）。
+
+**2026-07-19：** 已换新钥（minisign id `5282E2A963FB139A`），自 **v0.9.5** 起生效。≤0.9.4 用户不能在线更到 0.9.5，须下载安装包重装。
 
 ## 双仓发布步骤
 
