@@ -528,21 +528,23 @@ pub fn kill_other_instances() {
 
     #[cfg(windows)]
     {
-        // PowerShell Get-Process is more reliable than WMIC (deprecated) or
-        // tasklist /FI (filter may fail on some Windows builds).
-        let script = format!(
-            "Get-Process -Name veryagent -ErrorAction SilentlyContinue | Where-Object {{ $_.Id -ne {} }} | Stop-Process -Force",
-            current_pid
-        );
-        let _ = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-Command", &script])
-            .output();
+        // Must use CREATE_NO_WINDOW (via std_command). Bare `powershell.exe` /
+        // `taskkill` without that flag flashes a console — not acceptable for a
+        // desktop app. Prefer taskkill over PowerShell: same job, no script host.
+        let filter = format!("PID ne {current_pid}");
+        let _ = std_command("taskkill.exe")
+            .args(["/F", "/IM", "veryagent.exe", "/FI", &filter])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
     }
 
     #[cfg(not(windows))]
     {
-        let _ = std::process::Command::new("pkill")
+        let _ = std_command("pkill")
             .args(["-f", "veryagent"])
-            .output();
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
     }
 }
