@@ -4,6 +4,7 @@ import {
   adaptMessageTurn,
   createMessageTurnAdapter,
   dropHiddenFeedbackChecks,
+  extractImagesFromToolOutputText,
   extractUserResourcesFromText,
   groupConsecutiveDelegationStatus,
   groupGoalRuns,
@@ -1037,6 +1038,158 @@ describe("adaptMessageTurn — image tool results", () => {
     const group = adapted.content.find((p) => p.type === "tool-group")
     if (group?.type !== "tool-group") throw new Error("expected tool-group")
     expect(group.items[0]?.state).toBe("input-available")
+  })
+
+  it("renders platform generate_image when images[] is empty but structuredContent JSON is in output_preview", () => {
+    // Wire shape is path-only (no multi-MB base64) — UI hydrates from disk.
+    const mcpResult = {
+      content: [
+        {
+          type: "text",
+          text:
+            "Image generated successfully.\nThe image is already displayed to the user in the chat UI.\n" +
+            JSON.stringify({
+              mime: "image/png",
+              path: "C:/Users/EVAN/AppData/Local/Temp/veryagent-images/gpt_image_2_1.png",
+            }),
+        },
+      ],
+      isError: false,
+      structuredContent: {
+        mime: "image/png",
+        path: "C:/Users/EVAN/AppData/Local/Temp/veryagent-images/gpt_image_2_1.png",
+      },
+    }
+    const adapted = adaptMessageTurn(
+      {
+        id: "platform-gen-img",
+        role: "assistant",
+        timestamp: "2026-06-02T00:00:00.000Z",
+        blocks: [
+          {
+            type: "tool_use",
+            tool_use_id: "mcp_img_1",
+            tool_name: "mcp_veryagent_mcp_generate_image",
+            input_preview: JSON.stringify({ prompt: "a cat" }),
+          },
+          {
+            type: "tool_result",
+            tool_use_id: "mcp_img_1",
+            output_preview: JSON.stringify(mcpResult),
+            is_error: false,
+          },
+        ],
+      },
+      msgText,
+      false
+    )
+
+    expect(adapted.content.map((p) => p.type)).toEqual(["generated-image"])
+    const part = adapted.content[0]
+    if (part.type !== "generated-image") {
+      throw new Error("expected a generated-image part")
+    }
+    // Path-only: empty data, uri points at the on-disk file.
+    expect(part.image?.data).toBe("")
+    expect(part.image?.mime_type).toBe("image/png")
+    expect(part.image?.uri).toContain("veryagent-images")
+  })
+})
+
+describe("extractImagesFromToolOutputText", () => {
+  it("pulls base64 from MCP structuredContent", () => {
+    const text = JSON.stringify({
+      content: [{ type: "text", text: "ok" }],
+      structuredContent: { base64: "QUJDREVGR0g=", mime: "image/jpeg" },
+    })
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.data).toBe("QUJDREVGR0g=")
+    expect(imgs[0]?.mime_type).toBe("image/jpeg")
+  })
+
+  it("pulls image from content[].image parts", () => {
+    const text = JSON.stringify({
+      content: [{ type: "image", data: "aW1n", mimeType: "image/png" }],
+    })
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.data).toBe("aW1n")
+  })
+
+  it("pulls path-only platform structuredContent (no base64 on wire)", () => {
+    const text = JSON.stringify({
+      content: [
+        {
+          type: "text",
+          text:
+            "Image generated successfully.\n" +
+            JSON.stringify({
+              mime: "image/png",
+              path: "C:/Users/EVAN/AppData/Local/Temp/veryagent-images/x.png",
+            }),
+        },
+      ],
+      isError: false,
+      structuredContent: {
+        mime: "image/png",
+        path: "C:/Users/EVAN/AppData/Local/Temp/veryagent-images/x.png",
+      },
+    })
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.data).toBe("")
+    expect(imgs[0]?.mime_type).toBe("image/png")
+    expect(imgs[0]?.uri).toContain("veryagent-images")
+  })
+
+  it("recovers path from prose + trailing JSON trailer", () => {
+    const trailer = JSON.stringify({
+      mime: "image/png",
+      path: "C:/tmp/veryagent-images/cat.png",
+    })
+    const text = `Image generated successfully.\nThe image is already displayed.\n${trailer}`
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.uri).toBe("C:/tmp/veryagent-images/cat.png")
+    expect(imgs[0]?.data).toBe("")
+  })
+
+  it("recovers path from VERYAGENT_IMAGE marker only (no JSON)", () => {
+    const text =
+      "Image generated successfully.\n" +
+      "VERYAGENT_IMAGE mime=image/png path=C:/tmp/veryagent-images/marker-only.png"
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.uri).toBe("C:/tmp/veryagent-images/marker-only.png")
+    expect(imgs[0]?.mime_type).toBe("image/png")
+    expect(imgs[0]?.data).toBe("")
+  })
+
+  it("recovers path with spaces from VERYAGENT_IMAGE marker", () => {
+    const text =
+      "ok\nVERYAGENT_IMAGE mime=image/png path=C:/Users/John Doe/AppData/Local/Temp/veryagent-images/a.png"
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.uri).toBe(
+      "C:/Users/John Doe/AppData/Local/Temp/veryagent-images/a.png"
+    )
+  })
+
+  it("recovers path from legacy VERYAGENT_IMAGE path= mime= order", () => {
+    const text =
+      "ok\nVERYAGENT_IMAGE path=C:/tmp/veryagent-images/legacy.png mime=image/png"
+    const imgs = extractImagesFromToolOutputText(text)
+    expect(imgs).toHaveLength(1)
+    expect(imgs[0]?.uri).toBe("C:/tmp/veryagent-images/legacy.png")
+  })
+
+  it("returns empty for plain success prose (no JSON)", () => {
+    expect(
+      extractImagesFromToolOutputText(
+        "Image generated successfully.\nThe image is already displayed."
+      )
+    ).toEqual([])
   })
 })
 

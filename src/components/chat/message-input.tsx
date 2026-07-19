@@ -6,7 +6,6 @@ import Image from "next/image"
 import { useLocale, useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import {
-  BookOpen,
   BookOpenText,
   Check,
   ChevronDown,
@@ -79,7 +78,6 @@ import {
   uploadLocalPathToRemote,
   isEmptyAttachmentError,
   openSettingsWindow,
-  openwikiGetConfig,
   mcpScanLocal,
   type SettingsSection,
   UPLOAD_MAX_BYTES,
@@ -87,7 +85,6 @@ import {
   UPLOAD_I18N_KEY_NOT_A_FILE,
   UPLOAD_I18N_KEY_QUOTA_EXCEEDED,
 } from "@/lib/api"
-import { isOpenWikiEnabledForAgent } from "@/lib/openwiki-agent"
 import { extractAppCommandError } from "@/lib/app-error"
 import { openFileDialog } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
@@ -967,6 +964,25 @@ export function MessageInput({
     setComposerEmpty(ed ? isComposerEmpty(ed) : true)
   }, [])
 
+  /**
+   * Image refs for 图生图 / 引用二次创作.
+   * Kept out of the editor so the composer stays clean — only a compact chip
+   * above the input. Skill + image URL are injected at send time.
+   */
+  const [composerImageRefs, setComposerImageRefs] = useState<
+    Array<{
+      id: string
+      label: string
+      imageUrl: string
+      skillId?: string
+      skillLabel?: string
+    }>
+  >([])
+
+  const removeComposerImageRef = useCallback((imageUrl: string) => {
+    setComposerImageRefs((prev) => prev.filter((r) => r.imageUrl !== imageUrl))
+  }, [])
+
   const handleComposerChange = useCallback(() => {
     syncComposerEmpty()
     scheduleDraftSave()
@@ -1028,7 +1044,9 @@ export function MessageInput({
     [previewAttachmentId, imageAttachments]
   )
   const hasAttachments = attachments.length > 0
-  const hasSendableContent = !composerEmpty || hasAttachments
+  const hasComposerImageRefs = composerImageRefs.length > 0
+  const hasSendableContent =
+    !composerEmpty || hasAttachments || hasComposerImageRefs
 
   // ── Slash command autocomplete ──
   //
@@ -2085,15 +2103,11 @@ export function MessageInput({
     }
   }, [])
 
-  const [enabledPlugins, setEnabledPlugins] = useState<{
-    openWiki: boolean
-    mcp: LocalMcpServer[]
-  }>({ openWiki: false, mcp: [] })
+  const [enabledPlugins, setEnabledPlugins] = useState<{ mcp: LocalMcpServer[] }>({ mcp: [] })
   const [pluginsLoading, setPluginsLoading] = useState(false)
 
   const loadEnabledPlugins = useCallback(async () => {
     if (!agentType) {
-      setEnabledPlugins({ openWiki: false, mcp: [] })
       return
     }
     setPluginsLoading(true)
@@ -2114,19 +2128,13 @@ export function MessageInput({
             return null
         }
       })()
-      const [cfg, local] = await Promise.all([
-        openwikiGetConfig().catch(() => null),
-        mcpScanLocal().catch(() => [] as LocalMcpServer[]),
-      ])
-      const openWiki =
-        !!cfg && isOpenWikiEnabledForAgent(cfg, agentType)
+      const local = await mcpScanLocal().catch(() => [] as LocalMcpServer[])
       const mcp = mcpApp
         ? local.filter((p) => p.apps.includes(mcpApp))
         : []
-      setEnabledPlugins({ openWiki, mcp })
+      setEnabledPlugins({ mcp })
     } catch (error) {
       console.error("[MessageInput] load enabled plugins failed:", error)
-      setEnabledPlugins({ openWiki: false, mcp: [] })
     } finally {
       setPluginsLoading(false)
     }
@@ -2145,11 +2153,6 @@ export function MessageInput({
     [loadEnabledPlugins, loadQuickMessages]
   )
 
-  const handleOpenWikiPluginHint = useCallback(() => {
-    toast.message(t("pluginOpenWikiTitle"), {
-      description: t("pluginOpenWikiHint"),
-    })
-  }, [t])
 
   const handleMcpPluginHint = useCallback(
     (serverId: string) => {
@@ -2353,7 +2356,9 @@ export function MessageInput({
     }
   }, [attachmentTabId])
 
-  // ── Image reference attachment (right-click → "引用二次创作" on transcript images) ──
+  // ── Image reference attachment (right-click → "引用二次创作") ──
+  // Only a compact chip above the input — do NOT clutter the editor with
+  // filename badges + skill badges. Wire payload is assembled in buildDraft.
   useEffect(() => {
     if (!attachmentTabId) return
 
@@ -2362,39 +2367,25 @@ export function MessageInput({
       if (!customEvent.detail) return
       if (customEvent.detail.tabId !== attachmentTabId) return
       const { imageUrl, alt, skillId, skillLabel } = customEvent.detail
-      const editor = editorRef.current?.getEditor()
-      if (!editor) return
+      if (!imageUrl) return
 
-      // Build the image reference badge attrs.
-      const imageRef: ReferenceAttrs = {
-        refType: "image",
-        id: imageUrl,
-        label: alt || imageUrl.split("/").pop() || "参考图片",
-        uri: imageUrl,
-        meta: { imageUrl },
-      }
-
-      let chain = editor.chain().focus("end")
-
-      // Insert the image reference badge.
-      const needsSpace = !editor.isEmpty
-      if (needsSpace) chain = chain.insertContent(" ")
-      chain = chain.insertReference(imageRef).insertContent(" ")
-
-      // If a skillId was provided, also insert a skill reference badge so the
-      // agent picks up the right skill for the image reference.
-      if (skillId) {
-        const skillRef: ReferenceAttrs = {
-          refType: "skill",
-          id: skillId,
-          label: skillLabel || skillId,
-          uri: null,
-          meta: { invocationPrefix: "/" },
-        }
-        chain = chain.insertReference(skillRef).insertContent(" ")
-      }
-
-      chain.run()
+      const label =
+        alt || imageUrl.split(/[/\\]/).pop() || "参考图片"
+      setComposerImageRefs((prev) => {
+        const without = prev.filter((r) => r.imageUrl !== imageUrl)
+        return [
+          ...without,
+          {
+            id: imageUrl,
+            label,
+            imageUrl,
+            skillId: skillId || undefined,
+            skillLabel: skillLabel || undefined,
+          },
+        ]
+      })
+      // Focus the editor so the user can type the edit instruction immediately.
+      editorRef.current?.focus()
     }
 
     window.addEventListener(
@@ -2564,9 +2555,67 @@ export function MessageInput({
         return true
       })
     }
-    const displayMarkdown = editorRef.current?.getMarkdown().trim() ?? ""
+    let displayMarkdown = editorRef.current?.getMarkdown().trim() ?? ""
 
-    if (blocks.length === 0 && attachments.length === 0) return null
+    // Compact 图生图 chips live outside the editor. Inject skill token + image
+    // markdown at send time so the agent still gets the right context without
+    // cluttering the composer UI.
+    if (composerImageRefs.length > 0) {
+      const skillIds = new Set<string>()
+      const skillTokens: string[] = []
+      const imageTokens: string[] = []
+      for (const ref of composerImageRefs) {
+        if (ref.skillId && !skillIds.has(ref.skillId)) {
+          skillIds.add(ref.skillId)
+          skillTokens.push(
+            referenceToMarkdown({
+              refType: "skill",
+              id: ref.skillId,
+              label: ref.skillLabel || ref.skillId,
+              uri: null,
+              meta: { invocationPrefix: skillPrefix },
+            })
+          )
+        }
+        imageTokens.push(
+          referenceToMarkdown({
+            refType: "image",
+            id: ref.imageUrl,
+            label: ref.label,
+            uri: ref.imageUrl,
+            meta: { imageUrl: ref.imageUrl },
+          })
+        )
+      }
+      const prefix = [...skillTokens, ...imageTokens].filter(Boolean).join(" ")
+      if (prefix) {
+        displayMarkdown = displayMarkdown
+          ? `${prefix} ${displayMarkdown}`
+          : prefix
+        // Prepend into the first text block (or create one) so the wire
+        // prompt matches the display text.
+        const textIdx = blocks.findIndex((b) => b.type === "text")
+        if (textIdx >= 0) {
+          const existing = blocks[textIdx]
+          if (existing.type === "text") {
+            blocks[textIdx] = {
+              type: "text",
+              text: `${prefix} ${existing.text}`.trim(),
+            }
+          }
+        } else {
+          blocks.unshift({ type: "text", text: prefix })
+        }
+      }
+    }
+
+    if (
+      blocks.length === 0 &&
+      attachments.length === 0 &&
+      composerImageRefs.length === 0
+    ) {
+      return null
+    }
 
     // `attachments` holds only images now — files live inline as badges above.
     for (const attachment of attachments) {
@@ -2582,15 +2631,18 @@ export function MessageInput({
 
     const displayText =
       displayMarkdown ||
-      `Attached ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`
+      (composerImageRefs.length > 0
+        ? t("img2imgChip")
+        : `Attached ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`)
     return { blocks, displayText }
-  }, [attachments, skillPrefix])
+  }, [attachments, composerImageRefs, skillPrefix, t])
 
   // Clear the editor + attachments after a send / enqueue / save.
   const resetComposer = useCallback(() => {
     editorRef.current?.clear()
     setComposerEmpty(true)
     setAttachments([])
+    setComposerImageRefs([])
     embeddedPayloadsRef.current.clear()
     closeSlashMenu()
   }, [closeSlashMenu])
@@ -2794,6 +2846,7 @@ export function MessageInput({
   )
 
   const hasImageAttachments = imageAttachments.length > 0
+  const hasContextBarContent = hasImageAttachments || hasComposerImageRefs
   const showDragActive = isDragActive && !disabled
 
   // Normalized settings for the collapsed (narrow) master–detail panel. Config
@@ -3161,38 +3214,79 @@ export function MessageInput({
               )}
             >
               <ConversationContextBar
-                hasExtraContent={hasImageAttachments}
-                scrollEndTrigger={attachments.length}
+                hasExtraContent={hasContextBarContent}
+                scrollEndTrigger={
+                  attachments.length + composerImageRefs.length
+                }
                 extraContent={
                   <>
+                    {composerImageRefs.map((ref) => {
+                      const isData = ref.imageUrl.startsWith("data:")
+                      const isHttp =
+                        ref.imageUrl.startsWith("http://") ||
+                        ref.imageUrl.startsWith("https://")
+                      return (
+                        <div
+                          key={`imgref-${ref.id}`}
+                          className="group relative flex h-7 shrink-0 items-center gap-1 rounded-full border border-cyan-500/35 bg-cyan-500/10 pl-0.5 pr-5"
+                          title={ref.label}
+                        >
+                          {isData || isHttp ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={ref.imageUrl}
+                              alt=""
+                              className="h-5 w-5 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/15">
+                              <Sparkles className="h-3 w-3 text-cyan-600 dark:text-cyan-400" />
+                            </span>
+                          )}
+                          <span className="max-w-[5.5rem] truncate text-[11px] font-medium text-cyan-700 dark:text-cyan-300">
+                            {t("img2imgChip")}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeComposerImageRef(ref.imageUrl)}
+                            className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                            aria-label={t("removeAttachmentAria", {
+                              name: ref.label,
+                            })}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )
+                    })}
                     {imageAttachments.map((attachment) => (
                       <div
                         key={attachment.id}
-                        className="relative shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
+                        className="relative h-7 w-7 shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/30"
                       >
                         <button
                           type="button"
                           onClick={() => setPreviewAttachmentId(attachment.id)}
-                          className="cursor-pointer transition-opacity hover:opacity-80"
+                          className="h-full w-full cursor-pointer transition-opacity hover:opacity-80"
                         >
                           <Image
                             src={`data:${attachment.mimeType};base64,${attachment.data}`}
                             alt={attachment.name}
-                            width={56}
-                            height={56}
+                            width={28}
+                            height={28}
                             unoptimized
-                            className="h-14 w-14 object-cover"
+                            className="h-7 w-7 object-cover"
                           />
                         </button>
                         <button
                           type="button"
                           onClick={() => removeAttachment(attachment.id)}
-                          className="absolute right-1 top-1 rounded-sm bg-background/70 p-0.5 hover:bg-background"
+                          className="absolute -right-0.5 -top-0.5 rounded-full bg-background/90 p-0.5 shadow-sm hover:bg-background"
                           aria-label={t("removeAttachmentAria", {
                             name: attachment.name,
                           })}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-2.5 w-2.5" />
                         </button>
                       </div>
                     ))}
@@ -3677,7 +3771,6 @@ export function MessageInput({
                           )
                         })()}
                       {(pluginsLoading ||
-                        enabledPlugins.openWiki ||
                         enabledPlugins.mcp.length > 0) && (
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger>
@@ -3698,22 +3791,7 @@ export function MessageInput({
                               </div>
                             ) : (
                               <>
-                                {enabledPlugins.openWiki ? (
-                                  <DropdownMenuItem
-                                    onClick={handleOpenWikiPluginHint}
-                                  >
-                                    <BookOpen className="size-4" />
-                                    <span className="flex min-w-0 flex-1 flex-col">
-                                      <span className="truncate">
-                                        {t("pluginOpenWikiTitle")}
-                                      </span>
-                                      <span className="truncate text-[11px] text-muted-foreground">
-                                        {t("pluginOpenWikiActive")}
-                                      </span>
-                                    </span>
-                                  </DropdownMenuItem>
-                                ) : null}
-                                {enabledPlugins.mcp.map((plugin) => (
+                                                                {enabledPlugins.mcp.map((plugin) => (
                                   <DropdownMenuItem
                                     key={plugin.id}
                                     onClick={() =>
@@ -3724,8 +3802,7 @@ export function MessageInput({
                                     <span className="truncate">{plugin.id}</span>
                                   </DropdownMenuItem>
                                 ))}
-                                {!enabledPlugins.openWiki &&
-                                enabledPlugins.mcp.length === 0 ? (
+                                {enabledPlugins.mcp.length === 0 ? (
                                   <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                                     {t("pluginsEmpty")}
                                   </div>

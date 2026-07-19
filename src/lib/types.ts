@@ -371,6 +371,9 @@ export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
  *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
 export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
 
+/** Payload: `ImageGenerationConfig`. */
+export const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT = "image-generation-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -1349,7 +1352,10 @@ export type AcpEvent =
 
 /** Which settings surface drifted (mirror of Rust `ConfigStaleKind`), used to
  *  word the "restart to apply" banner. */
-export type ConfigStaleKind = "agent_config" | "model_provider"
+export type ConfigStaleKind =
+  | "agent_config"
+  | "model_provider"
+  | "image_generation"
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to

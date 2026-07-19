@@ -35,6 +35,7 @@ pub mod version_control;
 #[cfg(feature = "tauri-runtime")]
 pub mod windows;
 pub mod workspace_state;
+pub mod image_generation;
 pub mod vision_bridge;
 pub mod npm_cli;
 pub mod openwiki;

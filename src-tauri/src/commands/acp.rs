@@ -7217,16 +7217,18 @@ fn is_volatile_fingerprint_key(key: &str) -> bool {
 }
 
 /// Fingerprint the effective config a spawned agent process is locked to: the
-/// resolved `runtime_env` (minus per-launch volatile keys) plus the raw content
-/// of the agent's native config file(s). Both surfaces only take effect at
-/// process start, so a change to either is exactly what "this running session is
-/// stale" means. The digest is process-local — never persisted, never sent on
-/// the wire (only the resulting `stale` bool reaches the frontend) — so a
-/// non-cryptographic hash would do; SHA-256 keeps it deterministic and matches
-/// the rest of the codebase.
+/// resolved `runtime_env` (minus per-launch volatile keys), the raw content of
+/// the agent's native config file(s), and platform companion feature bits that
+/// are fixed at MCP injection time (today: image generation). All of these only
+/// take effect at process start, so a change to any is exactly what "this
+/// running session is stale" means. The digest is process-local — never
+/// persisted, never sent on the wire (only the resulting `stale` bool reaches
+/// the frontend) — so a non-cryptographic hash would do; SHA-256 keeps it
+/// deterministic and matches the rest of the codebase.
 pub(crate) fn fingerprint_config(
     agent_type: AgentType,
     runtime_env: &BTreeMap<String, String>,
+    image_enabled: bool,
 ) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -7244,22 +7246,48 @@ pub(crate) fn fingerprint_config(
     if let Some(native) = load_agent_local_config_json(agent_type) {
         hasher.update(native.as_bytes());
     }
+    // Companion `--features` image bit is read from runtime config at injection,
+    // not from agent env — include it so toggling 出图 marks sessions stale.
+    hasher.update(b"\x01platform\x01");
+    hasher.update(if image_enabled { b"image=1" } else { b"image=0" });
     format!("{:x}", hasher.finalize())
 }
 
+/// Every known agent type. Used when a platform-wide setting (e.g. image
+/// generation) changes and every running connection may need a staleness check.
+pub(crate) fn all_agent_types() -> &'static [AgentType] {
+    &[
+        AgentType::ClaudeCode,
+        AgentType::Codex,
+        AgentType::OpenCode,
+        AgentType::Gemini,
+        AgentType::OpenClaw,
+        AgentType::Cline,
+        AgentType::Hermes,
+        AgentType::CodeBuddy,
+        AgentType::KimiCode,
+        AgentType::Pi,
+        AgentType::MimoCode,
+    ]
+}
+
 /// Recompute the canonical config fingerprint for `agent_type` from current
-/// settings (DB + native config files), independent of any running session.
-/// Passes `session_id = None` so the result is session-independent (the only
-/// session-derived key is excluded anyway), making it directly comparable to
-/// the fingerprint `fingerprint_config` produced at spawn time. Propagates the
-/// agent's "disabled in settings" error verbatim.
+/// settings (DB + native config files + platform companion bits), independent
+/// of any running session. Passes `session_id = None` so the result is
+/// session-independent (the only session-derived key is excluded anyway),
+/// making it directly comparable to the fingerprint `fingerprint_config`
+/// produced at spawn time. Propagates the agent's "disabled in settings" error
+/// verbatim.
 pub(crate) async fn compute_session_config_fingerprint(
     db: &AppDatabase,
     agent_type: AgentType,
     data_dir: &Path,
 ) -> Result<String, AcpError> {
     let runtime_env = build_session_runtime_env(db, agent_type, None, data_dir).await?;
-    Ok(fingerprint_config(agent_type, &runtime_env))
+    let image_enabled = crate::db::service::image_generation_service::get_config(&db.conn)
+        .await
+        .enabled;
+    Ok(fingerprint_config(agent_type, &runtime_env, image_enabled))
 }
 
 /// After a settings save, recompute the effective config fingerprint for each of
@@ -10478,20 +10506,23 @@ wire_api = "chat"
 
         // Same inputs → same fingerprint (the native-config read is identical
         // across all calls in this test, so only the env varies).
-        let fp1 = fingerprint_config(agent, &env);
-        assert_eq!(fp1, fingerprint_config(agent, &env));
+        let fp1 = fingerprint_config(agent, &env, false);
+        assert_eq!(fp1, fingerprint_config(agent, &env, false));
 
         // Changing a real config value changes the fingerprint.
         let mut env_changed = env.clone();
         env_changed.insert("OPENAI_API_KEY".to_string(), "k2".to_string());
-        assert_ne!(fp1, fingerprint_config(agent, &env_changed));
+        assert_ne!(fp1, fingerprint_config(agent, &env_changed, false));
 
         // The per-launch volatile key is excluded — adding it must NOT change
         // the fingerprint (otherwise OpenClaw would look stale once a real
         // session id is assigned and the reset flag drops).
         let mut env_volatile = env.clone();
         env_volatile.insert("OPENCLAW_RESET_SESSION".to_string(), "1".to_string());
-        assert_eq!(fp1, fingerprint_config(agent, &env_volatile));
+        assert_eq!(fp1, fingerprint_config(agent, &env_volatile, false));
+
+        // Platform image toggle is part of the fingerprint (companion features).
+        assert_ne!(fp1, fingerprint_config(agent, &env, true));
     }
 
     #[tokio::test]

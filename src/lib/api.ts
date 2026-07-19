@@ -3357,6 +3357,80 @@ export async function visionBridgeSaveConfig(
   return getTransport().call("vision_bridge_save_config", { settings })
 }
 
+
+/** One image gateway entry (note + priority 0–9, 0 = highest). */
+export interface ImageGatewayEntry {
+  id: string
+  /** Free-form note: site name, price, model family, etc. */
+  note: string
+  /** 0 = highest priority (top / tried first), 9 = lowest. */
+  priority: number
+  enabled: boolean
+  api_url: string
+  api_key: string
+  model_name: string
+  default_size: string
+}
+
+/** Mirror of Rust `ImageGenerationConfigUpdate`. */
+export interface ImageGenerationSettings {
+  enabled: boolean
+  /** Multi-gateway list (preferred). */
+  gateways?: ImageGatewayEntry[]
+  /** Legacy single-gateway fields (still accepted when gateways empty). */
+  api_url: string
+  api_key: string
+  model_name: string
+  default_size: string
+}
+
+/** Mirror of Rust `ImageGenerationConfig` (full row, including `updated_at`). */
+export interface ImageGenerationConfig extends ImageGenerationSettings {
+  gateways: ImageGatewayEntry[]
+  updated_at: string
+}
+
+export async function imageGenerationGetConfig(): Promise<ImageGenerationConfig> {
+  return getTransport().call("image_generation_get_config")
+}
+
+/** Result of saving image-generation settings (includes stale-session count). */
+export interface ImageGenerationSaveResult {
+  config: ImageGenerationConfig
+  affectedRunningSessions: number
+}
+
+export async function imageGenerationSaveConfig(
+  settings: ImageGenerationSettings
+): Promise<ImageGenerationSaveResult> {
+  return getTransport().call("image_generation_save_config", { settings })
+}
+
+/** Model item from gateway `/models` (camelCase, matches Rust ProviderModelItem). */
+export interface ImageGenerationModelItem {
+  id: string
+  name: string
+}
+
+export interface ImageGenerationModelsResult {
+  models: ImageGenerationModelItem[]
+  /** True when no image-like ids matched and full list (minus noise) was returned. */
+  usedFallback: boolean
+}
+
+/** List models from the image gateway; prefers image-like model ids. */
+export async function imageGenerationFetchModels(params: {
+  apiUrl: string
+  apiKey: string
+}): Promise<ImageGenerationModelsResult> {
+  // Tauri command args use the Rust parameter names as-is (snake → camel via
+  // ipc). Match acpFetchKimiModels: pass camelCase keys.
+  return getTransport().call("image_generation_fetch_models", {
+    apiUrl: params.apiUrl,
+    apiKey: params.apiKey,
+  })
+}
+
 /** Mirror of Rust `OpenWikiAgentCapability`. */
 export type OpenWikiAgentCapability =
   | "read_wiki"

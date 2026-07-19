@@ -66,7 +66,7 @@ async fn git_output(
 /// Resolve the current `HEAD` state. The common cases (on a branch / detached)
 /// cost a single git invocation; the rarer unborn-branch and non-repository
 /// cases fall through to `symbolic-ref` and `--is-inside-work-tree`.
-async fn resolve_git_head(path: &str) -> Result<GitHeadInfo, AppCommandError> {
+pub async fn resolve_git_head(path: &str) -> Result<GitHeadInfo, AppCommandError> {
     // `rev-parse --abbrev-ref HEAD` prints the branch name, the literal "HEAD"
     // when detached, and fails on an unborn branch or a non-repository.
     let head = git_output(path, &["rev-parse", "--abbrev-ref", "HEAD"]).await?;

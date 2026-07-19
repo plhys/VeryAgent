@@ -22,6 +22,7 @@ pub mod session_info;
 pub mod session_state;
 pub mod terminal_runtime;
 pub mod types;
+pub mod image_generation;
 pub mod vision_bridge;
 
 pub use idle_sweep::{idle_sweep_task, idle_timeout_from_env, SWEEP_INTERVAL_SECS};

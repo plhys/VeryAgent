@@ -64,6 +64,10 @@ pub struct AppState {
     /// updated by the vision bridge settings command on save. Populated at
     /// startup by `apply_persisted_vision_bridge_config`.
     pub vision_bridge_config: crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
+    /// Hot-swappable image-generation enable flag. Shared with
+    /// `DelegationInjection`; updated by the image generation settings command.
+    /// Populated at startup by `apply_persisted_image_generation_config`.
+    pub image_generation_config: crate::acp::image_generation::ImageGenerationRuntimeConfig,
     /// Hot-swappable OpenWiki config (permissions + inject policy). Read at
     /// session-prompt inject time; updated by the OpenWiki settings command on
     /// save. Populated at startup by `apply_persisted_openwiki_config`.
@@ -120,6 +124,7 @@ pub fn build_delegation_stack(
     crate::acp::question::QuestionRuntimeConfig,
     crate::acp::session_info::SessionInfoRuntimeConfig,
     crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
+    crate::acp::image_generation::ImageGenerationRuntimeConfig,
     Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
 ) {
     use crate::acp::connection::DelegationInjection;
@@ -168,6 +173,7 @@ pub fn build_delegation_stack(
     let ask = crate::acp::question::QuestionRuntimeConfig::new();
     let sessions = crate::acp::session_info::SessionInfoRuntimeConfig::new();
     let vision = crate::acp::vision_bridge::VisionBridgeRuntimeConfig::new();
+    let image = crate::acp::image_generation::ImageGenerationRuntimeConfig::new();
 
     // Install the injection on the manager so spawn_agent picks it up
     // without an extra parameter at every call site.
@@ -180,8 +186,10 @@ pub fn build_delegation_stack(
         sessions: sessions.clone(),
         vision: vision.clone(),
         vision_bridge: Some(vision_bridge_access.clone()),
-        // Image generation is always enabled — the Gemini API is available on
-        // the internal network and requires no per-agent opt-in.
+        // Image generation companion feature bit. Runtime API credentials live
+        // on ImageGenerationRuntimeConfig (returned separately); this flag only
+        // controls whether `veryagent-mcp` exposes generate_image/modify_image.
+        // Settings save refreshes sessions via config-stale when toggled.
         image_enabled: true,
         // Web search is always enabled — it's a core capability backed by the
         // upstream MCP proxy at feishu.ideasir.com.
@@ -193,7 +201,7 @@ pub fn build_delegation_stack(
         }) as Arc<dyn crate::acp::question::SessionQuestionAccess>,
     });
 
-    (broker, tokens, socket_path, feedback, ask, sessions, vision, vision_bridge_access)
+    (broker, tokens, socket_path, feedback, ask, sessions, vision, image, vision_bridge_access)
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -238,7 +246,8 @@ impl AppState {
             question_config,
             session_info_config,
             vision_bridge_config,
-            vision_bridge_access,
+            image_generation_config,
+            _vision_bridge_access,
         ) = build_delegation_stack(
             &connection_manager,
             db.conn.clone(),
@@ -269,6 +278,7 @@ impl AppState {
             question_config,
             session_info_config,
             vision_bridge_config,
+            image_generation_config,
             openwiki_config: crate::openwiki::OpenWikiRuntimeConfig::new(),
             system_op_lock: default_system_op_lock(),
             update_state: default_update_state(),
