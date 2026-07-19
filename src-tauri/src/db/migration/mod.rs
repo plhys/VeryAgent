@@ -25,6 +25,8 @@ mod m20260612_000001_conversation_folder_kind;
 mod m20260621_000001_automation;
 mod m20260630_000001_conversation_parent_id_index;
 mod m20260711_000001_vision_bridge;
+mod m20260719_000001_image_generation;
+mod m20260719_000002_image_generation_gateways;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -56,6 +58,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260621_000001_automation::Migration),
             Box::new(m20260630_000001_conversation_parent_id_index::Migration),
             Box::new(m20260711_000001_vision_bridge::Migration),
+            Box::new(m20260719_000001_image_generation::Migration),
+            Box::new(m20260719_000002_image_generation_gateways::Migration),
         ]
     }
 }

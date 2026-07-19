@@ -471,4 +471,33 @@ fr = "Recherche sur le web des informations à jour — moteur de recherche prio
 pt = "Pesquisa na web por informações atualizadas — buscador com prioridade em chinês, pesquisa web, pesquisa de imagens e filtro temporal. A consulta do usuário é passada sem alterações."
 ar = "يبحث في الويب عن معلومات محدثة — محرك بحث يعطي الأولوية للصينية، مع بحث الويب وبحث الصور وتصفية الوقت. يتم تمرير استعلام المستخدم كما هو."
 
+[[expert]]
+id = "veryagent-image"
+category = "creative"
+icon = "Sparkles"
+sort_order = 320
+
+[expert.display_name]
+en = "Image Gateway"
+"zh-CN" = "出图网关"
+"zh-TW" = "出圖網關"
+ja = "画像ゲートウェイ"
+ko = "이미지 게이트웨이"
+es = "Puerta de imagen"
+de = "Bild-Gateway"
+fr = "Passerelle image"
+pt = "Gateway de imagem"
+ar = "بوابة الصور"
+
+[expert.description]
+en = "Generate and edit images. Use Settings on this skill to add multiple gateways with notes and priority 0–9 (0 = highest)."
+"zh-CN" = "生成与修改图片。点本技能「设置」可配置多个出图网关、备注与优先级 0–9（0 最优先）。"
+"zh-TW" = "生成與修改圖片。點本技能「設定」可配置多個出圖網關、備註與優先級 0–9（0 最優先）。"
+ja = "画像の生成と編集。設定で複数ゲートウェイ・メモ・優先度 0–9（0 が最優先）を構成します。"
+ko = "이미지 생성·편집. 설정에서 여러 게이트웨이, 메모, 우선순위 0–9(0이 최우선)를 구성합니다."
+es = "Genera y edita imágenes. En Ajustes configura varios gateways con notas y prioridad 0–9 (0 = máxima)."
+de = "Bilder erzeugen und bearbeiten. In den Einstellungen mehrere Gateways mit Notiz und Priorität 0–9 (0 = höchste)."
+fr = "Générer et modifier des images. Paramètres : plusieurs passerelles, notes et priorité 0–9 (0 = max)."
+pt = "Gera e edita imagens. Em Configurações: vários gateways, notas e prioridade 0–9 (0 = máxima)."
+ar = "إنشاء الصور وتعديلها. الإعدادات: بوابات متعددة وملاحظات وأولوية 0–9 (0 الأعلى)."
 

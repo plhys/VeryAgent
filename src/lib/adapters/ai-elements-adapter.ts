@@ -679,7 +679,10 @@ function fileNameFromUri(uri: string): string {
     const segment = url.pathname.split("/").pop() || ""
     return decodeURIComponent(segment) || uri
   } catch {
-    return uri
+    // Bare Windows/POSIX path: take the last segment.
+    const normalized = uri.replace(/\\/g, "/")
+    const segment = normalized.split("/").pop() || uri
+    return segment
   }
 }
 
@@ -968,11 +971,15 @@ function adaptContentBlock(
 
     case "image_generation": {
       const img = block.image ?? null
+      // Platform path-only results have empty `data` + a local `uri`; the
+      // GeneratedImagesBlock hydrates bytes via read_file_base64.
+      const hasBytes = !!(img?.data && img.data.length >= 4)
+      const hasPath = !!(img?.uri && img.uri.trim().length > 0)
       const display: UserImageDisplay | null =
-        img && img.data && img.mime_type
+        img && img.mime_type && (hasBytes || hasPath)
           ? {
               name: deriveImageNameFromImageData(img),
-              data: img.data,
+              data: hasBytes ? img.data : "",
               mime_type: img.mime_type,
               uri: img.uri ?? null,
             }
@@ -1010,8 +1017,319 @@ function deriveImageNameFromImageData(img: {
 }
 
 /**
+ * Pull image payloads out of a tool_result.
+ *
+ * Sources (first wins per image, de-duped by data prefix):
+ * 1. `result.images` — Claude Code Read / ACP-promoted tool images
+ * 2. `output_preview` JSON — platform `generate_image` / `modify_image` MCP
+ *    CallToolResult (`structuredContent.base64` + `mime`, or content[].image)
+ * 3. Top-level `{ base64, mime }` / `{ data, mime_type }` shapes
+ */
+export function extractImagesFromToolResult(result: {
+  images?: ImageData[] | null
+  output_preview?: string | null
+}): ImageData[] {
+  const out: ImageData[] = []
+  const seen = new Set<string>()
+
+  const push = (img: ImageData | null | undefined) => {
+    if (!img?.mime_type) return
+    if (!img.mime_type.startsWith("image/")) return
+    const hasBytes = typeof img.data === "string" && img.data.length >= 4
+    const hasPath =
+      typeof img.uri === "string" &&
+      img.uri.length > 0 &&
+      // path-only platform results use local paths; also allow file://
+      (img.uri.startsWith("file:") ||
+        img.uri.includes("/") ||
+        img.uri.includes("\\") ||
+        img.uri.includes(":"))
+    // Accept either inlined base64 or a resolvable on-disk path.
+    if (!hasBytes && !hasPath) return
+    const key = hasBytes
+      ? `${img.mime_type}:${img.data.length}:${img.data.slice(0, 48)}`
+      : `${img.mime_type}:path:${img.uri}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({
+      data: hasBytes ? img.data : "",
+      mime_type: img.mime_type,
+      uri: img.uri ?? null,
+    })
+  }
+
+  if (result.images) {
+    for (const img of result.images) push(img)
+  }
+
+  const preview = result.output_preview?.trim()
+  if (preview && preview.length > 0) {
+    for (const img of extractImagesFromToolOutputText(preview)) {
+      push(img)
+    }
+  }
+
+  return out
+}
+
+/**
+ * Parse a `VERYAGENT_IMAGE` marker body (text after the prefix).
+ *
+ * Preferred: `mime=image/png path=C:\Users\John Doe\...\a.png` (path last).
+ * Legacy: `path=... mime=...` or whitespace-split key=value.
+ */
+function parseVeryagentImageMarker(
+  rest: string
+): { path: string; mime: string | null } | null {
+  const body = rest.trim()
+  if (!body) return null
+
+  // Preferred: mime=... path=... (path takes the remainder — may contain spaces)
+  if (body.startsWith("mime=")) {
+    const afterMime = body.slice("mime=".length)
+    const pathIdx = afterMime.indexOf(" path=")
+    if (pathIdx >= 0) {
+      const mime = afterMime.slice(0, pathIdx).trim()
+      const path = afterMime.slice(pathIdx + " path=".length).trim()
+      if (path) return { path, mime: mime || null }
+    }
+  }
+
+  // Legacy: path=... mime=...
+  if (body.startsWith("path=")) {
+    const afterPath = body.slice("path=".length)
+    const mimeIdx = afterPath.lastIndexOf(" mime=")
+    if (mimeIdx >= 0) {
+      const path = afterPath.slice(0, mimeIdx).trim()
+      const mime = afterPath.slice(mimeIdx + " mime=".length).trim()
+      if (path) return { path, mime: mime || null }
+    }
+    // path-only
+    const path = afterPath.trim()
+    if (path && !path.includes("=")) return { path, mime: null }
+  }
+
+  // Fallback: whitespace-split key=value (breaks on spaces in path)
+  let path: string | null = null
+  let mime: string | null = null
+  for (const part of body.split(/\s+/)) {
+    if (part.startsWith("path=")) path = part.slice("path=".length)
+    else if (part.startsWith("mime=")) mime = part.slice("mime=".length)
+  }
+  if (path) return { path, mime }
+  return null
+}
+
+/** Parse platform / MCP tool-result JSON (or nested envelopes) for image bytes. */
+export function extractImagesFromToolOutputText(text: string): ImageData[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+
+  // Fast reject: pure prose success text without JSON / path / marker hints.
+  if (
+    !trimmed.startsWith("{") &&
+    !trimmed.startsWith("[") &&
+    !trimmed.includes("base64") &&
+    !trimmed.includes("mimeType") &&
+    !trimmed.includes("mime_type") &&
+    !trimmed.includes("structuredContent") &&
+    !trimmed.includes('"path"') &&
+    !trimmed.includes("veryagent-images") &&
+    !trimmed.includes("VERYAGENT_IMAGE")
+  ) {
+    return []
+  }
+
+  const images: ImageData[] = []
+  const seen = new Set<string>()
+
+  const pushPath = (path: string, mime: string | null) => {
+    const p = path.trim()
+    if (!p) return
+    const pathLooksImage =
+      /\.(png|jpe?g|webp|gif|bmp)$/i.test(p) || p.includes("veryagent-images")
+    if (!pathLooksImage && !(mime && mime.startsWith("image/"))) return
+    let resolvedMime =
+      mime && mime.startsWith("image/") ? mime : inferMimeFromPath(p)
+    if (!resolvedMime.startsWith("image/")) resolvedMime = "image/png"
+    const key = `path:${p}`
+    if (seen.has(key)) return
+    seen.add(key)
+    images.push({ data: "", mime_type: resolvedMime, uri: p })
+  }
+
+  // Marker lines (content-only hosts, truncated JSON, etc.)
+  for (const line of trimmed.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t.startsWith("VERYAGENT_IMAGE ")) continue
+    const parsed = parseVeryagentImageMarker(t.slice("VERYAGENT_IMAGE ".length))
+    if (parsed) pushPath(parsed.path, parsed.mime)
+  }
+
+  const candidates: unknown[] = []
+
+  // Whole string as JSON
+  try {
+    candidates.push(JSON.parse(trimmed))
+  } catch {
+    // Embedded JSON object (e.g. "Wall time…\n{...}")
+    const start = trimmed.indexOf("{")
+    const end = trimmed.lastIndexOf("}")
+    if (start >= 0 && end > start) {
+      try {
+        candidates.push(JSON.parse(trimmed.slice(start, end + 1)))
+      } catch {
+        // ignore
+      }
+    }
+    // Last line that looks like a JSON trailer
+    for (const line of [...trimmed.split(/\r?\n/)].reverse()) {
+      const l = line.trim()
+      if (!l.startsWith("{")) continue
+      try {
+        candidates.push(JSON.parse(l))
+      } catch {
+        // ignore
+      }
+      break
+    }
+  }
+
+  for (const cand of candidates) {
+    collectImagesFromUnknown(cand, images, 0)
+  }
+
+  // De-dupe collectImagesFromUnknown results that may overlap markers
+  if (images.length <= 1) return images
+  const deduped: ImageData[] = []
+  const keys = new Set<string>()
+  for (const img of images) {
+    const key =
+      img.data && img.data.length >= 4
+        ? `${img.mime_type}:${img.data.length}:${img.data.slice(0, 48)}`
+        : `${img.mime_type}:path:${img.uri ?? ""}`
+    if (keys.has(key)) continue
+    keys.add(key)
+    deduped.push(img)
+  }
+  return deduped
+}
+
+function collectImagesFromUnknown(
+  value: unknown,
+  out: ImageData[],
+  depth: number
+): void {
+  if (depth > 6 || value == null) return
+
+  if (Array.isArray(value)) {
+    for (const item of value) collectImagesFromUnknown(item, out, depth + 1)
+    return
+  }
+
+  if (typeof value !== "object") return
+  const obj = value as Record<string, unknown>
+
+  // Direct image-like object
+  const direct = coerceImageData(obj)
+  if (direct) {
+    out.push(direct)
+  }
+
+  // MCP CallToolResult: structuredContent { base64, mime, path }
+  if (obj.structuredContent && typeof obj.structuredContent === "object") {
+    collectImagesFromUnknown(obj.structuredContent, out, depth + 1)
+  }
+
+  // content: [{ type: "image", data, mimeType }, ...]
+  if (Array.isArray(obj.content)) {
+    collectImagesFromUnknown(obj.content, out, depth + 1)
+  }
+
+  // Nested result / outcome wrappers some hosts use
+  for (const key of ["result", "outcome", "data", "images"]) {
+    if (obj[key] != null) collectImagesFromUnknown(obj[key], out, depth + 1)
+  }
+}
+
+function coerceImageData(obj: Record<string, unknown>): ImageData | null {
+  // Platform structuredContent / persist shape
+  const b64Raw =
+    (typeof obj.base64 === "string" && obj.base64) ||
+    (typeof obj.data === "string" && obj.data) ||
+    (typeof obj.b64_json === "string" && obj.b64_json) ||
+    null
+  const mimeRaw =
+    (typeof obj.mime === "string" && obj.mime) ||
+    (typeof obj.mimeType === "string" && obj.mimeType) ||
+    (typeof obj.mime_type === "string" && obj.mime_type) ||
+    null
+  const pathUri =
+    typeof obj.path === "string" && obj.path.length > 0
+      ? obj.path
+      : typeof obj.uri === "string" && obj.uri.length > 0
+        ? obj.uri
+        : null
+
+  // MCP image content part: { type: "image", data, mimeType }
+  const isImageType =
+    obj.type === "image" ||
+    obj.type === "image_url" ||
+    (typeof mimeRaw === "string" && mimeRaw.startsWith("image/"))
+
+  const hasBytes = typeof b64Raw === "string" && b64Raw.length >= 4
+  // Path-only platform result (preferred wire shape — no multi-MB base64).
+  if (!hasBytes) {
+    if (!pathUri) return null
+    // Need an image mime or an image-looking path.
+    const pathLooksImage =
+      /\.(png|jpe?g|webp|gif|bmp)$/i.test(pathUri) ||
+      pathUri.includes("veryagent-images")
+    if (!mimeRaw && !isImageType && !pathLooksImage) return null
+    let mime =
+      mimeRaw && mimeRaw.startsWith("image/")
+        ? mimeRaw
+        : inferMimeFromPath(pathUri)
+    if (!mime.startsWith("image/")) mime = "image/png"
+    return { data: "", mime_type: mime, uri: pathUri }
+  }
+
+  // Reject if this looks like a path-only object without image mime
+  if (!mimeRaw && !isImageType && !pathUri) {
+    return null
+  }
+
+  let mime = mimeRaw && mimeRaw.startsWith("image/") ? mimeRaw : "image/png"
+  let data = b64Raw
+
+  // data:image/png;base64,XXXX
+  if (data.startsWith("data:")) {
+    const comma = data.indexOf(",")
+    if (comma > 0) {
+      const header = data.slice(5, comma)
+      const headerMime = header.split(";")[0]?.trim()
+      if (headerMime?.startsWith("image/")) mime = headerMime
+      data = data.slice(comma + 1)
+    }
+  }
+
+  if (!mime.startsWith("image/")) return null
+
+  return { data, mime_type: mime, uri: pathUri }
+}
+
+function inferMimeFromPath(path: string): string {
+  const lower = path.toLowerCase()
+  if (lower.endsWith(".png")) return "image/png"
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg"
+  if (lower.endsWith(".webp")) return "image/webp"
+  if (lower.endsWith(".gif")) return "image/gif"
+  return "image/png"
+}
+
+/**
  * Convert a tool_result carrying image bytes (e.g. Claude Code's `Read` of an
- * image, or a multi-page PDF read returning one image per page) into one
+ * image, platform `generate_image`, or a multi-page PDF read) into one
  * `generated-image` part per image.
  *
  * Mirrors the live ACP path: there, an image-bearing ToolCall is detected by
@@ -1021,21 +1339,24 @@ function deriveImageNameFromImageData(img: {
  * in-position instead of degrading to a bare "Read foo.png" row — closing the
  * live/historical asymmetry.
  *
+ * Also recovers platform companion results whose image only lives in
+ * `structuredContent` / MCP `content[].image` serialized into `output_preview`.
+ *
  * Returns `null` when the result carries no usable images, so callers fall
  * through to the normal tool-card path. Images missing `data`/`mime_type` are
  * skipped; if that empties the list, `null` is returned too.
  */
 function adaptImageToolResultParts(result: {
   images?: ImageData[] | null
+  output_preview?: string | null
 }): AdaptedGeneratedImagePart[] | null {
-  const images = result.images
-  if (!images || images.length === 0) return null
+  const images = extractImagesFromToolResult(result)
+  if (images.length === 0) return null
   const parts: AdaptedGeneratedImagePart[] = []
   for (const img of images) {
-    if (!img.data || !img.mime_type) continue
     parts.push({
       type: "generated-image",
-      // A Read has no model-revised prompt — only codex image generation does.
+      // A Read / platform generate has no model-revised prompt — only codex does.
       revisedPrompt: null,
       image: {
         name: deriveImageNameFromImageData(img),

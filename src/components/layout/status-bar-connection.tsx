@@ -1,9 +1,13 @@
 "use client"
 
-import { useCallback, useSyncExternalStore } from "react"
-import { Unplug } from "lucide-react"
+import { useCallback, useState, useSyncExternalStore } from "react"
+import { RefreshCw, Unplug } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useConnectionStore } from "@/contexts/acp-connections-context"
+import { toast } from "sonner"
+import {
+  useAcpActions,
+  useConnectionStore,
+} from "@/contexts/acp-connections-context"
 import { useTabStore } from "@/contexts/tab-context"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { AgentIcon } from "@/components/agent-icon"
@@ -41,8 +45,10 @@ const STATUS_STYLE: Record<
 export function StatusBarConnection() {
   const t = useTranslations("Folder.statusBar.connection")
   const store = useConnectionStore()
+  const { reapplyConfig } = useAcpActions()
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
+  const [reconnecting, setReconnecting] = useState(false)
 
   // Subscribe to activeKey changes
   const subscribeActiveKey = useCallback(
@@ -76,6 +82,9 @@ export function StatusBarConnection() {
 
   const status = activeConn?.status ?? null
   const agentType = activeConn?.agentType ?? null
+  const configStale = activeConn?.configStale ?? false
+  const isViewer = activeConn?.isViewer ?? false
+  const isDelegationChild = activeConn?.isDelegationChild ?? false
 
   // Selecting the primitive model string keeps this component inert to every
   // unrelated conversation update.
@@ -88,19 +97,91 @@ export function StatusBarConnection() {
     return conv?.model ?? null
   })
 
-  if (!agentType || !status || status === "disconnected") {
-    return (
+  const turnInFlight = status === "prompting"
+  const busy = reconnecting || status === "connecting"
+  // Owners only — viewers / broker children don't own the process.
+  const canReconnect =
+    !!activeKey &&
+    !!agentType &&
+    !!status &&
+    status !== "disconnected" &&
+    !isViewer &&
+    !isDelegationChild
+  const actionDisabled = !canReconnect || turnInFlight || busy
+
+  const handleReconnect = useCallback(async () => {
+    if (!activeKey || actionDisabled) return
+    setReconnecting(true)
+    try {
+      const ok = await reapplyConfig(activeKey)
+      if (ok) toast.success(t("reconnectApplied"))
+    } catch (error) {
+      toast.error(t("reconnectFailed"), {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setReconnecting(false)
+    }
+  }, [activeKey, actionDisabled, reapplyConfig, t])
+
+  const reconnectButton =
+    canReconnect ? (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center gap-1.5">
-              <Unplug className="h-3.5 w-3.5 text-muted-foreground/50" />
-              {model && <span>{model}</span>}
-            </div>
+            {/* Wrapper so tooltip still fires while the button is disabled. */}
+            <span className="inline-flex">
+              <button
+                type="button"
+                disabled={actionDisabled}
+                onClick={() => void handleReconnect()}
+                aria-label={
+                  busy
+                    ? t("reconnecting")
+                    : configStale
+                      ? t("reconnectStale")
+                      : t("reconnect")
+                }
+                className={cn(
+                  "inline-flex h-5 w-5 items-center justify-center rounded-sm transition-colors",
+                  "disabled:pointer-events-none disabled:opacity-40",
+                  configStale
+                    ? "text-amber-600 hover:bg-amber-500/15 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <RefreshCw
+                  className={cn("h-3 w-3", busy && "animate-spin")}
+                />
+              </button>
+            </span>
           </TooltipTrigger>
-          <TooltipContent side="top">{t("disconnected")}</TooltipContent>
+          <TooltipContent side="top">
+            {turnInFlight
+              ? t("reconnectDisabledDuringTurn")
+              : configStale
+                ? t("reconnectStaleTooltip")
+                : t("reconnectTooltip")}
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+    ) : null
+
+  if (!agentType || !status || status === "disconnected") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5">
+                <Unplug className="h-3.5 w-3.5 text-muted-foreground/50" />
+                {model && <span>{model}</span>}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top">{t("disconnected")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
     )
   }
 
@@ -115,19 +196,34 @@ export function StatusBarConnection() {
       : t("tooltip", { agent: label, status: statusLabel })
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="flex items-center gap-1">
-            <AgentIcon
-              agentType={agentType}
-              className={cn("size-3", style.className)}
-            />
-            {model && <span>{model}</span>}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top">{tooltipText}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <div className="flex items-center gap-1.5">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                "flex items-center gap-1",
+                configStale && "text-amber-700 dark:text-amber-300"
+              )}
+            >
+              <AgentIcon
+                agentType={agentType}
+                className={cn("size-3", style.className)}
+              />
+              {model && <span>{model}</span>}
+              {configStale && (
+                <span className="text-[10px] font-medium leading-none">
+                  {t("staleBadge")}
+                </span>
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {configStale ? t("staleTooltip", { agent: label }) : tooltipText}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {reconnectButton}
+    </div>
   )
 }

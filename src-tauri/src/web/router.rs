@@ -102,6 +102,18 @@ pub fn build_router(
             post(handlers::vision_bridge::set_vision_bridge_settings),
         )
         .route(
+            "/image_generation_get_config",
+            post(handlers::image_generation::get_image_generation_settings),
+        )
+        .route(
+            "/image_generation_save_config",
+            post(handlers::image_generation::set_image_generation_settings),
+        )
+        .route(
+            "/image_generation_fetch_models",
+            post(handlers::image_generation::fetch_image_generation_models),
+        )
+        .route(
             "/openwiki_get_config",
             post(handlers::openwiki::get_openwiki_config),
         )

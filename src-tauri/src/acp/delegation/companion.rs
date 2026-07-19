@@ -599,8 +599,9 @@ async fn build_tools_call_spawn(
             let model = arguments
                 .get("model")
                 .and_then(|v| v.as_str())
-                .unwrap_or("gemini")
-                .to_string();
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
             let image_size = arguments
                 .get("image_size")
                 .and_then(|v| v.as_str())
@@ -634,8 +635,9 @@ async fn build_tools_call_spawn(
             let model = arguments
                 .get("model")
                 .and_then(|v| v.as_str())
-                .unwrap_or("gemini")
-                .to_string();
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
             let ref_urls = arguments
                 .get("ref_urls")
                 .and_then(|v| v.as_array())
@@ -1194,60 +1196,101 @@ pub fn render_vision_result(outcome: &Value) -> Value {
     }
 }
 
-pub fn render_generate_image_result(outcome: &Value) -> Value {
+/// Render a successful platform image tool outcome for MCP hosts.
+///
+/// Hosts (and our chat UI) must show the picture — not a path/JSON dump.
+///
+/// Shape:
+/// - `content[0]`: short agent-facing text (never base64 / data URL)
+/// - `structuredContent`: `{ mime, path }` only — **no base64 on the wire**.
+///
+/// Why no base64 / MCP image part here:
+/// GPT-image / similar models return multi-MB PNGs. Putting that in
+/// `content` or `structuredContent` blows past ACP `raw_output` caps
+/// (64 KiB) and IPC limits, so the frontend sees `status=completed` with
+/// empty images and paints "图片生成失败" even though the file was saved.
+/// VeryAgent recovers bytes from `path` via `read_file_base64`.
+fn render_platform_image_result(outcome: &Value, failed_label: &str, success_label: &str) -> Value {
     let error_msg = outcome.get("error").and_then(|v| v.as_str());
     if let Some(err) = error_msg {
-        json!({
-            "content": [{ "type": "text", "text": format!("Image generation failed: {err}") }],
+        return json!({
+            "content": [{ "type": "text", "text": format!("{failed_label}: {err}") }],
             "isError": true,
-            "structuredContent": outcome.clone(),
-        })
-    } else {
-        let base64 = outcome.get("base64").and_then(|v| v.as_str()).unwrap_or("");
-        let mime = outcome.get("mime").and_then(|v| v.as_str()).unwrap_or("image/png");
-        let path = outcome.get("path").and_then(|v| v.as_str()).unwrap_or("");
-        if !base64.is_empty() {
-            json!({
-                "content": [{ "type": "text", "text": format!("![生成图片](data:{mime};base64,{base64})") }],
-                "isError": false,
-                "structuredContent": { "path": path, "mime": mime },
-            })
-        } else {
-            json!({
-                "content": [{ "type": "text", "text": format!("Image saved to: {path}") }],
-                "isError": false,
-                "structuredContent": outcome.clone(),
-            })
-        }
+            "structuredContent": {
+                "error": err,
+            },
+        });
     }
+
+    let mime = outcome
+        .get("mime")
+        .and_then(|v| v.as_str())
+        .unwrap_or("image/png");
+    let path = outcome
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    // Outcome may still carry base64 from the broker for disk persist, but
+    // we intentionally drop it from the MCP tool result.
+
+    // Success without a path cannot be displayed (UI hydrates from disk).
+    // Treat as error so the agent retries instead of claiming success.
+    if path.is_empty() {
+        let err = "image API returned no on-disk path";
+        return json!({
+            "content": [{ "type": "text", "text": format!("{failed_label}: {err}") }],
+            "isError": true,
+            "structuredContent": {
+                "error": err,
+            },
+        });
+    }
+
+    let structured = json!({ "mime": mime, "path": path });
+
+    // Human-facing lines for the agent + machine-readable path markers.
+    // Never include base64 — multi-MB payloads get truncated at 64 KiB and
+    // break display. VeryAgent recovers the file from path via
+    // `read_file_base64` (and ACP promotes path into ToolCall.images).
+    //
+    // Marker format: mime first, path last (path may contain spaces).
+    //   VERYAGENT_IMAGE mime=image/png path=C:\Users\John Doe\...\a.png
+    let mut text = format!(
+        "{success_label}\n\
+         STATUS: success. VeryAgent chat UI renders this image automatically.\n\
+         Do NOT claim the agent or UI cannot display images.\n\
+         Do NOT paste base64, data URLs, JSON, file paths, or markdown images into your reply.\n\
+         Briefly confirm success in natural language only.\n\
+         VERYAGENT_IMAGE mime={mime} path={path}\n"
+    );
+    // JSON trailer for structured parsers (handles spaces/unicode safely).
+    text.push_str(
+        &serde_json::to_string(&json!({ "mime": mime, "path": path }))
+            .unwrap_or_else(|_| format!(r#"{{"mime":"{mime}","path":"{path}"}}"#)),
+    );
+
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": false,
+        "structuredContent": structured,
+    })
+}
+
+pub fn render_generate_image_result(outcome: &Value) -> Value {
+    render_platform_image_result(
+        outcome,
+        "Image generation failed",
+        "Image generated successfully.",
+    )
 }
 
 pub fn render_modify_image_result(outcome: &Value) -> Value {
-    let error_msg = outcome.get("error").and_then(|v| v.as_str());
-    if let Some(err) = error_msg {
-        json!({
-            "content": [{ "type": "text", "text": format!("Image modification failed: {err}") }],
-            "isError": true,
-            "structuredContent": outcome.clone(),
-        })
-    } else {
-        let base64 = outcome.get("base64").and_then(|v| v.as_str()).unwrap_or("");
-        let mime = outcome.get("mime").and_then(|v| v.as_str()).unwrap_or("image/png");
-        let path = outcome.get("path").and_then(|v| v.as_str()).unwrap_or("");
-        if !base64.is_empty() {
-            json!({
-                "content": [{ "type": "text", "text": format!("![修改后的图片](data:{mime};base64,{base64})") }],
-                "isError": false,
-                "structuredContent": { "path": path, "mime": mime },
-            })
-        } else {
-            json!({
-                "content": [{ "type": "text", "text": format!("Image saved to: {path}") }],
-                "isError": false,
-                "structuredContent": outcome.clone(),
-            })
-        }
-    }
+    render_platform_image_result(
+        outcome,
+        "Image modification failed",
+        "Image modified successfully.",
+    )
 }
 
 pub fn render_web_search_result(outcome: &Value) -> Value {
@@ -1434,6 +1477,7 @@ mod tests {
             sessions: false,
             vision: false,
             image: false,
+            search: false,
         })
     }
 
@@ -1906,6 +1950,7 @@ mod tests {
         sessions: false,
         vision: false,
         image: false,
+        search: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
@@ -1914,6 +1959,7 @@ mod tests {
         sessions: false,
         vision: false,
         image: false,
+        search: false,
     };
     const ASK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -1922,6 +1968,7 @@ mod tests {
         sessions: false,
         vision: false,
         image: false,
+        search: false,
     };
     const SESSIONS_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -1930,6 +1977,7 @@ mod tests {
         sessions: true,
         vision: false,
         image: false,
+        search: false,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {

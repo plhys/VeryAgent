@@ -47,6 +47,7 @@ type SettingsNavLabelKey =
   | "appearance"
   | "agents"
   | "model_providers"
+  | "image_generation"
   | "mcp"
   | "experts"
   | "office_tools"
@@ -92,6 +93,8 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
     labelKey: "model_providers",
     icon: Server,
   },
+  // Image generation is configured from Skills (veryagent-image card Settings),
+  // not a standalone settings nav entry.
   {
     href: "/settings/agents",
     labelKey: "agents",

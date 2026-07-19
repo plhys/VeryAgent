@@ -265,6 +265,7 @@ async fn async_main() -> ExitCode {
         question_config,
         session_info_config,
         vision_bridge_config,
+        image_generation_config,
         _vision_bridge_access,
     ) = veryagent_lib::app_state::build_delegation_stack(
         &connection_manager,
@@ -297,6 +298,7 @@ async fn async_main() -> ExitCode {
         question_config: question_config.clone(),
         session_info_config: session_info_config.clone(),
         vision_bridge_config: vision_bridge_config.clone(),
+        image_generation_config: image_generation_config.clone(),
         openwiki_config: veryagent_lib::openwiki::OpenWikiRuntimeConfig::new(),
         system_op_lock: veryagent_lib::app_state::default_system_op_lock(),
         update_state: veryagent_lib::app_state::default_update_state(),
@@ -345,6 +347,12 @@ async fn async_main() -> ExitCode {
         &vision_bridge_config,
     )
     .await;
+    // Same for platform image generation.
+    veryagent_lib::commands::image_generation::apply_persisted_image_generation_config(
+        &state.db.conn,
+        &image_generation_config,
+    )
+    .await;
     // Same for OpenWiki config + agent permissions.
     veryagent_lib::commands::openwiki::apply_persisted_openwiki_config(
         &state.db.conn,
@@ -374,6 +382,11 @@ async fn async_main() -> ExitCode {
                 }),
             )),
             Arc::new(veryagent_lib::acp::vision_bridge::VisionBridgeService::new(
+                veryagent_lib::db::AppDatabase {
+                    conn: state.db.conn.clone(),
+                },
+            )),
+            Arc::new(veryagent_lib::acp::image_generation::ImageGenerationService::new(
                 veryagent_lib::db::AppDatabase {
                     conn: state.db.conn.clone(),
                 },

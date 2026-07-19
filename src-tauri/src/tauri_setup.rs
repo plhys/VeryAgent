@@ -18,6 +18,7 @@ use crate::commands::git;
         system_settings, terminal as terminal_commands,
         version_control, windows, workspace_state as workspace_state_commands,
         vision_bridge as vision_bridge_commands,
+        image_generation as image_generation_commands,
         image_proxy,
     };
     use crate::terminal::manager::TerminalManager;
@@ -451,6 +452,7 @@ use crate::commands::git;
                         question_config,
                         session_info_config,
                         vision_bridge_config,
+                        image_generation_config,
                         _vision_bridge_access,
                     ) = crate::app_state::build_delegation_stack(
                         &cm_state,
@@ -470,6 +472,7 @@ use crate::commands::git;
                     app.manage(question_config.clone());
                     app.manage(session_info_config.clone());
                     app.manage(vision_bridge_config.clone());
+                    app.manage(image_generation_config.clone());
                     app.manage(crate::commands::delegation::DelegationSocketPath(
                         socket_path.clone(),
                     ));
@@ -482,6 +485,7 @@ use crate::commands::git;
                     let question_for_init = question_config.clone();
                     let session_info_for_init = session_info_config.clone();
                     let vision_bridge_for_init = vision_bridge_config.clone();
+                    let image_generation_for_init = image_generation_config.clone();
                     tauri::async_runtime::block_on(async move {
                         delegation_commands::apply_persisted_config(
                             &db_for_init,
@@ -506,6 +510,11 @@ use crate::commands::git;
                         crate::commands::vision_bridge::apply_persisted_vision_bridge_config(
                             &db_for_init,
                             &vision_bridge_for_init,
+                        )
+                        .await;
+                        crate::commands::image_generation::apply_persisted_image_generation_config(
+                            &db_for_init,
+                            &image_generation_for_init,
                         )
                         .await;
                     });
@@ -538,6 +547,13 @@ use crate::commands::git;
                         ),
                         std::sync::Arc::new(
                             crate::acp::vision_bridge::VisionBridgeService::new(
+                                crate::db::AppDatabase {
+                                    conn: db_conn.clone(),
+                                },
+                            ),
+                        ),
+                        std::sync::Arc::new(
+                            crate::acp::image_generation::ImageGenerationService::new(
                                 crate::db::AppDatabase {
                                     conn: db_conn.clone(),
                                 },
@@ -1302,7 +1318,10 @@ use crate::commands::git;
                 web::update_web_service_config,
                 web::probe_web_service_port,
                 vision_bridge_commands::vision_bridge_get_config,
+                image_generation_commands::image_generation_get_config,
                 vision_bridge_commands::vision_bridge_save_config,
+                image_generation_commands::image_generation_save_config,
+                image_generation_commands::image_generation_fetch_models,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

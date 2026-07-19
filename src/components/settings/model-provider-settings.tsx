@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useState } from "react"
 import { Loader2, Pencil, Plus, Server, Trash2 } from "lucide-react"
@@ -23,8 +23,11 @@ import { AddModelProviderDialog } from "./add-model-provider-dialog"
 import { EditModelProviderDialog } from "./edit-model-provider-dialog"
 
 /**
- * Model-provider list body. When `embedded` is true, omit the outer ScrollArea
- * so a parent page can compose this with Vision Bridge under one scroller.
+ * Model-provider list body.
+ * Layout matches General / Appearance:
+ *   outer: w-full space-y-4 p-3 md:p-4
+ *   cards: rounded-xl border bg-card p-4 space-y-4
+ * When `embedded`, omit outer ScrollArea / page padding — parent supplies it.
  */
 export function ModelProviderSettingsBody({
   embedded = false,
@@ -82,34 +85,34 @@ export function ModelProviderSettingsBody({
 
   const body = (
     <>
-      <section className="space-y-3 px-3 pt-3 md:px-4 md:pt-4">
-        <div>
-          <h2 className="text-sm font-semibold">{t("sectionTitle")}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t("sectionDescription")}
-          </p>
-        </div>
-      </section>
-
-      <section className="mt-4 space-y-2 px-3 pb-3 md:px-4 md:pb-4">
-        <div className="flex items-center justify-end gap-2">
+      <section className="space-y-4 rounded-xl border bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">{t("sectionTitle")}</h2>
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t("sectionDescription")}
+            </p>
+          </div>
           <Button
             size="sm"
-            className="h-8 text-xs"
+            className="h-8 shrink-0 text-xs"
             onClick={() => setAddDialogOpen(true)}
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
+            <Plus className="mr-1 h-3.5 w-3.5" />
             {t("addProvider")}
           </Button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : providers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <Server className="h-8 w-8 mb-2 opacity-40" />
+            <Server className="mb-2 h-8 w-8 opacity-40" />
             <span className="text-xs">{t("noProviders")}</span>
           </div>
         ) : (
@@ -120,8 +123,8 @@ export function ModelProviderSettingsBody({
                 className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="text-sm font-medium truncate">{p.name}</div>
-                  <div className="truncate text-xs text-muted-foreground font-mono">
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  <div className="truncate font-mono text-xs text-muted-foreground">
                     {p.api_url}
                   </div>
                 </div>
@@ -188,7 +191,12 @@ export function ModelProviderSettingsBody({
   )
 
   if (embedded) return body
-  return <ScrollArea className="h-full">{body}</ScrollArea>
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="w-full space-y-4 p-3 md:p-4">{body}</div>
+    </ScrollArea>
+  )
 }
 
 export function ModelProviderSettings() {

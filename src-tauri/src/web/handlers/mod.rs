@@ -26,6 +26,7 @@ pub mod quick_messages;
 pub mod session_info;
 pub mod system_settings;
 pub mod terminal;
+pub mod image_generation;
 pub mod vision_bridge;
 pub mod npm_cli;
 pub mod openwiki;
