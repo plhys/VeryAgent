@@ -37,12 +37,15 @@ const subscribers = new Set<(snapshot: ExpertInstallStatus[]) => void>()
 async function loadSnapshot(): Promise<ExpertInstallStatus[] | null> {
   if (inflight) return inflight
   const myGeneration = generation
-  const request: Promise<ExpertInstallStatus[] | null> = Promise.all([
+  // Isolate sources with allSettled: an unregistered/failed science API must
+  // not zero out experts+office statuses (warehouse "Added" tab and composer
+  // gating both consume this snapshot).
+  const request: Promise<ExpertInstallStatus[] | null> = Promise.allSettled([
     expertsListAllInstallStatuses(),
     scienceListAllInstallStatuses(),
     officecliSkillListAllInstallStatuses(),
   ])
-    .then(([experts, science, office]) => {
+    .then(([expertsResult, scienceResult, officeResult]) => {
       // Only clear the shared handle if it still points at *this* request: a
       // focus refresh may have superseded it, and nulling unconditionally would
       // orphan the newer in-flight request and let a concurrent mount kick off a
@@ -51,6 +54,42 @@ async function loadSnapshot(): Promise<ExpertInstallStatus[] | null> {
       // A newer invalidation superseded this request while it was in flight —
       // discard its result so it can't clobber the fresher snapshot.
       if (myGeneration !== generation) return cached
+
+      const experts =
+        expertsResult.status === "fulfilled" ? expertsResult.value : []
+      const science =
+        scienceResult.status === "fulfilled" ? scienceResult.value : []
+      const office =
+        officeResult.status === "fulfilled" ? officeResult.value : []
+      if (expertsResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] experts statuses failed:",
+          expertsResult.reason
+        )
+      }
+      if (scienceResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] science statuses failed:",
+          scienceResult.reason
+        )
+      }
+      if (officeResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] office statuses failed:",
+          officeResult.reason
+        )
+      }
+
+      // If every source failed and we have no prior snapshot, keep null so
+      // callers stay in the fail-open "not ready" path instead of locking all.
+      if (
+        expertsResult.status === "rejected" &&
+        scienceResult.status === "rejected" &&
+        officeResult.status === "rejected"
+      ) {
+        return cached
+      }
+
       const merged = [...experts, ...science, ...office]
       cached = merged
       for (const notify of subscribers) notify(merged)

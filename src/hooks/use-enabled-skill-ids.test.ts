@@ -9,6 +9,7 @@ import type { AcpAgentInfo, ExpertInstallStatus } from "@/lib/types"
 // a custom-dir pi); it returns no agents here, so detection stays inert.
 vi.mock("@/lib/api", () => ({
   expertsListAllInstallStatuses: vi.fn(),
+  scienceListAllInstallStatuses: vi.fn(),
   officecliSkillListAllInstallStatuses: vi.fn(),
   acpListAgents: vi.fn().mockResolvedValue([]),
 }))
@@ -29,6 +30,7 @@ beforeEach(() => {
 async function setup() {
   const api = await import("@/lib/api")
   vi.mocked(api.expertsListAllInstallStatuses).mockResolvedValue([])
+  vi.mocked(api.scienceListAllInstallStatuses).mockResolvedValue([])
   vi.mocked(api.officecliSkillListAllInstallStatuses).mockResolvedValue([])
   const hook = await import("./use-enabled-skill-ids")
   return { api, hook }
@@ -46,6 +48,7 @@ describe("useEnabledSkillIds — focus refresh coalescing", () => {
     })
 
     vi.mocked(api.expertsListAllInstallStatuses).mockClear()
+    vi.mocked(api.scienceListAllInstallStatuses).mockClear()
     vi.mocked(api.officecliSkillListAllInstallStatuses).mockClear()
 
     // A window focus must coalesce to ONE refresh — not one scan per instance
@@ -57,6 +60,7 @@ describe("useEnabledSkillIds — focus refresh coalescing", () => {
 
     await waitFor(() => {
       expect(api.expertsListAllInstallStatuses).toHaveBeenCalledTimes(1)
+      expect(api.scienceListAllInstallStatuses).toHaveBeenCalledTimes(1)
       expect(api.officecliSkillListAllInstallStatuses).toHaveBeenCalledTimes(1)
     })
   })
@@ -70,6 +74,7 @@ describe("useEnabledSkillIds — focus refresh coalescing", () => {
     a.unmount()
     b.unmount()
     vi.mocked(api.expertsListAllInstallStatuses).mockClear()
+    vi.mocked(api.scienceListAllInstallStatuses).mockClear()
     vi.mocked(api.officecliSkillListAllInstallStatuses).mockClear()
 
     await act(async () => {
@@ -78,6 +83,7 @@ describe("useEnabledSkillIds — focus refresh coalescing", () => {
     })
 
     expect(api.expertsListAllInstallStatuses).not.toHaveBeenCalled()
+    expect(api.scienceListAllInstallStatuses).not.toHaveBeenCalled()
     expect(api.officecliSkillListAllInstallStatuses).not.toHaveBeenCalled()
   })
 })
