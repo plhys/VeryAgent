@@ -660,9 +660,26 @@ use crate::commands::git;
                     let builder = tauri::WebviewWindowBuilder::new(app, "main", url)
                         .title("VeryAgent")
                         .inner_size(1260.0, 860.0)
-                        .min_inner_size(400.0, 600.0);
+                        .min_inner_size(400.0, 600.0)
+                        // Start hidden to avoid a white/empty flash while the
+                        // webview loads. The frontend emits "main://ready"
+                        // once the app shell mounts, which makes the window
+                        // visible. If the event never fires (e.g. a JS error),
+                        // a 15-second fallback timer shows it anyway.
+                        .visible(false);
                     if let Ok(w) = windows::apply_platform_window_style(builder).build() {
                         windows::post_window_setup(&w);
+                        let w_clone = w.clone();
+                        // Fallback: show window after 15s even if frontend
+                        // never emits "main://ready" (prevents permanent
+                        // invisible window on JS errors).
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                            if w_clone.is_visible().unwrap_or(false) {
+                                return;
+                            }
+                            let _ = w_clone.show();
+                        });
                     }
                 }
 
@@ -780,6 +797,21 @@ use crate::commands::git;
                     let resize_app = app.handle().clone();
                     let _ = app.listen("pet://bubble-resized", move |_event| {
                         windows::reposition_pet_bubble(&resize_app);
+                    });
+                }
+
+                // Listen for the frontend's "ready" signal. The main window
+                // is created as hidden to avoid a white flash while the page
+                // loads; this event makes it visible once the React shell
+                // mounts. A 15-second fallback timer (set when the window
+                // was created) also shows it if this event never fires.
+                {
+                    use tauri::Listener;
+                    let ready_app = app.handle().clone();
+                    let _ = app.listen("main://ready", move |_event| {
+                        if let Some(w) = ready_app.get_webview_window("main") {
+                            let _ = w.show();
+                        }
                     });
                 }
 
