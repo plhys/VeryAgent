@@ -1005,7 +1005,7 @@ function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
 
   useEffect(() => {
     void fetchData()
-  }, [fetchData])
+  }, [fetchData, refreshKey])
 
   const handleTogglePlugin = useCallback(
     async (serverId: string, enable: boolean) => {
