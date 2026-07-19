@@ -8,6 +8,7 @@ pub mod delegation;
 mod error;
 pub mod event_metrics;
 pub mod experts;
+pub mod science;
 pub mod feedback;
 pub mod files;
 pub mod folder_commands;

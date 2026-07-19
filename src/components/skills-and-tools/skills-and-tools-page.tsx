@@ -74,38 +74,17 @@ import { useTabStore } from "@/contexts/tab-context"
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-const SKILL_CATEGORY_LABELS: Record<string, { en: string; zh: string }> = {
-  // Experts
-  discovery: { en: "Discovery & Design", zh: "发现与设计" },
-  planning: { en: "Planning", zh: "规划" },
-  execution: { en: "Execution", zh: "执行" },
-  quality: { en: "Quality & Testing", zh: "质量与测试" },
-  debugging: { en: "Debugging", zh: "调试" },
-  review: { en: "Review & Integration", zh: "评审与集成" },
-  meta: { en: "Meta Skills", zh: "元技能" },
-  creative: { en: "Creative & Graphics", zh: "创意与出图" },
-  // Science
-  ideation: { en: "Ideation", zh: "构思" },
-  design: { en: "Research Design", zh: "研究设计" },
-  analysis: { en: "Analysis", zh: "分析" },
-  visualization: { en: "Visualization", zh: "可视化" },
-  evaluation: { en: "Evaluation", zh: "评估" },
-  literature: { en: "Literature", zh: "文献" },
-  // Office
-  general: { en: "General", zh: "通用" },
-  presentations: { en: "Presentations", zh: "演示文稿" },
-  documents: { en: "Documents", zh: "文档" },
-  spreadsheets: { en: "Spreadsheets", zh: "电子表格" },
-  // Legacy / fallback
-  "coding-agent": { en: "Coding", zh: "编程" },
-  editor: { en: "Productivity", zh: "效率" },
-  productivity: { en: "Office", zh: "办公" },
-  "dev-workflow": { en: "Dev Workflow", zh: "开发流程" },
-  system: { en: "System", zh: "系统" },
-  other: { en: "Other", zh: "其他" },
+// Coarse source order for list sorting (expert → science → office).
+// Fine-grained skill categories stay on the backend for metadata only —
+// the UI no longer shows 17 category pills.
+const SOURCE_ORDER: Record<"expert" | "science" | "office", number> = {
+  expert: 1,
+  science: 2,
+  office: 3,
 }
 
-// Category display order (lower = first). Unlisted categories sort last.
+// Category display order (lower = first). Used only to keep a stable order
+// within the same source; not shown as filter chips.
 const CATEGORY_ORDER: Record<string, number> = {
   // Experts
   discovery: 1, planning: 2, execution: 3, quality: 4,
@@ -115,34 +94,6 @@ const CATEGORY_ORDER: Record<string, number> = {
   visualization: 14, evaluation: 15, literature: 16,
   // Office
   general: 21, presentations: 22, documents: 23, spreadsheets: 24,
-}
-
-function getCategoryLabel(category: string, locale: string): string {
-  const entry = SKILL_CATEGORY_LABELS[category]
-  if (!entry) return category
-  return locale.toLowerCase().startsWith("zh") ? entry.zh : entry.en
-}
-
-function getCategoryTone(
-  category: string
-): "default" | "secondary" | "outline" {
-  const tones: Record<string, "default" | "secondary" | "outline"> = {
-    discovery: "default",
-    planning: "default",
-    execution: "default",
-    quality: "default",
-    debugging: "default",
-    review: "default",
-    meta: "secondary",
-    creative: "outline",
-    "coding-agent": "default",
-    editor: "secondary",
-    productivity: "secondary",
-    "dev-workflow": "secondary",
-    system: "outline",
-    other: "outline",
-  }
-  return tones[category] ?? "outline"
 }
 
 const EXPERT_ICONS: Record<string, typeof Lightbulb> = {
@@ -305,8 +256,18 @@ function SkillCard({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Badge variant={getCategoryTone(skill.category)} className="text-[0.625rem]">
-          {getCategoryLabel(skill.category, locale)}
+        <Badge variant="outline" className="text-[0.625rem]">
+          {skill.source === "expert"
+            ? isZh
+              ? "编程"
+              : "Coding"
+            : skill.source === "science"
+              ? isZh
+                ? "科研"
+                : "Science"
+              : isZh
+                ? "办公"
+                : "Office"}
         </Badge>
         {enabled && (
           <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
@@ -578,19 +539,39 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const fetchSkills = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoadingSkills(true)
     try {
-      const [experts, science, officeSkills] = await Promise.all([
+      // Isolate sources: one failing API (e.g. unregistered science_list)
+      // must not wipe the whole warehouse.
+      const [expertsResult, scienceResult, officeResult] = await Promise.allSettled([
         expertsList(),
         scienceList(),
         officecliListSkills(),
       ])
+      const experts =
+        expertsResult.status === "fulfilled" ? expertsResult.value : []
+      const science =
+        scienceResult.status === "fulfilled" ? scienceResult.value : []
+      const officeSkills =
+        officeResult.status === "fulfilled" ? officeResult.value : []
+      if (expertsResult.status === "rejected") {
+        console.warn("[SkillsAndTools] expertsList failed:", expertsResult.reason)
+      }
+      if (scienceResult.status === "rejected") {
+        console.warn("[SkillsAndTools] scienceList failed:", scienceResult.reason)
+      }
+      if (officeResult.status === "rejected") {
+        console.warn(
+          "[SkillsAndTools] officecliListSkills failed:",
+          officeResult.reason
+        )
+      }
       const unified: UnifiedSkillItem[] = [
         ...experts.map(expertToUnified),
         ...science.map(scienceToUnified),
         ...officeSkills.map(officeSkillToUnified),
       ]
       setAllSkills(unified)
-    } catch {
-      // silently ignore
+    } catch (err) {
+      console.warn("[SkillsAndTools] fetchSkills failed:", err)
     } finally {
       if (!opts?.silent) setLoadingSkills(false)
     }
@@ -608,15 +589,20 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     [allSkills, enabledIds]
   )
 
-  const enabledByCategory = useMemo(() => {
+  const enabledBySource = useMemo(() => {
+    const order: Array<UnifiedSkillItem["source"]> = [
+      "expert",
+      "science",
+      "office",
+    ]
     const groups: Record<string, UnifiedSkillItem[]> = {}
     for (const skill of enabledSkills) {
-      if (!groups[skill.category]) groups[skill.category] = []
-      groups[skill.category].push(skill)
+      if (!groups[skill.source]) groups[skill.source] = []
+      groups[skill.source].push(skill)
     }
-    return Object.entries(groups).sort(([a], [b]) => {
-      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
-    })
+    return order
+      .filter((src) => (groups[src]?.length ?? 0) > 0)
+      .map((src) => [src, groups[src]] as const)
   }, [enabledSkills])
 
   const handleToggleSkill = useCallback(
@@ -781,9 +767,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         {/* Enabled Skills sub-section — grouped by category */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {navigatorLocale.toLowerCase().startsWith("zh")
-              ? "已启用的技能"
-              : "Enabled Skills"}
+            {t("enabledSkills")}
           </h4>
           {loadingSkills ? (
             <div className="flex items-center justify-center py-4 text-muted-foreground">
@@ -792,10 +776,14 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
             </div>
           ) : hasEnabledSkills ? (
             <div className="flex flex-col gap-5">
-              {enabledByCategory.map(([category, items]) => (
-                <div key={category}>
+              {enabledBySource.map(([source, items]) => (
+                <div key={source}>
                   <h5 className="mb-2 text-[11px] font-medium text-muted-foreground">
-                    {getCategoryLabel(category, navigatorLocale)}
+                    {source === "expert"
+                      ? t("sourceExpert")
+                      : source === "science"
+                        ? t("sourceScience")
+                        : t("sourceOffice")}
                   </h5>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((skill) => (
@@ -819,12 +807,10 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
           )}
         </div>
 
-        {/* Enabled Plugins sub-section */}
+        {/* Enabled Connectors sub-section */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {navigatorLocale.toLowerCase().startsWith("zh")
-              ? "已启用的插件"
-              : "Enabled Plugins"}
+            {t("installedPlugins")}
           </h4>
           {/* Always mount OpenWiki card so it can report enabled state. */}
           <div
@@ -890,18 +876,47 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoading(true)
       try {
-        const [experts, science, officeSkills] = await Promise.all([
-          expertsList(),
-          scienceList(),
-          officecliListSkills(),
-        ])
+        // Isolate sources: one failing API must not empty the warehouse tab.
+        const [expertsResult, scienceResult, officeResult] =
+          await Promise.allSettled([
+            expertsList(),
+            scienceList(),
+            officecliListSkills(),
+          ])
+        const experts =
+          expertsResult.status === "fulfilled" ? expertsResult.value : []
+        const science =
+          scienceResult.status === "fulfilled" ? scienceResult.value : []
+        const officeSkills =
+          officeResult.status === "fulfilled" ? officeResult.value : []
+        if (expertsResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] expertsList failed:",
+            expertsResult.reason
+          )
+        }
+        if (scienceResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] scienceList failed:",
+            scienceResult.reason
+          )
+        }
+        if (officeResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] officecliListSkills failed:",
+            officeResult.reason
+          )
+        }
         const unified: UnifiedSkillItem[] = [
           ...experts.map(expertToUnified),
           ...science.map(scienceToUnified),
           ...officeSkills.map(officeSkillToUnified),
         ]
-        // Sort by category order, then by name within category
+        // Source first (编程/科研/办公), then fine category, then name
         unified.sort((a, b) => {
+          const srcA = SOURCE_ORDER[a.source] ?? 99
+          const srcB = SOURCE_ORDER[b.source] ?? 99
+          if (srcA !== srcB) return srcA - srcB
           const orderA = CATEGORY_ORDER[a.category] ?? 99
           const orderB = CATEGORY_ORDER[b.category] ?? 99
           if (orderA !== orderB) return orderA - orderB
@@ -910,8 +925,8 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
           return nameA.localeCompare(nameB)
         })
         setSkills(unified)
-      } catch {
-        // silently ignore
+      } catch (err) {
+        console.warn("[SkillsAndTools] fetchData failed:", err)
       } finally {
         if (!opts?.silent) setLoading(false)
       }
@@ -985,26 +1000,24 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     ]
   )
 
-  // Group skills by category, preserving sort order
-  const groupedByCategory = useMemo(() => {
-    const groups: Record<string, UnifiedSkillItem[]> = {}
-    for (const skill of skills) {
-      if (!groups[skill.category]) groups[skill.category] = []
-      groups[skill.category].push(skill)
-    }
-    return Object.entries(groups).sort(([a], [b]) => {
-      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
-    })
-  }, [skills])
+  // Coarse source filter: all | expert | science | office
+  type SourceFilter = "all" | "expert" | "science" | "office"
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
 
-  // Category filter state: null = show all
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const sourceFilters: { id: SourceFilter; label: string }[] = useMemo(
+    () => [
+      { id: "all", label: t("filterAll") },
+      { id: "expert", label: t("filterExpert") },
+      { id: "science", label: t("filterScience") },
+      { id: "office", label: t("filterOffice") },
+    ],
+    [t]
+  )
 
-  // Skills to display (all or filtered by selected category)
   const displayedSkills = useMemo(() => {
-    if (!selectedCategory) return skills
-    return skills.filter((s) => s.category === selectedCategory)
-  }, [skills, selectedCategory])
+    if (sourceFilter === "all") return skills
+    return skills.filter((s) => s.source === sourceFilter)
+  }, [skills, sourceFilter])
 
   if (loading) {
     return (
@@ -1019,45 +1032,29 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
         <Cpu className="h-8 w-8" />
-        <p className="text-sm">
-          {navigatorLocale.toLowerCase().startsWith("zh")
-            ? `${currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]} 当前没有可安装的技能`
-            : `No installable skills for ${currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]}`}
-        </p>
+        <p className="text-sm">{t("noSkills")}</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
-      {/* Category filter tabs — horizontal scrollable row */}
-      <div className="shrink-0 overflow-x-auto border-b px-1 md:px-2">
+      {/* Coarse source filter — only 4 chips, not 17 fine categories */}
+      <div className="shrink-0 border-b px-1 md:px-2">
         <div className="flex items-center gap-1 py-2">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory(null)}
-            className={
-              "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-              (selectedCategory === null
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground")
-            }
-          >
-            {navigatorLocale.toLowerCase().startsWith("zh") ? "全部" : "All"}
-          </button>
-          {groupedByCategory.map(([category]) => (
+          {sourceFilters.map((f) => (
             <button
-              key={category}
+              key={f.id}
               type="button"
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => setSourceFilter(f.id)}
               className={
                 "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-                (selectedCategory === category
+                (sourceFilter === f.id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground")
               }
             >
-              {getCategoryLabel(category, navigatorLocale)}
+              {f.label}
             </button>
           ))}
         </div>
@@ -1068,9 +1065,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
         <div className="px-1 py-4 md:px-2">
           {displayedSkills.length === 0 ? (
             <p className="py-8 text-center text-xs text-muted-foreground">
-              {navigatorLocale.toLowerCase().startsWith("zh")
-                ? "该分类下没有技能"
-                : "No skills in this category"}
+              {t("noSkillsInFilter")}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1365,7 +1360,6 @@ function useSkillsPageAgentContext(): SkillsPageAgentContext {
 
 export function SkillsAndToolsPage() {
   const t = useTranslations("SkillsAndTools")
-  const locale = useLocale()
   const { fresh, availableAgents, currentAgent } = useSkillsPageAgentContext()
   // Soft refresh signal for the Enabled tab (no remount / no loading flash).
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1403,9 +1397,7 @@ export function SkillsAndToolsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {locale.toLowerCase().startsWith("zh")
-                    ? "VeryAgent 技能仓库。点「添加」即可把技能挂到当前智能体，无需去设置里勾选。"
-                    : "VeryAgent skill warehouse. Click Add to attach a skill to the current agent — no settings matrix."}
+                  {t("currentAgentHint")}
                 </p>
               </div>
             </div>
@@ -1425,19 +1417,19 @@ export function SkillsAndToolsPage() {
                 value="skills"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "技能仓库" : "Warehouse"}
+                {t("tabSkillsRepo")}
               </TabsTrigger>
               <TabsTrigger
                 value="enabled"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "已添加" : "Added"}
+                {t("tabEnabled")}
               </TabsTrigger>
               <TabsTrigger
                 value="plugins"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "插件" : "Plugins"}
+                {t("tabPluginsRepo")}
               </TabsTrigger>
             </TabsList>
           </div>

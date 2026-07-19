@@ -442,68 +442,6 @@ ar = "إنشاء وتحرير والتحقق من مستندات المهارا�
 
 
 [[expert]]
-id = "gemini-image"
-category = "creative"
-icon = "ImagePlus"
-sort_order = 300
-
-[expert.display_name]
-en = "Gemini Image Generation"
-"zh-CN" = "Gemini 图片生成"
-"zh-TW" = "Gemini 圖片生成"
-ja = "Gemini 画像生成"
-ko = "Gemini 이미지 생성"
-es = "Generación de imágenes Gemini"
-de = "Gemini Bildgenerierung"
-fr = "Génération d'images Gemini"
-pt = "Geração de imagens Gemini"
-ar = "إنشاء صور Gemini"
-
-[expert.description]
-en = "Generate, modify, and compose images via Gemini or Doubao — text-to-image, image-to-image, and iterative editing with transparent prompt pass-through."
-"zh-CN" = "通过 Gemini 或豆包生成、修改和合成图片——文生图、图生图、迭代改图，用户原话透传不经润色。支持 model 参数切换模型。"
-"zh-TW" = "透過 Gemini 生成、修改和合成圖片——文生圖、圖生圖、迭代改圖，使用者原話透傳不經潤色。"
-ja = "Gemini で画像を生成・変更・合成 — テキストから画像、画像から画像、反復編集。ユーザーの言葉を直接透過。"
-ko = "Gemini로 이미지 생성, 수정, 합성 — 텍스트→이미지, 이미지→이미지, 반복 편집. 사용자 원문 투과 전달."
-es = "Genera, modifica y compone imágenes vía Gemini — texto-a-imagen, imagen-a-imagen, edición iterativa con transmisión transparente del prompt."
-de = "Bilder via Gemini generieren, modifizieren und komponieren — Text-zu-Bild, Bild-zu-Bild, iteratives Bearbeiten mit transparentem Prompt-Passthrough."
-fr = "Génère, modifie et compose des images via Gemini — texte-vers-image, image-vers-image, édition itérative avec transmission transparente du prompt."
-pt = "Gera, modifica e compõe imagens via Gemini — texto-para-imagem, imagem-para-imagem, edição iterativa com pass-through transparente do prompt."
-ar = "إنشاء وتعديل وتجميع الصور عبر Gemini — من نص إلى صورة، من صورة إلى صورة، تعديل تكراري مع تمرير شفاف للمستخدم."
-
-
-[[expert]]
-id = "doubao-image"
-category = "creative"
-icon = "Paintbrush"
-sort_order = 305
-
-[expert.display_name]
-en = "Doubao Image Generation"
-"zh-CN" = "豆包图片生成"
-"zh-TW" = "豆包圖片生成"
-ja = "Doubao 画像生成"
-ko = "Doubao 이미지 생성"
-es = "Generación de imágenes Doubao"
-de = "Doubao Bildgenerierung"
-fr = "Génération d'images Doubao"
-pt = "Geração de imagens Doubao"
-ar = "إنشاء صور Doubao"
-
-[expert.description]
-en = "Generate, modify, and compose images via Doubao — text-to-image, image-to-image, and iterative editing. Use generate_image with model=doubao."
-"zh-CN" = "通过豆包模型生成、修改和合成图片——文生图、图生图、迭代改图。使用 generate_image 工具并指定 model=doubao。"
-"zh-TW" = "透過豆包模型生成、修改和合成圖片——文生圖、圖生圖、迭代改圖。使用 generate_image 工具並指定 model=doubao。"
-ja = "Doubao モデルで画像を生成・変更・合成 — テキストから画像、画像から画像、反復編集。generate_image ツールで model=doubao を指定。"
-ko = "Doubao 모델로 이미지 생성, 수정, 합성 — 텍스트→이미지, 이미지→이미지, 반복 편집. generate_image 도구에서 model=doubao 지정."
-es = "Genera, modifica y compone imágenes vía Doubao — texto-a-imagen, imagen-a-imagen, edición iterativa. Usa generate_image con model=doubao."
-de = "Bilder via Doubao generieren, modifizieren und komponieren — Text-zu-Bild, Bild-zu-Bild, iteratives Bearbeiten. Nutze generate_image mit model=doubao."
-fr = "Génère, modifie et compose des images via Doubao — texte-vers-image, image-vers-image, édition itérative. Utilise generate_image avec model=doubao."
-pt = "Gera, modifica e compõe imagens via Doubao — texto-para-imagem, imagem-para-imagem, edição iterativa. Use generate_image com model=doubao."
-ar = "إنشاء وتعديل وتجميع الصور عبر Doubao — من نص إلى صورة، من صورة إلى صورة، تعديل تكراري. استخدم generate_image مع model=doubao."
-
-
-[[expert]]
 id = "web-search"
 category = "discovery"
 icon = "Search"

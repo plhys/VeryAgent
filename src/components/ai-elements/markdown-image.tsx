@@ -30,10 +30,9 @@ import { Download, ImageIcon, LinkIcon, SparklesIcon } from "lucide-react"
  *                    not supported.
  *  - Copy URL     — copies the image `src` URL to the clipboard as text.
  *  - Download Image — saves the image to a local file via system save dialog.
- *  - Reference for Re-creation — inserts an image reference badge and a
- *                    skill badge into the current session's composer, so the
- *                    agent receives the reference image URL for use with
- *                    `generate_image` (ref_urls) or `modify_image`.
+ *  - Reference for Re-creation — inserts an image reference badge into the
+ *                    current session's composer so the agent receives the
+ *                    image URL as context (no image-generation skill attached).
  *
  * Left click opens the existing full-screen preview dialog used elsewhere in
  * the app; right click still opens the context menu.
@@ -101,19 +100,12 @@ export function MarkdownImage({
   // ── Reference for Re-creation ────────────────────────────────────────
   const handleReferenceToChat = useCallback(() => {
     if (!src || !activeTabId) return
-    // Emit a custom event that the composer listens for. The handler inserts
-    // an image reference badge (cyan, showing the image URL) and a skill badge
-    // (rose) into the editor. When sent, the image badge serializes as
-    // `![alt](url)` markdown and the skill badge as `/gemini-image`, so the
-    // agent receives both the reference image URL and the skill invocation.
-    // The agent then uses `generate_image` with `ref_urls` for image-to-image
-    // or `modify_image` for iterative editing.
+    // Attach only the image reference badge. Image-generation skills
+    // (gemini-image / doubao-image) were removed; keep URL context only.
     emitAttachImageReferenceToSession({
       tabId: activeTabId,
       imageUrl: String(src),
       alt: alt || "参考图片",
-      skillId: "gemini-image",
-      skillLabel: "gemini-image",
     })
   }, [src, alt, activeTabId])
 

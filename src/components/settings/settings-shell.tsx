@@ -47,7 +47,7 @@ type SettingsNavLabelKey =
   | "appearance"
   | "agents"
   | "model_providers"
-  | "plugin_config"
+  | "mcp"
   | "experts"
   | "office_tools"
   | "skill_packs"
@@ -106,7 +106,7 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
 
 /**
  * Advanced / expert settings — collapsed by default.
- * `plugin_config` and `shortcuts` were not named in the regroup request; they
+ * `mcp` and `shortcuts` were not named in the regroup request; they
  * stay available under advanced so no existing route is dropped from the nav.
  */
 const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
@@ -122,7 +122,7 @@ const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
   },
   {
     href: "/settings/mcp",
-    labelKey: "plugin_config",
+    labelKey: "mcp",
     icon: PlugZap,
   },
   {
