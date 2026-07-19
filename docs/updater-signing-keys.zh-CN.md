@@ -83,12 +83,25 @@ set TAURI_SIGNING_PRIVATE_KEY_PATH=%USERPROFILE%\.veryagent\keys\veryagent-updat
 set /p TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<%USERPROFILE%\.veryagent\keys\veryagent-updater.password
 ```
 
-PowerShell：
+PowerShell（**推荐：直接塞私钥内容**，本机 `PATH` 有时在 `pnpm exec` 子进程里读不到）：
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$env:USERPROFILE\.veryagent\keys\veryagent-updater.key"
+$key = "$env:USERPROFILE\.veryagent\keys\veryagent-updater.key"
+$env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content $key -Raw).Trim()
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content "$env:USERPROFILE\.veryagent\keys\veryagent-updater.password" -Raw).Trim()
+# 可选备份：
+# $env:TAURI_SIGNING_PRIVATE_KEY_PATH = $key
 ```
+
+若打包时只生成了 exe、没有 `.sig`（报错 `public key found, but no private key`），可事后补签：
+
+```powershell
+$exe = "src-tauri\target\release\bundle\nsis\veryAgent_0.9.5_x64-setup.exe"
+node node_modules\@tauri-apps\cli\tauri.js signer sign $exe
+# 成功后同目录出现 veryAgent_0.9.5_x64-setup.exe.sig
+```
+
+> 注意：勿用 `pnpm exec tauri signer ...` 若本机启用了 safe-delete 钩子拦截临时目录；直接 `node ...\tauri.js` 更稳。
 
 然后正常 `build-release.bat` 或：
 
@@ -98,15 +111,15 @@ pnpm tauri:prepare-sidecars
 cd src-tauri
 cargo build --release --bin veryagent --features tauri-runtime
 cd ..
-pnpm tauri build --no-build
+pnpm exec tauri build --bundles nsis --ci
 ```
 
 产物目录（Windows）：
 
 ```text
 src-tauri\target\release\bundle\nsis\
-  VeryAgent_*_x64-setup.exe
-  VeryAgent_*_x64-setup.exe.sig
+  veryAgent_*_x64-setup.exe
+  veryAgent_*_x64-setup.exe.sig
 ```
 
 并准备 Tauri 标准 `latest.json`（version / notes / pub_date / platforms.windows-x86_64.url + signature），挂到：
