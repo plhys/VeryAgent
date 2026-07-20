@@ -5,11 +5,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::acp::error::AcpError;
-use crate::acp::types::ConfigStaleKind;
-use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::EventEmitter;
 
