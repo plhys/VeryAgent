@@ -1,6 +1,8 @@
 pub mod adapters;
 pub mod agent_servers;
+pub mod marketplace;
 pub(crate) use agent_servers::*;
+pub(crate) use marketplace::*;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
