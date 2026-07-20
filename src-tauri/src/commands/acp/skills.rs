@@ -1,8 +1,6 @@
 use super::*;
 use std::path::PathBuf;
 
-use crate::acp::error::AcpError;
-
 
 pub(crate) fn is_markdown_file(path: &Path) -> bool {
     path.extension()

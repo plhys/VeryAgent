@@ -378,7 +378,7 @@ fn strip_jsonc_comments(raw: &str) -> String {
 }
 
 /// The resolved veryagent-managed provider/model block to write into config.toml.
-struct KimiManagedSpec {
+pub(crate) struct KimiManagedSpec {
     interface_type: String,
     base_url: Option<String>,
     /// Direct `api_key` field (when the user picks "direct key" auth).
@@ -1410,7 +1410,7 @@ pub(crate) fn hermes_config_yaml_path() -> PathBuf {
 /// `needs_base_url` marks providers whose endpoint is user-supplied (the
 /// OpenAI-compatible `openai-api` path). The frontend mirror owns the auth-kind
 /// UI flag.
-struct HermesProvider {
+pub(crate) struct HermesProvider {
     id: &'static str,
     key_env_var: &'static str,
     needs_base_url: bool,
@@ -1684,7 +1684,7 @@ fn existing_hermes_model_provider(existing: Option<&str>) -> Option<String> {
 }
 
 /// How `merge_hermes_model_config` should treat the `model.base_url` field.
-enum BaseUrlWrite<'a> {
+pub(crate) enum BaseUrlWrite<'a> {
     /// Write this endpoint, or remove the field when the value is empty/blank.
     /// Used for providers whose base URL is user-editable in the panel.
     Set(&'a str),
@@ -1696,7 +1696,7 @@ enum BaseUrlWrite<'a> {
 
 /// How `merge_hermes_model_config` should treat the inline `model.api_key`
 /// (and the companion `model.api_mode`), which only the `custom` provider uses.
-enum InlineApiKeyWrite<'a> {
+pub(crate) enum InlineApiKeyWrite<'a> {
     /// Inline-key provider (`custom`): write `key` (or remove the field when
     /// blank — a keyless local server). `scrub_mode` clears a stale
     /// `model.api_mode`: `true` when switching TO custom from a different
