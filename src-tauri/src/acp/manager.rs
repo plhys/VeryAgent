@@ -211,9 +211,12 @@ pub struct ConnectionManager {
     /// connection teardown.
     pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
     /// Hot-swappable OpenWiki config used at first-prompt inject time.
-    /// Wrapped in `Arc<Mutex<…>>` so `clone_ref` clones share the same slot and
-    /// bootstrap can install after the manager is already managed by Tauri.
-    openwiki_config: Arc<Mutex<Option<crate::openwiki::OpenWikiRuntimeConfig>>>,
+    /// Wrapped in `Arc<std::sync::Mutex<…>>` so `clone_ref` clones share the
+    /// same slot and bootstrap can install from a sync call even while the
+    /// tokio runtime is already running (server path calls this from
+    /// `async_main`). Do not use `tokio::sync::Mutex` here: its
+    /// `blocking_lock()` panics inside a runtime.
+    openwiki_config: Arc<std::sync::Mutex<Option<crate::openwiki::OpenWikiRuntimeConfig>>>,
 }
 
 /// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
@@ -240,7 +243,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
-            openwiki_config: Arc::new(Mutex::new(None)),
+            openwiki_config: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -267,9 +270,12 @@ impl ConnectionManager {
     /// Install the OpenWiki runtime config used for first-prompt injection.
     /// Shared across `clone_ref` clones via the Arc slot.
     pub fn install_openwiki_config(&self, config: crate::openwiki::OpenWikiRuntimeConfig) {
-        // Bootstrap is synchronous; use blocking_lock so a contended try_lock
-        // cannot silently leave injection disabled for the process lifetime.
-        *self.openwiki_config.blocking_lock() = Some(config);
+        // Critical short critical section: store the shared Arc handle only.
+        // Safe to call from sync bootstrap and from inside a tokio runtime.
+        *self
+            .openwiki_config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(config);
     }
 
     fn delegation_snapshot(&self) -> Option<crate::acp::connection::DelegationInjection> {
@@ -279,7 +285,10 @@ impl ConnectionManager {
     /// Snapshot the OpenWiki runtime config for session inject.
     /// Returns `None` when not installed (unit tests / bare managers).
     async fn openwiki_runtime(&self) -> Option<crate::openwiki::OpenWikiRuntimeConfig> {
-        self.openwiki_config.lock().await.clone()
+        self.openwiki_config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Test-only constructor that overrides the spawn-handshake timeout.
@@ -293,7 +302,7 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
-            openwiki_config: Arc::new(Mutex::new(None)),
+            openwiki_config: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
