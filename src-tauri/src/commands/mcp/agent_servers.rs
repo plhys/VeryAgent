@@ -1228,14 +1228,14 @@ pub(crate) fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, A
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialServerResponse {
+pub(crate) struct OfficialServerResponse {
     pub(crate) server: OfficialServer,
     #[serde(default)]
     pub(crate) _meta: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialServer {
+pub(crate) struct OfficialServer {
     pub(crate) name: String,
     #[serde(default)]
     pub(crate) title: Option<String>,
@@ -1256,13 +1256,13 @@ struct OfficialServer {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialRepository {
+pub(crate) struct OfficialRepository {
     #[serde(default)]
     pub(crate) url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialTransport {
+pub(crate) struct OfficialTransport {
     #[serde(default)]
     pub(crate) r#type: String,
     #[serde(default)]
@@ -1274,7 +1274,7 @@ struct OfficialTransport {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialIcon {
+pub(crate) struct OfficialIcon {
     #[serde(default)]
     pub(crate) src: Option<String>,
     #[serde(default, rename = "mimeType")]
@@ -1284,7 +1284,7 @@ struct OfficialIcon {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialPackage {
+pub(crate) struct OfficialPackage {
     #[serde(default, rename = "registryType")]
     pub(crate) registry_type: String,
     pub(crate) identifier: String,
@@ -1302,7 +1302,7 @@ struct OfficialPackage {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialArgument {
+pub(crate) struct OfficialArgument {
     #[serde(default)]
     pub(crate) name: Option<String>,
     #[serde(default)]
@@ -1324,7 +1324,7 @@ struct OfficialArgument {
 }
 
 #[derive(Debug, Deserialize)]
-struct OfficialKeyValueInput {
+pub(crate) struct OfficialKeyValueInput {
     pub(crate) name: String,
     #[serde(default)]
     pub(crate) value: Option<String>,
@@ -1446,13 +1446,13 @@ where
 }
 
 #[derive(Debug, Deserialize)]
-struct SmitheryServerListResponse {
+pub(crate) struct SmitheryServerListResponse {
     #[serde(default)]
     pub(crate) servers: Vec<SmitheryServerSummary>,
 }
 
 #[derive(Debug, Deserialize)]
-struct SmitheryServerSummary {
+pub(crate) struct SmitheryServerSummary {
     #[serde(default)]
     pub(crate) _id: Option<String>,
     #[serde(rename = "qualifiedName")]
@@ -1482,7 +1482,7 @@ struct SmitheryServerSummary {
 }
 
 #[derive(Debug, Deserialize)]
-struct SmitheryServerDetail {
+pub(crate) struct SmitheryServerDetail {
     #[serde(rename = "qualifiedName")]
     pub(crate) qualified_name: String,
     #[serde(rename = "displayName")]
@@ -1514,7 +1514,7 @@ struct SmitheryServerDetail {
 }
 
 #[derive(Debug, Deserialize)]
-struct SmitheryConnection {
+pub(crate) struct SmitheryConnection {
     #[serde(default)]
     pub(crate) r#type: String,
     #[serde(default, rename = "deploymentUrl")]
@@ -2631,7 +2631,7 @@ pub(crate) async fn fetch_smithery_server_detail(
 }
 
 #[derive(Debug, Clone)]
-struct SmitheryConfigField {
+pub(crate) struct SmitheryConfigField {
     pub(crate) key: String,
     pub(crate) description: Option<String>,
     pub(crate) required: bool,
