@@ -1040,6 +1040,14 @@ export async function probeTerminalShellPath(path: string): Promise<boolean> {
   return getTransport().call("probe_terminal_shell_path", { path })
 }
 
+export async function getAppAutostartEnabled(): Promise<boolean> {
+  return getTransport().call("get_app_autostart_enabled")
+}
+
+export async function setAppAutostartEnabled(enabled: boolean): Promise<boolean> {
+  return getTransport().call("set_app_autostart_enabled", { enabled })
+}
+
 export async function getSystemRenderingSettings(): Promise<SystemRenderingSettings> {
   return getTransport().call("get_system_rendering_settings")
 }

@@ -1,13 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2, MonitorCog, RefreshCw, SquareTerminal } from "lucide-react"
+import { Loader2, MonitorCog, Power, RefreshCw, SquareTerminal } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -16,10 +17,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  getAppAutostartEnabled,
   getAvailableTerminalShells,
   getSystemRenderingSettings,
   getSystemTerminalSettings,
   probeTerminalShellPath,
+  setAppAutostartEnabled,
   updateSystemRenderingSettings,
   updateSystemTerminalSettings,
 } from "@/lib/api"
@@ -72,6 +75,7 @@ export function GeneralSettings() {
   const renderingSettingsLoadable =
     isDesktop() && getActiveRemoteConnectionId() === null
   const renderingSectionVisible = renderingSettingsLoadable && isWindows
+  const autostartSectionVisible = renderingSettingsLoadable
 
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -84,6 +88,9 @@ export function GeneralSettings() {
   )
   const [customShellPath, setCustomShellPath] = useState<string>("")
   const [customPathExists, setCustomPathExists] = useState<boolean | null>(null)
+
+  const [autostartEnabled, setAutostartEnabled] = useState(false)
+  const [savingAutostart, setSavingAutostart] = useState(false)
 
   const [disableHwAccel, setDisableHwAccel] = useState(false)
   const [savingRendering, setSavingRendering] = useState(false)
@@ -99,13 +106,16 @@ export function GeneralSettings() {
     setLoadError(null)
 
     try {
-      const [terminalSettings, terminalShells, renderingSettings] =
+      const [terminalSettings, terminalShells, renderingSettings, autostart] =
         await Promise.all([
           getSystemTerminalSettings(),
           getAvailableTerminalShells(),
           renderingSettingsLoadable
             ? getSystemRenderingSettings()
             : Promise.resolve(null),
+          autostartSectionVisible
+            ? getAppAutostartEnabled()
+            : Promise.resolve(false),
         ])
 
       setAvailableShells(terminalShells)
@@ -135,6 +145,8 @@ export function GeneralSettings() {
           setProcessStartLoaded(true)
         }
       }
+
+      setAutostartEnabled(autostart)
     } catch (err) {
       const message = toErrorMessage(err)
       setLoadError(message)
@@ -142,7 +154,7 @@ export function GeneralSettings() {
     } finally {
       setLoading(false)
     }
-  }, [renderingSettingsLoadable])
+  }, [autostartSectionVisible, renderingSettingsLoadable])
 
   useEffect(() => {
     loadSettings().catch((err) => {
@@ -208,6 +220,23 @@ export function GeneralSettings() {
     void persistTerminalShell(trimmed)
   }, [customShellPath, persistTerminalShell])
 
+  const saveAutostartSetting = useCallback(
+    async (next: boolean, prev: boolean) => {
+      setSavingAutostart(true)
+      try {
+        const applied = await setAppAutostartEnabled(next)
+        setAutostartEnabled(applied)
+      } catch (err) {
+        setAutostartEnabled(prev)
+        const message = toErrorMessage(err)
+        toast.error(t("autostartSaveFailed", { message }))
+      } finally {
+        setSavingAutostart(false)
+      }
+    },
+    [t]
+  )
+
   const saveRenderingSettings = useCallback(
     async (next: boolean, prev: boolean) => {
       setSavingRendering(true)
@@ -260,6 +289,36 @@ export function GeneralSettings() {
           <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
             {t("loadFailed", { message: loadError })}
           </div>
+        )}
+
+        {autostartSectionVisible && (
+          <section className="rounded-xl border bg-card p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Power className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">{t("autostartTitle")}</h2>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-5">
+              {t("autostartDescription")}
+            </p>
+
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="app-autostart" className="text-sm">
+                {t("enableAutostart")}
+              </label>
+              <Switch
+                id="app-autostart"
+                checked={autostartEnabled}
+                onCheckedChange={(next) => {
+                  const prev = autostartEnabled
+                  setAutostartEnabled(next)
+                  saveAutostartSetting(next, prev)
+                }}
+                disabled={savingAutostart}
+                className="shrink-0"
+              />
+            </div>
+          </section>
         )}
 
         <section className="rounded-xl border bg-card p-4 space-y-4">

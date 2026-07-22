@@ -135,6 +135,10 @@ use crate::commands::git;
             .plugin(tauri_plugin_updater::Builder::new().build())
             .plugin(tauri_plugin_process::init())
             .plugin(tauri_plugin_notification::init())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                None,
+            ))
             .manage(ConnectionManager::new())
             .manage(TerminalManager::new())
             .manage(ChatChannelManager::new())
@@ -1168,6 +1172,8 @@ use crate::commands::git;
                 system_settings::update_system_terminal_settings,
                 system_settings::get_available_terminal_shells,
                 system_settings::probe_terminal_shell_path,
+                system_settings::get_app_autostart_enabled,
+                system_settings::set_app_autostart_enabled,
                 system_settings::get_system_rendering_settings,
                 system_settings::update_system_rendering_settings,
                 logging_commands::get_log_settings,
