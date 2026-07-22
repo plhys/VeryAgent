@@ -61,8 +61,8 @@ export const MessageContent = ({
     className={cn(
       "is-user:dark flex min-w-0 flex-col gap-2 overflow-hidden text-sm",
       "group-[.is-user]:ml-auto group-[.is-user]:w-fit group-[.is-user]:max-w-full group-[.is-user]:rounded-lg group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
-      "group-[.is-user]:bg-[#F0F0F0] group-[.is-user]:border group-[.is-user]:border-[#DBDBDB]",
-      "dark:group-[.is-user]:bg-[#222222] dark:group-[.is-user]:border dark:group-[.is-user]:border-[#393939]",
+      "group-[.is-user]:bg-muted group-[.is-user]:text-foreground",
+      "group-[.is-user]:border-border",
       "group-[.is-assistant]:w-full group-[.is-assistant]:text-foreground",
       className
     )}
