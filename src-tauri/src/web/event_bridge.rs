@@ -176,6 +176,10 @@ pub const SESSION_INFO_SETTINGS_CHANGED_EVENT: &str = "session-info-settings://c
 /// backend broadcast. Payload: `VisionBridgeConfig`.
 pub const VISION_BRIDGE_SETTINGS_CHANGED_EVENT: &str = "vision-bridge-settings://changed";
 
+/// Payload: `ImageGenerationConfig`. Same cross-window rationale as
+/// [`VISION_BRIDGE_SETTINGS_CHANGED_EVENT`].
+pub const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT: &str = "image-generation-settings://changed";
+
 /// Global side-channel announcing an OpenWiki config save. Same cross-window
 /// rationale as [`VISION_BRIDGE_SETTINGS_CHANGED_EVENT`]. Payload: `OpenWikiConfig`.
 pub const OPENWIKI_SETTINGS_CHANGED_EVENT: &str = "openwiki-settings://changed";

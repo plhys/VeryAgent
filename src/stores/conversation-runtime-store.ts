@@ -22,6 +22,7 @@ import { COLLAB_AGENT_TOOL_NAME, mergeCollabOp } from "@/lib/collab-tool"
 import { collapseLiveCollabBlocks } from "@/lib/collab-collapse"
 import { kimiTodoWriteEntries } from "@/lib/plan-parse"
 import { toErrorMessage } from "@/lib/app-error"
+import { extractImagesFromToolOutputText } from "@/lib/adapters/ai-elements-adapter"
 
 /**
  * Conversation-runtime shared state as a Zustand store — the per-conversation
@@ -410,10 +411,10 @@ function cleanAgentOutput(output: string | null): string | null {
 }
 
 /**
- * Decide whether a live `ToolCallInfo` is codex-acp's image-generation
- * tool call. Detection has to fire during the in-flight window
- * (ImageGenerationBegin, no images yet) so we can't rely on `images.length`
- * alone — the load-bearing signal during that window is the title.
+ * Decide whether a live `ToolCallInfo` is an image-generation tool call.
+ * Detection has to fire during the in-flight window (ImageGenerationBegin,
+ * no images yet) so we can't rely on `images.length` alone — the load-bearing
+ * signal during that window is the title / tool name.
  *
  * Layered detection:
  *   1. `title === "Image generation"` — codex-acp PR #271 hardcodes this
@@ -421,7 +422,9 @@ function cleanAgentOutput(output: string | null): string | null {
  *      `end_image_generation`. Primary path.
  *   2. Case-insensitive title match — defensive for any future codex-acp
  *      casing/whitespace drift.
- *   3. `images.length > 0` — defensive when title is somehow lost but
+ *   3. Platform companion tools `generate_image` / `modify_image` (MCP name
+ *      may be prefixed `mcp__…__generate_image` or `mcp_veryagent_mcp_…`).
+ *   4. `images.length > 0` — defensive when title is somehow lost but
  *      images are present (e.g. a snapshot replay that drops the title).
  *
  * The function is intentionally NOT a generic `kind === "other"` matcher
@@ -434,7 +437,29 @@ function isImageGenerationToolCall(info: {
   const title = (info.title ?? "").trim()
   if (title === "Image generation") return true
   if (title.toLowerCase() === "image generation") return true
+  const lower = title.toLowerCase()
+  if (
+    lower.includes("generate_image") ||
+    lower.includes("modify_image") ||
+    lower.endsWith("generate image") ||
+    lower.endsWith("modify image")
+  ) {
+    return true
+  }
   return (info.images?.length ?? 0) > 0
+}
+
+/** True when the normalized live tool name is the platform image MCP tool. */
+function isPlatformImageToolName(toolName: string): boolean {
+  const n = toolName.toLowerCase()
+  return (
+    n === "generate_image" ||
+    n === "modify_image" ||
+    n.endsWith("__generate_image") ||
+    n.endsWith("__modify_image") ||
+    n.endsWith("_generate_image") ||
+    n.endsWith("_modify_image")
+  )
 }
 
 /**
@@ -722,47 +747,88 @@ export function buildStreamingTurnsFromLiveMessage(
         //     a generic tool card sitting above a detached image
         //   - the new card is not folded into `groupConsecutiveToolCalls`
         //     (which only consumes `tool-call` parts)
-        if (isImageGenerationToolCall(block.info)) {
-          // codex-acp emits one image per ToolCall (each `call_id` is a
-          // single ImageGenerationBegin/End pair). One block per image —
-          // multiple images in a turn become multiple consecutive blocks.
-          // Defensive fallback: if a future agent ever sends multiple
-          // images in one ToolCall, we still emit one block per image so
-          // each renders as its own card.
-          const imgs = block.info.images ?? []
-          const revisedPrompt = extractRevisedPrompt(block.info.content)
-          // Live ToolCallStatus is forwarded so the renderer can show a
-          // failure slot when codex reports the call failed before any
-          // image bytes arrived. Without this the in-flight skeleton would
-          // sit there until TurnComplete clears `active_tool_calls`.
-          const status = narrowToolCallStatus(block.info.status)
-          if (imgs.length === 0) {
-            // In-flight placeholder: title arrived, image hasn't (or the
-            // call failed without producing one).
-            currentBlocks.push({
-              type: "image_generation",
-              revised_prompt: revisedPrompt,
-              image: null,
-              status,
-            })
-          } else {
-            for (const img of imgs) {
-              currentBlocks.push({
-                type: "image_generation",
-                revised_prompt: revisedPrompt,
-                image: {
+        {
+          // Prefer ACP-wire images; fall back to recovering platform companion
+          // generate_image/modify_image results from raw_output / content text
+          // (path-only marker, JSON trailer, structuredContent) when the host
+          // only surfaces text. Scan BOTH: raw_output may be 64 KiB-truncated
+          // and lose the path trailer while content still has it.
+          const fromWire = block.info.images ?? []
+          const rawJoined =
+            block.info.raw_output_chunks.length > 0
+              ? getJoinedChunks(block.info.raw_output_chunks)
+              : ""
+          const contentText = block.info.content ?? ""
+          const recoverFromText = (text: string) =>
+            text ? extractImagesFromToolOutputText(text) : []
+          let fromOutput: ReturnType<typeof extractImagesFromToolOutputText> =
+            []
+          if (fromWire.length === 0) {
+            fromOutput = recoverFromText(rawJoined)
+            if (fromOutput.length === 0 && contentText && contentText !== rawJoined) {
+              fromOutput = recoverFromText(contentText)
+            }
+          }
+          const recoveredImgs =
+            fromWire.length > 0
+              ? fromWire.map((img) => ({
                   data: img.data,
                   mime_type: img.mime_type,
                   uri: img.uri ?? null,
-                },
+                }))
+              : fromOutput
+
+          const toolNameEarly = getToolName(block.info)
+          const isPlatformImage = isPlatformImageToolName(toolNameEarly)
+          if (
+            isImageGenerationToolCall(block.info) ||
+            isPlatformImage ||
+            recoveredImgs.length > 0
+          ) {
+            // codex-acp emits one image per ToolCall (each `call_id` is a
+            // single ImageGenerationBegin/End pair). One block per image —
+            // multiple images in a turn become multiple consecutive blocks.
+            // Defensive fallback: if a future agent ever sends multiple
+            // images in one ToolCall, we still emit one block per image so
+            // each renders as its own card.
+            // Platform companion tools have no codex "Revised prompt:" frame.
+            // Codex image generation still uses extractRevisedPrompt.
+            const revisedPrompt = isPlatformImage
+              ? null
+              : extractRevisedPrompt(block.info.content)
+            // Live ToolCallStatus is forwarded so the renderer can show a
+            // failure slot when codex reports the call failed before any
+            // image bytes arrived. Without this the in-flight skeleton would
+            // sit there until TurnComplete clears `active_tool_calls`.
+            const status = narrowToolCallStatus(block.info.status)
+            if (recoveredImgs.length === 0) {
+              // In-flight placeholder: title arrived, image hasn't (or the
+              // call failed without producing one).
+              currentBlocks.push({
+                type: "image_generation",
+                revised_prompt: revisedPrompt,
+                image: null,
                 status,
               })
+            } else {
+              for (const img of recoveredImgs) {
+                currentBlocks.push({
+                  type: "image_generation",
+                  revised_prompt: revisedPrompt,
+                  image: {
+                    data: img.data,
+                    mime_type: img.mime_type,
+                    uri: img.uri ?? null,
+                  },
+                  status,
+                })
+              }
             }
+            if (status === "completed" || status === "failed") {
+              currentGroupHasCompletedTool = true
+            }
+            break
           }
-          if (status === "completed" || status === "failed") {
-            currentGroupHasCompletedTool = true
-          }
-          break
         }
 
         // Kimi Code emits BOTH a `TodoList` tool_call AND a canonical `plan`
@@ -839,6 +905,31 @@ export function buildStreamingTurnsFromLiveMessage(
               }
             : undefined
 
+        // Recover images from ACP wire or platform MCP JSON output so the
+        // historical adapter path (`adaptImageToolResultParts`) can render
+        // GeneratedImagesBlock even when the host never set ToolCall.images.
+        // Prefer raw_output; if empty (or truncated without path), also try content.
+        const resultImages = (() => {
+          if ((block.info.images?.length ?? 0) > 0) {
+            return (block.info.images ?? []).map((img) => ({
+              data: img.data,
+              mime_type: img.mime_type,
+              uri: img.uri ?? null,
+            }))
+          }
+          let imgs = resolvedOutput
+            ? extractImagesFromToolOutputText(resolvedOutput)
+            : []
+          if (
+            imgs.length === 0 &&
+            block.info.content &&
+            block.info.content !== resolvedOutput
+          ) {
+            imgs = extractImagesFromToolOutputText(block.info.content)
+          }
+          return imgs
+        })()
+
         if (isFinalState) {
           currentBlocks.push({
             type: "tool_result",
@@ -848,6 +939,7 @@ export function buildStreamingTurnsFromLiveMessage(
               : resolvedOutput,
             is_error: block.info.status === "failed",
             ...(agentStats ? { agent_stats: agentStats } : {}),
+            ...(resultImages.length > 0 ? { images: resultImages } : {}),
           })
           currentGroupHasCompletedTool = true
         } else if (resolvedOutput || (isAgent && children.length > 0)) {
@@ -866,6 +958,7 @@ export function buildStreamingTurnsFromLiveMessage(
             output_preview: isAgent ? null : (resolvedOutput ?? null),
             is_error: false,
             ...(agentStats ? { agent_stats: agentStats } : {}),
+            ...(resultImages.length > 0 ? { images: resultImages } : {}),
           })
           inProgressToolCallIds.add(block.info.tool_call_id)
         }

@@ -5136,6 +5136,8 @@ export function AcpAgentSettings() {
     if (at === "pi") return selectedDraft.piAuthMode === "model_provider"
     if (at === "code_buddy")
       return selectedDraft.codeBuddyAuthMode === "model_provider"
+    if (at === "mimo_code")
+      return selectedAgent.model_provider_id != null
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -11122,6 +11124,54 @@ supports_websockets = true`}
                         }}
                       />
                     )}
+                  </div>
+                ) : selectedAgent.agent_type === "mimo_code" ? (
+                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    <div>
+                      <label className="text-xs font-medium">
+                        {t("configManagement")}
+                      </label>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {t("modelProviderHint")}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("selectModelProvider")}
+                      </label>
+                      {selectedModelProviders.length > 0 ? (
+                        <Select
+                          value={
+                            selectedDraft.modelProviderId != null
+                              ? String(selectedDraft.modelProviderId)
+                              : ""
+                          }
+                          onValueChange={handleModelProviderSelect}
+                          disabled={selectedIsSavingConfig}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue
+                              placeholder={t("selectModelProvider")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {selectedModelProviders.map((provider) => (
+                              <SelectItem
+                                key={provider.id}
+                                value={String(provider.id)}
+                              >
+                                {provider.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("noModelProviderAvailable")}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">

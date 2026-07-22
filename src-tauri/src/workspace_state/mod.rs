@@ -13,6 +13,7 @@ use tokio::sync::mpsc::error::TrySendError;
 
 use crate::app_error::AppCommandError;
 use crate::commands::folders::{self, FileTreeNode};
+use crate::commands::git;
 use crate::git_repo::is_git_repo;
 use crate::web::event_bridge::{emit_event, EventEmitter};
 
@@ -715,7 +716,7 @@ async fn collect_git_snapshot(path: &str) -> Result<Vec<WorkspaceGitEntry>, AppC
     // status + numstat don't depend on each other; run concurrently to cut
     // per-flush latency roughly in half on large repos.
     let (status_entries, stats) = tokio::join!(
-        folders::git_status(path.to_string(), Some(true)),
+        git::git_status(path.to_string(), Some(true)),
         git_numstat_map(path),
     );
     let status_entries = status_entries?;

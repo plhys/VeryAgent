@@ -2,7 +2,9 @@
 
 /**
  * Combined settings page: Model Providers + Vision Bridge (multimodal routing).
- * Single nav entry keeps provider credentials and vision routing in one place.
+ * Spacing matches General / Appearance exactly:
+ *   outer ScrollArea > w-full space-y-4 p-3 md:p-4
+ *   children render card sections only (no extra padding)
  */
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -12,9 +14,8 @@ import { VisionBridgeSettingsBody } from "@/components/settings/vision-bridge-se
 export function ModelRoutingSettings() {
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-2">
+      <div className="w-full space-y-4 p-3 md:p-4">
         <ModelProviderSettingsBody embedded />
-        <div className="mx-3 border-t md:mx-4" />
         <VisionBridgeSettingsBody embedded />
       </div>
     </ScrollArea>

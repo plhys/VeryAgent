@@ -14,6 +14,7 @@ use crate::parsers::{folder_name_from_path, truncate_str, AgentParser, ParseErro
 
 pub struct OpenCodeParser {
     base_dir: PathBuf,
+    agent_type: AgentType,
 }
 
 impl Default for OpenCodeParser {
@@ -25,14 +26,30 @@ impl Default for OpenCodeParser {
 impl OpenCodeParser {
     pub fn new() -> Self {
         let base_dir = resolve_opencode_base_dir();
-        Self { base_dir }
+        Self {
+            base_dir,
+            agent_type: AgentType::OpenCode,
+        }
     }
 
     /// Test-only constructor that lets callers point the parser at a fixture
     /// directory containing an `opencode.db` SQLite file.
     #[cfg(any(test, feature = "test-utils"))]
     pub fn with_base_dir(base_dir: PathBuf) -> Self {
-        Self { base_dir }
+        Self {
+            base_dir,
+            agent_type: AgentType::OpenCode,
+        }
+    }
+
+    /// Create a parser pointing at a custom base directory with a custom agent
+    /// type. Used by MiMo Code (an OpenCode fork) which stores its SQLite DB at
+    /// `~/.local/share/mimocode/mimocode.db` instead of the OpenCode path.
+    pub fn with_base_dir_and_agent_type(base_dir: PathBuf, agent_type: AgentType) -> Self {
+        Self {
+            base_dir,
+            agent_type,
+        }
     }
 
     fn sqlite_db_path(&self) -> PathBuf {
@@ -74,7 +91,7 @@ impl OpenCodeParser {
         Ok(conn)
     }
 
-    fn parse_sqlite_summary_row(row: &QueryResult) -> Result<ConversationSummary, ParseError> {
+    fn parse_sqlite_summary_row(&self, row: &QueryResult) -> Result<ConversationSummary, ParseError> {
         let id: String = row.try_get("", "id")?;
         let directory: Option<String> = row.try_get("", "directory")?;
         let title: Option<String> = row.try_get("", "title")?;
@@ -94,7 +111,7 @@ impl OpenCodeParser {
 
         Ok(ConversationSummary {
             id,
-            agent_type: AgentType::OpenCode,
+            agent_type: self.agent_type,
             folder_path,
             folder_name,
             title: normalize_optional_string(title),
@@ -144,7 +161,7 @@ impl OpenCodeParser {
 
         let mut conversations = Vec::with_capacity(rows.len());
         for row in rows {
-            let summary = Self::parse_sqlite_summary_row(&row)?;
+            let summary = self.parse_sqlite_summary_row(&row)?;
             if summary.message_count == 0 {
                 continue;
             }
@@ -190,7 +207,7 @@ impl OpenCodeParser {
             ))
             .await?;
 
-        row.map(|r| Self::parse_sqlite_summary_row(&r)).transpose()
+        row.map(|r| self.parse_sqlite_summary_row(&r)).transpose()
     }
 
     async fn get_conversation_from_sqlite(

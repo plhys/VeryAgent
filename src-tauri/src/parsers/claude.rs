@@ -1708,6 +1708,7 @@ impl ClaudeRecordAccumulator {
     /// Feed one raw JSONL line. Blank and non-JSON lines are skipped, mirroring
     /// the historical `BufReader::lines()` loop (whose per-line errors were
     /// skipped via `Err(_) => continue`).
+    #[allow(dead_code)] // public helper for streaming/line-oriented callers; bg-watch uses feed_value
     pub(crate) fn feed_line(&mut self, line: &str) {
         if line.trim().is_empty() {
             return;
@@ -2240,6 +2241,7 @@ impl ClaudeRecordAccumulator {
 
     /// In-place [`Self::apply_background_lifecycle`] over `self.messages` —
     /// the full-file detail parse calls this once after feeding every record.
+    #[allow(dead_code)] // detail-path helper; live bg-watch applies lifecycle via other path
     pub(crate) fn finalize_background_lifecycle(&mut self) {
         let mut messages = std::mem::take(&mut self.messages);
         self.apply_background_lifecycle(&mut messages);

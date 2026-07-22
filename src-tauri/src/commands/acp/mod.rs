@@ -1,7 +1,28 @@
+pub mod general;
+pub(crate) use general::*;
+pub mod binary;
+pub(crate) use binary::*;
+pub mod codex_config;
+pub(crate) use codex_config::*;
+pub mod cline_config;
+pub(crate) use cline_config::*;
+pub mod opencode_config;
+pub(crate) use opencode_config::*;
+pub mod kimi_config;
+pub(crate) use kimi_config::*;
+pub mod pi_config;
+pub(crate) use pi_config::*;
+pub mod openclaw_config;
+pub(crate) use openclaw_config::*;
+pub mod hermes_config;
+pub(crate) use hermes_config::*;
+pub mod codebuddy_config;
+pub(crate) use codebuddy_config::*;
+pub mod skills;
+pub(crate) use skills::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "tauri-runtime")]
@@ -25,165 +46,13 @@ use crate::db::AppDatabase;
 use crate::models::agent::AgentType;
 use crate::web::event_bridge::EventEmitter;
 
-const ACP_AGENTS_UPDATED_EVENT: &str = "app://acp-agents-updated";
-const NPM_PREFIX_TIMEOUT: Duration = Duration::from_millis(1500);
-
 static NPM_GLOBAL_PREFIX_CACHE: tokio::sync::OnceCell<PathBuf> = tokio::sync::OnceCell::const_new();
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "snake_case")]
-struct AcpAgentsUpdatedEventPayload {
-    reason: &'static str,
-    agent_type: Option<AgentType>,
-}
-
-fn emit_acp_agents_updated(
-    emitter: &EventEmitter,
-    reason: &'static str,
-    agent_type: Option<AgentType>,
-) {
-    crate::web::event_bridge::emit_event(
-        emitter,
-        ACP_AGENTS_UPDATED_EVENT,
-        AcpAgentsUpdatedEventPayload { reason, agent_type },
-    );
-}
-
-const AGENT_INSTALL_EVENT: &str = "app://agent-install";
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum AgentInstallEventKind {
-    Started,
-    Log,
-    Completed,
-    Failed,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct AgentInstallEvent {
     pub task_id: String,
     pub kind: AgentInstallEventKind,
     pub payload: String,
-}
-
-fn emit_agent_install_event(
-    emitter: &EventEmitter,
-    task_id: &str,
-    kind: AgentInstallEventKind,
-    payload: impl Into<String>,
-) {
-    crate::web::event_bridge::emit_event(
-        emitter,
-        AGENT_INSTALL_EVENT,
-        AgentInstallEvent {
-            task_id: task_id.to_string(),
-            kind,
-            payload: payload.into(),
-        },
-    );
-}
-
-fn is_version_like(value: &str) -> bool {
-    value.chars().any(|c| c.is_ascii_digit()) && value.contains('.')
-}
-
-fn normalize_version_candidate(value: &str) -> Option<String> {
-    let normalized = value.trim().trim_start_matches('v');
-    if is_version_like(normalized) {
-        Some(normalized.to_string())
-    } else {
-        None
-    }
-}
-
-fn version_from_package_spec(package: &str) -> Option<String> {
-    let (_, maybe_version) = package.rsplit_once('@')?;
-    let version = maybe_version.trim();
-    if version.is_empty() || version.eq_ignore_ascii_case("latest") {
-        return None;
-    }
-    normalize_version_candidate(version)
-}
-
-fn package_name_from_spec(package: &str) -> String {
-    let normalized = package.trim();
-    if normalized.is_empty() {
-        return String::new();
-    }
-
-    if let Some(index) = normalized.rfind('@') {
-        if index > 0 {
-            let version_part = normalized[index + 1..].trim();
-            if !version_part.is_empty() {
-                return normalized[..index].to_string();
-            }
-        }
-    }
-
-    normalized.to_string()
-}
-
-/// Validate and normalize a user-supplied custom version for install.
-///
-/// Stricter than [`normalize_version_candidate`]: tolerates a leading `v`/`V`,
-/// then requires the first character to be a digit and the rest to be drawn from
-/// `[0-9A-Za-z.-+]` (covers semver pre-release/build metadata and calendar
-/// versions like `2026.5.20`). This rejects npm dist-tags (`latest`, `next`) and
-/// anything containing whitespace, `@`, or path separators, so the result is
-/// safe to interpolate into an npm package spec (`name@<v>`) and to substitute
-/// into a binary download URL. Returns the version without the leading `v`.
-fn sanitize_custom_version(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    let normalized = trimmed
-        .strip_prefix('v')
-        .or_else(|| trimmed.strip_prefix('V'))
-        .unwrap_or(trimmed);
-    let mut chars = normalized.chars();
-    if !chars.next()?.is_ascii_digit() {
-        return None;
-    }
-    // Require a dotted version (e.g. `1.2.3`) so the validator agrees with the
-    // detection fallback `version_from_package_spec`, which needs a `.` — and so
-    // a "custom version" is a concrete version rather than an npm range (`2`).
-    if !normalized.contains('.') {
-        return None;
-    }
-    let all_allowed = normalized
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'));
-    all_allowed.then(|| normalized.to_string())
-}
-
-/// Build the `npm install -g` spec for an agent.
-///
-/// `version_override` of `None` or all-whitespace yields the registry-pinned
-/// `package` spec unchanged (current behavior). A non-empty override is
-/// validated via [`sanitize_custom_version`] and combined with the registry
-/// package *name* (its pinned version is dropped) to form `name@<version>`. An
-/// override that fails validation is rejected with an error.
-fn build_npm_install_spec(
-    package: &str,
-    version_override: Option<&str>,
-) -> Result<String, AcpError> {
-    match version_override {
-        Some(raw) if !raw.trim().is_empty() => {
-            let version = sanitize_custom_version(raw).ok_or_else(|| {
-                AcpError::protocol(format!("invalid custom version: {}", raw.trim()))
-            })?;
-            Ok(format!("{}@{version}", package_name_from_spec(package)))
-        }
-        _ => Ok(package.to_string()),
-    }
-}
-
-/// Substitute a custom version into a registry binary download URL by replacing
-/// every occurrence of the registry version string. The registry version is
-/// embedded in the GitHub release URL (the path tag, and for some agents the
-/// asset filename), so a plain replace yields the URL for the requested version
-/// — assuming the upstream release reuses the same asset-naming convention.
-fn apply_custom_version_to_url(url: &str, registry_version: &str, custom_version: &str) -> String {
-    url.replace(registry_version, custom_version)
 }
 
 /// Check whether an NPX agent command is spawnable.
@@ -217,20 +86,6 @@ pub(crate) fn resolve_uvx_command() -> Option<PathBuf> {
         }
     }
     None
-}
-
-/// Whether a `Uvx` agent can actually be launched on this machine right now:
-/// the `uvx` runner is resolvable (veryagent auto-provisions it on install, so this
-/// holds post-prepare), or the agent's own CLI is on PATH (system fallback).
-/// The connect gate (`verify_agent_installed`) and the Settings status/list
-/// paths all use this so they agree on readiness. Note: the prepared-version
-/// marker is deliberately NOT consulted here — it records what was fetched (for
-/// the installed-version badge), not whether the launcher is currently present.
-fn uvx_agent_launchable(system_cmd: Option<(&'static str, &'static [&'static str])>) -> bool {
-    resolve_uvx_command().is_some()
-        || system_cmd
-            .map(|(c, _)| resolve_command_on_path(c).is_some())
-            .unwrap_or(false)
 }
 
 /// The `uvx` flags that pin the interpreter for a `Uvx` agent, inserted before
@@ -341,99 +196,6 @@ impl NpxCommandResolver {
     }
 }
 
-async fn resolve_npx_command_from_current_npm_prefix(cmd: &str) -> Option<PathBuf> {
-    let prefix = cached_npm_global_prefix().await?;
-    resolve_npx_command_from_npm_prefix(cmd, &prefix)
-}
-
-async fn cached_npm_global_prefix() -> Option<PathBuf> {
-    cached_npm_global_prefix_with(&NPM_GLOBAL_PREFIX_CACHE, resolve_current_npm_global_prefix).await
-}
-
-async fn cached_npm_global_prefix_with<F, Fut>(
-    cache: &tokio::sync::OnceCell<PathBuf>,
-    resolve: F,
-) -> Option<PathBuf>
-where
-    F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Option<PathBuf>>,
-{
-    if let Some(prefix) = cache.get() {
-        return Some(prefix.clone());
-    }
-
-    let resolved = resolve().await?;
-    match cache.set(resolved.clone()) {
-        Ok(()) => Some(resolved),
-        Err(_) => cache.get().cloned(),
-    }
-}
-
-async fn resolve_current_npm_global_prefix() -> Option<PathBuf> {
-    let npm_path = which::which("npm").ok()?;
-    let mut cmd = crate::process::tokio_command(npm_path);
-    cmd.arg("prefix").arg("-g").kill_on_drop(true);
-    let output = tokio::time::timeout(NPM_PREFIX_TIMEOUT, cmd.output())
-        .await
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    npm_global_prefix_from_stdout(&output.stdout)
-}
-
-fn npm_global_prefix_from_stdout(stdout: &[u8]) -> Option<PathBuf> {
-    let stdout_text = String::from_utf8_lossy(stdout);
-    let prefix = stdout_text.lines().next()?.trim();
-    if prefix.is_empty() {
-        return None;
-    }
-    Some(PathBuf::from(prefix))
-}
-
-fn npm_prefix_bin_dir(prefix: &Path) -> PathBuf {
-    if cfg!(windows) {
-        prefix.to_path_buf()
-    } else {
-        prefix.join("bin")
-    }
-}
-
-fn resolve_npx_command_from_npm_prefix(cmd: &str, prefix: &Path) -> Option<PathBuf> {
-    let bin_dir = npm_prefix_bin_dir(prefix);
-
-    #[cfg(windows)]
-    let candidates = [
-        bin_dir.join(format!("{cmd}.cmd")),
-        bin_dir.join(format!("{cmd}.exe")),
-        bin_dir.join(cmd),
-    ];
-
-    #[cfg(not(windows))]
-    let candidates = [bin_dir.join(cmd)];
-
-    candidates
-        .into_iter()
-        .find(|path| is_npm_command_candidate(path))
-}
-
-#[cfg(windows)]
-fn is_npm_command_candidate(path: &Path) -> bool {
-    path.is_file()
-}
-
-#[cfg(not(windows))]
-fn is_npm_command_candidate(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-
-    path.is_file()
-        && path
-            .metadata()
-            .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
-}
-
 /// Verify that the agent SDK / binary is installed and usable.
 ///
 /// This is the pre-spawn guard used by the session-page connect path:
@@ -498,445 +260,6 @@ pub(crate) async fn verify_agent_installed(agent_type: AgentType) -> Result<(), 
     }
 }
 
-/// Detect the actual installed version of an npm global package by running
-/// `npm list -g <package_name> --json` and parsing the JSON output.
-///
-/// Checks both the system global prefix and the user-local prefix
-/// (`~/.veryagent/npm-global/`) so packages installed via the EACCES fallback are
-/// found as well.
-async fn detect_npm_global_version(package_name: &str) -> Option<String> {
-    let npm_path = which::which("npm").ok()?;
-
-    // Try the default global prefix first.
-    if let Some(v) = npm_list_version(&npm_path, package_name, None).await {
-        return Some(v);
-    }
-
-    // Fallback: check the user-local prefix.
-    if let Some(prefix) = crate::process::user_npm_prefix() {
-        if prefix.exists() {
-            return npm_list_version(&npm_path, package_name, Some(&prefix)).await;
-        }
-    }
-
-    None
-}
-
-/// Run `npm list -g <package_name> --json [--prefix=<p>]` and extract the
-/// installed version string.
-async fn npm_list_version(
-    npm_path: &std::path::Path,
-    package_name: &str,
-    prefix: Option<&std::path::Path>,
-) -> Option<String> {
-    let mut cmd = crate::process::tokio_command(npm_path);
-    cmd.arg("list")
-        .arg("-g")
-        .arg(package_name)
-        .arg("--json")
-        .arg("--depth=0");
-    if let Some(p) = prefix {
-        cmd.arg(format!("--prefix={}", p.display()));
-    }
-    let output = cmd.output().await.ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
-    let version = json
-        .get("dependencies")?
-        .get(package_name)?
-        .get("version")?
-        .as_str()?;
-    normalize_version_candidate(version)
-}
-
-async fn detect_local_version(agent_type: AgentType) -> Option<String> {
-    let meta = registry::get_agent_meta(agent_type);
-    match meta.distribution {
-        registry::AgentDistribution::Npx { cmd, package, .. } => {
-            if !is_cmd_available(cmd).await {
-                return None;
-            }
-            // Try `npm list -g <package_name> --json` to get the real installed version.
-            let pkg_name = package_name_from_spec(package);
-            detect_npm_global_version(&pkg_name).await
-        }
-        registry::AgentDistribution::Binary { cmd, .. } => {
-            binary_cache::detect_installed_version(agent_type, cmd)
-                .ok()
-                .flatten()
-        }
-        registry::AgentDistribution::Uvx { .. } => binary_cache::uvx_prepared_version(agent_type),
-    }
-}
-
-/// Official npm registry URL – used to bypass local mirror configurations that
-/// may not have synced niche packages like `@agentclientprotocol/*`.
-const NPM_OFFICIAL_REGISTRY: &str = "https://registry.npmjs.org";
-
-/// Force npm to install platform-specific `optionalDependencies`. Several agents
-/// ship their native CLI as a per-platform optional package — e.g.
-/// `@agentclientprotocol/claude-agent-acp` pulls in `@anthropic-ai/claude-agent-sdk`,
-/// whose runtime binary lives in optional deps like
-/// `@anthropic-ai/claude-agent-sdk-win32-x64`. npm includes optional deps by
-/// default, but a machine with `omit=optional` in its `.npmrc` (or `npm_config_omit`
-/// in the environment) silently skips them, so the install "succeeds" yet the agent
-/// fails at launch with "native binary not found for <platform>". `--include` wins
-/// over `--omit` regardless of order and a CLI flag outranks any `.npmrc`, so passing
-/// it unconditionally guarantees the native binary lands no matter how npm is
-/// configured. Harmless for agents without optional deps.
-const NPM_INCLUDE_OPTIONAL: &str = "--include=optional";
-
-/// Run an npm command with piped stdout/stderr, streaming each line as a log event.
-/// Returns (success: bool, collected_stderr: String) so callers can inspect errors.
-async fn run_npm_streaming(
-    args: &[&str],
-    task_id: &str,
-    emitter: &EventEmitter,
-) -> Result<(bool, String), AcpError> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
-    let mut cmd = crate::process::tokio_command("npm");
-    for arg in args {
-        cmd.arg(arg);
-    }
-    cmd.stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| AcpError::protocol(format!("failed to spawn npm: {e}")))?;
-
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let emitter_clone = emitter.clone();
-    let task_id_owned = task_id.to_string();
-
-    let stdout_handle = tokio::spawn({
-        let emitter = emitter_clone.clone();
-        let task_id = task_id_owned.clone();
-        async move {
-            if let Some(out) = stdout {
-                let reader = BufReader::new(out);
-                let mut lines = reader.lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    emit_agent_install_event(&emitter, &task_id, AgentInstallEventKind::Log, &line);
-                }
-            }
-        }
-    });
-
-    let stderr_handle = tokio::spawn({
-        let emitter = emitter_clone;
-        let task_id = task_id_owned;
-        async move {
-            let mut collected = String::new();
-            if let Some(err) = stderr {
-                let reader = BufReader::new(err);
-                let mut lines = reader.lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    emit_agent_install_event(&emitter, &task_id, AgentInstallEventKind::Log, &line);
-                    if !collected.is_empty() {
-                        collected.push('\n');
-                    }
-                    collected.push_str(&line);
-                }
-            }
-            collected
-        }
-    });
-
-    let (_, stderr_result) = tokio::join!(stdout_handle, stderr_handle);
-    let collected_stderr = stderr_result.unwrap_or_default();
-
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| AcpError::protocol(format!("failed to wait for npm process: {e}")))?;
-
-    Ok((status.success(), collected_stderr))
-}
-
-async fn install_npm_global_package_streaming(
-    package: &str,
-    task_id: &str,
-    emitter: &EventEmitter,
-) -> Result<(), AcpError> {
-    let registry_arg = format!("--registry={NPM_OFFICIAL_REGISTRY}");
-
-    emit_agent_install_event(
-        emitter,
-        task_id,
-        AgentInstallEventKind::Log,
-        format!("$ npm install -g {NPM_INCLUDE_OPTIONAL} {package}"),
-    );
-
-    let (success, stderr) = run_npm_streaming(
-        &["install", "-g", NPM_INCLUDE_OPTIONAL, &registry_arg, package],
-        task_id,
-        emitter,
-    )
-    .await?;
-
-    if !success {
-        // EACCES: permission denied — retry with a user-local --prefix so
-        // we don't require root/sudo on macOS / Linux.
-        if stderr.contains("EACCES") {
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "Permission denied, retrying with user prefix...",
-            );
-            return install_npm_to_user_prefix_streaming(package, &registry_arg, task_id, emitter)
-                .await;
-        }
-
-        // EEXIST: file conflict — retry with --force to overwrite
-        if stderr.contains("EEXIST") {
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "File conflict, retrying with --force...",
-            );
-            let (retry_success, retry_stderr) = run_npm_streaming(
-                &[
-                    "install",
-                    "-g",
-                    "--force",
-                    NPM_INCLUDE_OPTIONAL,
-                    &registry_arg,
-                    package,
-                ],
-                task_id,
-                emitter,
-            )
-            .await?;
-            if !retry_success {
-                if retry_stderr.contains("EACCES") {
-                    emit_agent_install_event(
-                        emitter,
-                        task_id,
-                        AgentInstallEventKind::Log,
-                        "Permission denied on --force retry, falling back to user prefix...",
-                    );
-                    return install_npm_to_user_prefix_streaming(
-                        package,
-                        &registry_arg,
-                        task_id,
-                        emitter,
-                    )
-                    .await;
-                }
-                let err = retry_stderr.trim().to_string();
-                let msg = if err.is_empty() {
-                    "failed to install npm package globally (with --force)".to_string()
-                } else {
-                    format!("failed to install npm package globally (with --force): {err}")
-                };
-                return Err(AcpError::protocol(msg));
-            }
-            return Ok(());
-        }
-
-        let err = stderr.trim().to_string();
-        let msg = if err.is_empty() {
-            "failed to install npm package globally".to_string()
-        } else {
-            format!("failed to install npm package globally: {err}")
-        };
-        return Err(AcpError::protocol(msg));
-    }
-
-    Ok(())
-}
-
-/// Fallback: install an npm package into a user-local prefix (`~/.veryagent/npm-global/`)
-/// when the system global prefix is not writable (EACCES).
-async fn install_npm_to_user_prefix_streaming(
-    package: &str,
-    registry_arg: &str,
-    task_id: &str,
-    emitter: &EventEmitter,
-) -> Result<(), AcpError> {
-    let prefix = crate::process::user_npm_prefix().ok_or_else(|| {
-        AcpError::protocol(
-            "npm install -g failed with EACCES and could not determine home directory for fallback"
-                .to_string(),
-        )
-    })?;
-
-    // Ensure the prefix directory exists.
-    tokio::fs::create_dir_all(&prefix).await.map_err(|e| {
-        AcpError::protocol(format!(
-            "failed to create user npm prefix {}: {e}",
-            prefix.display()
-        ))
-    })?;
-
-    let prefix_arg = format!("--prefix={}", prefix.display());
-
-    emit_agent_install_event(
-        emitter,
-        task_id,
-        AgentInstallEventKind::Log,
-        format!(
-            "$ npm install -g {NPM_INCLUDE_OPTIONAL} --prefix={} {package}",
-            prefix.display()
-        ),
-    );
-
-    let (success, stderr) = run_npm_streaming(
-        &[
-            "install",
-            "-g",
-            NPM_INCLUDE_OPTIONAL,
-            &prefix_arg,
-            registry_arg,
-            package,
-        ],
-        task_id,
-        emitter,
-    )
-    .await?;
-
-    if !success {
-        // EEXIST in the user prefix: retry with --force to overwrite stale files
-        // from a previous installation.
-        if stderr.contains("EEXIST") {
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "File conflict in user prefix, retrying with --force...",
-            );
-            let (force_success, force_stderr) = run_npm_streaming(
-                &[
-                    "install",
-                    "-g",
-                    "--force",
-                    NPM_INCLUDE_OPTIONAL,
-                    &prefix_arg,
-                    registry_arg,
-                    package,
-                ],
-                task_id,
-                emitter,
-            )
-            .await?;
-            if !force_success {
-                let err = force_stderr.trim().to_string();
-                let msg = if err.is_empty() {
-                    format!(
-                        "failed to install npm package (user prefix {}, --force)",
-                        prefix.display()
-                    )
-                } else {
-                    format!(
-                        "failed to install npm package (user prefix {}, --force): {err}",
-                        prefix.display()
-                    )
-                };
-                return Err(AcpError::protocol(msg));
-            }
-            // --force succeeded, fall through to PATH setup below.
-        } else {
-            let err = stderr.trim().to_string();
-            let msg = if err.is_empty() {
-                format!(
-                    "failed to install npm package globally (user prefix {})",
-                    prefix.display()
-                )
-            } else {
-                format!(
-                    "failed to install npm package globally (user prefix {}): {err}",
-                    prefix.display()
-                )
-            };
-            return Err(AcpError::protocol(msg));
-        }
-    }
-
-    // Make sure the user prefix bin dir is in PATH for subsequent `which` lookups.
-    crate::process::ensure_user_npm_prefix_in_path();
-
-    Ok(())
-}
-
-async fn uninstall_npm_global_package(package: &str) -> Result<(), AcpError> {
-    let package_name = package_name_from_spec(package);
-
-    if !package_name.is_empty() {
-        // Try uninstalling from the default global prefix.
-        let output = crate::process::tokio_command("npm")
-            .arg("uninstall")
-            .arg("-g")
-            .arg(&package_name)
-            .output()
-            .await
-            .map_err(|e| AcpError::protocol(format!("failed to run npm uninstall -g: {e}")))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // EACCES: the package may have been installed to the user-local
-            // prefix via the EACCES fallback — try uninstalling from there.
-            if stderr.contains("EACCES") {
-                return uninstall_npm_from_user_prefix(&package_name).await;
-            }
-            let err = stderr.trim().to_string();
-            let msg = if err.is_empty() {
-                "failed to uninstall npm package globally".to_string()
-            } else {
-                format!("failed to uninstall npm package globally: {err}")
-            };
-            return Err(AcpError::protocol(msg));
-        }
-
-        // Also try removing from the user prefix (best-effort) in case the
-        // package was installed in both locations.
-        let _ = uninstall_npm_from_user_prefix(&package_name).await;
-    }
-
-    Ok(())
-}
-
-/// Uninstall an npm package from the user-local prefix (`~/.veryagent/npm-global/`).
-async fn uninstall_npm_from_user_prefix(package_name: &str) -> Result<(), AcpError> {
-    let prefix = match crate::process::user_npm_prefix() {
-        Some(p) if p.exists() => p,
-        _ => return Ok(()),
-    };
-
-    let prefix_arg = format!("--prefix={}", prefix.display());
-    let output = crate::process::tokio_command("npm")
-        .arg("uninstall")
-        .arg("-g")
-        .arg(&prefix_arg)
-        .arg(package_name)
-        .output()
-        .await
-        .map_err(|e| {
-            AcpError::protocol(format!(
-                "failed to run npm uninstall -g with user prefix: {e}"
-            ))
-        })?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let msg = if err.is_empty() {
-            format!(
-                "failed to uninstall npm package from user prefix (exit code {})",
-                output.status.code().unwrap_or(-1)
-            )
-        } else {
-            format!("failed to uninstall npm package from user prefix: {err}")
-        };
-        return Err(AcpError::protocol(msg));
-    }
-
-    Ok(())
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SkillStorageKind {
     SkillDirectoryOnly,
@@ -948,34 +271,6 @@ pub(crate) struct SkillStorageSpec {
     pub kind: SkillStorageKind,
     pub global_dirs: Vec<PathBuf>,
     pub project_rel_dirs: Vec<&'static str>,
-}
-
-fn home_dir_or_default() -> PathBuf {
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
-}
-
-fn codex_home_dir() -> PathBuf {
-    let configured = std::env::var("CODEX_HOME").ok().and_then(|raw| {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    });
-
-    match configured {
-        Some(value) => {
-            if value == "~" {
-                home_dir_or_default()
-            } else if let Some(remain) = value.strip_prefix("~/") {
-                home_dir_or_default().join(remain)
-            } else {
-                PathBuf::from(value)
-            }
-        }
-        None => home_dir_or_default().join(".codex"),
-    }
 }
 
 /// Hermes config/data directory. Honors `HERMES_HOME`, defaults to `~/.hermes`.
@@ -1003,449 +298,6 @@ pub(crate) fn hermes_home_dir() -> PathBuf {
         }
         None => home_dir_or_default().join(".hermes"),
     }
-}
-
-fn codex_config_toml_path() -> PathBuf {
-    codex_home_dir().join("config.toml")
-}
-
-fn codex_auth_json_path() -> PathBuf {
-    codex_home_dir().join("auth.json")
-}
-
-/// OpenCode reads config from `$XDG_CONFIG_HOME/opencode` (falling back to
-/// `~/.config/opencode`) and credentials from `$XDG_DATA_HOME/opencode`
-/// (falling back to `~/.local/share/opencode`) on every platform. veryagent must
-/// write where OpenCode reads, so these reuse the same XDG resolution as
-/// `opencode_plugins` (config) and `parsers::opencode` (data) — otherwise a
-/// user with XDG dirs set would get credentials written where OpenCode never
-/// looks, and veryagent's own plugin/connect paths would diverge.
-fn opencode_config_dir() -> PathBuf {
-    crate::acp::opencode_plugins::xdg_config_home()
-        .unwrap_or_else(|| home_dir_or_default().join(".config"))
-        .join("opencode")
-}
-
-fn opencode_primary_config_path() -> PathBuf {
-    opencode_config_dir().join("opencode.json")
-}
-
-fn opencode_legacy_config_path() -> PathBuf {
-    opencode_config_dir().join("config.json")
-}
-
-fn resolve_opencode_config_path() -> PathBuf {
-    let primary = opencode_primary_config_path();
-    if primary.exists() {
-        return primary;
-    }
-
-    let legacy = opencode_legacy_config_path();
-    if legacy.exists() {
-        return legacy;
-    }
-
-    primary
-}
-
-fn opencode_auth_json_path() -> PathBuf {
-    crate::parsers::opencode::resolve_opencode_base_dir().join("auth.json")
-}
-
-fn load_opencode_auth_json_raw() -> Option<String> {
-    fs::read_to_string(opencode_auth_json_path()).ok()
-}
-
-// ---------------------------------------------------------------------------
-// Cline config helpers
-// ---------------------------------------------------------------------------
-
-fn cline_data_dir() -> PathBuf {
-    if let Ok(custom) = std::env::var("CLINE_DIR") {
-        let trimmed = custom.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
-    home_dir_or_default().join(".cline").join("data")
-}
-
-fn cline_global_state_path() -> PathBuf {
-    cline_data_dir().join("globalState.json")
-}
-
-fn cline_secrets_path() -> PathBuf {
-    cline_data_dir().join("secrets.json")
-}
-
-fn load_cline_secrets_json_raw() -> Option<String> {
-    fs::read_to_string(cline_secrets_path()).ok()
-}
-
-/// Cline provider → secrets.json field name for the API key.
-fn cline_api_key_field_for_provider(provider: &str) -> &'static str {
-    match provider {
-        "anthropic" => "apiKey",
-        "openrouter" => "openRouterApiKey",
-        "openai-native" => "openAiNativeApiKey",
-        "openai" => "openAiApiKey",
-        "gemini" => "geminiApiKey",
-        "deepseek" => "deepSeekApiKey",
-        "mistral" => "mistralApiKey",
-        "xai" => "xaiApiKey",
-        _ => "openAiApiKey",
-    }
-}
-
-/// Cline provider → globalState model ID key suffix.
-/// Providers in ProviderKeyMap use `actMode{Suffix}` / `planMode{Suffix}`,
-/// others use `actModeApiModelId` / `planModeApiModelId`.
-fn cline_model_id_keys_for_provider(provider: &str) -> (&'static str, &'static str) {
-    match provider {
-        "openrouter" | "cline" => ("actModeOpenRouterModelId", "planModeOpenRouterModelId"),
-        "openai" => ("actModeOpenAiModelId", "planModeOpenAiModelId"),
-        "ollama" => ("actModeOllamaModelId", "planModeOllamaModelId"),
-        "lmstudio" => ("actModeLmStudioModelId", "planModeLmStudioModelId"),
-        "litellm" => ("actModeLiteLlmModelId", "planModeLiteLlmModelId"),
-        "requesty" => ("actModeRequestyModelId", "planModeRequestyModelId"),
-        "groq" => ("actModeGroqModelId", "planModeGroqModelId"),
-        _ => ("actModeApiModelId", "planModeApiModelId"),
-    }
-}
-
-/// Read globalState.json + secrets.json and merge into a unified config JSON
-/// with keys: apiProvider, model, apiKey, apiBaseUrl.
-fn load_cline_local_config_json() -> Option<String> {
-    let mut merged = serde_json::Map::new();
-
-    if let Ok(raw) = fs::read_to_string(cline_global_state_path()) {
-        if let Ok(state) = serde_json::from_str::<serde_json::Value>(&raw) {
-            // Cline uses actModeApiProvider / planModeApiProvider (prefer actMode)
-            let provider = state
-                .get("actModeApiProvider")
-                .or_else(|| state.get("planModeApiProvider"))
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-                .unwrap_or("anthropic")
-                .to_string();
-
-            merged.insert(
-                "apiProvider".to_string(),
-                serde_json::Value::String(provider.clone()),
-            );
-
-            // Read model from provider-specific key
-            let (act_key, _plan_key) = cline_model_id_keys_for_provider(&provider);
-            if let Some(model_id) = state
-                .get(act_key)
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-            {
-                merged.insert(
-                    "model".to_string(),
-                    serde_json::Value::String(model_id.to_string()),
-                );
-            }
-
-            // Read provider-specific baseUrl key
-            let base_url_key = match provider.as_str() {
-                "anthropic" => "anthropicBaseUrl",
-                "gemini" => "geminiBaseUrl",
-                "ollama" => "ollamaBaseUrl",
-                "lmstudio" => "lmStudioBaseUrl",
-                "litellm" => "liteLlmBaseUrl",
-                "requesty" => "requestyBaseUrl",
-                _ => "openAiBaseUrl",
-            };
-            if let Some(base_url) = state
-                .get(base_url_key)
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-            {
-                merged.insert(
-                    "apiBaseUrl".to_string(),
-                    serde_json::Value::String(base_url.to_string()),
-                );
-            }
-        }
-    }
-
-    // Read API key from secrets.json based on provider
-    if let Ok(raw) = fs::read_to_string(cline_secrets_path()) {
-        if let Ok(secrets) = serde_json::from_str::<serde_json::Value>(&raw) {
-            let provider = merged
-                .get("apiProvider")
-                .and_then(|v| v.as_str())
-                .unwrap_or("anthropic");
-            let key_field = cline_api_key_field_for_provider(provider);
-            if let Some(api_key) = secrets
-                .get(key_field)
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|v| !v.is_empty())
-            {
-                merged.insert(
-                    "apiKey".to_string(),
-                    serde_json::Value::String(api_key.to_string()),
-                );
-            }
-        }
-    }
-
-    if merged.is_empty() {
-        return None;
-    }
-    serde_json::to_string_pretty(&serde_json::Value::Object(merged)).ok()
-}
-
-/// Split merged config back into globalState.json + secrets.json.
-/// Writes `actModeApiProvider`, `planModeApiProvider`, provider-specific model keys,
-/// `openAiBaseUrl`, and `welcomeViewCompleted` to globalState.json,
-/// and the provider-specific API key to secrets.json.
-fn persist_cline_local_config(config_patch_json: Option<&str>) -> Result<(), AcpError> {
-    let Some(raw_patch) = config_patch_json else {
-        return Ok(());
-    };
-    let runtime = serde_json::from_str::<AgentRuntimeConfig>(raw_patch)
-        .map_err(|e| AcpError::protocol(format!("invalid config_json: {e}")))?;
-    let patch = serde_json::from_str::<serde_json::Value>(raw_patch)
-        .map_err(|e| AcpError::protocol(format!("invalid config_json: {e}")))?;
-
-    let provider = patch
-        .get("apiProvider")
-        .and_then(|v| v.as_str())
-        .unwrap_or("anthropic")
-        .to_string();
-
-    // --- Update globalState.json (merge) ---
-    let gs_path = cline_global_state_path();
-    let mut gs = if gs_path.exists() {
-        match fs::read_to_string(&gs_path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        {
-            Some(existing) if existing.is_object() => existing,
-            _ => serde_json::json!({}),
-        }
-    } else {
-        serde_json::json!({})
-    };
-    let gs_obj = gs
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("globalState root must be object"))?;
-
-    // Cline checks welcomeViewCompleted first in isAuthConfigured()
-    gs_obj.insert(
-        "welcomeViewCompleted".to_string(),
-        serde_json::Value::Bool(true),
-    );
-
-    // Set both act/plan mode providers
-    gs_obj.insert(
-        "actModeApiProvider".to_string(),
-        serde_json::Value::String(provider.clone()),
-    );
-    gs_obj.insert(
-        "planModeApiProvider".to_string(),
-        serde_json::Value::String(provider.clone()),
-    );
-
-    // Set provider-specific model ID keys
-    let (act_model_key, plan_model_key) = cline_model_id_keys_for_provider(&provider);
-    match trim_non_empty(runtime.model) {
-        Some(model) => {
-            gs_obj.insert(
-                act_model_key.to_string(),
-                serde_json::Value::String(model.clone()),
-            );
-            gs_obj.insert(plan_model_key.to_string(), serde_json::Value::String(model));
-        }
-        None => {
-            gs_obj.remove(act_model_key);
-            gs_obj.remove(plan_model_key);
-        }
-    }
-
-    // Each provider uses its own baseUrl key in globalState
-    let base_url_key = match provider.as_str() {
-        "anthropic" => "anthropicBaseUrl",
-        "gemini" => "geminiBaseUrl",
-        "ollama" => "ollamaBaseUrl",
-        "lmstudio" => "lmStudioBaseUrl",
-        "litellm" => "liteLlmBaseUrl",
-        "requesty" => "requestyBaseUrl",
-        _ => "openAiBaseUrl",
-    };
-    match trim_non_empty(runtime.api_base_url) {
-        Some(base_url) => {
-            gs_obj.insert(
-                base_url_key.to_string(),
-                serde_json::Value::String(base_url),
-            );
-        }
-        None => {
-            gs_obj.remove(base_url_key);
-        }
-    }
-
-    if let Some(parent) = gs_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create cline data directory failed: {e}")))?;
-    }
-    let serialized_gs = serde_json::to_string_pretty(&gs)
-        .map_err(|e| AcpError::protocol(format!("serialize cline globalState failed: {e}")))?;
-    fs::write(&gs_path, format!("{serialized_gs}\n"))
-        .map_err(|e| AcpError::protocol(format!("write cline globalState failed: {e}")))?;
-
-    // --- Update secrets.json ---
-    let secrets_path = cline_secrets_path();
-    let mut secrets = if secrets_path.exists() {
-        match fs::read_to_string(&secrets_path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        {
-            Some(existing) if existing.is_object() => existing,
-            _ => serde_json::json!({}),
-        }
-    } else {
-        serde_json::json!({})
-    };
-    let secrets_obj = secrets
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("secrets root must be object"))?;
-
-    let key_field = cline_api_key_field_for_provider(&provider);
-    match trim_non_empty(runtime.api_key) {
-        Some(api_key) => {
-            secrets_obj.insert(key_field.to_string(), serde_json::Value::String(api_key));
-        }
-        None => {
-            secrets_obj.remove(key_field);
-        }
-    }
-
-    if let Some(parent) = secrets_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create cline data directory failed: {e}")))?;
-    }
-    let serialized_secrets = serde_json::to_string_pretty(&secrets)
-        .map_err(|e| AcpError::protocol(format!("serialize cline secrets failed: {e}")))?;
-    fs::write(&secrets_path, format!("{serialized_secrets}\n"))
-        .map_err(|e| AcpError::protocol(format!("write cline secrets failed: {e}")))?;
-
-    Ok(())
-}
-
-fn load_codex_auth_json_raw() -> Option<String> {
-    fs::read_to_string(codex_auth_json_path()).ok()
-}
-
-fn load_codex_config_toml_raw() -> Option<String> {
-    fs::read_to_string(codex_config_toml_path()).ok()
-}
-
-/// Project codex `config.toml` text into the launch-relevant config map shared
-/// by the settings read-back and the staleness fingerprint. Pure (no I/O) so it
-/// is unit-testable; [`load_codex_local_config_json`] is the on-disk wrapper
-/// that also folds in the api key from `auth.json`.
-///
-/// `apiBaseUrl` / `model` / `env` mirror back into the codex runtime env via
-/// [`build_runtime_env_from_setting`] (they map to `OPENAI_*`); `modelProvider`
-/// deliberately does NOT (it is not an `AgentRuntimeConfig` field). It is still
-/// included so a provider switch is visible to the fingerprint even when the
-/// resolved `base_url` is unchanged — two providers can share one endpoint yet
-/// differ in `wire_api` / auth. Before codex-acp 1.0.1 this was caught only
-/// incidentally by the injected `MODEL_PROVIDER` launch env; that injection is
-/// gone now that resume reads `model_provider` from config.toml (#224), so the
-/// fingerprint must carry the name itself.
-fn codex_config_projection_from_toml(raw_toml: &str) -> serde_json::Map<String, serde_json::Value> {
-    let mut merged = serde_json::Map::new();
-    let Ok(value) = raw_toml.parse::<toml::Value>() else {
-        return merged;
-    };
-
-    if let Some(model) = value
-        .get("model")
-        .and_then(|item| item.as_str())
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-    {
-        merged.insert(
-            "model".to_string(),
-            serde_json::Value::String(model.to_string()),
-        );
-    }
-
-    let model_provider = value
-        .get("model_provider")
-        .and_then(|item| item.as_str())
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(str::to_string);
-
-    if let Some(provider) = &model_provider {
-        merged.insert(
-            "modelProvider".to_string(),
-            serde_json::Value::String(provider.clone()),
-        );
-    }
-
-    let mut api_base_url: Option<String> = None;
-    if let Some(provider) = &model_provider {
-        api_base_url = value
-            .get("model_providers")
-            .and_then(|table| table.get(provider.as_str()))
-            .and_then(|table| table.get("base_url"))
-            .and_then(|item| item.as_str())
-            .map(str::trim)
-            .filter(|item| !item.is_empty())
-            .map(str::to_string);
-    }
-    if api_base_url.is_none() {
-        api_base_url = value
-            .get("model_providers")
-            .and_then(|table| table.as_table())
-            .and_then(|providers| {
-                providers.values().find_map(|item| {
-                    item.get("base_url")
-                        .and_then(|base| base.as_str())
-                        .map(str::trim)
-                        .filter(|base| !base.is_empty())
-                        .map(str::to_string)
-                })
-            });
-    }
-    if let Some(base_url) = api_base_url {
-        merged.insert(
-            "apiBaseUrl".to_string(),
-            serde_json::Value::String(base_url),
-        );
-    }
-
-    if let Some(env) = value.get("env").and_then(|item| item.as_table()) {
-        let mut env_map = serde_json::Map::new();
-        for (key, item) in env {
-            let Some(raw) = item.as_str() else {
-                continue;
-            };
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            env_map.insert(
-                key.to_string(),
-                serde_json::Value::String(trimmed.to_string()),
-            );
-        }
-        if !env_map.is_empty() {
-            merged.insert("env".to_string(), serde_json::Value::Object(env_map));
-        }
-    }
-
-    merged
 }
 
 fn load_codex_local_config_json() -> Option<String> {
@@ -1476,742 +328,57 @@ fn load_codex_local_config_json() -> Option<String> {
     serde_json::to_string_pretty(&serde_json::Value::Object(merged)).ok()
 }
 
-fn persist_codex_local_config(config_patch_json: Option<&str>) -> Result<(), AcpError> {
-    let Some(raw_patch) = config_patch_json else {
-        return Ok(());
-    };
-    let runtime = serde_json::from_str::<AgentRuntimeConfig>(raw_patch)
-        .map_err(|e| AcpError::protocol(format!("invalid config_json: {e}")))?;
-    let AgentRuntimeConfig {
-        api_base_url,
-        api_key,
-        model,
-        env,
-    } = runtime;
+/// Resolve the MiMo Code auth.json path: `~/.local/share/mimocode/auth.json`.
+fn mimo_auth_json_path() -> PathBuf {
+    crate::parsers::mimo_code::resolve_mimo_code_base_dir().join("auth.json")
+}
 
-    let config_path = codex_config_toml_path();
-    let mut toml_value = if config_path.exists() {
-        match fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|raw| raw.parse::<toml::Value>().ok())
-        {
-            Some(existing) if existing.is_table() => existing,
-            _ => toml::Value::Table(toml::map::Map::new()),
-        }
-    } else {
-        toml::Value::Table(toml::map::Map::new())
-    };
+/// Strip `//` line comments and `/* */` block comments from a JSONC string,
+/// producing valid JSON that serde_json can parse. String literals are
+/// preserved — `//` inside a quoted string is left untouched.
+fn strip_jsonc_comments(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().collect();
+    let mut out = String::with_capacity(raw.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut i = 0;
 
-    let table = toml_value
-        .as_table_mut()
-        .ok_or_else(|| AcpError::protocol("codex config root must be a TOML table"))?;
-
-    match trim_non_empty(model) {
-        Some(model) => {
-            table.insert("model".to_string(), toml::Value::String(model));
-        }
-        None => {
-            table.remove("model");
-        }
-    }
-
-    let provider_name = table
-        .get("model_provider")
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| "veryagent".to_string());
-    table.insert(
-        "model_provider".to_string(),
-        toml::Value::String(provider_name.clone()),
-    );
-
-    let providers_item = table
-        .entry("model_providers".to_string())
-        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-    if !providers_item.is_table() {
-        *providers_item = toml::Value::Table(toml::map::Map::new());
-    }
-    let providers = providers_item
-        .as_table_mut()
-        .ok_or_else(|| AcpError::protocol("invalid model_providers table"))?;
-    let provider_item = providers
-        .entry(provider_name.clone())
-        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-    if !provider_item.is_table() {
-        *provider_item = toml::Value::Table(toml::map::Map::new());
-    }
-    let provider_table = provider_item
-        .as_table_mut()
-        .ok_or_else(|| AcpError::protocol("invalid model provider table"))?;
-    match trim_non_empty(api_base_url) {
-        Some(base_url) => {
-            // Codex appends the wire path itself; force OpenAI-compatible `/v1`.
-            let normalized = normalize_openai_compatible_base_url(&base_url);
-            provider_table.insert("base_url".to_string(), toml::Value::String(normalized));
-        }
-        None => {
-            provider_table.remove("base_url");
-        }
-    }
-    if provider_name == "veryagent" {
-        provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
-        // Current Codex rejects `wire_api = "chat"` at config load time; only
-        // `responses` is accepted. The gateway must implement Responses API.
-        provider_table.insert(
-            "wire_api".to_string(),
-            toml::Value::String("responses".to_string()),
-        );
-        provider_table.insert(
-            "requires_openai_auth".to_string(),
-            toml::Value::Boolean(true),
-        );
-    }
-
-    if env.is_empty() {
-        table.remove("env");
-    } else {
-        let mut env_table = toml::map::Map::new();
-        for (key, value) in env {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                continue;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
             }
-            env_table.insert(key, toml::Value::String(trimmed.to_string()));
-        }
-        if env_table.is_empty() {
-            table.remove("env");
+            i += 1;
+        } else if c == '"' {
+            in_string = true;
+            out.push(c);
+            i += 1;
+        } else if c == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+        } else if c == '/' && i + 1 < chars.len() && chars[i + 1] == '*' {
+            i += 2;
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
+                i += 1;
+            }
+            i = (i + 2).min(chars.len());
         } else {
-            table.insert("env".to_string(), toml::Value::Table(env_table));
+            out.push(c);
+            i += 1;
         }
     }
-
-    let serialized_toml = toml::to_string_pretty(&toml_value)
-        .map_err(|e| AcpError::protocol(format!("serialize codex toml failed: {e}")))?;
-    if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            AcpError::protocol(format!("create codex config directory failed: {e}"))
-        })?;
-    }
-    fs::write(&config_path, format!("{serialized_toml}\n"))
-        .map_err(|e| AcpError::protocol(format!("write codex config failed: {e}")))?;
-
-    let auth_path = codex_auth_json_path();
-    let mut auth_value = if auth_path.exists() {
-        match fs::read_to_string(&auth_path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        {
-            Some(existing) if existing.is_object() => existing,
-            _ => serde_json::json!({}),
-        }
-    } else {
-        serde_json::json!({})
-    };
-    let auth_obj = auth_value
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("codex auth root must be object"))?;
-    match trim_non_empty(api_key) {
-        Some(api_key) => {
-            auth_obj.insert(
-                "OPENAI_API_KEY".to_string(),
-                serde_json::Value::String(api_key),
-            );
-        }
-        None => {
-            auth_obj.remove("OPENAI_API_KEY");
-        }
-    }
-    let serialized_auth = serde_json::to_string_pretty(&auth_value)
-        .map_err(|e| AcpError::protocol(format!("serialize codex auth failed: {e}")))?;
-    if let Some(parent) = auth_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create codex auth directory failed: {e}")))?;
-    }
-    fs::write(&auth_path, format!("{serialized_auth}\n"))
-        .map_err(|e| AcpError::protocol(format!("write codex auth failed: {e}")))?;
-
-    Ok(())
-}
-
-fn persist_codex_native_config_files(
-    codex_auth_json: Option<&str>,
-    codex_config_toml: Option<&str>,
-) -> Result<(), AcpError> {
-    if let Some(raw_toml) = codex_config_toml {
-        toml::from_str::<toml::Table>(raw_toml)
-            .map_err(|e| AcpError::protocol(format!("invalid codex config.toml: {e}")))?;
-        let path = codex_config_toml_path();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| AcpError::protocol(format!("create codex directory failed: {e}")))?;
-        }
-        fs::write(&path, raw_toml)
-            .map_err(|e| AcpError::protocol(format!("write codex config.toml failed: {e}")))?;
-    }
-
-    if let Some(raw_auth) = codex_auth_json {
-        let parsed = serde_json::from_str::<serde_json::Value>(raw_auth)
-            .map_err(|e| AcpError::protocol(format!("invalid codex auth.json: {e}")))?;
-        if !parsed.is_object() {
-            return Err(AcpError::protocol(
-                "invalid codex auth.json: root must be a JSON object",
-            ));
-        }
-        let path = codex_auth_json_path();
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| AcpError::protocol(format!("create codex directory failed: {e}")))?;
-        }
-        fs::write(&path, raw_auth)
-            .map_err(|e| AcpError::protocol(format!("write codex auth.json failed: {e}")))?;
-    }
-
-    Ok(())
-}
-
-fn persist_opencode_auth_json(raw_auth: &str) -> Result<(), AcpError> {
-    let parsed = serde_json::from_str::<serde_json::Value>(raw_auth)
-        .map_err(|e| AcpError::protocol(format!("invalid opencode auth.json: {e}")))?;
-    if !parsed.is_object() {
-        return Err(AcpError::protocol(
-            "invalid opencode auth.json: root must be a JSON object",
-        ));
-    }
-    let path = opencode_auth_json_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create opencode directory failed: {e}")))?;
-    }
-    fs::write(&path, format!("{raw_auth}\n"))
-        .map_err(|e| AcpError::protocol(format!("write opencode auth.json failed: {e}")))?;
-    Ok(())
-}
-
-/// Managed OpenCode provider id written by the unified model-provider cascade.
-const OPENCODE_MANAGED_PROVIDER: &str = "veryagent";
-const OPENCODE_OPENAI_COMPAT_NPM: &str = "@ai-sdk/openai-compatible";
-
-/// Merge-write a `provider.veryagent` block into opencode.json and the matching
-/// credential into auth.json. Preserves every other provider / top-level key.
-///
-/// `model` is the agent-selected default. Chat only shows models the agent
-/// actually loads, so the managed provider table is limited to that selection
-/// (plus any explicit `catalog` entries callers still pass). Do not dump the
-/// entire gateway `/models` list — embeddings / image / unused ids are noise.
-fn write_opencode_managed_provider(
-    api_url: &str,
-    api_key: &str,
-    model: Option<&str>,
-    catalog: &[String],
-) -> Result<(), AcpError> {
-    let config_path = resolve_opencode_config_path();
-    let mut config = if config_path.exists() {
-        fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-            .filter(|v| v.is_object())
-            .unwrap_or_else(|| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-
-    let config_obj = config
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("opencode config root must be a JSON object"))?;
-
-    let provider_root = config_obj
-        .entry("provider".to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    if !provider_root.is_object() {
-        *provider_root = serde_json::json!({});
-    }
-    let providers = provider_root
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("invalid opencode provider table"))?;
-
-    let provider_item = providers
-        .entry(OPENCODE_MANAGED_PROVIDER.to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    if !provider_item.is_object() {
-        *provider_item = serde_json::json!({});
-    }
-    let provider_obj = provider_item
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("invalid opencode provider block"))?;
-
-    provider_obj.insert(
-        "npm".to_string(),
-        serde_json::Value::String(OPENCODE_OPENAI_COMPAT_NPM.to_string()),
-    );
-    provider_obj.insert(
-        "name".to_string(),
-        serde_json::Value::String(OPENCODE_MANAGED_PROVIDER.to_string()),
-    );
-
-    let options_item = provider_obj
-        .entry("options".to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    if !options_item.is_object() {
-        *options_item = serde_json::json!({});
-    }
-    let options = options_item
-        .as_object_mut()
-        .ok_or_else(|| AcpError::protocol("invalid opencode provider options"))?;
-    // Secrets never belong in opencode.json.
-    options.remove("apiKey");
-    if api_url.trim().is_empty() {
-        options.remove("baseURL");
-    } else {
-        let normalized = normalize_openai_compatible_base_url(api_url);
-        options.insert(
-            "baseURL".to_string(),
-            serde_json::Value::String(normalized),
-        );
-    }
-    if options.is_empty() {
-        provider_obj.remove("options");
-    }
-
-    let model_id = model
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        // OpenCode model values are `provider/model`; accept either form.
-        .map(|s| {
-            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
-                .unwrap_or(s)
-                .to_string()
-        });
-
-    // Managed models table = configured selection only (and any explicit extras).
-    // Always replace so stale gateway dump entries cannot linger in chat.
-    let mut catalog_ids: Vec<String> = catalog
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            s.strip_prefix(&format!("{OPENCODE_MANAGED_PROVIDER}/"))
-                .unwrap_or(s)
-                .to_string()
-        })
-        .collect();
-    if let Some(ref mid) = model_id {
-        if !catalog_ids.iter().any(|id| id == mid) {
-            catalog_ids.push(mid.clone());
-        }
-    }
-    if !catalog_ids.is_empty() {
-        let mut models = serde_json::Map::new();
-        for mid in &catalog_ids {
-            models.insert(mid.clone(), serde_json::json!({ "name": mid }));
-        }
-        provider_obj.insert("models".to_string(), serde_json::Value::Object(models));
-    }
-    if let Some(ref mid) = model_id {
-        config_obj.insert(
-            "model".to_string(),
-            serde_json::Value::String(format!("{OPENCODE_MANAGED_PROVIDER}/{mid}")),
-        );
-    }
-
-    let config_str = serde_json::to_string_pretty(&config)
-        .map_err(|e| AcpError::protocol(format!("serialize opencode config failed: {e}")))?;
-    if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create opencode directory failed: {e}")))?;
-    }
-    fs::write(&config_path, format!("{config_str}\n"))
-        .map_err(|e| AcpError::protocol(format!("write opencode config failed: {e}")))?;
-
-    // auth.json: merge credential for the managed provider only.
-    let auth_path = opencode_auth_json_path();
-    let mut auth_obj = if auth_path.exists() {
-        fs::read_to_string(&auth_path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-            .filter(|v| v.is_object())
-            .unwrap_or_else(|| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-    if !api_key.trim().is_empty() {
-        auth_obj[OPENCODE_MANAGED_PROVIDER] = serde_json::json!({
-            "type": "api",
-            "key": api_key,
-        });
-    }
-    let auth_str = serde_json::to_string_pretty(&auth_obj)
-        .map_err(|e| AcpError::protocol(e.to_string()))?;
-    persist_opencode_auth_json(&auth_str)?;
-    Ok(())
-}
-
-/// Managed Pi custom provider id written by the unified model-provider cascade.
-const PI_MANAGED_PROVIDER: &str = "veryagent";
-
-/// Default context window / output budget for managed Pi models.
-/// Pi rejects incomplete custom-model entries; match the schema used by a
-/// working hand-authored `a-plan` provider and by OpenClaw's managed write.
-const PI_MANAGED_MODEL_CONTEXT_WINDOW: u64 = 131_072;
-const PI_MANAGED_MODEL_MAX_TOKENS: u64 = 8_192;
-
-/// Build one Pi `models.json` model object with the fields pi requires.
-fn pi_managed_model_object(id: &str) -> serde_json::Value {
-    serde_json::json!({
-        "id": id,
-        "name": id,
-        "reasoning": false,
-        "input": ["text"],
-        "contextWindow": PI_MANAGED_MODEL_CONTEXT_WINDOW,
-        "maxTokens": PI_MANAGED_MODEL_MAX_TOKENS,
-        "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-        }
-    })
-}
-
-/// Merge-write a custom `veryagent` provider into pi's native settings/auth/models.
-///
-/// `model` is the default selection written to settings.json. `catalog` is an
-/// optional extra list of model ids the caller wants loaded; chat only shows
-/// what pi actually loads, so callers should pass the agent-selected model
-/// rather than the entire gateway `/models` dump.
-fn write_pi_managed_provider(
-    api_url: &str,
-    api_key: &str,
-    model: &str,
-    catalog: &[String],
-) -> Result<(), AcpError> {
-    let model = model.trim();
-    // settings.json — defaultProvider / defaultModel
-    let settings_path = pi_settings_json_path();
-    let mut settings = read_json_object_or_empty(&settings_path);
-    settings.insert(
-        "defaultProvider".to_string(),
-        serde_json::Value::String(PI_MANAGED_PROVIDER.to_string()),
-    );
-    if !model.is_empty() {
-        settings.insert(
-            "defaultModel".to_string(),
-            serde_json::Value::String(model.to_string()),
-        );
-    }
-    write_json_object_pretty(&settings_path, &settings)?;
-
-    // auth.json — provider credential
-    if !api_key.trim().is_empty() {
-        let auth_path = pi_auth_json_path();
-        let mut auth = read_json_object_or_empty(&auth_path);
-        let mut entry = serde_json::Map::new();
-        entry.insert(
-            "type".to_string(),
-            serde_json::Value::String("api_key".to_string()),
-        );
-        entry.insert(
-            "key".to_string(),
-            serde_json::Value::String(api_key.to_string()),
-        );
-        auth.insert(
-            PI_MANAGED_PROVIDER.to_string(),
-            serde_json::Value::Object(entry),
-        );
-        write_json_object_pretty(&auth_path, &auth)?;
-    }
-
-    // models.json — custom provider definition (baseUrl + openai-completions)
-    if !api_url.trim().is_empty() {
-        let models_path = pi_models_json_path();
-        let mut models_doc = read_json_object_or_empty(&models_path);
-        let mut providers = match models_doc.remove("providers") {
-            Some(serde_json::Value::Object(map)) => map,
-            _ => serde_json::Map::new(),
-        };
-        let mut entry = match providers.remove(PI_MANAGED_PROVIDER) {
-            Some(serde_json::Value::Object(map)) => map,
-            _ => serde_json::Map::new(),
-        };
-        let normalized = normalize_openai_compatible_base_url(api_url);
-        entry.insert(
-            "baseUrl".to_string(),
-            serde_json::Value::String(normalized),
-        );
-        entry.insert(
-            "api".to_string(),
-            serde_json::Value::String("openai-completions".to_string()),
-        );
-        // Display name for the managed provider in pi's model picker.
-        entry.insert(
-            "name".to_string(),
-            serde_json::Value::String("A计划".to_string()),
-        );
-        // Pi's model-registry rejects non-built-in providers that define models
-        // without an inline `apiKey` (auth.json alone is not enough). Without
-        // this field the entire custom provider fails to load, and set_model
-        // returns "Model not found: veryagent/<id>" even though models.json
-        // lists the id. Match the working hand-authored a-plan provider.
-        if !api_key.trim().is_empty() {
-            entry.insert(
-                "apiKey".to_string(),
-                serde_json::Value::String(api_key.to_string()),
-            );
-        }
-        // Gateway models rarely support OpenAI's developer role / reasoning
-        // effort; match the working hand-authored a-plan provider.
-        entry.insert(
-            "compat".to_string(),
-            serde_json::json!({
-                "supportsDeveloperRole": false,
-                "supportsReasoningEffort": false
-            }),
-        );
-
-        // Only the configured selection (and any explicit extras). Rebuild the
-        // array so stale gateway dump entries cannot linger in chat.
-        // Always use the full pi schema — bare `{id,name}` entries are ignored.
-        let mut models_arr: Vec<serde_json::Value> = Vec::new();
-        let mut push_model = |id: &str| {
-            let id = id.trim();
-            if id.is_empty() {
-                return;
-            }
-            let already = models_arr
-                .iter()
-                .any(|m| m.get("id").and_then(serde_json::Value::as_str) == Some(id));
-            if !already {
-                models_arr.push(pi_managed_model_object(id));
-            }
-        };
-        for id in catalog {
-            push_model(id);
-        }
-        if !model.is_empty() {
-            push_model(model);
-        }
-        entry.insert("models".to_string(), serde_json::Value::Array(models_arr));
-        providers.insert(
-            PI_MANAGED_PROVIDER.to_string(),
-            serde_json::Value::Object(entry),
-        );
-        models_doc.insert(
-            "providers".to_string(),
-            serde_json::Value::Object(providers),
-        );
-        write_json_object_pretty(&models_path, &models_doc)?;
-    }
-
-    Ok(())
-}
-
-/// Managed custom-model vendor tag written by veryagent into CodeBuddy's
-/// `~/.codebuddy/models.json`. CodeBuddy supports two independent paths:
-///   1. Native Tencent models — `CODEBUDDY_API_KEY` + region
-///      (`CODEBUDDY_INTERNET_ENVIRONMENT`: unset/overseas, `internal`, `ioa`)
-///   2. Additive custom models — entries in `models.json` with their own
-///      `url`/`apiKey` (OpenAI-compatible full `/chat/completions` path)
-///
-/// A计划 must use path (2) only. Hijacking `CODEBUDDY_BASE_URL` or setting
-/// `CODEBUDDY_DISABLE_BUILTIN_MODELS` / `availableModels` would hide or break
-/// the native China/overseas built-ins the user still needs.
-const CODEBUDDY_MANAGED_MODEL_VENDOR: &str = "A计划";
-const CODEBUDDY_MANAGED_MODEL_MAX_INPUT: u64 = 131_072;
-const CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT: u64 = 8_192;
-
-fn codebuddy_models_json_path() -> PathBuf {
-    crate::parsers::codebuddy::resolve_codebuddy_config_dir().join("models.json")
-}
-
-/// Build the full chat-completions URL CodeBuddy requires for custom models.
-/// Docs require a complete path ending in `/chat/completions` (not a bare `/v1`).
-fn codebuddy_chat_completions_url(api_url: &str) -> String {
-    let base = normalize_openai_compatible_base_url(api_url);
-    if base.is_empty() {
-        return String::new();
-    }
-    format!("{base}/chat/completions")
-}
-
-/// Merge-write the agent-selected A计划 model into CodeBuddy's native
-/// `~/.codebuddy/models.json` as an additive custom model.
-///
-/// Built-in Tencent models stay visible: we never write `availableModels` and
-/// never set `CODEBUDDY_DISABLE_BUILTIN_MODELS`. Previous veryagent-managed
-/// entries (vendor `A计划`) are replaced; other custom entries are preserved.
-/// A stale `availableModels` key left by older builds is removed so native
-/// models reappear in the picker.
-fn write_codebuddy_managed_provider(
-    api_url: &str,
-    api_key: &str,
-    model: &str,
-    catalog: &[String],
-) -> Result<(), AcpError> {
-    let model = model.trim();
-    let chat_url = codebuddy_chat_completions_url(api_url);
-    if chat_url.is_empty() {
-        return Ok(());
-    }
-
-    let mut ids: Vec<String> = catalog
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .collect();
-    if !model.is_empty() && !ids.iter().any(|id| id == model) {
-        ids.push(model.to_string());
-    }
-
-    let path = codebuddy_models_json_path();
-    let mut doc = read_json_object_or_empty(&path);
-
-    // Keep non-managed custom models; drop previous veryagent-managed ones so
-    // the list tracks only the currently configured selection.
-    let mut models: Vec<serde_json::Value> = match doc.remove("models") {
-        Some(serde_json::Value::Array(arr)) => arr
-            .into_iter()
-            .filter(|entry| {
-                entry
-                    .get("vendor")
-                    .and_then(serde_json::Value::as_str)
-                    != Some(CODEBUDDY_MANAGED_MODEL_VENDOR)
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-
-    for id in &ids {
-        // Replace same-id entries even if they were user-authored so bind wins.
-        models.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id.as_str()));
-        let mut entry = serde_json::Map::new();
-        entry.insert("id".to_string(), serde_json::Value::String(id.clone()));
-        entry.insert("name".to_string(), serde_json::Value::String(id.clone()));
-        entry.insert(
-            "vendor".to_string(),
-            serde_json::Value::String(CODEBUDDY_MANAGED_MODEL_VENDOR.to_string()),
-        );
-        entry.insert("url".to_string(), serde_json::Value::String(chat_url.clone()));
-        if !api_key.trim().is_empty() {
-            entry.insert(
-                "apiKey".to_string(),
-                serde_json::Value::String(api_key.to_string()),
-            );
-        }
-        entry.insert(
-            "maxInputTokens".to_string(),
-            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_INPUT.into()),
-        );
-        entry.insert(
-            "maxOutputTokens".to_string(),
-            serde_json::Value::Number(CODEBUDDY_MANAGED_MODEL_MAX_OUTPUT.into()),
-        );
-        entry.insert("supportsToolCall".to_string(), serde_json::Value::Bool(true));
-        models.push(serde_json::Value::Object(entry));
-    }
-
-    if models.is_empty() {
-        doc.remove("models");
-    } else {
-        doc.insert("models".to_string(), serde_json::Value::Array(models));
-    }
-    // Older builds wrote availableModels=[A计划 only], which hid every native
-    // Tencent model. Clear it so the picker merges built-ins + customs again.
-    doc.remove("availableModels");
-    if doc.is_empty() {
-        // Nothing left to keep — remove the file rather than write `{}`.
-        let _ = fs::remove_file(&path);
-        return Ok(());
-    }
-    write_json_object_pretty(&path, &doc)?;
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// Kimi Code config helpers
-//
-// IMPORTANT — how `kimi acp` actually authenticates (reverse-engineered &
-// empirically verified against @moonshot-ai/kimi-code 0.19.1):
-//
-// `kimi acp` gates EVERY `session/new` on an OAuth-style token: it calls
-// `harnessIsAuthed`, which is true iff `~/.kimi-code/credentials/kimi-code.json`
-// holds a token whose `access_token` is non-empty. It NEVER validates that token
-// for the gate (no network, no signature check). API keys — whether injected via
-// the `KIMI_MODEL_*` env family OR written into `config.toml` `[providers].api_key`
-// — do NOT create this token, so on their own they yield `Authentication
-// required`. The only advertised ACP auth method is a terminal device-code login
-// (`kimi acp --login`), which requires a Kimi *subscription* account.
-//
-// To support plain API-key users, veryagent therefore manages BOTH halves:
-//   1. `config.toml` — a veryagent-managed `[providers."veryagent"]` + `[models."veryagent-managed"]`
-//      + `default_model` block that ROUTES INFERENCE to the user's API key
-//      (any of the six native interface types: kimi / openai / openai_responses /
-//      anthropic / google-genai / vertexai).
-//   2. `credentials/kimi-code.json` — a synthetic gate token veryagent seeds so the
-//      ACP session opens. It is purely local: because `default_model` points at
-//      the API-key provider, the managed/OAuth endpoint is never called and this
-//      token is never transmitted. It carries a `_veryagent_synthetic` marker so we
-//      only ever remove OUR token, never a real login the user performed.
-//
-// The veryagent-managed block is keyed by the fixed names `veryagent` / `veryagent-managed`
-// so it is recognizable and removable without disturbing any provider/model the
-// user added by hand. The raw config.toml editor is the comment/format escape
-// hatch. A stale `KIMI_MODEL_*` env override would silently win over config.toml,
-// so every save also clears it.
-// ---------------------------------------------------------------------------
-
-const KIMI_MANAGED_PROVIDER: &str = "veryagent";
-const KIMI_MANAGED_MODEL_ALIAS: &str = "veryagent-managed";
-const KIMI_MODEL_API_KEY_ENV: &str = "KIMI_MODEL_API_KEY";
-const KIMI_MODEL_BASE_URL_ENV: &str = "KIMI_MODEL_BASE_URL";
-const KIMI_MODEL_NAME_ENV: &str = "KIMI_MODEL_NAME";
-/// Sentinel `access_token` value (and `_veryagent_synthetic` marker) identifying the
-/// gate token veryagent seeds, so we never clobber a real OAuth login.
-const KIMI_SYNTHETIC_TOKEN_ACCESS: &str = "veryagent-local-gate";
-/// Fallback context window for the managed model. Kimi's config schema **requires**
-/// `[models.<alias>].max_context_size` to be a positive integer — omitting it makes
-/// kimi discard the whole model block ("Ignored invalid config … models.veryagent-managed"),
-/// which leaves `default_model` dangling and every prompt ends with no reply. So we
-/// always write one, defaulting to the kimi-k2 256K window when the user leaves it blank.
-const KIMI_DEFAULT_MAX_CONTEXT_SIZE: i64 = 262_144;
-/// The six native provider `type` values Kimi accepts in `[providers.<name>]`.
-const KIMI_INTERFACE_TYPES: &[&str] = &[
-    "kimi",
-    "openai",
-    "openai_responses",
-    "anthropic",
-    "google-genai",
-    "vertexai",
-];
-
-fn kimi_code_config_toml_path() -> PathBuf {
-    crate::parsers::kimi_code::resolve_kimi_code_home_dir().join("config.toml")
-}
-
-/// The synthetic-gate-token file `kimi acp` checks to decide a session is
-/// authenticated (`<KIMI_CODE_HOME>/credentials/kimi-code.json`).
-fn kimi_code_credentials_token_path() -> PathBuf {
-    crate::parsers::kimi_code::resolve_kimi_code_home_dir()
-        .join("credentials")
-        .join("kimi-code.json")
-}
-
-/// The `[providers.<name>].env` variable Kimi reads each interface type's API key
-/// from when the user picks "env sub-table" auth. `None` for vertexai, whose
-/// credentials come from GCP Application Default Credentials (no inline key).
-fn kimi_provider_key_env_var(interface_type: &str) -> Option<&'static str> {
-    match interface_type {
-        "kimi" => Some("KIMI_API_KEY"),
-        "openai" | "openai_responses" => Some("OPENAI_API_KEY"),
-        "anthropic" => Some("ANTHROPIC_API_KEY"),
-        "google-genai" => Some("GOOGLE_API_KEY"),
-        _ => None,
-    }
+    out
 }
 
 /// The resolved veryagent-managed provider/model block to write into config.toml.
-struct KimiManagedSpec {
+pub(crate) struct KimiManagedSpec {
     interface_type: String,
     base_url: Option<String>,
     /// Direct `api_key` field (when the user picks "direct key" auth).
@@ -2221,118 +388,6 @@ struct KimiManagedSpec {
     env: BTreeMap<String, String>,
     model: String,
     max_context_size: Option<i64>,
-}
-
-/// Upsert (`Some`) or remove (`None`) the veryagent-managed `[providers.veryagent]` +
-/// `[models.veryagent-managed]` block in a parsed config.toml document, preserving
-/// every other section the user authored. Removal also resets `default_model`
-/// only when it points at our managed alias.
-fn apply_kimi_managed_block(
-    toml_value: &mut toml::Value,
-    spec: Option<&KimiManagedSpec>,
-) -> Result<(), AcpError> {
-    let table = toml_value
-        .as_table_mut()
-        .ok_or_else(|| AcpError::protocol("kimi config root must be a TOML table"))?;
-    match spec {
-        Some(spec) => {
-            let providers = table
-                .entry("providers".to_string())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-            if !providers.is_table() {
-                *providers = toml::Value::Table(toml::map::Map::new());
-            }
-            let providers = providers.as_table_mut().expect("providers set to table");
-            let mut provider_table = toml::map::Map::new();
-            provider_table.insert(
-                "type".to_string(),
-                toml::Value::String(spec.interface_type.clone()),
-            );
-            if let Some(url) = spec.base_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-                provider_table.insert("base_url".to_string(), toml::Value::String(url.to_string()));
-            }
-            if let Some(key) = spec.api_key.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-                provider_table.insert("api_key".to_string(), toml::Value::String(key.to_string()));
-            }
-            if !spec.env.is_empty() {
-                let mut env_table = toml::map::Map::new();
-                for (k, v) in &spec.env {
-                    let trimmed = v.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    env_table.insert(k.clone(), toml::Value::String(trimmed.to_string()));
-                }
-                if !env_table.is_empty() {
-                    provider_table.insert("env".to_string(), toml::Value::Table(env_table));
-                }
-            }
-            providers.insert(
-                KIMI_MANAGED_PROVIDER.to_string(),
-                toml::Value::Table(provider_table),
-            );
-
-            let models = table
-                .entry("models".to_string())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-            if !models.is_table() {
-                *models = toml::Value::Table(toml::map::Map::new());
-            }
-            let models = models.as_table_mut().expect("models set to table");
-            let mut model_table = toml::map::Map::new();
-            model_table.insert(
-                "provider".to_string(),
-                toml::Value::String(KIMI_MANAGED_PROVIDER.to_string()),
-            );
-            model_table.insert("model".to_string(), toml::Value::String(spec.model.clone()));
-            // Always emit a positive `max_context_size`: kimi's schema requires it and
-            // silently drops the entire model block otherwise (→ empty turns). Fall back
-            // to the default window when the user did not specify one.
-            let ctx = spec
-                .max_context_size
-                .filter(|c| *c > 0)
-                .unwrap_or(KIMI_DEFAULT_MAX_CONTEXT_SIZE);
-            model_table.insert("max_context_size".to_string(), toml::Value::Integer(ctx));
-            models.insert(
-                KIMI_MANAGED_MODEL_ALIAS.to_string(),
-                toml::Value::Table(model_table),
-            );
-
-            table.insert(
-                "default_model".to_string(),
-                toml::Value::String(KIMI_MANAGED_MODEL_ALIAS.to_string()),
-            );
-        }
-        None => {
-            let providers_empty = if let Some(providers) =
-                table.get_mut("providers").and_then(toml::Value::as_table_mut)
-            {
-                providers.remove(KIMI_MANAGED_PROVIDER);
-                providers.is_empty()
-            } else {
-                false
-            };
-            if providers_empty {
-                table.remove("providers");
-            }
-            let models_empty = if let Some(models) =
-                table.get_mut("models").and_then(toml::Value::as_table_mut)
-            {
-                models.remove(KIMI_MANAGED_MODEL_ALIAS);
-                models.is_empty()
-            } else {
-                false
-            };
-            if models_empty {
-                table.remove("models");
-            }
-            if table.get("default_model").and_then(toml::Value::as_str) == Some(KIMI_MANAGED_MODEL_ALIAS)
-            {
-                table.remove("default_model");
-            }
-        }
-    }
-    Ok(())
 }
 
 /// Read-modify-write `config.toml`, upserting (`Some`) or clearing (`None`) the
@@ -2367,37 +422,6 @@ fn mutate_kimi_config_toml(spec: Option<&KimiManagedSpec>) -> Result<(), AcpErro
     Ok(())
 }
 
-/// Read and parse a token file, if present and valid JSON.
-fn read_kimi_token_at(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
-}
-
-fn read_kimi_token() -> Option<serde_json::Value> {
-    read_kimi_token_at(&kimi_code_credentials_token_path())
-}
-
-/// Whether a token document is veryagent's synthetic gate token (vs a real OAuth
-/// login the user performed via `kimi login`). Matches either the sentinel
-/// `access_token` or the explicit `_veryagent_synthetic` marker.
-fn kimi_token_is_synthetic(token: &serde_json::Value) -> bool {
-    token
-        .get("_veryagent_synthetic")
-        .and_then(serde_json::Value::as_bool)
-        == Some(true)
-        || token.get("access_token").and_then(serde_json::Value::as_str)
-            == Some(KIMI_SYNTHETIC_TOKEN_ACCESS)
-}
-
-/// Whether a token document carries a non-empty `access_token` — i.e. would pass
-/// `kimi acp`'s session gate.
-fn kimi_token_has_access(token: &serde_json::Value) -> bool {
-    token
-        .get("access_token")
-        .and_then(serde_json::Value::as_str)
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
-}
-
 /// Whether any usable credential (real or synthetic) is present.
 fn kimi_credential_present() -> bool {
     read_kimi_token().map(|t| kimi_token_has_access(&t)).unwrap_or(false)
@@ -2408,158 +432,6 @@ fn kimi_credential_is_synthetic() -> bool {
     read_kimi_token()
         .map(|t| kimi_token_is_synthetic(&t))
         .unwrap_or(false)
-}
-
-/// Seed veryagent's synthetic gate token at `path` so `kimi acp` treats the session
-/// as authenticated. No-op (preserves) when a REAL OAuth login token is already
-/// present — that already satisfies the gate and must never be clobbered.
-fn seed_kimi_synthetic_credential_at(path: &Path) -> Result<(), AcpError> {
-    if let Some(existing) = read_kimi_token_at(path) {
-        if kimi_token_has_access(&existing) && !kimi_token_is_synthetic(&existing) {
-            return Ok(());
-        }
-    }
-    let token = serde_json::json!({
-        "access_token": KIMI_SYNTHETIC_TOKEN_ACCESS,
-        "refresh_token": "",
-        "expires_at": 9_999_999_999i64,
-        "expires_in": 9_999_999i64,
-        "scope": "",
-        "token_type": "Bearer",
-        "_veryagent_synthetic": true,
-    });
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            AcpError::protocol(format!("create kimi credentials directory failed: {e}"))
-        })?;
-    }
-    let body = serde_json::to_string_pretty(&token)
-        .map_err(|e| AcpError::protocol(format!("serialize kimi credential failed: {e}")))?;
-    fs::write(path, format!("{body}\n"))
-        .map_err(|e| AcpError::protocol(format!("write kimi credential failed: {e}")))?;
-    Ok(())
-}
-
-fn seed_kimi_synthetic_credential() -> Result<(), AcpError> {
-    seed_kimi_synthetic_credential_at(&kimi_code_credentials_token_path())
-}
-
-/// Remove the gate token at `path` ONLY when it is veryagent's synthetic one —
-/// leaving any real OAuth login the user performed untouched.
-fn remove_kimi_synthetic_credential_if_ours_at(path: &Path) -> Result<(), AcpError> {
-    match read_kimi_token_at(path) {
-        Some(token) if kimi_token_is_synthetic(&token) => fs::remove_file(path)
-            .map_err(|e| AcpError::protocol(format!("remove kimi credential failed: {e}"))),
-        _ => Ok(()),
-    }
-}
-
-fn remove_kimi_synthetic_credential_if_ours() -> Result<(), AcpError> {
-    remove_kimi_synthetic_credential_if_ours_at(&kimi_code_credentials_token_path())
-}
-
-/// Project the veryagent-managed config.toml block into a flat JSON object for the
-/// settings panel, plus the raw file text for the advanced editor. Uses keys
-/// (`baseUrl` / `key` / `modelId`, never `apiBaseUrl` / `apiKey` / `model` /
-/// `env`) that do NOT match `AgentRuntimeConfig`, so `build_runtime_env_from_setting`
-/// never mirrors these file values back into the `KIMI_MODEL_*` runtime env.
-fn project_kimi_managed_config(value: &toml::Value) -> serde_json::Map<String, serde_json::Value> {
-    let mut merged = serde_json::Map::new();
-
-    if let Some(provider) = value
-        .get("providers")
-        .and_then(|t| t.get(KIMI_MANAGED_PROVIDER))
-        .and_then(toml::Value::as_table)
-    {
-        let interface_type = provider
-            .get("type")
-            .and_then(toml::Value::as_str)
-            .map(str::to_string);
-        if let Some(itype) = &interface_type {
-            merged.insert(
-                "interfaceType".to_string(),
-                serde_json::Value::String(itype.clone()),
-            );
-        }
-        if let Some(url) = provider
-            .get("base_url")
-            .and_then(toml::Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            merged.insert(
-                "baseUrl".to_string(),
-                serde_json::Value::String(url.to_string()),
-            );
-        }
-        if let Some(key) = provider
-            .get("api_key")
-            .and_then(toml::Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            merged.insert("key".to_string(), serde_json::Value::String(key.to_string()));
-            merged.insert(
-                "authType".to_string(),
-                serde_json::Value::String("api_key".to_string()),
-            );
-        }
-        if let Some(env) = provider.get("env").and_then(toml::Value::as_table) {
-            if let Some(project) = env.get("GOOGLE_CLOUD_PROJECT").and_then(toml::Value::as_str) {
-                merged.insert(
-                    "vertexProject".to_string(),
-                    serde_json::Value::String(project.to_string()),
-                );
-            }
-            if let Some(location) = env.get("GOOGLE_CLOUD_LOCATION").and_then(toml::Value::as_str) {
-                merged.insert(
-                    "vertexLocation".to_string(),
-                    serde_json::Value::String(location.to_string()),
-                );
-            }
-            if let Some(var) = interface_type.as_deref().and_then(kimi_provider_key_env_var) {
-                if let Some(key) = env
-                    .get(var)
-                    .and_then(toml::Value::as_str)
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                {
-                    merged.insert("key".to_string(), serde_json::Value::String(key.to_string()));
-                    merged.insert(
-                        "authType".to_string(),
-                        serde_json::Value::String("env".to_string()),
-                    );
-                }
-            }
-        }
-    }
-    if let Some(model) = value
-        .get("models")
-        .and_then(|t| t.get(KIMI_MANAGED_MODEL_ALIAS))
-        .and_then(toml::Value::as_table)
-    {
-        if let Some(model_id) = model
-            .get("model")
-            .and_then(toml::Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            merged.insert(
-                "modelId".to_string(),
-                serde_json::Value::String(model_id.to_string()),
-            );
-        }
-        if let Some(ctx) = model.get("max_context_size").and_then(toml::Value::as_integer) {
-            merged.insert(
-                "maxContextSize".to_string(),
-                serde_json::Value::Number(ctx.into()),
-            );
-        }
-    }
-
-    let has_managed = merged.contains_key("interfaceType");
-    merged.insert("hasManagedBlock".to_string(), serde_json::Value::Bool(has_managed));
-    merged
 }
 
 fn load_kimi_code_config_json() -> Option<String> {
@@ -2608,88 +480,6 @@ pub(crate) struct KimiCodeConfigUpdate {
     pub vertex_project: Option<String>,
     pub vertex_location: Option<String>,
     pub raw_config_toml: Option<String>,
-}
-
-/// Validate + resolve a `native`-mode update into the managed block to write.
-fn build_kimi_managed_spec(update: &KimiCodeConfigUpdate) -> Result<KimiManagedSpec, AcpError> {
-    let interface_type = update.interface_type.as_deref().map(str::trim).unwrap_or("");
-    if !KIMI_INTERFACE_TYPES.contains(&interface_type) {
-        return Err(AcpError::protocol(format!(
-            "unknown kimi interface type: '{interface_type}'"
-        )));
-    }
-    let model = update
-        .model
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| AcpError::protocol("kimi native config requires a model id"))?
-        .to_string();
-    let base_url = update
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string);
-    if let Some(url) = &base_url {
-        if url.contains(['\n', '\r']) {
-            return Err(AcpError::protocol("kimi base url must not contain newlines"));
-        }
-    }
-
-    let mut env: BTreeMap<String, String> = BTreeMap::new();
-    let mut api_key: Option<String> = None;
-
-    if interface_type == "vertexai" {
-        // Vertex AI: no API key (GCP Application Default Credentials). Persist the
-        // project/location into the provider env sub-table.
-        if let Some(project) = update
-            .vertex_project
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            env.insert("GOOGLE_CLOUD_PROJECT".to_string(), project.to_string());
-        }
-        if let Some(location) = update
-            .vertex_location
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            env.insert("GOOGLE_CLOUD_LOCATION".to_string(), location.to_string());
-        }
-    } else if let Some(key) = update
-        .api_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
-        if key.contains(['\n', '\r']) {
-            return Err(AcpError::protocol("kimi api key must not contain newlines"));
-        }
-        // "env" auth writes the key into the provider env sub-table under the
-        // interface's canonical key var; otherwise it goes in the inline `api_key`.
-        if update.auth_type.as_deref() == Some("env") {
-            match kimi_provider_key_env_var(interface_type) {
-                Some(var) => {
-                    env.insert(var.to_string(), key.to_string());
-                }
-                None => api_key = Some(key.to_string()),
-            }
-        } else {
-            api_key = Some(key.to_string());
-        }
-    }
-
-    Ok(KimiManagedSpec {
-        interface_type: interface_type.to_string(),
-        base_url,
-        api_key,
-        env,
-        model,
-        max_context_size: update.max_context_size.filter(|c| *c > 0),
-    })
 }
 
 /// Clear any `KIMI_MODEL_*` env override from the DB `env_json`, preserving every
@@ -2879,43 +669,6 @@ pub(crate) async fn acp_fetch_kimi_models_core(
     Ok(ids)
 }
 
-// ---------------------------------------------------------------------------
-// Pi config helpers
-//
-// pi (the self-extensible coding agent, reached over ACP via `pi-acp`) reads its
-// model selection from `~/.pi/agent/settings.json` (`defaultProvider`,
-// `defaultModel`, `defaultThinkingLevel` — plain strings) and its API keys from
-// `~/.pi/agent/auth.json` (`{ "<provider>": { "type": "api_key", "key": ... } }`).
-// veryagent manages both NATIVE files directly (merge-writes that preserve every
-// other key), mirroring how it manages Codex's `auth.json`/`config.toml`. The
-// agent dir honors `PI_CODING_AGENT_DIR` so a custom pi install can be targeted.
-// ---------------------------------------------------------------------------
-
-/// Resolve pi's coding-agent dir: `PI_CODING_AGENT_DIR` if set (trimmed,
-/// non-empty), else `~/.pi/agent` (mirrors `codex_home_dir`/`resolve_kimi_*`).
-fn pi_agent_dir() -> PathBuf {
-    match std::env::var("PI_CODING_AGENT_DIR")
-        .ok()
-        .map(|raw| raw.trim().to_string())
-        .filter(|s| !s.is_empty())
-    {
-        Some(value) => PathBuf::from(value),
-        None => home_dir_or_default().join(".pi").join("agent"),
-    }
-}
-
-fn pi_settings_json_path() -> PathBuf {
-    pi_agent_dir().join("settings.json")
-}
-
-fn pi_auth_json_path() -> PathBuf {
-    pi_agent_dir().join("auth.json")
-}
-
-fn pi_models_json_path() -> PathBuf {
-    pi_agent_dir().join("models.json")
-}
-
 /// Like [`pi_agent_dir`], but resolves `PI_CODING_AGENT_DIR` from a per-agent
 /// `runtime_env` map first (the BYO-pi override path) before falling back to the
 /// process env / `~/.pi/agent`. Launch-time trust seeding only has the per-agent
@@ -3017,39 +770,6 @@ pub(crate) struct PiConfigUpdate {
     /// Wire protocol for the custom provider (defaults to `openai-completions`).
     /// Ignored when `custom_base_url` is `None`.
     pub custom_api: Option<String>,
-}
-
-/// Read a JSON file into an owned object map, returning an empty map when the
-/// file is absent, unreadable, or does not parse to a JSON object. Pi's native
-/// files are small and veryagent-owned; corruption shouldn't abort a save (we
-/// re-author the managed keys and preserve whatever else parses).
-fn read_json_object_or_empty(path: &Path) -> serde_json::Map<String, serde_json::Value> {
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|value| match value {
-            serde_json::Value::Object(map) => Some(map),
-            _ => None,
-        })
-        .unwrap_or_default()
-}
-
-/// Pretty-print a JSON object (with a trailing newline) to `path`, creating the
-/// parent directory if needed.
-fn write_json_object_pretty(
-    path: &Path,
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> Result<(), AcpError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create pi config directory failed: {e}")))?;
-    }
-    let mut text = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
-        .map_err(|e| AcpError::protocol(format!("serialize pi config failed: {e}")))?;
-    text.push('\n');
-    fs::write(path, text)
-        .map_err(|e| AcpError::protocol(format!("write pi config failed: {e}")))?;
-    Ok(())
 }
 
 /// Apply a structured Pi config update to pi's native files. Validates the whole
@@ -3335,336 +1055,6 @@ pub struct OpenClawGatewayEnsureResult {
     pub steps: Vec<String>,
 }
 
-/// OpenClaw's own default local port when nothing is configured.
-const OPENCLAW_DEFAULT_LOCAL_PORT: u16 = 18789;
-/// Managed custom provider id written into `~/.openclaw/openclaw.json` when the
-/// user binds a shared model provider. OpenClaw's gateway (not the ACP client)
-/// performs inference, so credentials must live in gateway config — env on the
-/// `openclaw acp` process alone is ignored.
-const OPENCLAW_MANAGED_PROVIDER: &str = "veryagent";
-
-fn openclaw_config_path() -> PathBuf {
-    let configured = std::env::var("OPENCLAW_CONFIG_PATH").ok().and_then(|raw| {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    });
-
-    match configured {
-        Some(value) => {
-            if value == "~" {
-                home_dir_or_default()
-            } else if let Some(remain) = value.strip_prefix("~/") {
-                home_dir_or_default().join(remain)
-            } else {
-                PathBuf::from(value)
-            }
-        }
-        None => home_dir_or_default()
-            .join(".openclaw")
-            .join("openclaw.json"),
-    }
-}
-
-/// Best-effort strip of JSON5-ish features (line/block comments + trailing
-/// commas) so OpenClaw's JSON5 configs still parse with `serde_json`.
-fn strip_json5_noise(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let bytes = raw.as_bytes();
-    let mut i = 0;
-    let mut in_string = false;
-    let mut escape = false;
-    while i < bytes.len() {
-        let b = bytes[i];
-        if in_string {
-            out.push(b as char);
-            if escape {
-                escape = false;
-            } else if b == b'\\' {
-                escape = true;
-            } else if b == b'"' {
-                in_string = false;
-            }
-            i += 1;
-            continue;
-        }
-        // line comment
-        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-            i += 2;
-            while i < bytes.len() && bytes[i] != b'\n' {
-                i += 1;
-            }
-            continue;
-        }
-        // block comment
-        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-            i += 2;
-            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                i += 1;
-            }
-            i = (i + 2).min(bytes.len());
-            continue;
-        }
-        if b == b'"' {
-            in_string = true;
-            out.push('"');
-            i += 1;
-            continue;
-        }
-        // trailing comma before } or ]
-        if b == b',' {
-            let mut j = i + 1;
-            while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                j += 1;
-            }
-            if j < bytes.len() && (bytes[j] == b'}' || bytes[j] == b']') {
-                i += 1;
-                continue;
-            }
-        }
-        out.push(b as char);
-        i += 1;
-    }
-    out
-}
-
-fn openclaw_read_config_value(path: &Path) -> Option<serde_json::Value> {
-    let raw = fs::read_to_string(path).ok()?;
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        return Some(value);
-    }
-    let stripped = strip_json5_noise(trimmed);
-    serde_json::from_str::<serde_json::Value>(&stripped).ok()
-}
-
-/// OpenClaw's openai-completions transport expects a base that already ends in
-/// `/v1` (it appends `/chat/completions` itself). Strip common chat suffixes and
-/// append `/v1` when missing so shared model-provider URLs work either way.
-fn normalize_openclaw_openai_base_url(api_url: &str) -> String {
-    normalize_openai_compatible_base_url(api_url)
-}
-
-/// Shared OpenAI-compatible base-url normalizer for Codex / OpenClaw / similar
-/// clients that append `/chat/completions` (or `/responses`) themselves.
-///
-/// Shared model-provider URLs are often pasted as a bare host root
-/// (`http://gateway:18080`). Without `/v1`, Codex ends up calling
-/// `/chat/completions` on the HTML root and appears to "retry forever".
-fn normalize_openai_compatible_base_url(api_url: &str) -> String {
-    let trimmed = api_url.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    let without_suffix = trimmed
-        .strip_suffix("/chat/completions")
-        .or_else(|| trimmed.strip_suffix("/completions"))
-        .or_else(|| trimmed.strip_suffix("/responses"))
-        .or_else(|| trimmed.strip_suffix("/models"))
-        .unwrap_or(trimmed)
-        .trim_end_matches('/');
-    if without_suffix.ends_with("/v1") {
-        without_suffix.to_string()
-    } else {
-        format!("{without_suffix}/v1")
-    }
-}
-
-/// Write (or update) the veryagent-managed custom provider block in openclaw.json
-/// so the local gateway can authenticate against a shared model provider.
-///
-/// Shape matches OpenClaw's custom openai-compatible providers:
-/// `models.providers.veryagent` + optional `agents.defaults.model.primary`.
-fn write_openclaw_managed_provider(
-    api_url: &str,
-    api_key: &str,
-    model: Option<&str>,
-) -> Result<(), AcpError> {
-    let path = openclaw_config_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            AcpError::protocol(format!(
-                "create openclaw config dir failed ({}): {e}",
-                parent.display()
-            ))
-        })?;
-    }
-
-    let mut root = openclaw_read_config_value(&path).unwrap_or_else(|| serde_json::json!({}));
-    if !root.is_object() {
-        root = serde_json::json!({});
-    }
-
-    let base_url = normalize_openclaw_openai_base_url(api_url);
-    let model = model.map(str::trim).filter(|s| !s.is_empty());
-
-    let obj = root.as_object_mut().ok_or_else(|| {
-        AcpError::protocol(format!("invalid openclaw.json root in {}", path.display()))
-    })?;
-
-    let models_value = obj
-        .entry("models".to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    let models_obj = models_value.as_object_mut().ok_or_else(|| {
-        AcpError::protocol(format!("invalid models object in {}", path.display()))
-    })?;
-    models_obj
-        .entry("mode".to_string())
-        .or_insert_with(|| serde_json::json!("merge"));
-
-    let providers_value = models_obj
-        .entry("providers".to_string())
-        .or_insert_with(|| serde_json::json!({}));
-    let providers_obj = providers_value.as_object_mut().ok_or_else(|| {
-        AcpError::protocol(format!(
-            "invalid models.providers object in {}",
-            path.display()
-        ))
-    })?;
-
-    // Keep any previously managed model list when this write is credentials-only
-    // (cascade from provider URL/key edit without a model change).
-    let existing_models = providers_obj
-        .get(OPENCLAW_MANAGED_PROVIDER)
-        .and_then(|p| p.get("models"))
-        .cloned();
-
-    let mut provider = serde_json::Map::new();
-    if !base_url.is_empty() {
-        provider.insert(
-            "baseUrl".to_string(),
-            serde_json::Value::String(base_url),
-        );
-    }
-    if !api_key.trim().is_empty() {
-        provider.insert(
-            "apiKey".to_string(),
-            serde_json::Value::String(api_key.to_string()),
-        );
-    }
-    provider.insert(
-        "api".to_string(),
-        serde_json::Value::String("openai-completions".to_string()),
-    );
-
-    if let Some(model_id) = model {
-        provider.insert(
-            "models".to_string(),
-            serde_json::json!([{
-                "id": model_id,
-                "name": model_id,
-                "reasoning": false,
-                "input": ["text"],
-                "contextWindow": 200000,
-                "maxTokens": 8192
-            }]),
-        );
-    } else if let Some(existing) = existing_models {
-        provider.insert("models".to_string(), existing);
-    } else {
-        provider.insert("models".to_string(), serde_json::json!([]));
-    }
-    providers_obj.insert(
-        OPENCLAW_MANAGED_PROVIDER.to_string(),
-        serde_json::Value::Object(provider),
-    );
-
-    if let Some(model_id) = model {
-        let primary = format!("{OPENCLAW_MANAGED_PROVIDER}/{model_id}");
-        let agents_value = obj
-            .entry("agents".to_string())
-            .or_insert_with(|| serde_json::json!({}));
-        let agents_obj = agents_value.as_object_mut().ok_or_else(|| {
-            AcpError::protocol(format!("invalid agents object in {}", path.display()))
-        })?;
-        let defaults_value = agents_obj
-            .entry("defaults".to_string())
-            .or_insert_with(|| serde_json::json!({}));
-        let defaults_obj = defaults_value.as_object_mut().ok_or_else(|| {
-            AcpError::protocol(format!(
-                "invalid agents.defaults object in {}",
-                path.display()
-            ))
-        })?;
-        defaults_obj.insert(
-            "model".to_string(),
-            serde_json::json!({ "primary": primary }),
-        );
-        let allow_value = defaults_obj
-            .entry("models".to_string())
-            .or_insert_with(|| serde_json::json!({}));
-        if let Some(allow_obj) = allow_value.as_object_mut() {
-            allow_obj.insert(
-                primary,
-                serde_json::json!({ "alias": "veryagent" }),
-            );
-        }
-    }
-
-    let text = serde_json::to_string_pretty(&root)
-        .map_err(|e| AcpError::protocol(format!("serialize openclaw.json failed: {e}")))?;
-    fs::write(&path, format!("{text}\n")).map_err(|e| {
-        AcpError::protocol(format!(
-            "write openclaw.json failed ({}): {e}",
-            path.display()
-        ))
-    })?;
-
-    Ok(())
-}
-
-/// Best-effort restart so a running gateway reloads managed provider credentials.
-async fn restart_openclaw_gateway_after_provider_write() {
-    match run_openclaw_cli(&["gateway", "restart"], 45).await {
-        Ok((ok, out)) if !ok => {
-            tracing::warn!("[OpenClaw] gateway restart after provider write: {out}");
-        }
-        Err(e) => {
-            tracing::warn!("[OpenClaw] gateway restart after provider write failed: {e}");
-        }
-        _ => {}
-    }
-}
-
-fn openclaw_json_str(value: &serde_json::Value, path: &[&str]) -> Option<String> {
-    let mut cur = value;
-    for key in path {
-        cur = cur.get(*key)?;
-    }
-    cur.as_str()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-}
-
-fn openclaw_json_port(value: &serde_json::Value) -> Option<u16> {
-    let port = value.get("gateway")?.get("port")?;
-    if let Some(n) = port.as_u64() {
-        return u16::try_from(n).ok().filter(|p| *p != 0);
-    }
-    if let Some(s) = port.as_str() {
-        return s.trim().parse::<u16>().ok().filter(|p| *p != 0);
-    }
-    None
-}
-
-fn openclaw_env_nonempty(key: &str) -> Option<String> {
-    std::env::var(key).ok().and_then(|raw| {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
 fn openclaw_expand_path(raw: &str) -> PathBuf {
     let trimmed = raw.trim();
     if trimmed == "~" {
@@ -3687,10 +1077,6 @@ fn openclaw_read_token_file(raw_path: &str) -> Option<String> {
     }
 }
 
-fn openclaw_local_ws_url(port: u16) -> String {
-    format!("ws://127.0.0.1:{port}")
-}
-
 /// Discover OpenClaw gateway URL/token from process env + local openclaw.json.
 /// Never fabricates a default port as truth — only reports what is configured.
 /// Live reachability is filled by `discover_openclaw_gateway_core`.
@@ -3705,130 +1091,6 @@ pub(crate) async fn discover_openclaw_gateway_core() -> OpenClawGatewayDiscovery
     discovery
 }
 
-/// Injectable discovery core (used by unit tests and the public wrapper).
-/// Does not perform network I/O; `gateway_reachable` is always false here.
-fn discover_openclaw_gateway_from(
-    config_path: PathBuf,
-    env_url: Option<String>,
-    env_port: Option<String>,
-    env_token: Option<String>,
-) -> OpenClawGatewayDiscovery {
-    let config_exists = config_path.is_file();
-    let config_value = if config_exists {
-        openclaw_read_config_value(&config_path)
-    } else {
-        None
-    };
-    let config_parsed = config_value.is_some();
-
-    // URL priority:
-    // 1) OPENCLAW_GATEWAY_URL env
-    // 2) gateway.remote.url in config
-    // 3) construct from OPENCLAW_GATEWAY_PORT env
-    // 4) construct from gateway.port in config (only when that port is present)
-    let mut gateway_url: Option<String> = None;
-    let mut gateway_url_source: Option<String> = None;
-    let mut gateway_port: Option<u16> = None;
-    let mut gateway_port_source: Option<String> = None;
-    let mut gateway_mode: Option<String> = None;
-
-    if let Some(url) = env_url.filter(|v| !v.trim().is_empty()) {
-        gateway_url = Some(url.trim().to_string());
-        gateway_url_source = Some("env".to_string());
-    }
-
-    if let Some(port_raw) = env_port {
-        if let Ok(port) = port_raw.trim().parse::<u16>() {
-            if port != 0 {
-                gateway_port = Some(port);
-                gateway_port_source = Some("env".to_string());
-            }
-        }
-    }
-
-    if let Some(ref value) = config_value {
-        if gateway_url.is_none() {
-            if let Some(url) = openclaw_json_str(value, &["gateway", "remote", "url"]) {
-                gateway_url = Some(url);
-                gateway_url_source = Some("config_remote_url".to_string());
-            }
-        }
-        if gateway_port.is_none() {
-            if let Some(port) = openclaw_json_port(value) {
-                gateway_port = Some(port);
-                gateway_port_source = Some("config_port".to_string());
-            }
-        }
-        gateway_mode = openclaw_json_str(value, &["gateway", "mode"]);
-    }
-
-    if gateway_url.is_none() {
-        if let Some(port) = gateway_port {
-            gateway_url = Some(openclaw_local_ws_url(port));
-            gateway_url_source = Some(if gateway_port_source.as_deref() == Some("env") {
-                "env_port".to_string()
-            } else {
-                "config_port".to_string()
-            });
-        }
-    }
-
-    // Token priority (client-side):
-    // OPENCLAW_GATEWAY_TOKEN → gateway.remote.token → gateway.auth.token
-    // → gateway.auth.tokenFile / token-file (read contents)
-    let mut gateway_token: Option<String> = None;
-    let mut gateway_token_source: Option<String> = None;
-
-    if let Some(token) = env_token.filter(|v| !v.trim().is_empty()) {
-        gateway_token = Some(token.trim().to_string());
-        gateway_token_source = Some("env".to_string());
-    }
-
-    if gateway_token.is_none() {
-        if let Some(ref value) = config_value {
-            if let Some(token) = openclaw_json_str(value, &["gateway", "remote", "token"]) {
-                gateway_token = Some(token);
-                gateway_token_source = Some("config_remote_token".to_string());
-            } else if let Some(token) = openclaw_json_str(value, &["gateway", "auth", "token"]) {
-                // Skip env-substitution placeholders like \${OPENCLAW_GATEWAY_TOKEN}
-                // when the env itself was empty — they are not real tokens.
-                if !token.starts_with("${") {
-                    gateway_token = Some(token);
-                    gateway_token_source = Some("config_auth_token".to_string());
-                }
-            }
-
-            if gateway_token.is_none() {
-                let file_path = openclaw_json_str(value, &["gateway", "auth", "tokenFile"])
-                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token_file"]))
-                    .or_else(|| openclaw_json_str(value, &["gateway", "auth", "token-file"]))
-                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "tokenFile"]))
-                    .or_else(|| openclaw_json_str(value, &["gateway", "remote", "token_file"]));
-                if let Some(path) = file_path {
-                    if let Some(token) = openclaw_read_token_file(&path) {
-                        gateway_token = Some(token);
-                        gateway_token_source = Some("config_token_file".to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    OpenClawGatewayDiscovery {
-        gateway_url,
-        gateway_url_source,
-        gateway_token,
-        gateway_token_source,
-        config_path: config_path.display().to_string(),
-        config_exists,
-        config_parsed,
-        gateway_port,
-        gateway_port_source,
-        gateway_mode,
-        gateway_reachable: false,
-    }
-}
-
 fn openclaw_probe_target(discovery: &OpenClawGatewayDiscovery) -> Option<(String, u16)> {
     if let Some(url) = discovery.gateway_url.as_deref() {
         if let Some(parsed) = parse_openclaw_ws_host_port(url) {
@@ -3839,61 +1101,6 @@ fn openclaw_probe_target(discovery: &OpenClawGatewayDiscovery) -> Option<(String
         return Some(("127.0.0.1".to_string(), port));
     }
     None
-}
-
-fn parse_openclaw_ws_host_port(raw: &str) -> Option<(String, u16)> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let without_scheme = trimmed
-        .strip_prefix("ws://")
-        .or_else(|| trimmed.strip_prefix("wss://"))
-        .or_else(|| trimmed.strip_prefix("http://"))
-        .or_else(|| trimmed.strip_prefix("https://"))
-        .unwrap_or(trimmed);
-    let host_port = without_scheme.split('/').next().unwrap_or("").trim();
-    if host_port.is_empty() {
-        return None;
-    }
-    // IPv6 in brackets: [::1]:18789
-    if let Some(rest) = host_port.strip_prefix('[') {
-        let end = rest.find(']')?;
-        let host = rest[..end].to_string();
-        let after = &rest[end + 1..];
-        let port = if let Some(p) = after.strip_prefix(':') {
-            p.parse::<u16>().ok().filter(|p| *p != 0)?
-        } else {
-            OPENCLAW_DEFAULT_LOCAL_PORT
-        };
-        return Some((host, port));
-    }
-    if let Some((host, port_raw)) = host_port.rsplit_once(':') {
-        if !host.is_empty() {
-            if let Ok(port) = port_raw.parse::<u16>() {
-                if port != 0 {
-                    return Some((host.to_string(), port));
-                }
-            }
-        }
-    }
-    // Host only — OpenClaw default local port.
-    Some((host_port.to_string(), OPENCLAW_DEFAULT_LOCAL_PORT))
-}
-
-async fn probe_openclaw_gateway_reachable(discovery: &OpenClawGatewayDiscovery) -> bool {
-    let Some((host, port)) = openclaw_probe_target(discovery) else {
-        return false;
-    };
-    match tokio::time::timeout(
-        std::time::Duration::from_millis(400),
-        tokio::net::TcpStream::connect((host.as_str(), port)),
-    )
-    .await
-    {
-        Ok(Ok(_)) => true,
-        _ => false,
-    }
 }
 
 async fn resolve_openclaw_cli() -> Result<PathBuf, AcpError> {
@@ -3912,47 +1119,6 @@ async fn resolve_openclaw_cli() -> Result<PathBuf, AcpError> {
     Err(AcpError::protocol(
         "openclaw CLI not found. Install OpenClaw in Settings first.".to_string(),
     ))
-}
-
-async fn run_openclaw_cli(args: &[&str], timeout_secs: u64) -> Result<(bool, String), AcpError> {
-    let cli = resolve_openclaw_cli().await?;
-    let mut cmd = crate::process::tokio_command(&cli);
-    cmd.args(args);
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
-    let child = cmd
-        .spawn()
-        .map_err(|e| AcpError::protocol(format!("failed to spawn openclaw: {e}")))?;
-    let output = match tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        child.wait_with_output(),
-    )
-    .await
-    {
-        Ok(Ok(out)) => out,
-        Ok(Err(e)) => {
-            return Err(AcpError::protocol(format!("openclaw command failed: {e}")));
-        }
-        Err(_) => {
-            return Err(AcpError::protocol(format!(
-                "openclaw {} timed out after {timeout_secs}s",
-                args.join(" ")
-            )));
-        }
-    };
-    let mut text = String::new();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if !stdout.trim().is_empty() {
-        text.push_str(stdout.trim());
-    }
-    if !stderr.trim().is_empty() {
-        if !text.is_empty() {
-            text.push('\n');
-        }
-        text.push_str(stderr.trim());
-    }
-    Ok((output.status.success(), text))
 }
 
 async fn spawn_openclaw_gateway_run(port: u16) -> Result<(), AcpError> {
@@ -4232,22 +1398,6 @@ fn probe_pi_version(resolved: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-// ---------------------------------------------------------------------------
-// Hermes config helpers
-//
-// Hermes self-manages credentials in `~/.hermes/.env` (secrets) and general
-// settings in `~/.hermes/config.yaml` (the `model:` section), reading them with
-// its own runtime resolver. veryagent manages those two files directly — mirroring
-// how it manages Codex's `auth.json` + `config.toml` — rather than injecting
-// process env. The provider choice drives the linkage: it selects which `.env`
-// var holds the API key and which `model.provider` / `model.base_url` go into
-// config.yaml.
-// ---------------------------------------------------------------------------
-
-fn hermes_env_path() -> PathBuf {
-    hermes_home_dir().join(".env")
-}
-
 pub(crate) fn hermes_config_yaml_path() -> PathBuf {
     hermes_home_dir().join("config.yaml")
 }
@@ -4260,7 +1410,7 @@ pub(crate) fn hermes_config_yaml_path() -> PathBuf {
 /// `needs_base_url` marks providers whose endpoint is user-supplied (the
 /// OpenAI-compatible `openai-api` path). The frontend mirror owns the auth-kind
 /// UI flag.
-struct HermesProvider {
+pub(crate) struct HermesProvider {
     id: &'static str,
     key_env_var: &'static str,
     needs_base_url: bool,
@@ -4515,99 +1665,6 @@ const HERMES_PROVIDERS: &[HermesProvider] = &[
     },
 ];
 
-fn hermes_provider(id: &str) -> Option<&'static HermesProvider> {
-    HERMES_PROVIDERS.iter().find(|p| p.id == id)
-}
-
-/// Whether a provider stores its API key INLINE in config.yaml `model.api_key`
-/// rather than in `~/.hermes/.env`. Only `custom` (the user-supplied
-/// OpenAI-compatible endpoint) works this way in Hermes 0.16.0: its registry
-/// entry has no `.env` key var, so the key rides in the `model:` section next to
-/// `base_url`. Drives both the structured write (`plan_hermes_write`) and the
-/// panel projection (`project_hermes_key_and_base`).
-fn hermes_inlines_api_key(provider: &str) -> bool {
-    provider == "custom"
-}
-
-/// Parse simple `KEY=value` lines from a dotenv file. Ignores blank lines and
-/// `#` comments, tolerates a leading `export `, and strips one layer of
-/// surrounding single/double quotes from the value. Last occurrence wins.
-fn parse_env_file(raw: &str) -> BTreeMap<String, String> {
-    let mut map = BTreeMap::new();
-    for line in raw.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let body = trimmed.strip_prefix("export ").unwrap_or(trimmed);
-        let Some((key, value)) = body.split_once('=') else {
-            continue;
-        };
-        let key = key.trim();
-        if key.is_empty() {
-            continue;
-        }
-        let value = value.trim();
-        let value = value
-            .strip_prefix('"')
-            .and_then(|v| v.strip_suffix('"'))
-            .or_else(|| value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')))
-            .unwrap_or(value);
-        map.insert(key.to_string(), value.to_string());
-    }
-    map
-}
-
-/// Update `KEY=value` entries in a dotenv file while preserving comments, blank
-/// lines, ordering, and unrelated keys. The first occurrence of an updated key
-/// is replaced in place; any later duplicates of that key are dropped (so a
-/// last-occurrence-wins reader can't surface a stale shadowing line). Missing
-/// keys are appended — including with an empty value (`KEY=`): Hermes loads
-/// `~/.hermes/.env` with override semantics, so an explicit empty line both
-/// clears a stored credential AND masks an inherited process-env value of the
-/// same name (e.g. a stale `OPENAI_API_KEY` exported in the shell).
-fn patch_env_text(existing: &str, updates: &[(&str, &str)]) -> String {
-    let mut applied = vec![false; updates.len()];
-    let mut out_lines: Vec<String> = Vec::new();
-
-    for line in existing.lines() {
-        let trimmed = line.trim_start();
-        let line_key = if trimmed.starts_with('#') {
-            None
-        } else {
-            let body = trimmed.strip_prefix("export ").unwrap_or(trimmed);
-            body.split_once('=').map(|(k, _)| k.trim())
-        };
-        if let Some(line_key) = line_key {
-            if let Some(i) = updates.iter().position(|(key, _)| line_key == *key) {
-                if applied[i] {
-                    // Drop later duplicates of a key we already rewrote.
-                    continue;
-                }
-                out_lines.push(format!("{}={}", updates[i].0, updates[i].1));
-                applied[i] = true;
-                continue;
-            }
-        }
-        out_lines.push(line.to_string());
-    }
-
-    for (i, (key, value)) in updates.iter().enumerate() {
-        // Append a missing key, including an empty `KEY=` — an explicit empty
-        // line is what masks an inherited process-env value under Hermes' dotenv
-        // override loading, not just a no-op cleanup.
-        if !applied[i] {
-            out_lines.push(format!("{key}={value}"));
-        }
-    }
-
-    let mut result = out_lines.join("\n");
-    if !result.is_empty() {
-        result.push('\n');
-    }
-    result
-}
-
 fn yaml_str(value: &serde_yaml::Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -4627,7 +1684,7 @@ fn existing_hermes_model_provider(existing: Option<&str>) -> Option<String> {
 }
 
 /// How `merge_hermes_model_config` should treat the `model.base_url` field.
-enum BaseUrlWrite<'a> {
+pub(crate) enum BaseUrlWrite<'a> {
     /// Write this endpoint, or remove the field when the value is empty/blank.
     /// Used for providers whose base URL is user-editable in the panel.
     Set(&'a str),
@@ -4639,7 +1696,7 @@ enum BaseUrlWrite<'a> {
 
 /// How `merge_hermes_model_config` should treat the inline `model.api_key`
 /// (and the companion `model.api_mode`), which only the `custom` provider uses.
-enum InlineApiKeyWrite<'a> {
+pub(crate) enum InlineApiKeyWrite<'a> {
     /// Inline-key provider (`custom`): write `key` (or remove the field when
     /// blank — a keyless local server). `scrub_mode` clears a stale
     /// `model.api_mode`: `true` when switching TO custom from a different
@@ -4652,309 +1709,6 @@ enum InlineApiKeyWrite<'a> {
     /// endpoint so it can't bleed into the newly selected provider — mirroring
     /// Hermes' own `auth.py` cleanup on a provider switch.
     Clear,
-}
-
-/// Set `model.{provider,default,base_url}` in a Hermes config.yaml document,
-/// preserving every other top-level key. `default` is only written when a
-/// non-empty model is given; `base_url` follows the `BaseUrlWrite` action and
-/// the inline `model.api_key` follows the `InlineApiKeyWrite` action.
-fn merge_hermes_model_config(
-    existing: Option<&str>,
-    provider: &str,
-    model: &str,
-    base_url: BaseUrlWrite<'_>,
-    inline_api_key: InlineApiKeyWrite<'_>,
-) -> Result<String, AcpError> {
-    use serde_yaml::{Mapping, Value};
-    let mut root: Value = match existing {
-        Some(raw) if !raw.trim().is_empty() => serde_yaml::from_str(raw)
-            .map_err(|e| AcpError::protocol(format!("invalid hermes config.yaml: {e}")))?,
-        _ => Value::Mapping(Mapping::new()),
-    };
-    if !root.is_mapping() {
-        root = Value::Mapping(Mapping::new());
-    }
-    let root_map = root.as_mapping_mut().expect("root is a mapping");
-
-    let model_key = Value::String("model".to_string());
-    if !root_map
-        .get(&model_key)
-        .map(Value::is_mapping)
-        .unwrap_or(false)
-    {
-        root_map.insert(model_key.clone(), Value::Mapping(Mapping::new()));
-    }
-    let model_map = root_map
-        .get_mut(&model_key)
-        .and_then(Value::as_mapping_mut)
-        .expect("model is a mapping");
-
-    model_map.insert(
-        Value::String("provider".to_string()),
-        Value::String(provider.to_string()),
-    );
-    if !model.is_empty() {
-        model_map.insert(
-            Value::String("default".to_string()),
-            Value::String(model.to_string()),
-        );
-    }
-    match base_url {
-        BaseUrlWrite::Set(url) if !url.trim().is_empty() => {
-            model_map.insert(
-                Value::String("base_url".to_string()),
-                Value::String(url.trim().to_string()),
-            );
-        }
-        BaseUrlWrite::Set(_) => {
-            model_map.remove(Value::String("base_url".to_string()));
-        }
-        // Preserve: leave whatever `model.base_url` is already there.
-        BaseUrlWrite::Preserve => {}
-    }
-    match inline_api_key {
-        InlineApiKeyWrite::Set { key, scrub_mode } => {
-            if key.trim().is_empty() {
-                // Blank key on an inline provider → keyless local server.
-                model_map.remove(Value::String("api_key".to_string()));
-            } else {
-                model_map.insert(
-                    Value::String("api_key".to_string()),
-                    Value::String(key.trim().to_string()),
-                );
-            }
-            // Switching TO custom scrubs a stale mode; a custom→custom re-save
-            // leaves a user's raw-editor `api_mode` untouched.
-            if scrub_mode {
-                model_map.remove(Value::String("api_mode".to_string()));
-            }
-        }
-        // Non-inline provider: scrub a stale inline key/mode from a prior `custom`.
-        InlineApiKeyWrite::Clear => {
-            model_map.remove(Value::String("api_key".to_string()));
-            model_map.remove(Value::String("api_mode".to_string()));
-        }
-    }
-
-    serde_yaml::to_string(&root)
-        .map_err(|e| AcpError::protocol(format!("serialize hermes config.yaml failed: {e}")))
-}
-
-/// Quote a single argv token for the current platform's shell, only when it
-/// contains characters that would otherwise be reparsed (so simple tokens stay
-/// readable). POSIX uses single quotes; Windows wraps in double quotes.
-fn shell_quote_arg(arg: &str) -> String {
-    shell_quote_arg_for(arg, cfg!(windows))
-}
-
-/// Platform-parameterized core of [`shell_quote_arg`], so both the POSIX and
-/// Windows quoting rules are unit-testable on any host.
-///
-/// The backslash forces quoting on POSIX (it is the shell escape char) but NOT
-/// on Windows, where it is just the path separator. Force-quoting a plain
-/// Windows path like `C:\…\uvx.exe` makes the rendered command *begin* with a
-/// double-quoted string: `cmd.exe` runs that fine, but PowerShell parses a
-/// leading quoted string as a string *expression* (invoking it would need the
-/// `&` call operator) and dies with "Unexpected token" on the next argument —
-/// uvx never runs. Leaving a space-free path unquoted keeps it a bare command
-/// token that runs in both `cmd` and PowerShell. (A path that contains spaces
-/// still must be quoted; such a copied command stays PowerShell-incompatible and
-/// needs a leading `&` when pasted there.)
-fn shell_quote_arg_for(arg: &str, windows: bool) -> String {
-    // Metacharacters that force quoting. Backslash is POSIX-only: on Windows it
-    // is the path separator and quoting on its account is what breaks PowerShell.
-    let special: &str = if windows {
-        "[](){}'\"$&;|<>*?`!#~"
-    } else {
-        "[](){}'\"$&;|<>*?`\\!#~"
-    };
-    let needs_quoting =
-        arg.is_empty() || arg.chars().any(|c| c.is_whitespace() || special.contains(c));
-    if !needs_quoting {
-        return arg.to_string();
-    }
-    if windows {
-        format!("\"{}\"", arg.replace('"', "\\\""))
-    } else {
-        format!("'{}'", arg.replace('\'', "'\\''"))
-    }
-}
-
-fn shell_join(argv: &[String]) -> String {
-    argv.iter()
-        .map(|a| shell_quote_arg(a))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// The argv for Hermes's `--setup` and `model` flows: prefer a system `hermes`
-/// CLI, else the resolved uvx recipe (with the pinned package), else the
-/// documented uvx form. Returned as argv vectors so callers can shell-quote per
-/// platform for display or execute them.
-fn hermes_setup_argvs() -> (Vec<String>, Vec<String>) {
-    let meta = registry::get_agent_meta(AgentType::Hermes);
-    if let registry::AgentDistribution::Uvx {
-        package,
-        cmd,
-        python,
-        system_cmd,
-        ..
-    } = meta.distribution
-    {
-        if let Some((sys, _)) = system_cmd {
-            if resolve_command_on_path(sys).is_some() {
-                return (
-                    vec![sys.to_string(), "acp".to_string(), "--setup".to_string()],
-                    vec![sys.to_string(), "model".to_string()],
-                );
-            }
-        }
-        let uvx = resolve_uvx_command()
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "uvx".to_string());
-        let python_args = uvx_python_args(python);
-        // `uvx [--python <ver>] --from <package> <tail...>` — the pin must
-        // precede `--from`, matching the launch/prewarm invocations.
-        let build = |tail: &[&str]| -> Vec<String> {
-            let mut argv = vec![uvx.clone()];
-            argv.extend(python_args.iter().cloned());
-            argv.push("--from".to_string());
-            argv.push(package.to_string());
-            argv.extend(tail.iter().map(|s| s.to_string()));
-            argv
-        };
-        return (build(&[cmd, "--setup"]), build(&["hermes", "model"]));
-    }
-    // Unreachable: Hermes is always a Uvx distribution.
-    (
-        vec![
-            "uvx".to_string(),
-            "--python".to_string(),
-            "3.13".to_string(),
-            "--from".to_string(),
-            "hermes-agent[acp,mcp]==0.16.0".to_string(),
-            "hermes-acp".to_string(),
-            "--setup".to_string(),
-        ],
-        vec![
-            "uvx".to_string(),
-            "--python".to_string(),
-            "3.13".to_string(),
-            "--from".to_string(),
-            "hermes-agent[acp,mcp]==0.16.0".to_string(),
-            "hermes".to_string(),
-            "model".to_string(),
-        ],
-    )
-}
-
-/// Build the displayed/runnable `(setup, model)` shell commands for the Hermes
-/// setup guidance, shell-quoted for the current platform.
-fn hermes_setup_commands() -> (String, String) {
-    let (setup, model) = hermes_setup_argvs();
-    (shell_join(&setup), shell_join(&model))
-}
-
-/// Read `~/.hermes/.env` + `config.yaml` and project them into the normalized
-/// JSON the settings UI binds to: `{provider, model, baseUrl, apiKey,
-/// hermesHome, setupCommand, modelCommand}`. Only the active provider's single
-/// key var is surfaced — never the rest of `.env`.
-/// Project the active provider's API key and endpoint URL for the settings UI.
-/// For inline-key providers (`custom`) the key comes from config.yaml's
-/// `model.api_key`; for every other keyed provider it is read from the
-/// provider's `.env` key var. The base URL prefers config.yaml's
-/// `model.base_url` and falls back to the provider's base-URL env var — so an
-/// endpoint that lives only in `.env` (e.g. a bare `OPENAI_BASE_URL` with no
-/// YAML `base_url`) still shows in the panel and isn't cleared on the next save.
-/// Empty stored values are treated as absent. Unknown providers map to nothing
-/// here (their key var is undiscoverable; the raw editor governs).
-fn project_hermes_key_and_base(
-    provider: &str,
-    env_map: &BTreeMap<String, String>,
-    yaml_base_url: Option<&str>,
-    yaml_api_key: Option<&str>,
-) -> (Option<String>, Option<String>) {
-    let meta = hermes_provider(provider);
-    let api_key = if hermes_inlines_api_key(provider) {
-        yaml_api_key
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(str::to_string)
-    } else {
-        meta.filter(|p| !p.key_env_var.is_empty())
-            .and_then(|p| env_map.get(p.key_env_var))
-            .filter(|v| !v.is_empty())
-            .map(|v| v.to_string())
-    };
-    let base_url = yaml_base_url.map(str::to_string).or_else(|| {
-        meta.filter(|p| !p.base_url_env_var.is_empty())
-            .and_then(|p| env_map.get(p.base_url_env_var))
-            .filter(|v| !v.is_empty())
-            .map(|v| v.to_string())
-    });
-    (api_key, base_url)
-}
-
-fn load_hermes_local_config_json() -> Option<String> {
-    let env_map = fs::read_to_string(hermes_env_path())
-        .ok()
-        .map(|raw| parse_env_file(&raw))
-        .unwrap_or_default();
-
-    let mut provider: Option<String> = None;
-    let mut model: Option<String> = None;
-    let mut yaml_base_url: Option<String> = None;
-    let mut yaml_api_key: Option<String> = None;
-    if let Ok(raw_yaml) = fs::read_to_string(hermes_config_yaml_path()) {
-        if let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(&raw_yaml) {
-            if let Some(model_section) = value.get("model") {
-                provider = yaml_str(model_section, "provider");
-                model = yaml_str(model_section, "default");
-                yaml_base_url = yaml_str(model_section, "base_url");
-                yaml_api_key = yaml_str(model_section, "api_key");
-            }
-        }
-    }
-
-    let (api_key, base_url) = match provider.as_deref() {
-        Some(p) => project_hermes_key_and_base(
-            p,
-            &env_map,
-            yaml_base_url.as_deref(),
-            yaml_api_key.as_deref(),
-        ),
-        None => (None, yaml_base_url),
-    };
-
-    let (setup_command, model_command) = hermes_setup_commands();
-
-    let mut merged = serde_json::Map::new();
-    if let Some(value) = provider {
-        merged.insert("provider".to_string(), serde_json::Value::String(value));
-    }
-    if let Some(value) = model {
-        merged.insert("model".to_string(), serde_json::Value::String(value));
-    }
-    if let Some(value) = base_url {
-        merged.insert("baseUrl".to_string(), serde_json::Value::String(value));
-    }
-    if let Some(value) = api_key {
-        merged.insert("apiKey".to_string(), serde_json::Value::String(value));
-    }
-    merged.insert(
-        "hermesHome".to_string(),
-        serde_json::Value::String(hermes_home_dir().display().to_string()),
-    );
-    merged.insert(
-        "setupCommand".to_string(),
-        serde_json::Value::String(setup_command),
-    );
-    merged.insert(
-        "modelCommand".to_string(),
-        serde_json::Value::String(model_command),
-    );
-
-    serde_json::to_string_pretty(&serde_json::Value::Object(merged)).ok()
 }
 
 /// Structured Hermes config update from the settings UI.
@@ -4994,18 +1748,6 @@ fn hermes_skip_chmod() -> bool {
             cgroup.contains("docker") || cgroup.contains("lxc") || cgroup.contains("kubepods")
         })
         .unwrap_or(false)
-}
-
-/// Parse a `HERMES_HOME_MODE` value (octal, e.g. `0701` for web-server traversal
-/// layouts), falling back to owner-only `0700`. Accepts an optional `0o` prefix.
-#[cfg(unix)]
-fn parse_hermes_home_mode(raw: Option<&str>) -> u32 {
-    raw.map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.strip_prefix("0o").unwrap_or(s))
-        .and_then(|s| u32::from_str_radix(s, 8).ok())
-        .filter(|m| *m != 0)
-        .unwrap_or(0o700)
 }
 
 /// Create the Hermes home directory if needed. On Unix, tighten it to
@@ -5156,186 +1898,12 @@ pub(crate) fn acp_update_hermes_config_core(
 /// nothing in `.env` changes).
 type HermesWritePlan = (String, Vec<(&'static str, String)>);
 
-/// Pure decision logic for a Hermes config save: compute the config.yaml content
-/// to write and the `.env` `(key_var, value)` updates. Validation happens here
-/// (no I/O) so a bad request fails before anything is written.
-///
-/// Raw mode is enforced server-side to never touch `.env` (the API contract is
-/// not left to the caller's payload). OAuth/AWS providers carry no key var, so
-/// they never produce a key update. Keyed providers update their API key (a
-/// blank key leaves the stored secret untouched); providers with a base-URL env
-/// var also mirror the structured endpoint URL there. Embedded newlines in the
-/// key or base URL are rejected.
-fn plan_hermes_write(
-    provider: &str,
-    api_key: Option<&str>,
-    model: &str,
-    base_url: Option<&str>,
-    raw_config_yaml: Option<&str>,
-    existing_config: Option<&str>,
-) -> Result<HermesWritePlan, AcpError> {
-    // The provider the existing config.yaml was on (None for a first save / raw
-    // mode). Drives base-URL preservation and stale-`.env`-credential cleanup.
-    let previous_provider = existing_hermes_model_provider(existing_config);
-
-    let config_yaml = if let Some(raw) = raw_config_yaml {
-        serde_yaml::from_str::<serde_yaml::Value>(raw)
-            .map_err(|e| AcpError::protocol(format!("invalid hermes config.yaml: {e}")))?;
-        raw.to_string()
-    } else {
-        // Structured mode only handles providers in the curated table. The
-        // `custom` provider IS handled (its key/endpoint live inline in
-        // config.yaml — see `hermes_inlines_api_key`), but unknown ids (the
-        // legacy `openai` pseudo-provider, user-defined `custom:` slugs, or
-        // anything outside the table) have no credential layout veryagent can map —
-        // reject them and steer the user to the raw config.yaml editor, which
-        // stays the escape hatch.
-        let meta = hermes_provider(provider).ok_or_else(|| {
-            AcpError::protocol(format!(
-                "unknown hermes provider '{provider}'; edit ~/.hermes/config.yaml directly"
-            ))
-        })?;
-        // Decide what happens to `model.base_url`:
-        // - User-editable endpoint (openai-api/lmstudio/azure-foundry) → write the
-        //   field's value, or clear it when blank.
-        // - Endpoint not exposed in the panel, and the provider is UNCHANGED →
-        //   preserve an out-of-band base URL (proxy/Azure) the user set elsewhere.
-        // - Endpoint not exposed, but the provider just CHANGED → clear the stale
-        //   base URL left over from the previous provider (it must not carry over).
-        let base = if meta.needs_base_url {
-            BaseUrlWrite::Set(base_url.unwrap_or(""))
-        } else if previous_provider.as_deref() == Some(provider) {
-            BaseUrlWrite::Preserve
-        } else {
-            BaseUrlWrite::Set("")
-        };
-        // Inline key — `custom` only. The key rides in `model.api_key`; every
-        // other provider gets `Clear` so a stale inline key from a previous
-        // `custom` endpoint never bleeds into the new provider. A blank inline
-        // key drops the field (keyless local server).
-        let inline_api_key = if hermes_inlines_api_key(provider) {
-            let key = api_key.map(str::trim).unwrap_or_default();
-            if key.contains(['\n', '\r']) {
-                return Err(AcpError::protocol(
-                    "hermes api key must not contain newlines",
-                ));
-            }
-            // Scrub a stale `api_mode` only when switching TO custom from a
-            // different provider; a custom→custom re-save preserves it.
-            let scrub_mode = previous_provider.as_deref() != Some(provider);
-            InlineApiKeyWrite::Set { key, scrub_mode }
-        } else {
-            InlineApiKeyWrite::Clear
-        };
-        merge_hermes_model_config(existing_config, provider, model, base, inline_api_key)?
-    };
-
-    // Raw mode edits config.yaml only; never `.env`.
-    let mut env_updates: Vec<(&'static str, String)> = Vec::new();
-    if raw_config_yaml.is_none() {
-        let meta = hermes_provider(provider);
-        // API key — keyed providers only. A blank key leaves the stored secret
-        // untouched (so switching providers can't wipe it).
-        if let Some(meta) = meta.filter(|p| !p.key_env_var.is_empty()) {
-            if let Some(key) = api_key.map(str::trim).filter(|k| !k.is_empty()) {
-                if key.contains(['\n', '\r']) {
-                    return Err(AcpError::protocol(
-                        "hermes api key must not contain newlines",
-                    ));
-                }
-                env_updates.push((meta.key_env_var, key.to_string()));
-            }
-        }
-        // Endpoint URL — mirror the structured base URL into the provider's
-        // base-URL env var so `.env` and config.yaml `model.base_url` agree
-        // under either of Hermes' resolution paths. An empty value clears a
-        // stale override.
-        if let Some(meta) = meta.filter(|p| p.needs_base_url && !p.base_url_env_var.is_empty()) {
-            let base = base_url.map(str::trim).unwrap_or_default();
-            if base.contains(['\n', '\r']) {
-                return Err(AcpError::protocol(
-                    "hermes base url must not contain newlines",
-                ));
-            }
-            env_updates.push((meta.base_url_env_var, base.to_string()));
-        }
-        // Neutralize only vars that can actually BLEED INTO the selected
-        // provider's runtime path — never blanket-wipe the previous provider's
-        // own credential (a valid ANTHROPIC_API_KEY must survive an anthropic→zai
-        // switch; zai won't read it). The one documented cross-provider fallback
-        // in hermes 0.16.0: openrouter (being OpenAI-API compatible) falls back to
-        // OPENAI_API_KEY and treats OPENAI_BASE_URL as an endpoint override. So
-        // when saving openrouter, write an explicit empty `OPENAI_API_KEY=` /
-        // `OPENAI_BASE_URL=` — appended even if absent from `.env`, since under
-        // Hermes' dotenv override loading only that masks a stale value inherited
-        // from the process environment.
-        if provider == "openrouter" {
-            for var in ["OPENAI_API_KEY", "OPENAI_BASE_URL"] {
-                if !env_updates.iter().any(|(k, _)| *k == var) {
-                    env_updates.push((var, String::new()));
-                }
-            }
-        }
-    }
-
-    Ok((config_yaml, env_updates))
-}
-
 /// Compare two base URLs for equality, ignoring a trailing slash — every Hermes
 /// endpoint rstrips `/`, so `https://x/v1` and `https://x/v1/` are the same host
 /// and must not churn a managed/symlinked `.env` on every launch. Used for the
 /// reconcile decision ONLY; the value written to `.env` stays verbatim.
 fn base_url_eq(a: &str, b: &str) -> bool {
     a.trim_end_matches('/') == b.trim_end_matches('/')
-}
-
-/// Decide how to reconcile the active provider's base-URL `.env` variable with
-/// `config.yaml`'s `model.base_url`, so Hermes' auxiliary credential path —
-/// `auth.py::resolve_api_key_provider_credentials`, which reads the endpoint
-/// ONLY from the provider's `<X>_BASE_URL` env var — resolves the SAME endpoint
-/// as the main loop, which reads `config.yaml model.base_url`. Hermes' own
-/// `hermes model`/`hermes setup` writes `model.base_url` but never the `.env`
-/// var, so auxiliary tasks (title generation, compression, …) silently fall
-/// back to the provider's registry-default host and 401 against the wrong
-/// endpoint. The settings panel already mirrors both on save; this covers
-/// configs authored outside veryagent.
-///
-/// Scope is the single ACTIVE provider's own base-URL var, never another
-/// provider's. Returns `Some((env_var, value))` to write — `value` is the
-/// verbatim `model.base_url`, or `""` to clear a stale override that would
-/// otherwise bleed into the auxiliary path — or `None` for a no-op. Unknown /
-/// legacy providers and ones with no base-URL var (OAuth, Bedrock,
-/// kimi-coding-cn) map to `None`.
-fn plan_hermes_base_url_reconcile(
-    provider: &str,
-    yaml_base_url: Option<&str>,
-    current_env_value: Option<&str>,
-) -> Option<(&'static str, String)> {
-    let meta = hermes_provider(provider).filter(|p| !p.base_url_env_var.is_empty())?;
-    let desired = yaml_base_url.map(str::trim).unwrap_or_default();
-    // A base URL carrying an embedded newline would let `patch_env_text` emit an
-    // extra `.env` line — injecting ANOTHER provider's var and breaking the
-    // single-active-var invariant. config.yaml is the user's own file, but skip
-    // rather than corrupt `.env` (the panel's `plan_hermes_write` rejects
-    // newlines the same way). A blank-after-trim value still falls through to the
-    // empty/clear path below.
-    if desired.contains(['\n', '\r']) {
-        return None;
-    }
-    let current = current_env_value.unwrap_or_default();
-    if desired.is_empty() {
-        // No endpoint in config.yaml. Clear a stale, non-empty override so it
-        // can't shadow the registry default in the auxiliary path; leave an
-        // absent/empty var alone (don't append a redundant `KEY=`).
-        if current.is_empty() {
-            return None;
-        }
-        return Some((meta.base_url_env_var, String::new()));
-    }
-    if base_url_eq(desired, current) {
-        return None;
-    }
-    Some((meta.base_url_env_var, desired.to_string()))
 }
 
 /// Reconcile `~/.hermes/.env`'s base-URL variable with `config.yaml`'s
@@ -5379,66 +1947,6 @@ pub(crate) fn reconcile_hermes_runtime_env(runtime_env: &BTreeMap<String, String
     }
 }
 
-/// Inner reconcile keyed on an explicit home dir (so tests drive a tempdir
-/// without mutating `HERMES_HOME`). No-ops when `config.yaml` is absent — it
-/// must never create `~/.hermes`; a config written later goes through the panel
-/// (which already mirrors the base URL) or a subsequent launch.
-fn reconcile_hermes_runtime_env_in(home: &Path) -> Result<(), AcpError> {
-    let config_path = home.join("config.yaml");
-    let Ok(raw_yaml) = fs::read_to_string(&config_path) else {
-        return Ok(());
-    };
-    let value: serde_yaml::Value = serde_yaml::from_str(&raw_yaml)
-        .map_err(|e| AcpError::protocol(format!("parse hermes config.yaml: {e}")))?;
-    let Some(model_section) = value.get("model") else {
-        return Ok(());
-    };
-    let Some(provider) = yaml_str(model_section, "provider") else {
-        return Ok(());
-    };
-    let yaml_base_url = yaml_str(model_section, "base_url");
-
-    let env_path = home.join(".env");
-    // Only a MISSING `.env` is an empty baseline. An existing-but-unreadable file
-    // (non-UTF-8, permission-denied, …) must abort the reconcile — patching from
-    // an empty baseline would rewrite `.env` with just the base-URL line and drop
-    // the user's API keys and comments. A dangling symlink reads as NotFound and
-    // is correctly created fresh (0600) by `write_hermes_secret_file`.
-    let existing_env = match fs::read_to_string(&env_path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(e) => return Err(AcpError::protocol(format!("read hermes .env: {e}"))),
-    };
-    let env_map = parse_env_file(&existing_env);
-    let current = hermes_provider(&provider)
-        .filter(|p| !p.base_url_env_var.is_empty())
-        .and_then(|p| env_map.get(p.base_url_env_var))
-        .map(String::as_str);
-
-    let Some((var, val)) =
-        plan_hermes_base_url_reconcile(&provider, yaml_base_url.as_deref(), current)
-    else {
-        return Ok(());
-    };
-
-    let patched = patch_env_text(&existing_env, &[(var, val.as_str())]);
-    write_hermes_secret_file(&env_path, &patched, ".env")
-}
-
-fn agent_local_config_path(agent_type: AgentType) -> Option<PathBuf> {
-    match agent_type {
-        AgentType::ClaudeCode => Some(home_dir_or_default().join(".claude").join("settings.json")),
-        AgentType::Gemini => Some(home_dir_or_default().join(".gemini").join("settings.json")),
-        AgentType::OpenCode => Some(resolve_opencode_config_path()),
-        AgentType::Cline => Some(cline_global_state_path()),
-        // Kimi Code's native config is `~/.kimi-code/config.toml`. Exposing the
-        // path lights up "open config file" + staleness tracking; the actual
-        // load/persist are special-cased below (TOML, not the generic JSON path).
-        AgentType::KimiCode => Some(kimi_code_config_toml_path()),
-        _ => None,
-    }
-}
-
 pub(crate) fn load_agent_local_config_json(agent_type: AgentType) -> Option<String> {
     if agent_type == AgentType::Codex {
         return load_codex_local_config_json();
@@ -5461,98 +1969,6 @@ pub(crate) fn load_agent_local_config_json(agent_type: AgentType) -> Option<Stri
         return None;
     }
     serde_json::to_string_pretty(&parsed).ok()
-}
-
-fn merge_json_values(base: &mut serde_json::Value, patch: &serde_json::Value) {
-    if let (Some(base_obj), Some(patch_obj)) = (base.as_object_mut(), patch.as_object()) {
-        for (key, patch_value) in patch_obj {
-            if patch_value.is_null() {
-                // null in patch means "remove this key"
-                base_obj.remove(key);
-                continue;
-            }
-            match base_obj.get_mut(key) {
-                Some(base_value) => merge_json_values(base_value, patch_value),
-                None => {
-                    base_obj.insert(key.clone(), patch_value.clone());
-                }
-            }
-        }
-        return;
-    }
-
-    *base = patch.clone();
-}
-
-fn persist_agent_local_config_json(
-    agent_type: AgentType,
-    config_patch_json: Option<&str>,
-) -> Result<(), AcpError> {
-    if agent_type == AgentType::Codex {
-        return persist_codex_local_config(config_patch_json);
-    }
-    if agent_type == AgentType::Cline {
-        return persist_cline_local_config(config_patch_json);
-    }
-    if agent_type == AgentType::KimiCode {
-        // Kimi's config.toml is written exclusively through the dedicated
-        // `acp_update_kimi_code_config` command (structured/raw modes). The
-        // generic JSON-merge persist must never touch it (it would write JSON
-        // into a TOML file).
-        return Ok(());
-    }
-
-    let Some(path) = agent_local_config_path(agent_type) else {
-        return Ok(());
-    };
-    let Some(raw_patch) = config_patch_json else {
-        return Ok(());
-    };
-
-    let patch = serde_json::from_str::<serde_json::Value>(raw_patch)
-        .map_err(|e| AcpError::protocol(format!("invalid config_json: {e}")))?;
-    if !patch.is_object() {
-        return Err(AcpError::protocol(
-            "invalid config_json: root must be a JSON object",
-        ));
-    }
-
-    if agent_type == AgentType::OpenCode {
-        let serialized = serde_json::to_string_pretty(&patch)
-            .map_err(|e| AcpError::protocol(format!("serialize config_json failed: {e}")))?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| AcpError::protocol(format!("create config directory failed: {e}")))?;
-        }
-        fs::write(&path, format!("{serialized}\n"))
-            .map_err(|e| AcpError::protocol(format!("write local config failed: {e}")))?;
-        return Ok(());
-    }
-
-    let mut base = if path.exists() {
-        match fs::read_to_string(&path)
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        {
-            Some(existing) if existing.is_object() => existing,
-            _ => serde_json::json!({}),
-        }
-    } else {
-        serde_json::json!({})
-    };
-
-    merge_json_values(&mut base, &patch);
-    let serialized = serde_json::to_string_pretty(&base)
-        .map_err(|e| AcpError::protocol(format!("serialize config_json failed: {e}")))?;
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AcpError::protocol(format!("create config directory failed: {e}")))?;
-    }
-    fs::write(&path, format!("{serialized}\n"))
-        .map_err(|e| AcpError::protocol(format!("write local config failed: {e}")))?;
-
-    Ok(())
 }
 
 pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSpec> {
@@ -5656,13 +2072,10 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
             ],
             project_rel_dirs: vec![".pi/skills", ".agents/skills"],
         }),
-    }
-}
-
-fn scope_rank(scope: AgentSkillScope) -> u8 {
-    match scope {
-        AgentSkillScope::Global => 0,
-        AgentSkillScope::Project => 1,
+        // MiMo Code is an OpenCode fork; it shares the same skills directory
+        // convention. Return None for now — can be enabled when MiMo Code's
+        // skill system is validated.
+        AgentType::MimoCode => None,
     }
 }
 
@@ -5728,123 +2141,6 @@ pub(crate) fn preferred_scope_skill_dir(
     dirs.into_iter()
         .next()
         .ok_or_else(|| AcpError::protocol("no skill directory resolved for this agent"))
-}
-
-fn is_markdown_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("md"))
-        .unwrap_or(false)
-}
-
-fn skill_name_from_id(id: &str) -> String {
-    id.to_string()
-}
-
-/// Best-effort extraction of a one-line skill description from a markdown
-/// file's YAML frontmatter. Prefers `short-description` (commonly nested under
-/// a `metadata:` block) and falls back to a top-level `description`. Only the
-/// first 4 KiB is read; frontmatter always fits, and skill bodies can be large.
-fn read_skill_description(content_path: &Path) -> Option<String> {
-    use std::io::Read;
-    let mut file = fs::File::open(content_path).ok()?;
-    let mut buf = [0u8; 4096];
-    let n = file.read(&mut buf).ok()?;
-    let head = std::str::from_utf8(&buf[..n]).ok()?;
-
-    let mut lines = head.lines();
-    if lines.next()?.trim() != "---" {
-        return None;
-    }
-
-    let mut short: Option<String> = None;
-    let mut long: Option<String> = None;
-    for line in lines {
-        let trimmed_end = line.trim_end();
-        if trimmed_end == "---" || trimmed_end == "..." {
-            break;
-        }
-        let is_top_level = !line.starts_with(|c: char| c.is_whitespace());
-        let stripped = line.trim();
-
-        // `short-description` is allowed at any indent so it resolves when
-        // nested under `metadata:` (Codex's `.system` skills follow this).
-        if short.is_none() {
-            if let Some(rest) = stripped.strip_prefix("short-description:") {
-                if let Some(val) = parse_frontmatter_scalar(rest) {
-                    short = Some(val);
-                    break;
-                }
-            }
-        }
-        // `description` is only honored at the top level to avoid colliding
-        // with unrelated nested `description:` keys.
-        if is_top_level && long.is_none() {
-            if let Some(rest) = line.strip_prefix("description:") {
-                if let Some(val) = parse_frontmatter_scalar(rest) {
-                    long = Some(val);
-                }
-            }
-        }
-    }
-    short.or(long)
-}
-
-/// Read a single-line YAML scalar (with optional matching quotes). Returns
-/// `None` for empty values or block-scalar markers (`|` / `>`) we can't span.
-fn parse_frontmatter_scalar(rest: &str) -> Option<String> {
-    let val = rest.trim();
-    if val.starts_with('|') || val.starts_with('>') {
-        return None;
-    }
-    let unquoted = val
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .or_else(|| val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
-        .unwrap_or(val)
-        .trim();
-    if unquoted.is_empty() {
-        None
-    } else {
-        Some(unquoted.to_string())
-    }
-}
-
-fn build_skill_item(
-    id: String,
-    scope: AgentSkillScope,
-    layout: AgentSkillLayout,
-    path: PathBuf,
-) -> AgentSkillItem {
-    let description = read_skill_description(&skill_content_path(layout, &path));
-    AgentSkillItem {
-        name: skill_name_from_id(&id),
-        id,
-        scope,
-        layout,
-        path: path.to_string_lossy().to_string(),
-        description,
-        read_only: false,
-    }
-}
-
-/// Codex ships a handful of built-in skills under `~/.codex/skills/.system/`
-/// (imagegen, skill-creator, etc.). We scan that directory so users see
-/// these in the `$` autocomplete and the Skills settings list — but any
-/// write to those files would clobber the CLI's own assets.
-fn is_read_only_skill_path(agent_type: AgentType, skill_path: &Path) -> bool {
-    if agent_type != AgentType::Codex {
-        return false;
-    }
-    let ro_root = codex_home_dir().join("skills").join(".system");
-    skill_path.starts_with(&ro_root)
-}
-
-fn skill_content_path(layout: AgentSkillLayout, skill_path: &Path) -> PathBuf {
-    match layout {
-        AgentSkillLayout::SkillDirectory => skill_path.join("SKILL.md"),
-        AgentSkillLayout::MarkdownFile => skill_path.to_path_buf(),
-    }
 }
 
 /// Symlink-safe removal: if `path` is a symlink (to a file or directory),
@@ -5959,56 +2255,6 @@ pub(crate) fn list_skills_from_dir(
     Ok(by_id.into_values().collect())
 }
 
-fn locate_existing_skill(
-    dir: &Path,
-    kind: SkillStorageKind,
-    skill_id: &str,
-    scope: AgentSkillScope,
-) -> Option<AgentSkillItem> {
-    if matches!(
-        kind,
-        SkillStorageKind::SkillDirectoryOnly | SkillStorageKind::SkillDirectoryOrMarkdownFile
-    ) {
-        let skill_dir = dir.join(skill_id);
-        if skill_dir.is_dir() && skill_dir.join("SKILL.md").is_file() {
-            return Some(build_skill_item(
-                skill_id.to_string(),
-                scope,
-                AgentSkillLayout::SkillDirectory,
-                skill_dir,
-            ));
-        }
-    }
-
-    if matches!(kind, SkillStorageKind::SkillDirectoryOrMarkdownFile) {
-        let file_path = dir.join(format!("{skill_id}.md"));
-        if file_path.is_file() {
-            return Some(build_skill_item(
-                skill_id.to_string(),
-                scope,
-                AgentSkillLayout::MarkdownFile,
-                file_path,
-            ));
-        }
-    }
-
-    None
-}
-
-fn locate_existing_skill_across_dirs(
-    dirs: &[PathBuf],
-    kind: SkillStorageKind,
-    skill_id: &str,
-    scope: AgentSkillScope,
-) -> Option<AgentSkillItem> {
-    for dir in dirs {
-        if let Some(found) = locate_existing_skill(dir, kind, skill_id, scope) {
-            return Some(found);
-        }
-    }
-    None
-}
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentRuntimeConfig {
@@ -6020,55 +2266,6 @@ struct AgentRuntimeConfig {
     model: Option<String>,
     #[serde(default)]
     env: BTreeMap<String, String>,
-}
-
-fn trim_non_empty(value: Option<String>) -> Option<String> {
-    value.and_then(|raw| {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-/// Primary env var keys for each agent type: (api_base_url, api_key, model).
-/// Shared by runtime env resolution, model-provider cascade, and config patching.
-fn agent_env_keys(agent_type: AgentType) -> (&'static str, &'static str, &'static str) {
-    match agent_type {
-        AgentType::ClaudeCode => (
-            "ANTHROPIC_BASE_URL",
-            "ANTHROPIC_AUTH_TOKEN",
-            "ANTHROPIC_MODEL",
-        ),
-        AgentType::Gemini => ("GOOGLE_GEMINI_BASE_URL", "GEMINI_API_KEY", "GEMINI_MODEL"),
-        // Kimi Code does NOT read shell KIMI_API_KEY/OPENAI_API_KEY; the only
-        // non-interactive credential path is the `KIMI_MODEL_*` family, which
-        // also takes priority over `~/.kimi-code/config.toml`.
-        AgentType::KimiCode => ("KIMI_MODEL_BASE_URL", "KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME"),
-        // CodeBuddy self-hosted / shared-provider path uses CODEBUDDY_BASE_URL +
-        // CODEBUDDY_API_KEY. Hosted region is CODEBUDDY_INTERNET_ENVIRONMENT and
-        // is cleared when a model provider is bound.
-        AgentType::CodeBuddy => (
-            "CODEBUDDY_BASE_URL",
-            "CODEBUDDY_API_KEY",
-            "CODEBUDDY_MODEL",
-        ),
-        _ => ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"),
-    }
-}
-
-/// Serialize a BTreeMap into env_json for database storage.
-/// Returns `None` when the map is empty.
-fn serialize_env_map(env: &BTreeMap<String, String>) -> Result<Option<String>, AcpError> {
-    if env.is_empty() {
-        Ok(None)
-    } else {
-        serde_json::to_string(env)
-            .map(Some)
-            .map_err(|e| AcpError::protocol(e.to_string()))
-    }
 }
 
 pub(crate) fn build_runtime_env_from_setting(
@@ -6138,7 +2335,7 @@ pub(crate) async fn apply_model_provider_env(
     // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY hijacks the whole agent onto the
     // gateway and breaks native China/overseas Tencent models.
     let inject_openai_compat_env =
-        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy);
+        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode);
     if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
         // Agents that append `/chat/completions` themselves need a `/v1` base.
         // Shared provider rows are often bare host roots (`http://host:port`).
@@ -6213,30 +2410,35 @@ pub(crate) async fn apply_model_provider_env(
         }
     }
 
-    // Pi / OpenCode: refresh the managed `veryagent` provider on every session
-    // start so credentials + the agent-selected model stay current. Pass an
-    // empty catalog — chat should only show the configured model, not the
-    // entire gateway /models dump (embeddings / image / unused placeholders).
-    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode) {
+    // Pi / OpenCode / MiMo Code: refresh the managed `veryagent` provider on
+    // every session start so credentials + the agent-selected model stay
+    // current. Pass an empty catalog — chat should only show the configured
+    // model, not the entire gateway /models dump.
+    if matches!(agent_type, AgentType::Pi | AgentType::OpenCode | AgentType::MimoCode) {
         let model = runtime_env
             .get(model_key)
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
         let empty_catalog: Vec<String> = Vec::new();
-        let result = if agent_type == AgentType::Pi {
-            write_pi_managed_provider(
+        let result = match agent_type {
+            AgentType::Pi => write_pi_managed_provider(
                 &provider.api_url,
                 &provider.api_key,
                 model.as_deref().unwrap_or(""),
                 &empty_catalog,
-            )
-        } else {
-            write_opencode_managed_provider(
+            ),
+            AgentType::MimoCode => write_mimo_managed_provider(
                 &provider.api_url,
                 &provider.api_key,
                 model.as_deref(),
                 &empty_catalog,
-            )
+            ),
+            _ => write_opencode_managed_provider(
+                &provider.api_url,
+                &provider.api_key,
+                model.as_deref(),
+                &empty_catalog,
+            ),
         };
         if let Err(e) = result {
             tracing::warn!(
@@ -6358,299 +2560,6 @@ pub(crate) fn provider_codex_model_action(
         Some(v) => CodexModelAction::Set(v.to_string()),
         None => CodexModelAction::Clear,
     }
-}
-
-/// Update on-disk config files for a single agent when model provider credentials change.
-/// Uses `agent_env_keys` to determine the correct env var names per agent type.
-///
-/// For `model_env`: entries with `Some(value)` are written; entries with `None`
-/// are explicitly cleared (overwritten with empty string in the env-patch, so
-/// `persist_agent_local_config_json` removes them).
-///
-/// Async so Pi/OpenCode can best-effort fetch the shared provider's full model
-/// catalog and inject it into the managed provider entry (chat model picker).
-async fn cascade_update_agent_config(
-    agent_type: AgentType,
-    api_url: &str,
-    api_key: &str,
-    model_env: &BTreeMap<String, Option<String>>,
-    codex_model: &CodexModelAction,
-) -> Result<(), AcpError> {
-    let (url_key, key_key, _) = agent_env_keys(agent_type);
-    match agent_type {
-        AgentType::ClaudeCode | AgentType::Gemini => {
-            // Write into config.env (not root-level). For model entries, use
-            // JSON-null for "clear" — `merge_json_values` interprets null as
-            // "remove this key".
-            let mut env = serde_json::Map::new();
-            env.insert(
-                url_key.to_string(),
-                serde_json::Value::String(api_url.to_string()),
-            );
-            env.insert(
-                key_key.to_string(),
-                serde_json::Value::String(api_key.to_string()),
-            );
-            for (k, v) in model_env {
-                let value = match v {
-                    Some(s) => serde_json::Value::String(s.clone()),
-                    None => serde_json::Value::Null,
-                };
-                env.insert(k.clone(), value);
-            }
-            let patch = serde_json::json!({ "env": env });
-            let patch_str =
-                serde_json::to_string(&patch).map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_agent_local_config_json(agent_type, Some(&patch_str))?;
-        }
-        AgentType::OpenClaw => {
-            // OpenClaw inference runs inside the local gateway process, not the
-            // ACP client. Persist credentials + model into openclaw.json so the
-            // gateway can actually call the shared provider.
-            let model_name = model_env
-                .get("OPENAI_MODEL")
-                .and_then(|v| v.as_ref())
-                .map(String::as_str);
-            write_openclaw_managed_provider(api_url, api_key, model_name)?;
-        }
-        AgentType::Hermes => {
-            // When a model_provider_id is set, cascade the provider's credentials
-            // into Hermes's config.yaml and .env using the existing structured
-            // write path. Use "custom" as the provider id (model providers expose
-            // OpenAI-compatible endpoints).
-            let model_name = model_env
-                .get("OPENAI_MODEL")
-                .and_then(|v| v.as_ref())
-                .map(String::clone)
-                .unwrap_or_default();
-            // Hermes' custom provider treats model.base_url as an OpenAI-style base
-            // and appends /chat/completions itself. The base_url therefore needs
-            // the /v1 suffix so the final URL is …/v1/chat/completions. If the
-            // model_provider's api_url already ends with /v1 (or /v1/), leave it;
-            // otherwise append /v1.
-            let hermes_base_url = {
-                let trimmed = api_url.trim_end_matches('/');
-                if trimmed.ends_with("/v1") {
-                    trimmed.to_string()
-                } else {
-                    format!("{}/v1", trimmed)
-                }
-            };
-            let home = hermes_home_dir();
-            ensure_hermes_home_secure(&home)?;
-            let config_path = hermes_config_yaml_path();
-            let existing = fs::read_to_string(&config_path).ok();
-            let (config_yaml, env_updates) = plan_hermes_write(
-                "custom",
-                Some(api_key),
-                &model_name,
-                Some(&hermes_base_url),
-                None, // not raw mode
-                existing.as_deref(),
-            )?;
-            write_hermes_secret_file(&config_path, &config_yaml, "config.yaml")?;
-            if !env_updates.is_empty() {
-                let env_path = hermes_env_path();
-                let existing_env = fs::read_to_string(&env_path).unwrap_or_default();
-                let updates: Vec<(&str, &str)> =
-                    env_updates.iter().map(|(k, v)| (*k, v.as_str())).collect();
-                let patched = patch_env_text(&existing_env, &updates);
-                write_hermes_secret_file(&env_path, &patched, ".env")?;
-            }
-        }
-        AgentType::Codex => {
-            let auth_path = codex_auth_json_path();
-            let mut auth_obj = if auth_path.exists() {
-                fs::read_to_string(&auth_path)
-                    .ok()
-                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-                    .filter(|v| v.is_object())
-                    .unwrap_or_else(|| serde_json::json!({}))
-            } else {
-                serde_json::json!({})
-            };
-            if !api_key.trim().is_empty() {
-                auth_obj[key_key] = serde_json::Value::String(api_key.to_string());
-            }
-            let auth_str = serde_json::to_string_pretty(&auth_obj)
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-
-            let config_path = codex_config_toml_path();
-            let mut toml_value = if config_path.exists() {
-                fs::read_to_string(&config_path)
-                    .ok()
-                    .and_then(|raw| raw.parse::<toml::Value>().ok())
-                    .filter(|v| v.is_table())
-                    .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
-            } else {
-                toml::Value::Table(toml::map::Map::new())
-            };
-            let table = toml_value
-                .as_table_mut()
-                .ok_or_else(|| AcpError::protocol("codex config root must be a TOML table"))?;
-            table.remove("api_base_url");
-
-            let provider_name = table
-                .get("model_provider")
-                .and_then(|value| value.as_str())
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-                .unwrap_or_else(|| "veryagent".to_string());
-            table.insert(
-                "model_provider".to_string(),
-                toml::Value::String(provider_name.clone()),
-            );
-
-            let providers_item = table
-                .entry("model_providers".to_string())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-            if !providers_item.is_table() {
-                *providers_item = toml::Value::Table(toml::map::Map::new());
-            }
-            let providers = providers_item
-                .as_table_mut()
-                .ok_or_else(|| AcpError::protocol("invalid model_providers table"))?;
-            let provider_item = providers
-                .entry(provider_name.clone())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
-            if !provider_item.is_table() {
-                *provider_item = toml::Value::Table(toml::map::Map::new());
-            }
-            let provider_table = provider_item
-                .as_table_mut()
-                .ok_or_else(|| AcpError::protocol("invalid model provider table"))?;
-            if api_url.trim().is_empty() {
-                provider_table.remove("base_url");
-            } else {
-                let normalized = normalize_openai_compatible_base_url(api_url);
-                provider_table.insert(
-                    "base_url".to_string(),
-                    toml::Value::String(normalized),
-                );
-            }
-            if provider_name == "veryagent" {
-                provider_table.insert("name".to_string(), toml::Value::String("veryagent".to_string()));
-                // Codex 2026+ only accepts `responses` (chat was removed).
-                provider_table.insert(
-                    "wire_api".to_string(),
-                    toml::Value::String("responses".to_string()),
-                );
-                provider_table.insert(
-                    "requires_openai_auth".to_string(),
-                    toml::Value::Boolean(true),
-                );
-            }
-            match codex_model {
-                CodexModelAction::Set(model) => {
-                    table.insert("model".to_string(), toml::Value::String(model.to_string()));
-                }
-                CodexModelAction::Clear => {
-                    table.remove("model");
-                }
-                CodexModelAction::NoOp => {}
-            }
-            let toml_str = toml::to_string_pretty(&toml_value)
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-
-            persist_codex_native_config_files(Some(&auth_str), Some(&toml_str))?;
-        }
-        AgentType::OpenCode => {
-            // OpenCode stores credentials per provider id in auth.json
-            // (`{ type: "api", key }`) and non-secret provider defs in
-            // opencode.json (`provider.<id>`). Write a managed `veryagent`
-            // provider so the unified model-provider selector works the same
-            // as Hermes/Cline/Kimi. Only the agent-selected model is loaded —
-            // settings remains the place to pick from the full A计划 catalog.
-            write_opencode_managed_provider(
-                api_url,
-                api_key,
-                model_env
-                    .get("OPENAI_MODEL")
-                    .and_then(|v| v.as_ref())
-                    .map(String::as_str),
-                &[],
-            )?;
-        }
-        AgentType::Cline => {
-            // When a model_provider_id is set, cascade the provider's credentials
-            // into Cline's globalState.json and secrets.json. Use "openai" as the
-            // apiProvider (model providers expose OpenAI-compatible endpoints).
-            let model_name = model_env
-                .get("OPENAI_MODEL")
-                .and_then(|v| v.as_ref())
-                .map(String::clone)
-                .unwrap_or_default();
-            let config_patch = serde_json::json!({
-                "apiProvider": "openai",
-                "apiBaseUrl": api_url,
-                "apiKey": api_key,
-                "model": model_name,
-            });
-            let patch_str = serde_json::to_string(&config_patch)
-                .map_err(|e| AcpError::protocol(e.to_string()))?;
-            persist_cline_local_config(Some(&patch_str))?;
-        }
-        AgentType::CodeBuddy => {
-            // A计划 is additive: write a custom model into models.json with its
-            // own OpenAI-compatible url/apiKey. Do not touch CODEBUDDY_BASE_URL
-            // / region / native API key — those own the Tencent built-in catalog
-            // (China vs overseas).
-            let model_name = model_env
-                .get("CODEBUDDY_MODEL")
-                .and_then(|v| v.as_ref())
-                .map(String::as_str)
-                .unwrap_or("");
-            write_codebuddy_managed_provider(api_url, api_key, model_name, &[])?;
-        }
-        AgentType::KimiCode => {
-            // When a model_provider_id is set, the cascade injects provider
-            // credentials into kimi's config.toml using the veryagent-managed
-            // provider block. The interface is `openai` (model providers expose
-            // OpenAI-compatible endpoints). Also seed a synthetic gate token
-            // so `kimi acp` can authenticate.
-            let model_name = model_env
-                .get("KIMI_MODEL_NAME")
-                .and_then(|v| v.as_ref())
-                .map(String::clone)
-                .unwrap_or_default();
-            let spec = KimiManagedSpec {
-                interface_type: "openai".to_string(),
-                // Kimi's openai transport appends `/chat/completions` to base_url.
-                // Shared providers are often bare host roots; force `/v1`.
-                base_url: if api_url.trim().is_empty() {
-                    None
-                } else {
-                    Some(normalize_openai_compatible_base_url(api_url))
-                },
-                api_key: if api_key.trim().is_empty() {
-                    None
-                } else {
-                    Some(api_key.to_string())
-                },
-                env: BTreeMap::new(),
-                model: model_name,
-                max_context_size: Some(KIMI_DEFAULT_MAX_CONTEXT_SIZE),
-            };
-            mutate_kimi_config_toml(Some(&spec))?;
-            seed_kimi_synthetic_credential()?;
-        }
-        AgentType::Pi => {
-            // Pi authenticates via `~/.pi/agent/{settings,auth,models}.json`.
-            // When bound to a shared model provider, write a managed custom
-            // provider (`veryagent`) so the agent uses the same credentials as
-            // every other agent that selected "A计划"/model provider. Only the
-            // agent-selected model is written — chat shows what pi loads, and
-            // settings is where the full A计划 catalog is chosen.
-            let model_name = model_env
-                .get("OPENAI_MODEL")
-                .and_then(|v| v.as_ref())
-                .map(String::as_str)
-                .unwrap_or("");
-            write_pi_managed_provider(api_url, api_key, model_name, &[])?;
-        }
-    }
-    Ok(())
 }
 
 /// Cascade model provider changes (credentials + model) to all dependent agent settings
@@ -6963,26 +2872,19 @@ async fn ensure_openclaw_gateway_for_session(
     Ok(())
 }
 
-/// Per-launch env keys that vary by session/run but don't represent user
-/// config, so they're excluded from the config fingerprint. Without this, a
-/// session-id-derived value would flip the fingerprint the moment a real
-/// session id is assigned and make every session look "stale". Currently only
-/// OpenClaw's reset flag (set iff `session_id` is None at spawn).
-fn is_volatile_fingerprint_key(key: &str) -> bool {
-    key == "OPENCLAW_RESET_SESSION"
-}
-
 /// Fingerprint the effective config a spawned agent process is locked to: the
-/// resolved `runtime_env` (minus per-launch volatile keys) plus the raw content
-/// of the agent's native config file(s). Both surfaces only take effect at
-/// process start, so a change to either is exactly what "this running session is
-/// stale" means. The digest is process-local — never persisted, never sent on
-/// the wire (only the resulting `stale` bool reaches the frontend) — so a
-/// non-cryptographic hash would do; SHA-256 keeps it deterministic and matches
-/// the rest of the codebase.
+/// resolved `runtime_env` (minus per-launch volatile keys), the raw content of
+/// the agent's native config file(s), and platform companion feature bits that
+/// are fixed at MCP injection time (today: image generation). All of these only
+/// take effect at process start, so a change to any is exactly what "this
+/// running session is stale" means. The digest is process-local — never
+/// persisted, never sent on the wire (only the resulting `stale` bool reaches
+/// the frontend) — so a non-cryptographic hash would do; SHA-256 keeps it
+/// deterministic and matches the rest of the codebase.
 pub(crate) fn fingerprint_config(
     agent_type: AgentType,
     runtime_env: &BTreeMap<String, String>,
+    image_enabled: bool,
 ) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -7000,22 +2902,48 @@ pub(crate) fn fingerprint_config(
     if let Some(native) = load_agent_local_config_json(agent_type) {
         hasher.update(native.as_bytes());
     }
+    // Companion `--features` image bit is read from runtime config at injection,
+    // not from agent env — include it so toggling 出图 marks sessions stale.
+    hasher.update(b"\x01platform\x01");
+    hasher.update(if image_enabled { b"image=1" } else { b"image=0" });
     format!("{:x}", hasher.finalize())
 }
 
+/// Every known agent type. Used when a platform-wide setting (e.g. image
+/// generation) changes and every running connection may need a staleness check.
+pub(crate) fn all_agent_types() -> &'static [AgentType] {
+    &[
+        AgentType::ClaudeCode,
+        AgentType::Codex,
+        AgentType::OpenCode,
+        AgentType::Gemini,
+        AgentType::OpenClaw,
+        AgentType::Cline,
+        AgentType::Hermes,
+        AgentType::CodeBuddy,
+        AgentType::KimiCode,
+        AgentType::Pi,
+        AgentType::MimoCode,
+    ]
+}
+
 /// Recompute the canonical config fingerprint for `agent_type` from current
-/// settings (DB + native config files), independent of any running session.
-/// Passes `session_id = None` so the result is session-independent (the only
-/// session-derived key is excluded anyway), making it directly comparable to
-/// the fingerprint `fingerprint_config` produced at spawn time. Propagates the
-/// agent's "disabled in settings" error verbatim.
+/// settings (DB + native config files + platform companion bits), independent
+/// of any running session. Passes `session_id = None` so the result is
+/// session-independent (the only session-derived key is excluded anyway),
+/// making it directly comparable to the fingerprint `fingerprint_config`
+/// produced at spawn time. Propagates the agent's "disabled in settings" error
+/// verbatim.
 pub(crate) async fn compute_session_config_fingerprint(
     db: &AppDatabase,
     agent_type: AgentType,
     data_dir: &Path,
 ) -> Result<String, AcpError> {
     let runtime_env = build_session_runtime_env(db, agent_type, None, data_dir).await?;
-    Ok(fingerprint_config(agent_type, &runtime_env))
+    let image_enabled = crate::db::service::image_generation_service::get_config(&db.conn)
+        .await
+        .enabled;
+    Ok(fingerprint_config(agent_type, &runtime_env, image_enabled))
 }
 
 /// After a settings save, recompute the effective config fingerprint for each of
@@ -7950,40 +3878,6 @@ pub(crate) async fn acp_update_agent_env_core(
     Ok(())
 }
 
-/// Apply a `CodexModelAction` to the `model` field at the root of
-/// `~/.codex/config.toml`, preserving everything else.
-fn apply_codex_root_model_action(action: &CodexModelAction) -> Result<(), AcpError> {
-    if matches!(action, CodexModelAction::NoOp) {
-        return Ok(());
-    }
-    let config_path = codex_config_toml_path();
-    let mut toml_value = if config_path.exists() {
-        fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|raw| raw.parse::<toml::Value>().ok())
-            .filter(|v| v.is_table())
-            .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
-    } else {
-        toml::Value::Table(toml::map::Map::new())
-    };
-    let table = toml_value
-        .as_table_mut()
-        .ok_or_else(|| AcpError::protocol("codex config root must be a TOML table"))?;
-    match action {
-        CodexModelAction::Set(model) => {
-            table.insert("model".to_string(), toml::Value::String(model.clone()));
-        }
-        CodexModelAction::Clear => {
-            table.remove("model");
-        }
-        CodexModelAction::NoOp => unreachable!(),
-    }
-    let toml_str =
-        toml::to_string_pretty(&toml_value).map_err(|e| AcpError::protocol(e.to_string()))?;
-    persist_codex_native_config_files(None, Some(&toml_str))?;
-    Ok(())
-}
-
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_update_agent_env(
@@ -8012,38 +3906,6 @@ pub async fn acp_update_agent_env(
         &emitter,
     )
     .await
-}
-
-/// Decide what to write to OpenCode's `auth.json`. `None` (caller passed no
-/// auth payload) leaves the file untouched. An explicitly empty payload becomes
-/// `{}` so clearing the last credential truncates the file instead of being
-/// skipped — otherwise a stale key would survive on disk and the disconnected
-/// provider would reappear after reload.
-fn opencode_auth_payload_to_write(raw: Option<&str>) -> Option<String> {
-    let trimmed = raw?.trim();
-    Some(if trimmed.is_empty() {
-        "{}".to_string()
-    } else {
-        trimmed.to_string()
-    })
-}
-
-/// Persist OpenCode's native files (`auth.json` + `opencode.json`) for a
-/// config/preferences save. Shared by both the config and preferences commands
-/// so the empty-auth handling can't drift between the two exposed paths. An
-/// explicitly empty auth payload truncates `auth.json` to `{}`; `None` leaves
-/// each file untouched.
-fn persist_opencode_native_config(
-    opencode_auth_json: Option<&str>,
-    config_json: Option<&str>,
-) -> Result<(), AcpError> {
-    if let Some(auth) = opencode_auth_payload_to_write(opencode_auth_json) {
-        persist_opencode_auth_json(&auth)?;
-    }
-    if let Some(raw) = config_json {
-        persist_agent_local_config_json(AgentType::OpenCode, Some(raw))?;
-    }
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -8346,88 +4208,6 @@ pub async fn acp_open_hermes_setup_terminal(kind: String) -> Result<(), AcpError
     ensure_hermes_home_secure(&home)?;
     let home_str = home.to_string_lossy();
     open_external_terminal_impl(&command, Some(home_str.as_ref()))
-}
-
-#[cfg(feature = "tauri-runtime")]
-fn open_external_terminal_impl(command: &str, cwd: Option<&str>) -> Result<(), AcpError> {
-    use std::process::Command;
-    // Reject control characters: a newline breaks out of the macOS AppleScript
-    // string literal (and would corrupt the cmd/shell line elsewhere), turning a
-    // single command into multiple statements.
-    if command.contains(['\n', '\r']) || cwd.is_some_and(|c| c.contains(['\n', '\r'])) {
-        return Err(AcpError::protocol(
-            "terminal command and cwd must not contain newlines",
-        ));
-    }
-    let dir = cwd
-        .map(|c| c.to_string())
-        .unwrap_or_else(|| home_dir_or_default().display().to_string());
-
-    #[cfg(target_os = "macos")]
-    {
-        // Hand `cd <dir> && <command>` to Terminal.app via AppleScript. Quote the
-        // dir for the shell, then escape the whole string for the AppleScript
-        // literal (backslashes first, then double-quotes).
-        let shell_cmd = format!("cd {} && {}", shell_single_quote(&dir), command);
-        let escaped = shell_cmd.replace('\\', "\\\\").replace('"', "\\\"");
-        let osa = format!(
-            "tell application \"Terminal\"\nactivate\ndo script \"{escaped}\"\nend tell"
-        );
-        Command::new("osascript")
-            .arg("-e")
-            .arg(osa)
-            .spawn()
-            .map_err(|e| AcpError::protocol(format!("open Terminal failed: {e}")))?;
-        return Ok(());
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        // `start "" cmd /K <command>` opens a new console that stays open. The
-        // empty "" is the window title `start` would otherwise eat.
-        Command::new("cmd")
-            .args(["/C", "start", "", "cmd", "/K", command])
-            .current_dir(&dir)
-            .spawn()
-            .map_err(|e| AcpError::protocol(format!("open terminal failed: {e}")))?;
-        return Ok(());
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        // Probe common Linux terminal emulators in order; keep the window open
-        // after the command by re-exec'ing the user's shell.
-        let keep_open = format!("{command}; exec \"${{SHELL:-bash}}\"");
-        let candidates: [(&str, [&str; 3]); 4] = [
-            ("x-terminal-emulator", ["-e", "sh", "-c"]),
-            ("gnome-terminal", ["--", "sh", "-c"]),
-            ("konsole", ["-e", "sh", "-c"]),
-            ("xterm", ["-e", "sh", "-c"]),
-        ];
-        for (term, args) in candidates {
-            if resolve_command_on_path(term).is_some() {
-                return Command::new(term)
-                    .args(args)
-                    .arg(&keep_open)
-                    .current_dir(&dir)
-                    .spawn()
-                    .map(|_| ())
-                    .map_err(|e| AcpError::protocol(format!("open {term} failed: {e}")));
-            }
-        }
-        return Err(AcpError::protocol(
-            "no supported terminal emulator found (tried x-terminal-emulator, gnome-terminal, konsole, xterm)",
-        ));
-    }
-
-    #[allow(unreachable_code)]
-    Err(AcpError::protocol("unsupported platform for terminal launch"))
-}
-
-/// Quote a string for a single-quoted POSIX shell argument.
-#[cfg(all(feature = "tauri-runtime", target_os = "macos"))]
-fn shell_single_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 /// Ensure `~/.hermes` exists and reveal it in the system file manager.
@@ -8928,43 +4708,6 @@ pub async fn acp_uninstall_agent(
     acp_uninstall_agent_core(agent_type, task_id, &db, &emitter).await
 }
 
-/// The npm package that ships the `pi` binary pi-acp spawns as `pi --mode rpc`.
-/// Installed unpinned ("latest"): pi releases frequently and pi-acp resolves
-/// `pi` from PATH, so the binary's version floats independently of the pinned
-/// `pi-acp` adapter (which `acp_prepare_npx_agent` installs separately).
-const PI_CODING_AGENT_PACKAGE: &str = "@earendil-works/pi-coding-agent";
-
-/// Install the `pi` binary globally via npm, streaming progress on the shared
-/// `app://agent-install` topic. This is the prerequisite the missing-pi launch
-/// preflight (see [`crate::acp::connection`]) guards against. Reuses the same
-/// EACCES user-prefix and EEXIST `--force` fallbacks as every other npm agent
-/// install.
-pub(crate) async fn acp_install_pi_binary_core(
-    task_id: String,
-    emitter: &EventEmitter,
-) -> Result<(), AcpError> {
-    emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
-
-    let result =
-        install_npm_global_package_streaming(PI_CODING_AGENT_PACKAGE, &task_id, emitter).await;
-
-    match &result {
-        Ok(()) => emit_agent_install_event(
-            emitter,
-            &task_id,
-            AgentInstallEventKind::Completed,
-            "pi installed successfully",
-        ),
-        Err(e) => emit_agent_install_event(
-            emitter,
-            &task_id,
-            AgentInstallEventKind::Failed,
-            e.to_string(),
-        ),
-    }
-    result
-}
-
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn acp_install_pi_binary(
@@ -9309,20 +5052,6 @@ pub async fn opencode_uninstall_plugin(name: String) -> Result<PluginCheckSummar
     opencode_uninstall_plugin_core(name).await
 }
 
-// ─── Codex Device Code OAuth ───
-
-const CODEX_OAUTH_ISSUER: &str = "https://auth.openai.com";
-const CODEX_OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CodexDeviceCodeResponse {
-    pub user_code: String,
-    pub verification_url: String,
-    pub device_auth_id: String,
-    pub interval: u64,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexDeviceCodePollResult {
@@ -9344,22 +5073,6 @@ struct DeviceCodeUserCodeResp {
         deserialize_with = "deserialize_interval"
     )]
     interval: u64,
-}
-
-fn default_interval() -> u64 {
-    5
-}
-
-fn extract_jwt_account_id(jwt: &str) -> Option<String> {
-    let payload = jwt.split('.').nth(1)?;
-    let decoded =
-        base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, payload).ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
-    value
-        .get("https://api.openai.com/auth")
-        .and_then(|auth| auth.get("chatgpt_account_id"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
 }
 
 fn deserialize_interval<'de, D>(deserializer: D) -> Result<u64, D::Error>
@@ -10234,20 +5947,23 @@ wire_api = "chat"
 
         // Same inputs → same fingerprint (the native-config read is identical
         // across all calls in this test, so only the env varies).
-        let fp1 = fingerprint_config(agent, &env);
-        assert_eq!(fp1, fingerprint_config(agent, &env));
+        let fp1 = fingerprint_config(agent, &env, false);
+        assert_eq!(fp1, fingerprint_config(agent, &env, false));
 
         // Changing a real config value changes the fingerprint.
         let mut env_changed = env.clone();
         env_changed.insert("OPENAI_API_KEY".to_string(), "k2".to_string());
-        assert_ne!(fp1, fingerprint_config(agent, &env_changed));
+        assert_ne!(fp1, fingerprint_config(agent, &env_changed, false));
 
         // The per-launch volatile key is excluded — adding it must NOT change
         // the fingerprint (otherwise OpenClaw would look stale once a real
         // session id is assigned and the reset flag drops).
         let mut env_volatile = env.clone();
         env_volatile.insert("OPENCLAW_RESET_SESSION".to_string(), "1".to_string());
-        assert_eq!(fp1, fingerprint_config(agent, &env_volatile));
+        assert_eq!(fp1, fingerprint_config(agent, &env_volatile, false));
+
+        // Platform image toggle is part of the fingerprint (companion features).
+        assert_ne!(fp1, fingerprint_config(agent, &env, true));
     }
 
     #[tokio::test]

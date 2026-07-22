@@ -94,6 +94,7 @@ const APP_OPTIONS: { value: McpAppType; label: string }[] = [
   { value: "hermes", label: "Hermes Agent" },
   { value: "code_buddy", label: "CodeBuddy" },
   { value: "kimi_code", label: "Kimi Code" },
+  { value: "mimo_code", label: "MiMo Code" },
 ]
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -258,6 +259,7 @@ function appsToDraft(apps: McpAppType[]): Record<McpAppType, boolean> {
     hermes: appSet.has("hermes"),
     code_buddy: appSet.has("code_buddy"),
     kimi_code: appSet.has("kimi_code"),
+    mimo_code: appSet.has("mimo_code"),
   }
 }
 

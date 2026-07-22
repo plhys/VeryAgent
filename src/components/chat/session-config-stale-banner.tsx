@@ -69,7 +69,9 @@ export function SessionConfigStaleBanner({
   const title =
     configStaleKind === "model_provider"
       ? t("modelProviderTitle")
-      : t("agentConfigTitle")
+      : configStaleKind === "image_generation"
+        ? t("imageGenerationTitle")
+        : t("agentConfigTitle")
 
   const handleReconnect = async () => {
     if (actionDisabled) return

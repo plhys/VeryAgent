@@ -193,19 +193,26 @@ pub struct ProviderModelItem {
 /// - `https://api.openai.com`
 /// - `https://api.openai.com/v1/models`
 /// - `https://gateway.example.com/v1/chat/completions` (chat endpoint pasted by mistake)
+/// - `https://gateway.example.com/v1/images/generations` (image endpoint pasted by mistake)
 fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
     let mut base = api_url.trim().trim_end_matches('/').to_string();
     if base.is_empty() {
         return Vec::new();
     }
 
-    // Strip accidental chat/completions suffix so we can recover a models list URL.
+    // Strip accidental chat/image suffixes so we can recover a models list URL.
+    // Longer paths first so `/v1/chat/completions` does not leave a bare `/v1`
+    // stripped only partially via `/chat/completions`.
     for suffix in [
+        "/v1/chat/completions",
+        "/v1/messages",
+        "/v1/images/generations",
+        "/v1/images/edits",
         "/chat/completions",
         "/completions",
         "/messages",
-        "/v1/chat/completions",
-        "/v1/messages",
+        "/images/generations",
+        "/images/edits",
     ] {
         if let Some(stripped) = base
             .strip_suffix(suffix)
@@ -227,6 +234,7 @@ fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
 
     if base.ends_with("/models") {
         push(base.clone());
+        // Also try parent /v1/models if someone pasted .../something/models oddly.
     } else {
         push(format!("{base}/models"));
         // Many gateways only expose OpenAI-compatible routes under /v1.
@@ -238,13 +246,83 @@ fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
     candidates
 }
 
+/// Prefer env-proxy client first (user settings / HTTP_PROXY), then a no-proxy
+/// client. Corporate TLS-intercept proxies often break OpenAI-compatible
+/// gateways with BAD_DECRYPT / 502; the second client recovers direct access.
+fn models_http_clients() -> Result<Vec<reqwest::Client>, AppCommandError> {
+    let timeout = std::time::Duration::from_secs(20);
+    let mut clients = Vec::with_capacity(2);
+
+    let with_env = reqwest::Client::builder()
+        .timeout(timeout)
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| AppCommandError::invalid_input(format!("HTTP client error: {e}")))?;
+    clients.push(with_env);
+
+    let direct = reqwest::Client::builder()
+        .timeout(timeout)
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .no_proxy()
+        .build()
+        .map_err(|e| AppCommandError::invalid_input(format!("HTTP client error: {e}")))?;
+    clients.push(direct);
+
+    Ok(clients)
+}
+
+fn humanize_models_fetch_error(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    if lower.contains("bad_decrypt")
+        || lower.contains("certificate")
+        || lower.contains("ssl")
+        || lower.contains("tls")
+        || lower.contains("proxy:")
+    {
+        return format!(
+            "网关 HTTPS/代理握手失败（常见于系统代理 TLS 解密）。\
+已自动尝试直连。请检查 API 地址与系统代理，或暂时关闭代理后重试。原始错误: {raw}"
+        );
+    }
+    if lower.contains("http 502") || lower.contains("http 503") || lower.contains("http 504") {
+        return format!(
+            "网关暂时不可用（上游 5xx）。请确认 API 地址可访问、Key 有效，或稍后重试。原始错误: {raw}"
+        );
+    }
+    raw.to_string()
+}
+
 fn parse_provider_models_body(body: &str) -> Result<Vec<ProviderModelItem>, String> {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return Err("Empty response body".to_string());
+    }
+
     let parsed: serde_json::Value =
-        serde_json::from_str(body).map_err(|e| format!("Invalid JSON: {e}"))?;
+        serde_json::from_str(trimmed).map_err(|e| format!("Invalid JSON: {e}"))?;
+
+    // Explicit API error payloads should not be reported as "empty list".
+    if let Some(err) = parsed.get("error") {
+        let msg = err
+            .get("message")
+            .and_then(|v| v.as_str())
+            .or_else(|| err.as_str())
+            .unwrap_or("gateway error");
+        return Err(format!("Gateway error: {msg}"));
+    }
+    if parsed.get("success") == Some(&serde_json::Value::Bool(false)) {
+        let msg = parsed
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("request failed");
+        return Err(format!("Gateway error: {msg}"));
+    }
 
     let extract_id = |item: &serde_json::Value| -> Option<String> {
         item.get("id")
             .or_else(|| item.get("model"))
+            .or_else(|| item.get("model_name"))
+            .or_else(|| item.get("modelName"))
             .or_else(|| item.get("name"))
             .and_then(|v| v.as_str())
             .map(str::trim)
@@ -268,11 +346,52 @@ fn parse_provider_models_body(body: &str) -> Result<Vec<ProviderModelItem>, Stri
         }
     };
 
-    // OpenAI-compatible: { "object": "list", "data": [{ "id": "gpt-5", ... }] }
-    if let Some(arr) = parsed.get("data").and_then(|d| d.as_array()) {
+    let push_from_array = |models: &mut Vec<ProviderModelItem>, arr: &[serde_json::Value]| {
         for item in arr {
             if let Some(id) = extract_id(item) {
-                push_item(&mut models, id);
+                push_item(models, id);
+            }
+        }
+    };
+
+    // OpenAI / NewAPI: { "object": "list", "data": [{ "id": "gpt-5", ... }] }
+    if let Some(arr) = parsed.get("data").and_then(|d| d.as_array()) {
+        push_from_array(&mut models, arr);
+    }
+
+    // Nested: { "data": { "data": [...] } } or { "data": { "models": [...] } }
+    if models.is_empty() {
+        if let Some(obj) = parsed.get("data").and_then(|d| d.as_object()) {
+            for key in ["data", "models", "items", "list", "result"] {
+                if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
+                    push_from_array(&mut models, arr);
+                    if !models.is_empty() {
+                        break;
+                    }
+                }
+            }
+            // Map form: { "data": { "gpt-4": {...}, "dall-e-3": {...} } }
+            if models.is_empty() {
+                for (k, v) in obj {
+                    if let Some(id) = extract_id(v).or_else(|| {
+                        let t = k.trim();
+                        if t.is_empty() {
+                            None
+                        } else {
+                            Some(t.to_string())
+                        }
+                    }) {
+                        // Skip meta keys that are not model ids.
+                        let lower = id.to_ascii_lowercase();
+                        if matches!(
+                            lower.as_str(),
+                            "success" | "message" | "object" | "total" | "page" | "page_size"
+                        ) {
+                            continue;
+                        }
+                        push_item(&mut models, id);
+                    }
+                }
             }
         }
     }
@@ -280,26 +399,117 @@ fn parse_provider_models_body(body: &str) -> Result<Vec<ProviderModelItem>, Stri
     // Some gateways: { "models": ["a", "b"] } or { "models": [{ "id": ... }] }
     if models.is_empty() {
         if let Some(arr) = parsed.get("models").and_then(|d| d.as_array()) {
-            for item in arr {
-                if let Some(id) = extract_id(item) {
-                    push_item(&mut models, id);
-                }
-            }
+            push_from_array(&mut models, arr);
         }
     }
 
     // Rare: bare array
     if models.is_empty() {
         if let Some(arr) = parsed.as_array() {
-            for item in arr {
-                if let Some(id) = extract_id(item) {
-                    push_item(&mut models, id);
+            push_from_array(&mut models, arr);
+        }
+    }
+
+    Ok(models)
+}
+
+/// List models from an OpenAI-compatible gateway using raw URL + API key.
+/// Shared by model-provider settings and image-generation model picker.
+pub async fn fetch_openai_compatible_models(
+    api_url: &str,
+    api_key: &str,
+) -> Result<Vec<ProviderModelItem>, AppCommandError> {
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return Err(AppCommandError::invalid_input(
+            "API Key is empty; cannot list models",
+        ));
+    }
+
+    let candidates = provider_models_url_candidates(api_url);
+    if candidates.is_empty() {
+        return Err(AppCommandError::invalid_input(
+            "API URL is empty; cannot list models",
+        ));
+    }
+
+    let clients = models_http_clients()?;
+    let mut last_error = String::from("no candidate URL succeeded");
+
+    // Outer: URL variants. Inner: proxy then direct. Auth failures short-circuit.
+    for url in &candidates {
+        for (client_idx, client) in clients.iter().enumerate() {
+            let via = if client_idx == 0 {
+                "proxy-env"
+            } else {
+                "direct"
+            };
+            let resp = match client
+                .get(url)
+                .header("Authorization", format!("Bearer {api_key}"))
+                // Some OpenAI-compatible gateways accept either form.
+                .header("api-key", api_key)
+                .send()
+                .await
+            {
+                Ok(resp) => resp,
+                Err(e) => {
+                    last_error = format!("Request failed for {url} ({via}): {e}");
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+
+            if !status.is_success() {
+                let snippet = body.chars().take(300).collect::<String>();
+                last_error = format!(
+                    "Provider returned HTTP {} for {} ({}): {}",
+                    status.as_u16(),
+                    url,
+                    via,
+                    snippet
+                );
+                // Keep trying alternate candidates / direct client on 404/405/5xx.
+                if status.as_u16() == 404 || status.as_u16() == 405 {
+                    continue;
+                }
+                // Auth/permission errors are definitive (key wrong, not routing).
+                if status.as_u16() == 401 || status.as_u16() == 403 {
+                    return Err(AppCommandError::invalid_input(last_error));
+                }
+                continue;
+            }
+
+            match parse_provider_models_body(&body) {
+                Ok(models) if !models.is_empty() => return Ok(models),
+                Ok(_) => {
+                    // 200 + empty list is common on NewAPI when the token has
+                    // no models enabled / model scope is empty — not a routing bug.
+                    let snippet = body.chars().take(180).collect::<String>();
+                    last_error = format!(
+                        "网关返回空模型列表（{url}, {via}）。\
+常见原因：1) 令牌未勾选/开通任何模型 2) 令牌模型范围为空 3) 该 Key 无权列出模型。\
+可在网关后台令牌设置里勾选模型后重试，或直接在下方手填模型名。\
+响应片段: {snippet}"
+                    );
+                    // Empty list is definitive for this URL+auth; no point retrying
+                    // other proxy modes for the same empty payload shape.
+                    return Err(AppCommandError::invalid_input(last_error));
+                }
+                Err(e) => {
+                    let snippet = body.chars().take(160).collect::<String>();
+                    last_error = format!("{e} (url: {url}, {via}; body: {snippet})");
+                    continue;
                 }
             }
         }
     }
 
-    Ok(models)
+    Err(AppCommandError::invalid_input(humanize_models_fetch_error(
+        &last_error,
+    )))
 }
 
 /// Fetch available models from a model provider's OpenAI-compatible `/models` endpoint.
@@ -308,75 +518,7 @@ pub async fn fetch_provider_models_core(
     id: i32,
 ) -> Result<Vec<ProviderModelItem>, AppCommandError> {
     let provider = get_model_provider_core(db, id).await?;
-    let api_key = provider.api_key.trim();
-    if api_key.is_empty() {
-        return Err(AppCommandError::invalid_input(
-            "API Key is empty; cannot list models",
-        ));
-    }
-
-    let candidates = provider_models_url_candidates(&provider.api_url);
-    if candidates.is_empty() {
-        return Err(AppCommandError::invalid_input(
-            "API URL is empty; cannot list models",
-        ));
-    }
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| AppCommandError::invalid_input(format!("HTTP client error: {e}")))?;
-
-    let mut last_error = String::from("no candidate URL succeeded");
-
-    for url in candidates {
-        let resp = match client
-            .get(&url)
-            .header("Authorization", format!("Bearer {api_key}"))
-            // Some OpenAI-compatible gateways accept either form.
-            .header("api-key", api_key)
-            .send()
-            .await
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                last_error = format!("Request failed for {url}: {e}");
-                continue;
-            }
-        };
-
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-
-        if !status.is_success() {
-            let snippet = body.chars().take(300).collect::<String>();
-            last_error = format!(
-                "Provider returned HTTP {} for {}: {}",
-                status.as_u16(),
-                url,
-                snippet
-            );
-            // Keep trying alternate candidates on 404/405.
-            if status.as_u16() == 404 || status.as_u16() == 405 {
-                continue;
-            }
-            // Auth/permission errors are definitive.
-            if status.as_u16() == 401 || status.as_u16() == 403 {
-                return Err(AppCommandError::invalid_input(last_error));
-            }
-            continue;
-        }
-
-        match parse_provider_models_body(&body) {
-            Ok(models) => return Ok(models),
-            Err(e) => {
-                last_error = format!("{e} (url: {url})");
-                continue;
-            }
-        }
-    }
-
-    Err(AppCommandError::invalid_input(last_error))
+    fetch_openai_compatible_models(&provider.api_url, &provider.api_key).await
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +621,15 @@ mod tests {
                 "https://gateway.example.com/v1/models".to_string(),
             ]
         );
+        assert_eq!(
+            provider_models_url_candidates(
+                "https://gateway.example.com/v1/images/generations"
+            ),
+            vec![
+                "https://gateway.example.com/models".to_string(),
+                "https://gateway.example.com/v1/models".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -492,6 +643,20 @@ mod tests {
         let models = parse_provider_models_body(alt).expect("models array");
         assert_eq!(models.len(), 2);
         assert_eq!(models[1].id, "b");
+
+        let nested = r#"{"data":{"models":[{"model_name":"flux-pro"},{"id":"dall-e-3"}]}}"#;
+        let models = parse_provider_models_body(nested).expect("nested models");
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "flux-pro");
+
+        let err = parse_provider_models_body(
+            r#"{"error":{"message":"Invalid token","type":"new_api_error"}}"#,
+        );
+        assert!(err.unwrap_err().contains("Invalid token"));
+
+        let empty = parse_provider_models_body(r#"{"object":"list","data":[]}"#)
+            .expect("empty list is ok parse");
+        assert!(empty.is_empty());
     }
 
     #[tokio::test]

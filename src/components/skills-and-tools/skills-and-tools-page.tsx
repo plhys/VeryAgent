@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  BookOpen,
   Cpu,
   Puzzle,
   Check,
@@ -30,7 +29,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { AgentIcon } from "@/components/agent-icon"
-import { OpenWikiConfigDialog } from "@/components/skills-and-tools/openwiki-config-dialog"
+import { ImageGenerationConfigDialog } from "@/components/skills-and-tools/image-generation-config-dialog"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
 import {
   invalidateAgentSkillsCache,
@@ -51,14 +50,8 @@ import {
   officecliSkillUnlinkFromAgent,
   mcpScanLocal,
   mcpSetServerApps,
-  openwikiGetConfig,
-  openwikiSaveConfig,
 } from "@/lib/api"
 import { openSettingsWindow } from "@/lib/api"
-import {
-  isOpenWikiEnabledForAgent,
-  setOpenWikiEnabledForAgent,
-} from "@/lib/openwiki-agent"
 import type {
   AgentType,
   ExpertListItem,
@@ -74,38 +67,20 @@ import { useTabStore } from "@/contexts/tab-context"
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-const SKILL_CATEGORY_LABELS: Record<string, { en: string; zh: string }> = {
-  // Experts
-  discovery: { en: "Discovery & Design", zh: "发现与设计" },
-  planning: { en: "Planning", zh: "规划" },
-  execution: { en: "Execution", zh: "执行" },
-  quality: { en: "Quality & Testing", zh: "质量与测试" },
-  debugging: { en: "Debugging", zh: "调试" },
-  review: { en: "Review & Integration", zh: "评审与集成" },
-  meta: { en: "Meta Skills", zh: "元技能" },
-  creative: { en: "Creative & Graphics", zh: "创意与出图" },
-  // Science
-  ideation: { en: "Ideation", zh: "构思" },
-  design: { en: "Research Design", zh: "研究设计" },
-  analysis: { en: "Analysis", zh: "分析" },
-  visualization: { en: "Visualization", zh: "可视化" },
-  evaluation: { en: "Evaluation", zh: "评估" },
-  literature: { en: "Literature", zh: "文献" },
-  // Office
-  general: { en: "General", zh: "通用" },
-  presentations: { en: "Presentations", zh: "演示文稿" },
-  documents: { en: "Documents", zh: "文档" },
-  spreadsheets: { en: "Spreadsheets", zh: "电子表格" },
-  // Legacy / fallback
-  "coding-agent": { en: "Coding", zh: "编程" },
-  editor: { en: "Productivity", zh: "效率" },
-  productivity: { en: "Office", zh: "办公" },
-  "dev-workflow": { en: "Dev Workflow", zh: "开发流程" },
-  system: { en: "System", zh: "系统" },
-  other: { en: "Other", zh: "其他" },
+// Top-level filter groups shown in the Skills warehouse:
+// 编程 / 艺术设计 / 科研 / 办公
+// "creative" is a first-class group (not buried under 编程).
+type SkillDisplayGroup = "expert" | "creative" | "science" | "office"
+
+const SOURCE_ORDER: Record<SkillDisplayGroup, number> = {
+  expert: 1,
+  creative: 2,
+  science: 3,
+  office: 4,
 }
 
-// Category display order (lower = first). Unlisted categories sort last.
+// Category display order (lower = first). Used only to keep a stable order
+// within the same source; not shown as filter chips.
 const CATEGORY_ORDER: Record<string, number> = {
   // Experts
   discovery: 1, planning: 2, execution: 3, quality: 4,
@@ -115,34 +90,6 @@ const CATEGORY_ORDER: Record<string, number> = {
   visualization: 14, evaluation: 15, literature: 16,
   // Office
   general: 21, presentations: 22, documents: 23, spreadsheets: 24,
-}
-
-function getCategoryLabel(category: string, locale: string): string {
-  const entry = SKILL_CATEGORY_LABELS[category]
-  if (!entry) return category
-  return locale.toLowerCase().startsWith("zh") ? entry.zh : entry.en
-}
-
-function getCategoryTone(
-  category: string
-): "default" | "secondary" | "outline" {
-  const tones: Record<string, "default" | "secondary" | "outline"> = {
-    discovery: "default",
-    planning: "default",
-    execution: "default",
-    quality: "default",
-    debugging: "default",
-    review: "default",
-    meta: "secondary",
-    creative: "outline",
-    "coding-agent": "default",
-    editor: "secondary",
-    productivity: "secondary",
-    "dev-workflow": "secondary",
-    system: "outline",
-    other: "outline",
-  }
-  return tones[category] ?? "outline"
 }
 
 const EXPERT_ICONS: Record<string, typeof Lightbulb> = {
@@ -204,6 +151,14 @@ interface UnifiedSkillItem {
   source: "expert" | "science" | "office"
 }
 
+/** Visible warehouse group for a skill (creative splits out of expert). */
+function skillDisplayGroup(
+  skill: Pick<UnifiedSkillItem, "source" | "category">
+): SkillDisplayGroup {
+  if (skill.category === "creative") return "creative"
+  return skill.source
+}
+
 function expertToUnified(expert: ExpertListItem): UnifiedSkillItem {
   return {
     id: expert.metadata.id,
@@ -241,6 +196,15 @@ function scienceToUnified(skill: ScienceListItem): UnifiedSkillItem {
 /*  Unified Skill Card                                                */
 /* ------------------------------------------------------------------ */
 
+/** Skills that expose a first-party Settings button on the card. */
+const SKILLS_WITH_SETTINGS = new Set(["veryagent-image"])
+
+/** Product display names that must win over embedded experts.toml (no rebuild). */
+const SKILL_DISPLAY_NAME_OVERRIDE: Record<string, { zh: string; en: string }> =
+  {
+    "veryagent-image": { zh: "出图网关", en: "Image Gateway" },
+  }
+
 function SkillCard({
   skill,
   locale,
@@ -254,56 +218,115 @@ function SkillCard({
   onToggle: (id: string, source: "expert" | "science" | "office") => void
   togglingId: string | null
 }) {
-  const name = pickLocalizedText(skill.name, locale, skill.id)
+  const t = useTranslations("SkillsAndTools")
+  const isZhLocale = locale.toLowerCase().startsWith("zh")
+  const nameOverride = SKILL_DISPLAY_NAME_OVERRIDE[skill.id]
+  const name =
+    nameOverride != null
+      ? isZhLocale
+        ? nameOverride.zh
+        : nameOverride.en
+      : pickLocalizedText(skill.name, locale, skill.id)
   const desc = pickLocalizedText(skill.description, locale, "")
   const isToggling = togglingId === skill.id
   const iconName = skill.icon
+  const isZh = locale.toLowerCase().startsWith("zh")
+  const hasSettings = SKILLS_WITH_SETTINGS.has(skill.id)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-          <SkillIcon name={iconName} className="h-4 w-4 text-primary" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{name}</p>
-              {desc && (
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {desc}
-                </p>
-              )}
+    <>
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <SkillIcon name={iconName} className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{name}</p>
+                {desc && (
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                    {desc}
+                  </p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {hasSettings && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label={t("imageSkillSettingsAria", { name })}
+                    title={t("imageSkillSettings")}
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">
+                      {t("imageSkillSettings")}
+                    </span>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={enabled ? "destructive" : "default"}
+                  className="h-7 px-2.5 text-xs"
+                  disabled={isToggling}
+                  onClick={() => onToggle(skill.id, skill.source)}
+                  aria-label={
+                    isZh
+                      ? enabled
+                        ? `从当前智能体移除${name}`
+                        : `添加${name}到当前智能体`
+                      : enabled
+                        ? `Remove ${name} from current agent`
+                        : `Add ${name} to current agent`
+                  }
+                >
+                  {isToggling ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : enabled ? (
+                    isZh ? "移除" : "Remove"
+                  ) : (
+                    isZh ? "添加" : "Add"
+                  )}
+                </Button>
+              </div>
             </div>
-            <Switch
-              checked={enabled}
-              onCheckedChange={() => onToggle(skill.id, skill.source)}
-              disabled={isToggling}
-              aria-label={
-                locale.toLowerCase().startsWith("zh")
-                  ? enabled
-                    ? `从当前智能体停用${name}`
-                    : `对当前智能体启用${name}`
-                  : enabled
-                    ? `Disable ${name} for current agent`
-                    : `Enable ${name} for current agent`
-              }
-            />
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[0.625rem]">
+            {(() => {
+              const group = skillDisplayGroup(skill)
+              if (group === "creative") return isZh ? "艺术设计" : "Art & Design"
+              if (group === "expert") return isZh ? "编程" : "Coding"
+              if (group === "science") return isZh ? "科研" : "Science"
+              return isZh ? "办公" : "Office"
+            })()}
+          </Badge>
+          {hasSettings && (
+            <Badge variant="secondary" className="text-[0.625rem]">
+              {t("imageSkillNeedsConfig")}
+            </Badge>
+          )}
+          {enabled && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3 w-3" />
+              {isZh ? "已添加" : "Added"}
+            </span>
+          )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Badge variant={getCategoryTone(skill.category)} className="text-[0.625rem]">
-          {getCategoryLabel(skill.category, locale)}
-        </Badge>
-        {enabled && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
-            <Check className="h-3 w-3" />
-            {locale.toLowerCase().startsWith("zh") ? "已启用" : "Enabled"}
-          </span>
-        )}
-      </div>
-    </div>
+      {hasSettings && skill.id === "veryagent-image" && (
+        <ImageGenerationConfigDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        />
+      )}
+    </>
   )
 }
 
@@ -389,163 +412,6 @@ function PluginCard({
 }
 
 /* ------------------------------------------------------------------ */
-/*  OpenWiki first-party connector card                               */
-/* ------------------------------------------------------------------ */
-
-function OpenWikiPluginCard({
-  agentType,
-  agentLabel,
-  workspaceHint,
-  refreshKey,
-  onToggled,
-  /** When true, hide the card while disabled (used by Enabled tab). */
-  hideWhenDisabled = false,
-  onEnabledChange,
-}: {
-  agentType: AgentType
-  agentLabel: string
-  workspaceHint?: string | null
-  refreshKey?: number
-  onToggled: () => void
-  hideWhenDisabled?: boolean
-  onEnabledChange?: (enabled: boolean) => void
-}) {
-  const t = useTranslations("SkillsAndTools")
-  const [loading, setLoading] = useState(true)
-  const [isEnabled, setIsEnabled] = useState(false)
-  const [toggling, setToggling] = useState(false)
-  const [configOpen, setConfigOpen] = useState(false)
-
-  const fetchState = useCallback(
-    async (opts?: { silent?: boolean }) => {
-      if (!opts?.silent) setLoading(true)
-      try {
-        const cfg = await openwikiGetConfig()
-        const enabled = isOpenWikiEnabledForAgent(cfg, agentType)
-        setIsEnabled(enabled)
-        onEnabledChange?.(enabled)
-      } catch {
-        setIsEnabled(false)
-        onEnabledChange?.(false)
-      } finally {
-        if (!opts?.silent) setLoading(false)
-      }
-    },
-    [agentType, onEnabledChange]
-  )
-
-  useEffect(() => {
-    void fetchState()
-  }, [fetchState])
-
-  useEffect(() => {
-    // Soft refresh after sibling tab toggles — keep current UI, no spinner.
-    if (refreshKey === 0) return
-    void fetchState({ silent: true })
-  }, [fetchState, refreshKey])
-
-  const handleToggle = useCallback(
-    async (enable: boolean) => {
-      setToggling(true)
-      try {
-        const cfg = await openwikiGetConfig()
-        const next = setOpenWikiEnabledForAgent(cfg, agentType, enable)
-        await openwikiSaveConfig(next)
-        setIsEnabled(enable)
-        onEnabledChange?.(enable)
-        if (enable) {
-          toast.success(t("openwikiEnableSuccess", { agent: agentLabel }), {
-            description: t("openwikiEnableHint"),
-          })
-        } else {
-          toast.success(t("openwikiDisableSuccess", { agent: agentLabel }))
-        }
-        onToggled()
-      } catch (err) {
-        toast.error(t("openwikiToggleFailed", { error: String(err) }))
-      } finally {
-        setToggling(false)
-      }
-    },
-    [agentLabel, agentType, onEnabledChange, onToggled, t]
-  )
-
-  if (hideWhenDisabled && !loading && !isEnabled) {
-    return null
-  }
-
-  return (
-    <>
-      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <BookOpen className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{t("openwikiName")}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                  {t("openwikiDescription")}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="h-7 w-7"
-                  title={t("openwikiConfigure")}
-                  aria-label={t("openwikiConfigure")}
-                  onClick={() => setConfigOpen(true)}
-                >
-                  <Settings2 className="h-3.5 w-3.5" />
-                </Button>
-                <Switch
-                  checked={isEnabled}
-                  onCheckedChange={(checked) => void handleToggle(checked)}
-                  disabled={loading || toggling || !agentType}
-                  aria-label={
-                    isEnabled
-                      ? t("openwikiDisableSuccess", { agent: agentLabel })
-                      : t("openwikiEnableSuccess", { agent: agentLabel })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-[0.625rem]">
-            {t("firstPartyPlugins")}
-          </Badge>
-          {isEnabled ? (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="h-3 w-3" />
-              {agentLabel}
-            </span>
-          ) : null}
-        </div>
-        {isEnabled ? (
-          <p className="text-[11px] leading-snug text-muted-foreground">
-            {t("openwikiEnableHint")}
-          </p>
-        ) : null}
-      </div>
-      <OpenWikiConfigDialog
-        open={configOpen}
-        onOpenChange={setConfigOpen}
-        workspaceHint={workspaceHint}
-        onSaved={() => {
-          void fetchState()
-          onToggled()
-        }}
-      />
-    </>
-  )
-}
-
-/* ------------------------------------------------------------------ */
 /*  Enabled Tab (shows enabled skills + enabled plugins, with toggles) */
 /* ------------------------------------------------------------------ */
 
@@ -554,7 +420,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const locale = useLocale()
   const navigatorLocale =
     typeof navigator !== "undefined" ? (navigator.language ?? locale) : locale
-  const { fresh, currentAgent, lockedAgentType, workspaceHint } =
+  const { fresh, currentAgent, lockedAgentType } =
     useSkillsPageAgentContext()
   const { enabledIds } = useEnabledSkillIds(lockedAgentType, true)
 
@@ -566,19 +432,39 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const fetchSkills = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoadingSkills(true)
     try {
-      const [experts, science, officeSkills] = await Promise.all([
+      // Isolate sources: one failing API (e.g. unregistered science_list)
+      // must not wipe the whole warehouse.
+      const [expertsResult, scienceResult, officeResult] = await Promise.allSettled([
         expertsList(),
         scienceList(),
         officecliListSkills(),
       ])
+      const experts =
+        expertsResult.status === "fulfilled" ? expertsResult.value : []
+      const science =
+        scienceResult.status === "fulfilled" ? scienceResult.value : []
+      const officeSkills =
+        officeResult.status === "fulfilled" ? officeResult.value : []
+      if (expertsResult.status === "rejected") {
+        console.warn("[SkillsAndTools] expertsList failed:", expertsResult.reason)
+      }
+      if (scienceResult.status === "rejected") {
+        console.warn("[SkillsAndTools] scienceList failed:", scienceResult.reason)
+      }
+      if (officeResult.status === "rejected") {
+        console.warn(
+          "[SkillsAndTools] officecliListSkills failed:",
+          officeResult.reason
+        )
+      }
       const unified: UnifiedSkillItem[] = [
         ...experts.map(expertToUnified),
         ...science.map(scienceToUnified),
         ...officeSkills.map(officeSkillToUnified),
       ]
       setAllSkills(unified)
-    } catch {
-      // silently ignore
+    } catch (err) {
+      console.warn("[SkillsAndTools] fetchSkills failed:", err)
     } finally {
       if (!opts?.silent) setLoadingSkills(false)
     }
@@ -596,15 +482,22 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     [allSkills, enabledIds]
   )
 
-  const enabledByCategory = useMemo(() => {
+  const enabledBySource = useMemo(() => {
+    const order: Array<"expert" | "creative" | "science" | "office"> = [
+      "expert",
+      "creative",
+      "science",
+      "office",
+    ]
     const groups: Record<string, UnifiedSkillItem[]> = {}
     for (const skill of enabledSkills) {
-      if (!groups[skill.category]) groups[skill.category] = []
-      groups[skill.category].push(skill)
+      const group = skillDisplayGroup(skill)
+      if (!groups[group]) groups[group] = []
+      groups[group].push(skill)
     }
-    return Object.entries(groups).sort(([a], [b]) => {
-      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
-    })
+    return order
+      .filter((src) => (groups[src]?.length ?? 0) > 0)
+      .map((src) => [src, groups[src]] as const)
   }, [enabledSkills])
 
   const handleToggleSkill = useCallback(
@@ -636,11 +529,11 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
             ? currentlyEnabled
-              ? `已从${agentName}停用`
-              : `已对${agentName}启用`
+              ? `已从${agentName}移除`
+              : `已添加到${agentName}`
             : currentlyEnabled
-              ? `Disabled for ${agentName}`
-              : `Enabled for ${agentName}`
+              ? `Removed from ${agentName}`
+              : `Added to ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
         await refreshEnabledSkillIds()
@@ -663,9 +556,6 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   const [plugins, setPlugins] = useState<LocalMcpServer[]>([])
   const [loadingPlugins, setLoadingPlugins] = useState(true)
   const [togglingPluginId, setTogglingPluginId] = useState<string | null>(null)
-  const [openWikiEnabled, setOpenWikiEnabled] = useState(false)
-  const [openWikiReady, setOpenWikiReady] = useState(false)
-
   const fetchPlugins = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoadingPlugins(true)
     try {
@@ -755,13 +645,8 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   }
 
   const hasEnabledSkills = enabledSkills.length > 0
-  const hasEnabledPlugins = enabledPlugins.length > 0 || openWikiEnabled
-  const pluginsSectionLoading = loadingPlugins || !openWikiReady
-
-  const handleOpenWikiEnabledChange = useCallback((enabled: boolean) => {
-    setOpenWikiEnabled(enabled)
-    setOpenWikiReady(true)
-  }, [])
+  const hasEnabledPlugins = enabledPlugins.length > 0
+  const pluginsSectionLoading = loadingPlugins
 
   return (
     <ScrollArea className="flex-1">
@@ -769,9 +654,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         {/* Enabled Skills sub-section — grouped by category */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {navigatorLocale.toLowerCase().startsWith("zh")
-              ? "已启用的技能"
-              : "Enabled Skills"}
+            {t("enabledSkills")}
           </h4>
           {loadingSkills ? (
             <div className="flex items-center justify-center py-4 text-muted-foreground">
@@ -780,10 +663,16 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
             </div>
           ) : hasEnabledSkills ? (
             <div className="flex flex-col gap-5">
-              {enabledByCategory.map(([category, items]) => (
-                <div key={category}>
+              {enabledBySource.map(([source, items]) => (
+                <div key={source}>
                   <h5 className="mb-2 text-[11px] font-medium text-muted-foreground">
-                    {getCategoryLabel(category, navigatorLocale)}
+                    {source === "expert"
+                      ? t("sourceExpert")
+                      : source === "creative"
+                        ? t("sourceCreative")
+                        : source === "science"
+                          ? t("sourceScience")
+                          : t("sourceOffice")}
                   </h5>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((skill) => (
@@ -807,14 +696,11 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
           )}
         </div>
 
-        {/* Enabled Plugins sub-section */}
+        {/* Enabled Connectors sub-section */}
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {navigatorLocale.toLowerCase().startsWith("zh")
-              ? "已启用的插件"
-              : "Enabled Plugins"}
+            {t("installedPlugins")}
           </h4>
-          {/* Always mount OpenWiki card so it can report enabled state. */}
           <div
             className={
               !pluginsSectionLoading && hasEnabledPlugins
@@ -822,15 +708,6 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
                 : "hidden"
             }
           >
-            <OpenWikiPluginCard
-              agentType={lockedAgentType}
-              agentLabel={agentLabel}
-              workspaceHint={workspaceHint}
-              refreshKey={refreshKey}
-              onToggled={onToggled}
-              hideWhenDisabled
-              onEnabledChange={handleOpenWikiEnabledChange}
-            />
             {enabledPlugins.map((plugin) => (
               <PluginCard
                 key={plugin.id}
@@ -878,18 +755,47 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoading(true)
       try {
-        const [experts, science, officeSkills] = await Promise.all([
-          expertsList(),
-          scienceList(),
-          officecliListSkills(),
-        ])
+        // Isolate sources: one failing API must not empty the warehouse tab.
+        const [expertsResult, scienceResult, officeResult] =
+          await Promise.allSettled([
+            expertsList(),
+            scienceList(),
+            officecliListSkills(),
+          ])
+        const experts =
+          expertsResult.status === "fulfilled" ? expertsResult.value : []
+        const science =
+          scienceResult.status === "fulfilled" ? scienceResult.value : []
+        const officeSkills =
+          officeResult.status === "fulfilled" ? officeResult.value : []
+        if (expertsResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] expertsList failed:",
+            expertsResult.reason
+          )
+        }
+        if (scienceResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] scienceList failed:",
+            scienceResult.reason
+          )
+        }
+        if (officeResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] officecliListSkills failed:",
+            officeResult.reason
+          )
+        }
         const unified: UnifiedSkillItem[] = [
           ...experts.map(expertToUnified),
           ...science.map(scienceToUnified),
           ...officeSkills.map(officeSkillToUnified),
         ]
-        // Sort by category order, then by name within category
+        // Group first (编程/艺术设计/科研/办公), then fine category, then name
         unified.sort((a, b) => {
+          const srcA = SOURCE_ORDER[skillDisplayGroup(a)] ?? 99
+          const srcB = SOURCE_ORDER[skillDisplayGroup(b)] ?? 99
+          if (srcA !== srcB) return srcA - srcB
           const orderA = CATEGORY_ORDER[a.category] ?? 99
           const orderB = CATEGORY_ORDER[b.category] ?? 99
           if (orderA !== orderB) return orderA - orderB
@@ -898,8 +804,8 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
           return nameA.localeCompare(nameB)
         })
         setSkills(unified)
-      } catch {
-        // silently ignore
+      } catch (err) {
+        console.warn("[SkillsAndTools] fetchData failed:", err)
       } finally {
         if (!opts?.silent) setLoading(false)
       }
@@ -946,11 +852,11 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
             ? currentlyEnabled
-              ? `已从${agentName}停用`
-              : `已对${agentName}启用`
+              ? `已从${agentName}移除`
+              : `已添加到${agentName}`
             : currentlyEnabled
-              ? `Disabled for ${agentName}`
-              : `Enabled for ${agentName}`
+              ? `Removed from ${agentName}`
+              : `Added to ${agentName}`
         )
         invalidateAgentSkillsCache(lockedAgentType)
         await refreshEnabledSkillIds()
@@ -973,26 +879,32 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     ]
   )
 
-  // Group skills by category, preserving sort order
-  const groupedByCategory = useMemo(() => {
-    const groups: Record<string, UnifiedSkillItem[]> = {}
-    for (const skill of skills) {
-      if (!groups[skill.category]) groups[skill.category] = []
-      groups[skill.category].push(skill)
-    }
-    return Object.entries(groups).sort(([a], [b]) => {
-      return (CATEGORY_ORDER[a] ?? 99) - (CATEGORY_ORDER[b] ?? 99)
-    })
-  }, [skills])
+  // Coarse filter: all | expert | creative | science | office
+  type SourceFilter = "all" | "expert" | "creative" | "science" | "office"
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
 
-  // Category filter state: null = show all
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const sourceFilters: { id: SourceFilter; label: string }[] = useMemo(
+    () => [
+      { id: "all", label: t("filterAll") },
+      { id: "expert", label: t("filterExpert") },
+      { id: "creative", label: t("filterCreative") },
+      { id: "science", label: t("filterScience") },
+      { id: "office", label: t("filterOffice") },
+    ],
+    [t]
+  )
 
-  // Skills to display (all or filtered by selected category)
   const displayedSkills = useMemo(() => {
-    if (!selectedCategory) return skills
-    return skills.filter((s) => s.category === selectedCategory)
-  }, [skills, selectedCategory])
+    if (sourceFilter === "all") return skills
+    if (sourceFilter === "creative") {
+      return skills.filter((s) => skillDisplayGroup(s) === "creative")
+    }
+    if (sourceFilter === "expert") {
+      // 编程 excludes 艺术设计 skills
+      return skills.filter((s) => skillDisplayGroup(s) === "expert")
+    }
+    return skills.filter((s) => s.source === sourceFilter)
+  }, [skills, sourceFilter])
 
   if (loading) {
     return (
@@ -1007,45 +919,29 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
         <Cpu className="h-8 w-8" />
-        <p className="text-sm">
-          {navigatorLocale.toLowerCase().startsWith("zh")
-            ? `${currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]} 当前没有可安装的技能`
-            : `No installable skills for ${currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]}`}
-        </p>
+        <p className="text-sm">{t("noSkills")}</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
-      {/* Category filter tabs — horizontal scrollable row */}
-      <div className="shrink-0 overflow-x-auto border-b px-1 md:px-2">
+      {/* Coarse source filter — only 4 chips, not 17 fine categories */}
+      <div className="shrink-0 border-b px-1 md:px-2">
         <div className="flex items-center gap-1 py-2">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory(null)}
-            className={
-              "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-              (selectedCategory === null
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground")
-            }
-          >
-            {navigatorLocale.toLowerCase().startsWith("zh") ? "全部" : "All"}
-          </button>
-          {groupedByCategory.map(([category]) => (
+          {sourceFilters.map((f) => (
             <button
-              key={category}
+              key={f.id}
               type="button"
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => setSourceFilter(f.id)}
               className={
                 "shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors " +
-                (selectedCategory === category
+                (sourceFilter === f.id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground")
               }
             >
-              {getCategoryLabel(category, navigatorLocale)}
+              {f.label}
             </button>
           ))}
         </div>
@@ -1056,9 +952,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
         <div className="px-1 py-4 md:px-2">
           {displayedSkills.length === 0 ? (
             <p className="py-8 text-center text-xs text-muted-foreground">
-              {navigatorLocale.toLowerCase().startsWith("zh")
-                ? "该分类下没有技能"
-                : "No skills in this category"}
+              {t("noSkillsInFilter")}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1087,7 +981,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
 function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshKey: number }) {
   const t = useTranslations("SkillsAndTools")
   const locale = useLocale()
-  const { currentAgent, lockedAgentType, workspaceHint } =
+  const { currentAgent, lockedAgentType } =
     useSkillsPageAgentContext()
   const pluginAgentType = useMemo(
     () => agentTypeToMcpAppType(lockedAgentType),
@@ -1111,7 +1005,7 @@ function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
 
   useEffect(() => {
     void fetchData()
-  }, [fetchData])
+  }, [fetchData, refreshKey])
 
   const handleTogglePlugin = useCallback(
     async (serverId: string, enable: boolean) => {
@@ -1201,21 +1095,6 @@ function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
   return (
     <ScrollArea className="flex-1">
       <div className="flex flex-col gap-6 px-1 py-4 md:px-2">
-        <div>
-          <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t("firstPartyPlugins")}
-          </h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <OpenWikiPluginCard
-              agentType={lockedAgentType}
-              agentLabel={agentLabel}
-              workspaceHint={workspaceHint}
-              refreshKey={refreshKey}
-              onToggled={onToggled}
-            />
-          </div>
-        </div>
-
         <div>
           <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t("mcpPlugins")}
@@ -1310,9 +1189,7 @@ interface SkillsPageAgentContext {
   availableAgents: SkillsPageAgent[]
   lockedAgentType: AgentType | null
   currentAgent: SkillsPageAgent | null
-  /** Current conversation working dir, if any (for OpenWiki workspace ops). */
-  workspaceHint: string | null
-}
+  }
 
 function useSkillsPageAgentContext(): SkillsPageAgentContext {
   const { agents, fresh } = useAcpAgents()
@@ -1343,8 +1220,7 @@ function useSkillsPageAgentContext(): SkillsPageAgentContext {
     availableAgents,
     lockedAgentType,
     currentAgent,
-    workspaceHint: currentConversation?.workingDir ?? null,
-  }
+      }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1353,7 +1229,6 @@ function useSkillsPageAgentContext(): SkillsPageAgentContext {
 
 export function SkillsAndToolsPage() {
   const t = useTranslations("SkillsAndTools")
-  const locale = useLocale()
   const { fresh, availableAgents, currentAgent } = useSkillsPageAgentContext()
   // Soft refresh signal for the Enabled tab (no remount / no loading flash).
   const [refreshKey, setRefreshKey] = useState(0)
@@ -1391,9 +1266,7 @@ export function SkillsAndToolsPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {locale.toLowerCase().startsWith("zh")
-                    ? "仅作用于当前入口智能体。技能：在输入框「+」里选用；插件（如 OpenWiki）：开启后自动生效，也可在「+ → 已启用插件」查看。"
-                    : "Scoped to the current entry agent. Skills: pick from the composer “+” menu. Plugins (e.g. OpenWiki): work automatically once enabled; check “+ → Enabled plugins”."}
+                  {t("currentAgentHint")}
                 </p>
               </div>
             </div>
@@ -1401,7 +1274,7 @@ export function SkillsAndToolsPage() {
         )}
 
         <Tabs
-          defaultValue="enabled"
+          defaultValue="skills"
           className="flex flex-1 flex-col overflow-hidden"
         >
           <div className="shrink-0 pt-2">
@@ -1410,39 +1283,39 @@ export function SkillsAndToolsPage() {
               variant="line"
             >
               <TabsTrigger
-                value="enabled"
-                className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
-              >
-                {locale.toLowerCase().startsWith("zh") ? "已启用" : "Enabled"}
-              </TabsTrigger>
-              <TabsTrigger
                 value="skills"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "技能" : "Skills"}
+                {t("tabSkillsRepo")}
+              </TabsTrigger>
+              <TabsTrigger
+                value="enabled"
+                className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
+              >
+                {t("tabEnabled")}
               </TabsTrigger>
               <TabsTrigger
                 value="plugins"
                 className="border-none rounded-none border-b-2 border-transparent bg-transparent text-sm shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground"
               >
-                {locale.toLowerCase().startsWith("zh") ? "插件" : "Plugins"}
+                {t("tabPluginsRepo")}
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent
-            value="enabled"
-            forceMount
-            className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
-          >
-            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
-          </TabsContent>
           <TabsContent
             value="skills"
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
             <SkillsTab onToggled={handleToggleHappened} />
+          </TabsContent>
+          <TabsContent
+            value="enabled"
+            forceMount
+            className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
+          >
+            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
           </TabsContent>
           <TabsContent
             value="plugins"

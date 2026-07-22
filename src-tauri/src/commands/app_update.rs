@@ -93,10 +93,10 @@ pub async fn check_app_update(
         }),
         Ok(None) => None,
         Err(e) => {
-            // Empty / unpublished release channel is not a user-facing failure:
-            // product UX is simply "no update available" (already latest).
-            // Real transport failures still surface so the user can switch
-            // sources or fix the network.
+            // Only *empty / misconfigured endpoints* are treated as "no update".
+            // Network failures, HTTP non-success (including 404 on latest.json),
+            // and unparseable manifests must surface — otherwise a broken channel
+            // looks identical to "already latest" (the 0.9.5→0.9.6 false negative).
             let detail = format!(
                 "{} — {} ({})",
                 e,
@@ -105,12 +105,17 @@ pub async fn check_app_update(
             );
             if is_empty_update_channel(&detail) {
                 tracing::info!(
-                    "update check: no release on {} ({}); treating as up-to-date",
+                    "update check: no endpoints configured on {} ({}); treating as up-to-date",
                     source.label(),
                     source.manifest_url()
                 );
                 None
             } else {
+                tracing::warn!(
+                    "update check failed from {} ({}): {e}",
+                    source.label(),
+                    source.manifest_url()
+                );
                 return Err(AppCommandError::network(format!(
                     "Failed to check for updates from {} ({})",
                     source.label(),
@@ -127,21 +132,50 @@ pub async fn check_app_update(
     })
 }
 
-/// 404 / missing release assets / empty endpoints → no published update yet.
+/// True only when the updater itself has no endpoints configured.
+///
+/// Do **not** map HTTP 404 / `ReleaseNotFound` / transport errors here: those
+/// mean "check failed", not "already on latest". See tauri-plugin-updater
+/// `Error::EmptyEndpoints` ("Updater does not have any endpoints set.").
 fn is_empty_update_channel(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
-    m.contains("404")
-        || m.contains("not found")
-        || m.contains("could not fetch a valid release")
-        || m.contains("no release")
+    m.contains("does not have any endpoints")
         || m.contains("empty endpoints")
-        || m.contains("does not have any endpoints")
-        // Common before the first signed release is uploaded.
-        || (m.contains("latest.json")
-            && (m.contains("404")
-                || m.contains("not found")
-                || m.contains("could not fetch")
-                || m.contains("failed to fetch")))
+        || m.contains("no endpoints set")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_empty_update_channel;
+
+    #[test]
+    fn empty_channel_only_matches_missing_endpoints() {
+        assert!(is_empty_update_channel(
+            "Updater does not have any endpoints set."
+        ));
+        assert!(is_empty_update_channel("empty endpoints"));
+        assert!(is_empty_update_channel("no endpoints set for updater"));
+    }
+
+    #[test]
+    fn network_and_release_errors_are_not_empty_channel() {
+        // Plugin maps failed fetch / bad JSON to ReleaseNotFound with this text.
+        assert!(!is_empty_update_channel(
+            "Could not fetch a valid release JSON from the remote — GitHub (https://example/latest.json)"
+        ));
+        assert!(!is_empty_update_channel(
+            "error sending request for url (https://example/latest.json): error trying to connect"
+        ));
+        assert!(!is_empty_update_channel(
+            "update endpoint did not respond with a successful status code — 404 Not Found"
+        ));
+        assert!(!is_empty_update_channel(
+            "failed to deserialize update response: missing field `version`"
+        ));
+        assert!(!is_empty_update_channel(
+            "latest.json not found on the server"
+        ));
+    }
 }
 
 /// Begin (or attach to) a download+install of the available update. Returns

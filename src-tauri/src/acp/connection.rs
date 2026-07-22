@@ -711,8 +711,13 @@ pub async fn spawn_agent_connection(
     // Derived from the same `runtime_env` we hand the agent (minus per-launch
     // volatile keys) plus the agent's native config file content, so a later
     // settings save can be compared against it to detect a stale running session.
+    // Include the companion image feature bit (fixed at MCP injection time).
+    let image_enabled_fp = delegation_injection
+        .as_ref()
+        .map(|inj| inj.image_enabled)
+        .unwrap_or(false);
     let config_fingerprint =
-        crate::commands::acp::fingerprint_config(agent_type, &runtime_env);
+        crate::commands::acp::fingerprint_config(agent_type, &runtime_env, image_enabled_fp);
 
     // Insert the entry BEFORE spawning the background task so that a
     // fast-failing `run_connection` can never remove it before it was
@@ -4346,6 +4351,279 @@ fn extract_tool_call_images(content: &[ToolCallContent]) -> Option<Vec<ToolCallI
     }
 }
 
+/// Recover platform companion `generate_image` / `modify_image` results that
+/// only ship `{ mime, path }` (no multi-MB base64 on the wire).
+///
+/// Agents often put the MCP CallToolResult into `raw_output` as JSON or as
+/// prose + a trailing `{"mime","path"}` object / `VERYAGENT_IMAGE` marker.
+/// Without this, `images` stays empty and the UI shows generation failed
+/// even though the file already exists under `Temp/veryagent-images/`.
+fn extract_platform_images_from_raw_output(raw: &str) -> Option<Vec<ToolCallImageInfo>> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if !trimmed.contains("veryagent-images")
+        && !trimmed.contains("\"path\"")
+        && !trimmed.contains("structuredContent")
+        && !trimmed.contains("VERYAGENT_IMAGE")
+    {
+        return None;
+    }
+
+    let mut out: Vec<ToolCallImageInfo> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    let mut push_path = |path: &str, mime: Option<&str>| {
+        let path = path.trim();
+        if path.is_empty() {
+            return;
+        }
+        let looks_platform = path.contains("veryagent-images")
+            || path.ends_with(".png")
+            || path.ends_with(".jpg")
+            || path.ends_with(".jpeg")
+            || path.ends_with(".webp")
+            || path.ends_with(".gif");
+        if !looks_platform {
+            return;
+        }
+        if !seen.insert(path.to_string()) {
+            return;
+        }
+        let mime_type = mime
+            .map(str::trim)
+            .filter(|m| m.starts_with("image/"))
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| {
+                let lower = path.to_ascii_lowercase();
+                if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+                    "image/jpeg".into()
+                } else if lower.ends_with(".webp") {
+                    "image/webp".into()
+                } else if lower.ends_with(".gif") {
+                    "image/gif".into()
+                } else {
+                    "image/png".into()
+                }
+            });
+        out.push(ToolCallImageInfo {
+            data: String::new(),
+            mime_type,
+            uri: Some(path.to_string()),
+        });
+    };
+
+    for line in trimmed.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("VERYAGENT_IMAGE ") {
+            // Preferred: `mime=... path=...` with path last so spaces in
+            // Windows user dirs (e.g. `C:\Users\John Doe\...`) survive.
+            // Legacy: `path=... mime=...` or whitespace-split key=value.
+            let (path, mime) = parse_veryagent_image_marker(rest);
+            if let Some(p) = path {
+                push_path(&p, mime.as_deref());
+            }
+        }
+    }
+
+    let mut candidates: Vec<serde_json::Value> = Vec::new();
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        candidates.push(v);
+    } else {
+        if let (Some(s), Some(e)) = (trimmed.find('{'), trimmed.rfind('}')) {
+            if e > s {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&trimmed[s..=e]) {
+                    candidates.push(v);
+                }
+            }
+        }
+        if let Some(last) = trimmed
+            .lines()
+            .rev()
+            .map(str::trim)
+            .find(|l| l.starts_with('{'))
+        {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(last) {
+                candidates.push(v);
+            }
+        }
+    }
+
+    fn walk_json(
+        val: &serde_json::Value,
+        depth: usize,
+        push_path: &mut dyn FnMut(&str, Option<&str>),
+    ) {
+        if depth > 8 {
+            return;
+        }
+        match val {
+            serde_json::Value::Object(map) => {
+                let path = map
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| map.get("uri").and_then(|v| v.as_str()));
+                let mime = map
+                    .get("mime")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| map.get("mimeType").and_then(|v| v.as_str()))
+                    .or_else(|| map.get("mime_type").and_then(|v| v.as_str()));
+                if let Some(p) = path {
+                    push_path(p, mime);
+                }
+                if let Some(sc) = map.get("structuredContent") {
+                    walk_json(sc, depth + 1, push_path);
+                }
+                for (k, v) in map {
+                    if k == "structuredContent" || k == "base64" || k == "data" || k == "b64_json" {
+                        continue;
+                    }
+                    walk_json(v, depth + 1, push_path);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for item in arr {
+                    walk_json(item, depth + 1, push_path);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for cand in &candidates {
+        walk_json(cand, 0, &mut push_path);
+    }
+
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+/// Parse `VERYAGENT_IMAGE` marker body (after the prefix).
+///
+/// Formats:
+/// - `mime=image/png path=C:\Users\John Doe\...\a.png` (preferred; path last)
+/// - `path=C:/tmp/a.png mime=image/png` (legacy)
+/// - whitespace-split `key=value` tokens (legacy, breaks on spaces in path)
+fn parse_veryagent_image_marker(rest: &str) -> (Option<String>, Option<String>) {
+    let rest = rest.trim();
+    if rest.is_empty() {
+        return (None, None);
+    }
+
+    // Preferred: mime=... path=...  (path takes remainder of line)
+    if let Some(after_mime) = rest.strip_prefix("mime=") {
+        if let Some(idx) = after_mime.find(" path=") {
+            let mime = after_mime[..idx].trim();
+            let path = after_mime[idx + " path=".len()..].trim();
+            if !path.is_empty() {
+                return (
+                    Some(path.to_string()),
+                    if mime.is_empty() {
+                        None
+                    } else {
+                        Some(mime.to_string())
+                    },
+                );
+            }
+        }
+    }
+
+    // Legacy: path=... mime=...  (mime is last short token)
+    if let Some(after_path) = rest.strip_prefix("path=") {
+        if let Some(idx) = after_path.rfind(" mime=") {
+            let path = after_path[..idx].trim();
+            let mime = after_path[idx + " mime=".len()..].trim();
+            if !path.is_empty() {
+                return (
+                    Some(path.to_string()),
+                    if mime.is_empty() {
+                        None
+                    } else {
+                        Some(mime.to_string())
+                    },
+                );
+            }
+        }
+        // path-only (no mime)
+        let path = after_path.trim();
+        if !path.is_empty() && !path.contains('=') {
+            return (Some(path.to_string()), None);
+        }
+    }
+
+    // Fallback: whitespace-split key=value (paths with spaces break here)
+    let mut path = None;
+    let mut mime = None;
+    for part in rest.split_whitespace() {
+        if let Some(v) = part.strip_prefix("path=") {
+            path = Some(v.to_string());
+        } else if let Some(v) = part.strip_prefix("mime=") {
+            mime = Some(v.to_string());
+        }
+    }
+    (path, mime)
+}
+
+/// Merge ACP content images with path-only recoveries from content text
+/// and/or raw_output.
+///
+/// Some hosts put the MCP CallToolResult only in content text (not
+/// `raw_output`). Scan both so path-only platform results still promote
+/// into `ToolCall.images`.
+fn merge_tool_call_images(
+    content_images: Option<Vec<ToolCallImageInfo>>,
+    content_text: Option<&str>,
+    raw_output: Option<&str>,
+) -> Option<Vec<ToolCallImageInfo>> {
+    let mut out = content_images.unwrap_or_default();
+    let mut existing_uris: HashSet<String> = out.iter().filter_map(|i| i.uri.clone()).collect();
+
+    let mut absorb = |src: &str| {
+        if let Some(recovered) = extract_platform_images_from_raw_output(src) {
+            for img in recovered {
+                let Some(uri) = img.uri.clone() else {
+                    continue;
+                };
+                if existing_uris.contains(&uri) {
+                    continue;
+                }
+                // Prefer attaching path onto a path-less empty-data slot
+                // (incomplete path-only wire image) instead of a second card.
+                if let Some(slot) = out
+                    .iter_mut()
+                    .find(|i| i.uri.is_none() && i.data.is_empty())
+                {
+                    slot.uri = Some(uri.clone());
+                    if slot.mime_type.is_empty() || !slot.mime_type.starts_with("image/") {
+                        slot.mime_type = img.mime_type.clone();
+                    }
+                    existing_uris.insert(uri);
+                    continue;
+                }
+                existing_uris.insert(uri);
+                out.push(img);
+            }
+        }
+    };
+
+    if let Some(text) = content_text {
+        absorb(text);
+    }
+    if let Some(raw) = raw_output {
+        absorb(raw);
+    }
+
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
 /// If the output looks like numbered lines (`   115→content`), strip them
 /// and return `{"start_line":N,"content":"..."}` — same as the historical path.
 fn structurize_live_output(text: &str) -> String {
@@ -4913,17 +5191,24 @@ async fn emit_conversation_update(
             let content =
                 serialize_tool_call_content(&tc.content, synthesized_edit.is_none())
                     .map(|c| unwrap_codebuddy_deferred_output(agent_type, &c).unwrap_or(c));
-            let images = extract_tool_call_images(&tc.content);
             let raw_input = synthesized_edit
                 .or(own_raw_input)
                 .map(|text| resolve_live_tool_input(&text, cwd));
             // Initial tool_call notification — the frontend reducer
             // treats `raw_output` as a full replacement, so we bypass
             // the diff path and seed the cache with the current snapshot.
-            let raw_output = json_value_to_text(&tc.raw_output)
+            let raw_output_full = json_value_to_text(&tc.raw_output)
                 .map(|text| unwrap_codebuddy_deferred_output(agent_type, &text).unwrap_or(text))
-                .map(|text| structurize_live_output(&text))
-                .and_then(|text| raw_output_cache.seed(&tool_call_id, &text));
+                .map(|text| structurize_live_output(&text));
+            // Recover platform path-only images from content text + FULL
+            // raw_output before the 64 KiB emit cap (path trailer is tiny).
+            let images = merge_tool_call_images(
+                extract_tool_call_images(&tc.content),
+                content.as_deref(),
+                raw_output_full.as_deref(),
+            );
+            let raw_output =
+                raw_output_full.and_then(|text| raw_output_cache.seed(&tool_call_id, &text));
             let locations = if tc.locations.is_empty() {
                 None
             } else {
@@ -5008,11 +5293,6 @@ async fn emit_conversation_update(
                 .as_deref()
                 .and_then(|c| serialize_tool_call_content(c, synthesized_edit.is_none()))
                 .map(|c| unwrap_codebuddy_deferred_output(agent_type, &c).unwrap_or(c));
-            let images = tcu
-                .fields
-                .content
-                .as_deref()
-                .and_then(extract_tool_call_images);
             let raw_input = synthesized_edit
                 .or(own_raw_input)
                 .map(|text| resolve_live_tool_input(&text, cwd));
@@ -5025,6 +5305,15 @@ async fn emit_conversation_update(
             let raw_output_text = json_value_to_text(&tcu.fields.raw_output)
                 .map(|text| unwrap_codebuddy_deferred_output(agent_type, &text).unwrap_or(text))
                 .map(|text| structurize_live_output(&text));
+            // Path recovery uses content text + FULL snapshot (not delta).
+            let images = merge_tool_call_images(
+                tcu.fields
+                    .content
+                    .as_deref()
+                    .and_then(extract_tool_call_images),
+                content.as_deref(),
+                raw_output_text.as_deref(),
+            );
             let (raw_output, raw_output_append) = match raw_output_text {
                 Some(text) => match raw_output_cache.consume(&tool_call_id, &text) {
                     Some((payload, append)) => (Some(payload), Some(append)),
@@ -6528,4 +6817,99 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn extracts_platform_path_from_json_trailer() {
+        let raw = concat!(
+            "Image generated successfully.\n",
+            "The image is already displayed to the user in the chat UI.\n",
+            r#"{"mime":"image/png","path":"C:/Users/EVAN/AppData/Local/Temp/veryagent-images/gpt_image_2_1.png"}"#
+        );
+        let imgs = extract_platform_images_from_raw_output(raw).expect("images");
+        assert_eq!(imgs.len(), 1);
+        assert_eq!(imgs[0].mime_type, "image/png");
+        assert!(imgs[0].data.is_empty());
+        assert!(imgs[0]
+            .uri
+            .as_deref()
+            .unwrap()
+            .contains("veryagent-images"));
+    }
+
+    #[test]
+    fn extracts_platform_path_from_marker_line() {
+        // Preferred format: mime first, path last.
+        let raw = "ok\nVERYAGENT_IMAGE mime=image/png path=C:/tmp/veryagent-images/a.png";
+        let imgs = extract_platform_images_from_raw_output(raw).expect("images");
+        assert_eq!(imgs.len(), 1);
+        assert_eq!(
+            imgs[0].uri.as_deref(),
+            Some("C:/tmp/veryagent-images/a.png")
+        );
+    }
+
+    #[test]
+    fn extracts_platform_path_from_legacy_marker_line() {
+        let raw = "ok\nVERYAGENT_IMAGE path=C:/tmp/veryagent-images/a.png mime=image/png";
+        let imgs = extract_platform_images_from_raw_output(raw).expect("images");
+        assert_eq!(imgs.len(), 1);
+        assert_eq!(
+            imgs[0].uri.as_deref(),
+            Some("C:/tmp/veryagent-images/a.png")
+        );
+    }
+
+    #[test]
+    fn extracts_platform_path_with_spaces_in_marker() {
+        let raw = "ok\nVERYAGENT_IMAGE mime=image/png path=C:/Users/John Doe/AppData/Local/Temp/veryagent-images/a.png";
+        let imgs = extract_platform_images_from_raw_output(raw).expect("images");
+        assert_eq!(imgs.len(), 1);
+        assert_eq!(
+            imgs[0].uri.as_deref(),
+            Some("C:/Users/John Doe/AppData/Local/Temp/veryagent-images/a.png")
+        );
+    }
+
+    #[test]
+    fn merge_prefers_content_images_and_adds_path_only() {
+        let content = vec![ToolCallImageInfo {
+            data: "abc".into(),
+            mime_type: "image/png".into(),
+            uri: None,
+        }];
+        let raw = r#"{"mime":"image/png","path":"C:/tmp/veryagent-images/b.png"}"#;
+        let merged = merge_tool_call_images(Some(content), None, Some(raw)).expect("merged");
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].data, "abc");
+        assert_eq!(
+            merged[1].uri.as_deref(),
+            Some("C:/tmp/veryagent-images/b.png")
+        );
+    }
+
+    #[test]
+    fn merge_recovers_path_from_content_text_only() {
+        let content_text = concat!(
+            "Image generated successfully.\n",
+            "VERYAGENT_IMAGE mime=image/png path=C:/tmp/veryagent-images/only-content.png\n",
+            r#"{"mime":"image/png","path":"C:/tmp/veryagent-images/only-content.png"}"#
+        );
+        let merged =
+            merge_tool_call_images(None, Some(content_text), None).expect("merged from content");
+        assert_eq!(merged.len(), 1);
+        assert_eq!(
+            merged[0].uri.as_deref(),
+            Some("C:/tmp/veryagent-images/only-content.png")
+        );
+        assert!(merged[0].data.is_empty());
+    }
+
+    #[test]
+    fn merge_dedupes_same_path_from_content_and_raw() {
+        let text = r#"{"mime":"image/png","path":"C:/tmp/veryagent-images/same.png"}"#;
+        let merged =
+            merge_tool_call_images(None, Some(text), Some(text)).expect("merged");
+        assert_eq!(merged.len(), 1);
+    }
+
 }

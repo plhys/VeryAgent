@@ -1,21 +1,19 @@
+// folders.rs (slimmed by T1): folder CRUD + file tree only.
+// Git operations moved to commands/git/.
+
 use std::collections::{hash_map::DefaultHasher, HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use std::process::Stdio;
 use std::sync::LazyLock;
 use std::time::UNIX_EPOCH;
-
 use base64::Engine as _;
 use serde::Serialize;
-
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
-
 #[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
-
 use crate::app_error::AppCommandError;
 use crate::db::error::DbError;
 use crate::db::service::folder_service;
@@ -23,82 +21,197 @@ use crate::db::AppDatabase;
 use crate::models::GitCredentials;
 use crate::models::{FolderDetail, FolderHistoryEntry};
 use crate::web::event_bridge::EventEmitter;
+use crate::git_repo::ensure_git_repo;
 
-/// Configure a git command for remote operations:
-/// - Always disable interactive prompts (prevent hanging in a GUI app)
-/// - If explicit credentials are provided, use them directly
-/// - Otherwise, try to inject stored account credentials
-async fn prepare_remote_git_cmd(
-    cmd: &mut tokio::process::Command,
-    repo_path: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) {
-    prepare_remote_git_cmd_with_remote(cmd, repo_path, None, credentials, db, data_dir).await;
-}
+// Git commands now live in commands/git/; folder code may call them.
+use crate::commands::git::*;
 
-/// Same as `prepare_remote_git_cmd` but allows specifying a remote name
-/// to match credentials against the correct remote URL.
-async fn prepare_remote_git_cmd_with_remote(
-    cmd: &mut tokio::process::Command,
-    repo_path: &str,
-    remote_name: Option<&str>,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) {
-    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null());
 
-    if let Some(creds) = credentials {
-        // Explicit credentials provided (e.g. from credential dialog)
-        if let Ok(askpass) = crate::git_credential::ensure_askpass_script(data_dir) {
-            crate::git_credential::inject_credentials(
-                cmd,
-                &creds.username,
-                &creds.password,
-                &askpass,
-            );
-        }
-    } else {
-        // Fall back to stored accounts, matching against the specified remote
-        crate::git_credential::try_inject_for_repo_remote(
-            cmd,
-            repo_path,
-            remote_name,
-            &db.conn,
-            data_dir,
-        )
-        .await;
-    }
-}
 
-/// Same as `prepare_remote_git_cmd` but for clone (URL only, no repo yet).
-async fn prepare_remote_git_cmd_for_url(
-    cmd: &mut tokio::process::Command,
-    clone_url: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) {
-    cmd.env("GIT_TERMINAL_PROMPT", "0").stdin(Stdio::null());
 
-    if let Some(creds) = credentials {
-        if let Ok(askpass) = crate::git_credential::ensure_askpass_script(data_dir) {
-            crate::git_credential::inject_credentials(
-                cmd,
-                &creds.username,
-                &creds.password,
-                &askpass,
-            );
-        }
-    } else {
-        crate::git_credential::try_inject_for_url(cmd, clone_url, &db.conn, data_dir).await;
-    }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /// Classify a git remote command error, detecting authentication failures.
-fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError {
+pub fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError {
     let msg = String::from_utf8_lossy(stderr).trim().to_string();
     tracing::error!("[GIT_CMD] {} failed, stderr: {}", operation, msg);
     let lower = msg.to_lowercase();
@@ -131,19 +244,6 @@ fn classify_remote_git_error(operation: &str, stderr: &[u8]) -> AppCommandError 
     AppCommandError::external_command(format!("git {operation} failed"), msg)
 }
 
-#[derive(Debug, Serialize)]
-pub struct GitStatusEntry {
-    pub status: String,
-    pub file: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitBranchList {
-    pub local: Vec<String>,
-    pub remote: Vec<String>,
-    pub worktree_branches: Vec<String>,
-}
-
 /// Where a given branch is checked out, resolved against the registered folders.
 /// `path` is the canonical filesystem path of the worktree (or main working
 /// tree) hosting the branch — `None` when the branch is not checked out in any
@@ -154,86 +254,6 @@ pub struct GitBranchList {
 pub struct WorktreeResolution {
     pub path: Option<String>,
     pub folder_id: Option<i32>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitConflictInfo {
-    pub has_conflicts: bool,
-    pub conflicted_files: Vec<String>,
-    pub operation: String,
-    pub upstream_commit: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitPullResult {
-    pub updated_files: usize,
-    pub conflict: Option<GitConflictInfo>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitPushResult {
-    pub pushed_commits: usize,
-    pub upstream_set: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitPushInfo {
-    pub branch: String,
-    pub remotes: Vec<GitRemote>,
-    pub tracking_remote: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitMergeResult {
-    pub merged_commits: usize,
-    pub conflict: Option<GitConflictInfo>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitRebaseResult {
-    pub message: String,
-    pub conflict: Option<GitConflictInfo>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitConflictFileVersions {
-    pub base: String,
-    pub ours: String,
-    pub theirs: String,
-    pub merged: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitCommitResult {
-    pub committed_files: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitStashEntry {
-    pub index: usize,
-    pub message: String,
-    pub branch: String,
-    pub date: String,
-    pub ref_name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitRemote {
-    pub name: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct GitCommitSucceededEvent {
-    folder_id: i32,
-    committed_files: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct GitPushSucceededEvent {
-    folder_id: i32,
-    pushed_commits: usize,
-    upstream_set: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -275,32 +295,7 @@ pub struct FileSaveResult {
     pub line_ending: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct GitLogEntry {
-    pub hash: String,
-    pub full_hash: String,
-    pub author: String,
-    pub date: String,
-    pub message: String,
-    pub files: Vec<GitLogFileChange>,
-    pub pushed: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitLogFileChange {
-    pub path: String,
-    pub status: String,
-    pub additions: u32,
-    pub deletions: u32,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GitLogResult {
-    pub entries: Vec<GitLogEntry>,
-    pub has_upstream: bool,
-}
-
-fn count_non_empty_lines(content: &str) -> usize {
+pub fn count_non_empty_lines(content: &str) -> usize {
     content
         .lines()
         .map(str::trim)
@@ -312,34 +307,7 @@ fn parse_count_from_output(stdout: &[u8]) -> Option<usize> {
     String::from_utf8_lossy(stdout).trim().parse::<usize>().ok()
 }
 
-fn git_command_error(operation: &str, stderr: &[u8]) -> AppCommandError {
-    let stderr = String::from_utf8_lossy(stderr).trim().to_string();
-    AppCommandError::external_command(format!("git {operation} failed"), stderr)
-}
-
-use crate::git_repo::ensure_git_repo;
-
-async fn detect_conflicts(path: &str) -> Result<Vec<String>, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["-c", "core.quotePath=false"])
-        .args(["diff", "--name-only", "--diff-filter=U"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Ok(vec![]);
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(unquote_git_path)
-        .filter(|l| !l.is_empty())
-        .collect())
-}
-
-async fn get_head_hash(path: &str) -> Result<Option<String>, AppCommandError> {
+pub async fn get_head_hash(path: &str) -> Result<Option<String>, AppCommandError> {
     let output = crate::process::tokio_command("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(path)
@@ -358,24 +326,7 @@ async fn get_head_hash(path: &str) -> Result<Option<String>, AppCommandError> {
     Ok(Some(head))
 }
 
-async fn count_files_in_commit(path: &str, commit: &str) -> Result<usize, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["show", "--name-only", "--pretty=format:", commit])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("show", &output.stderr));
-    }
-
-    Ok(count_non_empty_lines(&String::from_utf8_lossy(
-        &output.stdout,
-    )))
-}
-
-async fn count_changed_files_between(
+pub async fn count_changed_files_between(
     path: &str,
     base: &str,
     head: &str,
@@ -397,7 +348,7 @@ async fn count_changed_files_between(
     )))
 }
 
-async fn estimate_push_commit_count(path: &str) -> usize {
+pub async fn estimate_push_commit_count(path: &str) -> usize {
     let upstream_ahead = crate::process::tokio_command("git")
         .args(["rev-list", "--count", "@{push}..HEAD"])
         .current_dir(path)
@@ -458,10 +409,6 @@ async fn estimate_push_commit_count(path: &str) -> usize {
 
     parse_count_from_output(&output.stdout).unwrap_or(0)
 }
-
-// ---------------------------------------------------------------------------
-// Shared core functions (used by both Tauri commands and web handlers)
-// ---------------------------------------------------------------------------
 
 pub async fn get_folder_core(db: &AppDatabase, folder_id: i32) -> Result<FolderDetail, DbError> {
     folder_service::get_folder_by_id(&db.conn, folder_id)
@@ -683,10 +630,6 @@ pub async fn update_folder_default_agent_core(
         .ok_or_else(|| AppCommandError::not_found("Folder not found"))
 }
 
-// ---------------------------------------------------------------------------
-// Tauri command wrappers (thin shims over _core)
-// ---------------------------------------------------------------------------
-
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_folder(
@@ -821,39 +764,6 @@ pub async fn create_folder_directory(path: String) -> Result<(), AppCommandError
     std::fs::create_dir_all(&path).map_err(AppCommandError::io)
 }
 
-pub(crate) async fn clone_repository_core(
-    url: &str,
-    target_dir: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) -> Result<(), AppCommandError> {
-    if url.trim().is_empty() || target_dir.trim().is_empty() {
-        return Err(AppCommandError::invalid_input(
-            "Repository URL and target directory are required",
-        ));
-    }
-
-    let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["clone", url, target_dir]);
-    prepare_remote_git_cmd_for_url(&mut cmd, url, credentials, db, data_dir).await;
-
-    let output = cmd.output().await.map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            AppCommandError::dependency_missing("Git is not installed. Please install Git first.")
-                .with_detail("https://git-scm.com")
-        } else {
-            AppCommandError::external_command("Failed to run git clone", e.to_string())
-        }
-    })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(classify_git_clone_error(stderr.trim()));
-    }
-    Ok(())
-}
-
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn clone_repository(
@@ -873,7 +783,7 @@ pub async fn clone_repository(
     clone_repository_core(&url, &target_dir, credentials.as_ref(), &db, &data_dir).await
 }
 
-fn classify_git_clone_error(stderr: &str) -> AppCommandError {
+pub fn classify_git_clone_error(stderr: &str) -> AppCommandError {
     let normalized = stderr.to_lowercase();
 
     if normalized.contains("already exists and is not an empty directory") {
@@ -919,1372 +829,6 @@ fn classify_git_clone_error(stderr: &str) -> AppCommandError {
     }
 
     AppCommandError::external_command("Git clone failed", stderr.to_string())
-}
-
-/// The state of a working tree's `HEAD`. The legacy `get_git_branch` contract
-/// collapsed every non-branch state into `None`, so a detached HEAD looked
-/// identical to a non-git folder and the UI hid all git operations (issue
-/// #279). This distinguishes the four states the UI actually needs.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub struct GitHeadInfo {
-    /// Whether git recognizes this path as a work tree.
-    pub is_repo: bool,
-    /// Branch name when `HEAD` points at a branch — including an unborn branch
-    /// right after `git init`. `None` when detached or not a repo.
-    pub branch: Option<String>,
-    /// Whether `HEAD` is detached (points directly at a commit, not a branch).
-    pub detached: bool,
-    /// Short commit hash; present when detached and at least one commit exists.
-    pub short_sha: Option<String>,
-}
-
-async fn git_output(
-    path: &str,
-    args: &[&str],
-) -> Result<std::process::Output, AppCommandError> {
-    crate::process::tokio_command("git")
-        .args(args)
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)
-}
-
-/// Resolve the current `HEAD` state. The common cases (on a branch / detached)
-/// cost a single git invocation; the rarer unborn-branch and non-repository
-/// cases fall through to `symbolic-ref` and `--is-inside-work-tree`.
-async fn resolve_git_head(path: &str) -> Result<GitHeadInfo, AppCommandError> {
-    // `rev-parse --abbrev-ref HEAD` prints the branch name, the literal "HEAD"
-    // when detached, and fails on an unborn branch or a non-repository.
-    let head = git_output(path, &["rev-parse", "--abbrev-ref", "HEAD"]).await?;
-    if head.status.success() {
-        let name = String::from_utf8_lossy(&head.stdout).trim().to_string();
-        if !name.is_empty() && name != "HEAD" {
-            return Ok(GitHeadInfo {
-                is_repo: true,
-                branch: Some(name),
-                detached: false,
-                short_sha: None,
-            });
-        }
-        // Detached HEAD — surface the short commit so the UI can label it.
-        let short_sha = git_output(path, &["rev-parse", "--short", "HEAD"])
-            .await
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .filter(|s| !s.is_empty());
-        return Ok(GitHeadInfo {
-            is_repo: true,
-            branch: None,
-            detached: true,
-            short_sha,
-        });
-    }
-
-    // Unborn branch (after `git init`, before the first commit): `symbolic-ref`
-    // still resolves the branch name where `rev-parse` cannot.
-    let sym = git_output(path, &["symbolic-ref", "--short", "HEAD"]).await?;
-    if sym.status.success() {
-        let name = String::from_utf8_lossy(&sym.stdout).trim().to_string();
-        if !name.is_empty() {
-            return Ok(GitHeadInfo {
-                is_repo: true,
-                branch: Some(name),
-                detached: false,
-                short_sha: None,
-            });
-        }
-    }
-
-    // Neither resolved a branch — authoritatively decide repo-ness. An unusual
-    // work tree with no resolvable branch still counts as a repo so the UI
-    // offers git operations rather than "initialize".
-    let inside = git_output(path, &["rev-parse", "--is-inside-work-tree"]).await?;
-    let is_repo =
-        inside.status.success() && String::from_utf8_lossy(&inside.stdout).trim() == "true";
-    Ok(GitHeadInfo {
-        is_repo,
-        branch: None,
-        detached: false,
-        short_sha: None,
-    })
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn get_git_head(path: String) -> Result<GitHeadInfo, AppCommandError> {
-    resolve_git_head(&path).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn get_git_branch(path: String) -> Result<Option<String>, AppCommandError> {
-    Ok(resolve_git_head(&path).await?.branch)
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_init(path: String) -> Result<(), AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["init"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("init", &output.stderr));
-    }
-    Ok(())
-}
-
-pub(crate) async fn git_pull_core(
-    path: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) -> Result<GitPullResult, AppCommandError> {
-    let head_before = get_head_hash(path).await?;
-
-    // Step 1: fetch from remote
-    let mut fetch_cmd = crate::process::tokio_command("git");
-    fetch_cmd.args(["fetch"]).current_dir(path);
-    prepare_remote_git_cmd(&mut fetch_cmd, path, credentials, db, data_dir).await;
-
-    let fetch_output = fetch_cmd.output().await.map_err(AppCommandError::io)?;
-
-    if !fetch_output.status.success() {
-        return Err(classify_remote_git_error("fetch", &fetch_output.stderr));
-    }
-
-    // Step 2: check if upstream exists
-    let upstream_check = crate::process::tokio_command("git")
-        .args(["rev-parse", "@{u}"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !upstream_check.status.success() {
-        return Ok(GitPullResult {
-            updated_files: 0,
-            conflict: None,
-        });
-    }
-    let upstream_commit = String::from_utf8_lossy(&upstream_check.stdout)
-        .trim()
-        .to_string();
-
-    // Step 3: check if we can fast-forward
-    let merge_base = crate::process::tokio_command("git")
-        .args(["merge-base", "HEAD", "@{u}"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-    let head_hash = crate::process::tokio_command("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    let base_hash = String::from_utf8_lossy(&merge_base.stdout)
-        .trim()
-        .to_string();
-    let current_head = String::from_utf8_lossy(&head_hash.stdout)
-        .trim()
-        .to_string();
-
-    if base_hash == current_head {
-        let ff_output = crate::process::tokio_command("git")
-            .args(["merge", "--ff-only", "@{u}"])
-            .current_dir(path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-
-        if !ff_output.status.success() {
-            return Err(git_command_error("merge --ff-only", &ff_output.stderr));
-        }
-    } else {
-        let merge_output = crate::process::tokio_command("git")
-            .args(["merge", "--no-commit", "@{u}"])
-            .current_dir(path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-
-        if !merge_output.status.success() {
-            let conflicted_files = detect_conflicts(path).await?;
-            if !conflicted_files.is_empty() {
-                let _ = crate::process::tokio_command("git")
-                    .args(["merge", "--abort"])
-                    .current_dir(path)
-                    .output()
-                    .await;
-
-                return Ok(GitPullResult {
-                    updated_files: 0,
-                    conflict: Some(GitConflictInfo {
-                        has_conflicts: true,
-                        conflicted_files,
-                        operation: "pull".to_string(),
-                        upstream_commit: Some(upstream_commit),
-                    }),
-                });
-            }
-            return Err(git_command_error("merge", &merge_output.stderr));
-        }
-
-        let commit_output = crate::process::tokio_command("git")
-            .args(["commit", "--no-edit"])
-            .current_dir(path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-
-        if !commit_output.status.success() {
-            let stderr = String::from_utf8_lossy(&commit_output.stderr);
-            let stdout = String::from_utf8_lossy(&commit_output.stdout);
-            if !stderr.contains("nothing to commit") && !stdout.contains("nothing to commit") {
-                return Err(git_command_error("commit", &commit_output.stderr));
-            }
-        }
-    }
-
-    let head_after = get_head_hash(path).await?;
-    let updated_files = match (head_before.as_deref(), head_after.as_deref()) {
-        (Some(before), Some(after)) if before != after => {
-            count_changed_files_between(path, before, after).await?
-        }
-        (None, Some(after)) => count_files_in_commit(path, after).await?,
-        _ => 0,
-    };
-
-    Ok(GitPullResult {
-        updated_files,
-        conflict: None,
-    })
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_pull(
-    path: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
-) -> Result<GitPullResult, AppCommandError> {
-    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
-        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
-    })?;
-    // Resolve through the effective data dir so a custom
-    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
-    // this subprocess.
-    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
-    git_pull_core(&path, credentials.as_ref(), &db, &data_dir).await
-}
-
-/// Start a merge with the upstream branch (used by merge workspace after pull conflict detection).
-/// This recreates the conflict state so that :1:, :2:, :3: stage entries are available.
-/// If `upstream_commit` is provided, merge against that specific commit instead of `@{u}`.
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_start_pull_merge(
-    path: String,
-    upstream_commit: Option<String>,
-) -> Result<(), AppCommandError> {
-    let target = upstream_commit.as_deref().unwrap_or("@{u}");
-    let output = crate::process::tokio_command("git")
-        .args(["merge", "--no-commit", target])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    // It's expected to fail with conflicts — that's the point.
-    // We just need the merge state to be active so stage entries exist.
-    if !output.status.success() {
-        let conflicted_files = detect_conflicts(&path).await?;
-        if !conflicted_files.is_empty() {
-            return Ok(()); // Conflict state is now active — merge workspace can proceed
-        }
-        return Err(git_command_error("merge", &output.stderr));
-    }
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_has_merge_head(path: String) -> Result<bool, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["rev-parse", "--verify", "MERGE_HEAD"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-    Ok(output.status.success())
-}
-
-pub(crate) async fn git_fetch_core(
-    path: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) -> Result<String, AppCommandError> {
-    let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["fetch", "--all"]).current_dir(path);
-    prepare_remote_git_cmd(&mut cmd, path, credentials, db, data_dir).await;
-
-    let output = cmd.output().await.map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(classify_remote_git_error("fetch --all", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_fetch(
-    path: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
-) -> Result<String, AppCommandError> {
-    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
-        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
-    })?;
-    // Resolve through the effective data dir so a custom
-    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
-    // this subprocess.
-    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
-    git_fetch_core(&path, credentials.as_ref(), &db, &data_dir).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_push_info(path: String) -> Result<GitPushInfo, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    // Get current branch name
-    let branch_output = crate::process::tokio_command("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-    let branch = String::from_utf8_lossy(&branch_output.stdout)
-        .trim()
-        .to_string();
-
-    // Get tracking remote for current branch
-    let remote_key = format!("branch.{}.remote", branch);
-    let remote_output = crate::process::tokio_command("git")
-        .args(["config", "--get", &remote_key])
-        .current_dir(&path)
-        .output()
-        .await;
-    let tracking_remote = remote_output
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|v| !v.is_empty());
-
-    // Get all remotes
-    let remotes = git_list_remotes(path).await?;
-
-    Ok(GitPushInfo {
-        branch,
-        remotes,
-        tracking_remote,
-    })
-}
-
-pub(crate) async fn git_push_core(
-    data_dir: &std::path::Path,
-    emitter: &EventEmitter,
-    folder_id: Option<i32>,
-    path: &str,
-    remote: Option<&str>,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-) -> Result<GitPushResult, AppCommandError> {
-    let pushed_commits = estimate_push_commit_count(path).await;
-
-    let target_remote = remote.filter(|s| !s.is_empty()).unwrap_or("origin");
-
-    let branch_output = crate::process::tokio_command("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-    let branch = String::from_utf8_lossy(&branch_output.stdout)
-        .trim()
-        .to_string();
-
-    let upstream_check = crate::process::tokio_command("git")
-        .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        .current_dir(path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    let current_upstream = if upstream_check.status.success() {
-        Some(
-            String::from_utf8_lossy(&upstream_check.stdout)
-                .trim()
-                .to_string(),
-        )
-    } else {
-        None
-    };
-
-    let needs_set_upstream = match &current_upstream {
-        None => true,
-        Some(upstream) => !upstream.starts_with(&format!("{}/", target_remote)),
-    };
-
-    let output = if needs_set_upstream {
-        let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", "--set-upstream", target_remote, &branch])
-            .current_dir(path);
-        prepare_remote_git_cmd_with_remote(
-            &mut cmd,
-            path,
-            Some(target_remote),
-            credentials,
-            db,
-            data_dir,
-        )
-        .await;
-        cmd.output().await.map_err(AppCommandError::io)?
-    } else {
-        let mut cmd = crate::process::tokio_command("git");
-        cmd.args(["push", target_remote, &branch]).current_dir(path);
-        prepare_remote_git_cmd_with_remote(
-            &mut cmd,
-            path,
-            Some(target_remote),
-            credentials,
-            db,
-            data_dir,
-        )
-        .await;
-        cmd.output().await.map_err(AppCommandError::io)?
-    };
-
-    if !output.status.success() {
-        return Err(classify_remote_git_error("push", &output.stderr));
-    }
-
-    let upstream_set = needs_set_upstream;
-
-    if let Some(folder_id) = folder_id {
-        crate::web::event_bridge::emit_event(
-            emitter,
-            "folder://git-push-succeeded",
-            GitPushSucceededEvent {
-                folder_id,
-                pushed_commits,
-                upstream_set,
-            },
-        );
-    }
-
-    Ok(GitPushResult {
-        pushed_commits,
-        upstream_set,
-    })
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_push(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-    path: String,
-    remote: Option<String>,
-    credentials: Option<GitCredentials>,
-    folder_id: Option<i32>,
-    db: tauri::State<'_, AppDatabase>,
-) -> Result<GitPushResult, AppCommandError> {
-    let folder_id = folder_id.or_else(|| {
-        window
-            .label()
-            .strip_prefix("push-")
-            .and_then(|value| value.parse::<i32>().ok())
-    });
-    let data_dir = app.path().app_data_dir().map_err(|e| {
-        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
-    })?;
-    // Resolve through the effective data dir so a custom
-    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
-    // this subprocess.
-    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
-    let emitter = EventEmitter::Tauri(app.clone());
-    git_push_core(
-        &data_dir,
-        &emitter,
-        folder_id,
-        &path,
-        remote.as_deref(),
-        credentials.as_ref(),
-        &db,
-    )
-    .await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_new_branch(
-    path: String,
-    branch_name: String,
-    start_point: Option<String>,
-) -> Result<(), AppCommandError> {
-    let mut args = vec!["checkout".to_string(), "-b".to_string(), branch_name];
-    if let Some(start_point) = start_point {
-        let trimmed = start_point.trim();
-        if !trimmed.is_empty() {
-            args.push(trimmed.to_string());
-        }
-    }
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("checkout -b", &output.stderr));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_worktree_add(
-    path: String,
-    branch_name: String,
-    worktree_path: String,
-) -> Result<(), AppCommandError> {
-    // 校验分支是否已存在
-    let check = crate::process::tokio_command("git")
-        .args([
-            "rev-parse",
-            "--verify",
-            &format!("refs/heads/{}", branch_name),
-        ])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-    if check.status.success() {
-        return Err(
-            AppCommandError::already_exists("Branch already exists").with_detail(branch_name)
-        );
-    }
-
-    // 校验目录是否已存在
-    if std::path::Path::new(&worktree_path).exists() {
-        return Err(
-            AppCommandError::already_exists("Worktree directory already exists")
-                .with_detail(worktree_path),
-        );
-    }
-
-    // 执行 git worktree add -b <branch> <path>
-    let output = crate::process::tokio_command("git")
-        .args(["worktree", "add", "-b", &branch_name, &worktree_path])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("worktree add", &output.stderr));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_checkout(path: String, branch_name: String) -> Result<(), AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["checkout", &branch_name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("checkout", &output.stderr));
-    }
-    Ok(())
-}
-
-/// Whether the working tree at `path` has no uncommitted changes to *tracked*
-/// files (untracked files are ignored — they survive a branch switch). Used to
-/// refuse a `shared_in_root` automation before it `git checkout`s the user's
-/// root tree, which would otherwise carry their in-progress edits onto the
-/// target branch (or fail outright).
-pub async fn git_is_clean(path: String) -> Result<bool, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["status", "--porcelain", "--untracked-files=no"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("status", &output.stderr));
-    }
-    // Porcelain prints one line per changed tracked path; clean ⇒ no output.
-    Ok(output.stdout.iter().all(|b| b.is_ascii_whitespace()))
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_reset(path: String, commit: String, mode: String) -> Result<(), AppCommandError> {
-    let mode = mode.trim().to_lowercase();
-    let mode_flag = match mode.as_str() {
-        "soft" | "mixed" | "hard" | "keep" => format!("--{mode}"),
-        _ => {
-            return Err(AppCommandError::invalid_input(
-                "Reset mode must be one of: soft, mixed, hard, keep",
-            ))
-        }
-    };
-
-    let output = crate::process::tokio_command("git")
-        .args(["reset", mode_flag.as_str(), commit.as_str()])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("reset", &output.stderr));
-    }
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_list_branches(path: String) -> Result<Vec<String>, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let output = crate::process::tokio_command("git")
-        .args(["branch", "--format=%(refname:short)"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("branch", &output.stderr));
-    }
-
-    let branches = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect();
-    Ok(branches)
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_push(
-    path: String,
-    message: Option<String>,
-    keep_index: bool,
-) -> Result<String, AppCommandError> {
-    let mut args = vec!["stash".to_string(), "push".to_string()];
-    if let Some(msg) = message {
-        if !msg.is_empty() {
-            args.push("-m".to_string());
-            args.push(msg);
-        }
-    }
-    if keep_index {
-        args.push("--keep-index".to_string());
-    }
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash push", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_pop(
-    path: String,
-    stash_ref: Option<String>,
-) -> Result<String, AppCommandError> {
-    let mut args = vec!["stash", "pop"];
-    let stash_ref_val;
-    if let Some(ref r) = stash_ref {
-        stash_ref_val = r.clone();
-        args.push(&stash_ref_val);
-    }
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash pop", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_list(path: String) -> Result<Vec<GitStashEntry>, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["stash", "list", "--format=%gd||%gs||%ci"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash list", &output.stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let entries = stdout
-        .lines()
-        .filter(|l| !l.is_empty())
-        .enumerate()
-        .filter_map(|(i, line)| {
-            let parts: Vec<&str> = line.splitn(3, "||").collect();
-            if parts.len() < 3 {
-                return None;
-            }
-            let ref_name = parts[0].to_string();
-            let subject = parts[1];
-            let date = parts[2].to_string();
-
-            // Parse branch and message from subject like "On branch: message" or "WIP on branch: hash"
-            let (branch, message) = if let Some(rest) = subject.strip_prefix("On ") {
-                if let Some(colon_pos) = rest.find(": ") {
-                    let branch = rest[..colon_pos].to_string();
-                    let msg = rest[colon_pos + 2..].to_string();
-                    (branch, msg)
-                } else {
-                    (String::new(), subject.to_string())
-                }
-            } else if let Some(rest) = subject.strip_prefix("WIP on ") {
-                if let Some(colon_pos) = rest.find(": ") {
-                    let branch = rest[..colon_pos].to_string();
-                    let msg = rest[colon_pos + 2..].to_string();
-                    (branch, msg)
-                } else {
-                    (String::new(), subject.to_string())
-                }
-            } else {
-                (String::new(), subject.to_string())
-            };
-
-            Some(GitStashEntry {
-                index: i,
-                message,
-                branch,
-                date,
-                ref_name,
-            })
-        })
-        .collect();
-
-    Ok(entries)
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_apply(path: String, stash_ref: String) -> Result<String, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["stash", "apply", &stash_ref])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash apply", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_drop(path: String, stash_ref: String) -> Result<String, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["stash", "drop", &stash_ref])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash drop", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_clear(path: String) -> Result<String, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["stash", "clear"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash clear", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_stash_show(
-    path: String,
-    stash_ref: String,
-) -> Result<Vec<GitStatusEntry>, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["-c", "core.quotePath=false"])
-        .args(["stash", "show", "--name-status", &stash_ref])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("stash show", &output.stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let entries = stdout
-        .lines()
-        .filter(|l| !l.is_empty())
-        .filter_map(|line| {
-            let mut parts = line.splitn(2, '\t');
-            let status = parts.next()?.trim().to_string();
-            let file = unquote_git_path(parts.next()?);
-            Some(GitStatusEntry { status, file })
-        })
-        .collect();
-
-    Ok(entries)
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_status(
-    path: String,
-    show_all_untracked: Option<bool>,
-) -> Result<Vec<GitStatusEntry>, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let untracked_mode = if show_all_untracked.unwrap_or(false) {
-        "-uall"
-    } else {
-        "-unormal"
-    };
-    // `--no-optional-locks` keeps this read-only query from contending with
-    // concurrent agent writes on `.git/index.lock`. See PR #215 follow-up.
-    let output = crate::process::tokio_command("git")
-        .arg("--no-optional-locks")
-        .args(["-c", "core.quotePath=false"])
-        .args(["status", "--porcelain=v1", untracked_mode])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("status", &output.stderr));
-    }
-
-    let entries = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(|line| {
-            let status = line[..2].trim().to_string();
-            let file = unquote_git_path(&line[3..]);
-            GitStatusEntry { status, file }
-        })
-        .collect();
-    Ok(entries)
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_is_tracked(path: String, file: String) -> Result<bool, AppCommandError> {
-    let literal_file = to_git_literal_pathspec(&file);
-    let output = crate::process::tokio_command("git")
-        .args(["ls-files", "--error-unmatch", "--"])
-        .arg(&literal_file)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    Ok(output.status.success())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_diff(path: String, file: Option<String>) -> Result<String, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let literal_file = file.as_deref().map(to_git_literal_pathspec);
-    let mut args = vec!["diff".to_string(), "HEAD".to_string()];
-    if let Some(ref f) = literal_file {
-        args.push("--".to_string());
-        args.push(f.clone());
-    }
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        // For new repos with no HEAD, fall back to diff --cached
-        let mut fallback_args = vec!["diff".to_string(), "--cached".to_string()];
-        if let Some(ref f) = literal_file {
-            fallback_args.push("--".to_string());
-            fallback_args.push(f.clone());
-        }
-        let fallback = crate::process::tokio_command("git")
-            .args(&fallback_args)
-            .current_dir(&path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-        return Ok(String::from_utf8_lossy(&fallback.stdout).to_string());
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_diff_with_branch(
-    path: String,
-    branch: String,
-    file: Option<String>,
-) -> Result<String, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let target_branch = branch.trim();
-    if target_branch.is_empty() {
-        return Err(AppCommandError::invalid_input(
-            "Branch name cannot be empty",
-        ));
-    }
-
-    let literal_file = file.as_deref().map(to_git_literal_pathspec);
-    let mut args = vec![
-        "diff".to_string(),
-        "--no-color".to_string(),
-        target_branch.to_string(),
-    ];
-    if let Some(ref f) = literal_file {
-        args.push("--".to_string());
-        args.push(f.clone());
-    }
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AppCommandError::external_command(
-            "git diff failed",
-            format!("branch={target_branch}; {stderr}"),
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_show_diff(
-    path: String,
-    commit: String,
-    file: Option<String>,
-) -> Result<String, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let literal_file = file.as_deref().map(to_git_literal_pathspec);
-    let mut args = vec![
-        "show".to_string(),
-        "--no-color".to_string(),
-        "--format=".to_string(),
-        commit,
-    ];
-    if let Some(ref f) = literal_file {
-        args.push("--".to_string());
-        args.push(f.clone());
-    }
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("show", &output.stderr));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_show_file(
-    path: String,
-    file: String,
-    ref_name: Option<String>,
-) -> Result<String, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let git_ref = ref_name.unwrap_or_else(|| "HEAD".to_string());
-    let file_spec = format!("{}:{}", git_ref, file);
-
-    let output = crate::process::tokio_command("git")
-        .args(["show", &file_spec])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        // File doesn't exist at this ref (e.g. new/untracked file) — return empty
-        return Ok(String::new());
-    }
-
-    let bytes = &output.stdout;
-    if bytes.iter().take(2048).any(|b| *b == 0) {
-        return Err(
-            AppCommandError::invalid_input("Binary files are not supported").with_detail(file_spec),
-        );
-    }
-
-    Ok(String::from_utf8_lossy(bytes).to_string())
-}
-
-pub(crate) async fn git_commit_core(
-    emitter: &EventEmitter,
-    folder_id: Option<i32>,
-    conn: &sea_orm::DatabaseConnection,
-    path: &str,
-    message: &str,
-    files: &[String],
-) -> Result<GitCommitResult, AppCommandError> {
-    // Find files already staged for deletion — git add would fail on these
-    // because they no longer exist in either the working tree or the index.
-    let staged_deletions: std::collections::HashSet<String> = crate::process::tokio_command("git")
-        .args(["diff", "--cached", "--name-only", "--diff-filter=D", "-z"])
-        .current_dir(path)
-        .output()
-        .await
-        .ok()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .split('\0')
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    // Stage only files that aren't already staged deletions
-    let files_to_add: Vec<_> = files
-        .iter()
-        .filter(|f| !staged_deletions.contains(f.as_str()))
-        .collect();
-
-    if !files_to_add.is_empty() {
-        let mut add_args = vec!["add".to_string(), "--".to_string()];
-        add_args.extend(
-            files_to_add
-                .iter()
-                .map(|file| to_git_literal_pathspec(file)),
-        );
-
-        let add_output = crate::process::tokio_command("git")
-            .args(&add_args)
-            .current_dir(path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-
-        if !add_output.status.success() {
-            return Err(git_command_error("add", &add_output.stderr));
-        }
-    }
-
-    // Resolve commit author from matching account (e.g. GitHub username)
-    let author_override = crate::git_credential::resolve_commit_author(path, conn).await;
-
-    // Commit
-    let mut commit_cmd = crate::process::tokio_command("git");
-    if let Some((ref name, ref email)) = author_override {
-        commit_cmd.args([
-            "-c",
-            &format!("user.name={name}"),
-            "-c",
-            &format!("user.email={email}"),
-        ]);
-    }
-    commit_cmd.args(["commit", "-m", message]).current_dir(path);
-
-    let commit_output = commit_cmd.output().await.map_err(AppCommandError::io)?;
-
-    if !commit_output.status.success() {
-        return Err(git_command_error("commit", &commit_output.stderr));
-    }
-
-    let committed_files = count_files_in_commit(path, "HEAD")
-        .await
-        .unwrap_or(files.len());
-
-    if let Some(folder_id) = folder_id {
-        crate::web::event_bridge::emit_event(
-            emitter,
-            "folder://git-commit-succeeded",
-            GitCommitSucceededEvent {
-                folder_id,
-                committed_files,
-            },
-        );
-    }
-
-    Ok(GitCommitResult { committed_files })
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_commit(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-    db: tauri::State<'_, AppDatabase>,
-    path: String,
-    message: String,
-    files: Vec<String>,
-    folder_id: Option<i32>,
-) -> Result<GitCommitResult, AppCommandError> {
-    let folder_id = folder_id.or_else(|| {
-        window
-            .label()
-            .strip_prefix("commit-")
-            .and_then(|value| value.parse::<i32>().ok())
-    });
-    let emitter = EventEmitter::Tauri(app.clone());
-    git_commit_core(&emitter, folder_id, &db.conn, &path, &message, &files).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_rollback_file(path: String, file: String) -> Result<(), AppCommandError> {
-    let target = file.trim();
-    if target.is_empty() {
-        return Err(AppCommandError::invalid_input("File path cannot be empty"));
-    }
-
-    let literal_file = to_git_literal_pathspec(target);
-    let restore_output = crate::process::tokio_command("git")
-        .args([
-            "restore",
-            "--source=HEAD",
-            "--staged",
-            "--worktree",
-            "--",
-            &literal_file,
-        ])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if restore_output.status.success() {
-        return Ok(());
-    }
-
-    let restore_stderr = String::from_utf8_lossy(&restore_output.stderr)
-        .trim()
-        .to_string();
-    let restore_stderr_lower = restore_stderr.to_lowercase();
-    let supports_restore = !restore_stderr_lower.contains("unknown option")
-        && !restore_stderr_lower.contains("unknown switch")
-        && !restore_stderr_lower.contains("not a git command")
-        && !restore_stderr_lower.contains("did you mean");
-
-    if supports_restore {
-        return Err(AppCommandError::external_command(
-            "git restore failed",
-            restore_stderr,
-        ));
-    }
-
-    let _ = crate::process::tokio_command("git")
-        .args(["reset", "HEAD", "--", &literal_file])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    let checkout_output = crate::process::tokio_command("git")
-        .args(["checkout", "--", &literal_file])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !checkout_output.status.success() {
-        return Err(git_command_error("checkout --", &checkout_output.stderr));
-    }
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_add_files(path: String, files: Vec<String>) -> Result<(), AppCommandError> {
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    let mut args = vec!["add".to_string(), "--".to_string()];
-    args.extend(files.iter().map(|file| to_git_literal_pathspec(file)));
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("add", &output.stderr));
-    }
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_list_all_branches(path: String) -> Result<GitBranchList, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let local_fut = crate::process::tokio_command("git")
-        .args(["branch", "--format=%(refname:short)"])
-        .current_dir(&path)
-        .output();
-
-    let remote_fut = crate::process::tokio_command("git")
-        .args(["branch", "-r", "--format=%(refname:short)"])
-        .current_dir(&path)
-        .output();
-
-    let wt_fut = crate::process::tokio_command("git")
-        .args(["worktree", "list", "--porcelain"])
-        .current_dir(&path)
-        .output();
-
-    let (local_output, remote_output, wt_output) = tokio::join!(local_fut, remote_fut, wt_fut);
-
-    let local_output = local_output.map_err(AppCommandError::io)?;
-    if !local_output.status.success() {
-        return Err(git_command_error("branch", &local_output.stderr));
-    }
-
-    let local: Vec<String> = String::from_utf8_lossy(&local_output.stdout)
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect();
-
-    let remote: Vec<String> = match remote_output {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty() && !l.contains("HEAD") && l.contains('/'))
-            .collect(),
-        _ => vec![],
-    };
-
-    // Parse worktree entries, excluding the current worktree (path itself)
-    let worktree_branches: Vec<String> = match wt_output {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let canonical_path =
-                std::fs::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
-            let mut branches = Vec::new();
-            let mut current_wt_path: Option<String> = None;
-            for line in stdout.lines() {
-                if let Some(wt) = line.strip_prefix("worktree ") {
-                    current_wt_path = Some(wt.trim().to_string());
-                } else if let Some(b) = line.strip_prefix("branch refs/heads/") {
-                    if let Some(ref wt) = current_wt_path {
-                        let wt_canonical =
-                            std::fs::canonicalize(wt).unwrap_or_else(|_| PathBuf::from(wt));
-                        if wt_canonical != canonical_path {
-                            branches.push(b.trim().to_string());
-                        }
-                    }
-                } else if line.is_empty() {
-                    current_wt_path = None;
-                }
-            }
-            branches
-        }
-        _ => vec![],
-    };
-
-    Ok(GitBranchList {
-        local,
-        remote,
-        worktree_branches,
-    })
-}
-
-/// Parse `git worktree list --porcelain` into `(worktree_path, branch)` pairs.
-/// Each porcelain block starts with a `worktree <path>` line and is terminated
-/// by a blank line; a `branch refs/heads/<name>` line carries the checked-out
-/// branch (absent for detached/bare worktrees → `None`). Trailing blocks with
-/// no terminating blank line are flushed at EOF.
-fn parse_worktrees(stdout: &str) -> Vec<(String, Option<String>)> {
-    let mut entries: Vec<(String, Option<String>)> = Vec::new();
-    let mut current_path: Option<String> = None;
-    let mut current_branch: Option<String> = None;
-
-    for line in stdout.lines() {
-        if let Some(p) = line.strip_prefix("worktree ") {
-            // Defensive flush in case a block wasn't blank-line terminated.
-            if let Some(path) = current_path.take() {
-                entries.push((path, current_branch.take()));
-            }
-            current_path = Some(p.trim().to_string());
-            current_branch = None;
-        } else if let Some(b) = line.strip_prefix("branch refs/heads/") {
-            current_branch = Some(b.trim().to_string());
-        } else if line.is_empty() {
-            if let Some(path) = current_path.take() {
-                entries.push((path, current_branch.take()));
-            }
-            current_branch = None;
-        }
-    }
-    if let Some(path) = current_path.take() {
-        entries.push((path, current_branch.take()));
-    }
-    entries
 }
 
 /// Resolve where `branch` is checked out and which registered folder owns that
@@ -2353,451 +897,25 @@ pub async fn resolve_worktree_folder(
     resolve_worktree_folder_core(&db, repo_path, branch).await
 }
 
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_list_remotes(path: String) -> Result<Vec<GitRemote>, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let output = crate::process::tokio_command("git")
-        .args(["remote", "-v"])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("remote -v", &output.stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut seen = HashSet::new();
-    let mut remotes = Vec::new();
-    for line in stdout.lines() {
-        // Format: "name\turl (fetch|push)"
-        if !line.ends_with("(fetch)") {
-            continue;
-        }
-        let Some((name, rest)) = line.split_once('\t') else {
-            continue;
-        };
-        let url = rest.trim_end_matches("(fetch)").trim();
-        if seen.insert(name.to_string()) {
-            remotes.push(GitRemote {
-                name: name.to_string(),
-                url: url.to_string(),
-            });
-        }
-    }
-    Ok(remotes)
-}
-
-pub(crate) async fn git_fetch_remote_core(
-    path: &str,
-    name: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) -> Result<String, AppCommandError> {
-    let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["fetch", name]).current_dir(path);
-    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(name), credentials, db, data_dir).await;
-
-    let output = cmd.output().await.map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(classify_remote_git_error("fetch", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_fetch_remote(
-    path: String,
-    name: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
-) -> Result<String, AppCommandError> {
-    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
-        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
-    })?;
-    // Resolve through the effective data dir so a custom
-    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
-    // this subprocess.
-    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
-    git_fetch_remote_core(&path, &name, credentials.as_ref(), &db, &data_dir).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_add_remote(
-    path: String,
-    name: String,
-    url: String,
-) -> Result<(), AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["remote", "add", &name, &url])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("remote add", &output.stderr));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_remove_remote(path: String, name: String) -> Result<(), AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["remote", "remove", &name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("remote remove", &output.stderr));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_set_remote_url(
-    path: String,
-    name: String,
-    url: String,
-) -> Result<(), AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["remote", "set-url", &name, &url])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("remote set-url", &output.stderr));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_merge(
-    path: String,
-    branch_name: String,
-) -> Result<GitMergeResult, AppCommandError> {
-    // Count commits to be merged before performing merge
-    let count_output = crate::process::tokio_command("git")
-        .args(["rev-list", "--count", &format!("HEAD..{}", branch_name)])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    let merged_commits = if count_output.status.success() {
-        String::from_utf8_lossy(&count_output.stdout)
-            .trim()
-            .parse::<usize>()
-            .unwrap_or(0)
-    } else {
-        0
-    };
-
-    let output = crate::process::tokio_command("git")
-        .args(["merge", &branch_name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        let conflicted_files = detect_conflicts(&path).await?;
-        if !conflicted_files.is_empty() {
-            return Ok(GitMergeResult {
-                merged_commits,
-                conflict: Some(GitConflictInfo {
-                    has_conflicts: true,
-                    conflicted_files,
-                    operation: "merge".to_string(),
-                    upstream_commit: None,
-                }),
-            });
-        }
-        return Err(git_command_error("merge", &output.stderr));
-    }
-    Ok(GitMergeResult {
-        merged_commits,
-        conflict: None,
-    })
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_rebase(
-    path: String,
-    branch_name: String,
-) -> Result<GitRebaseResult, AppCommandError> {
-    let output = crate::process::tokio_command("git")
-        .args(["rebase", &branch_name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        let conflicted_files = detect_conflicts(&path).await?;
-        if !conflicted_files.is_empty() {
-            return Ok(GitRebaseResult {
-                message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-                conflict: Some(GitConflictInfo {
-                    has_conflicts: true,
-                    conflicted_files,
-                    operation: "rebase".to_string(),
-                    upstream_commit: None,
-                }),
-            });
-        }
-        return Err(git_command_error("rebase", &output.stderr));
-    }
-    Ok(GitRebaseResult {
-        message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        conflict: None,
-    })
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_delete_branch(
-    path: String,
-    branch_name: String,
-    force: bool,
-) -> Result<String, AppCommandError> {
-    let flag = if force { "-D" } else { "-d" };
-    let output = crate::process::tokio_command("git")
-        .args(["branch", flag, &branch_name])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error(&format!("branch {flag}"), &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-pub(crate) async fn git_delete_remote_branch_core(
-    path: &str,
-    remote: &str,
-    branch: &str,
-    credentials: Option<&GitCredentials>,
-    db: &AppDatabase,
-    data_dir: &std::path::Path,
-) -> Result<String, AppCommandError> {
-    let mut cmd = crate::process::tokio_command("git");
-    cmd.args(["push", remote, "--delete", branch])
-        .current_dir(path);
-    prepare_remote_git_cmd_with_remote(&mut cmd, path, Some(remote), credentials, db, data_dir)
-        .await;
-
-    let output = cmd.output().await.map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(classify_remote_git_error("push --delete", &output.stderr));
-    }
-    Ok(String::from_utf8_lossy(&output.stderr).trim().to_string())
-}
-
-#[cfg(feature = "tauri-runtime")]
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_delete_remote_branch(
-    path: String,
-    remote: String,
-    branch: String,
-    credentials: Option<GitCredentials>,
-    db: tauri::State<'_, AppDatabase>,
-    app_handle: tauri::AppHandle,
-) -> Result<String, AppCommandError> {
-    let data_dir = app_handle.path().app_data_dir().map_err(|e| {
-        AppCommandError::external_command("Failed to resolve app data dir", e.to_string())
-    })?;
-    // Resolve through the effective data dir so a custom
-    // `VERYAGENT_DATA_DIR` reaches the git credential helper invoked by
-    // this subprocess.
-    let data_dir = crate::paths::resolve_effective_data_dir(&data_dir);
-    git_delete_remote_branch_core(
-        &path,
-        &remote,
-        &branch,
-        credentials.as_ref(),
-        &db,
-        &data_dir,
-    )
-    .await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, AppCommandError> {
-    detect_conflicts(&path).await
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_conflict_file_versions(
-    path: String,
-    file: String,
-) -> Result<GitConflictFileVersions, AppCommandError> {
-    // :1: = base (common ancestor), :2: = ours (HEAD), :3: = theirs (incoming)
-    let mut versions = Vec::with_capacity(3);
-    for stage in ["1", "2", "3"] {
-        let file_spec = format!(":{}:{}", stage, file);
-        let output = crate::process::tokio_command("git")
-            .args(["show", &file_spec])
-            .current_dir(&path)
-            .output()
-            .await
-            .map_err(AppCommandError::io)?;
-
-        if !output.status.success() {
-            // File may not exist at this stage (e.g. newly added on one side)
-            versions.push(String::new());
-        } else {
-            let bytes = &output.stdout;
-            if bytes.iter().take(2048).any(|b| *b == 0) {
-                return Err(
-                    AppCommandError::invalid_input("Binary files are not supported")
-                        .with_detail(file_spec),
-                );
-            }
-            versions.push(String::from_utf8_lossy(bytes).to_string());
-        }
-    }
-
-    // Read the working tree file (contains conflict markers)
-    let file_path = Path::new(&path).join(&file);
-    let merged = std::fs::read_to_string(&file_path).unwrap_or_default();
-
-    Ok(GitConflictFileVersions {
-        base: versions.remove(0),
-        ours: versions.remove(0),
-        theirs: versions.remove(0),
-        merged,
-    })
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_resolve_conflict(
-    path: String,
-    file: String,
-    content: String,
-) -> Result<(), AppCommandError> {
-    let file_path = Path::new(&path).join(&file);
-
-    // Write resolved content
-    std::fs::write(&file_path, content)
-        .map_err(|e| AppCommandError::io_error(format!("Failed to write resolved file: {}", e)))?;
-
-    // Stage the resolved file
-    let output = crate::process::tokio_command("git")
-        .args(["add", &file])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("add", &output.stderr));
-    }
-
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_abort_operation(path: String, operation: String) -> Result<(), AppCommandError> {
-    let args = match operation.as_str() {
-        "merge" | "pull" => vec!["merge", "--abort"],
-        "rebase" => vec!["rebase", "--abort"],
-        _ => {
-            return Err(AppCommandError::invalid_input(format!(
-                "Unknown operation: {operation}"
-            )));
-        }
-    };
-
-    let output = crate::process::tokio_command("git")
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error(
-            &format!("{} --abort", operation),
-            &output.stderr,
-        ));
-    }
-    Ok(())
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_continue_operation(
-    path: String,
-    operation: String,
-) -> Result<(), AppCommandError> {
-    let (program, args): (&str, Vec<&str>) = match operation.as_str() {
-        "merge" | "pull" => ("git", vec!["commit", "--no-edit"]),
-        "rebase" => ("git", vec!["rebase", "--continue"]),
-        _ => {
-            return Err(AppCommandError::invalid_input(format!(
-                "Unknown operation: {operation}"
-            )));
-        }
-    };
-
-    let output = crate::process::tokio_command(program)
-        .args(&args)
-        .current_dir(&path)
-        .env("GIT_EDITOR", "true")
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error(
-            &format!("{} --continue", operation),
-            &output.stderr,
-        ));
-    }
-    Ok(())
-}
-
 const FILE_TREE_IGNORED_DIRS: &[&str] = &[".git", "__pycache__"];
 
 /// Hard limit: refuse to open files larger than 50 MB in the text editor.
 const FILE_OPEN_HARD_LIMIT: usize = 50_000_000;
+
 /// Save limit: refuse to save content larger than 50 MB.
 const FILE_SAVE_HARD_LIMIT: usize = 50_000_000;
+
 const FILE_BASE64_DEFAULT_MAX_BYTES: usize = 20_000_000;
+
 const FILE_BASE64_MAX_BYTES: usize = 100_000_000;
+
 const FILE_IO_MAX_CONCURRENT_OPS: usize = 8;
 
 static FILE_IO_SEMAPHORE: LazyLock<Semaphore> =
     LazyLock::new(|| Semaphore::new(FILE_IO_MAX_CONCURRENT_OPS));
 
-fn to_git_literal_pathspec(path: &str) -> String {
+pub fn to_git_literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
-}
-
-/// Remove surrounding quotes from a git output path.
-/// Git quotes paths containing non-ASCII or special characters, e.g.
-/// `"path/\344\270\255\346\226\207.txt"`.  With `core.quotePath=false`
-/// the octal escapes are gone, but the quotes may still appear for paths
-/// with spaces, tabs, etc.
-fn unquote_git_path(path: &str) -> String {
-    let trimmed = path.trim();
-    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 pub(crate) fn resolve_tree_path(
@@ -3037,8 +1155,6 @@ where
         AppCommandError::task_execution_failed("File I/O task failed").with_detail(e.to_string())
     })?
 }
-
-// ─── Directory browser helpers (for web/server mode) ───
 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn get_home_directory() -> Result<String, AppCommandError> {
@@ -3911,235 +2027,7 @@ pub async fn create_file_tree_entry(
     Ok(rel)
 }
 
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_log(
-    path: String,
-    limit: Option<u32>,
-    branch: Option<String>,
-    remote: Option<String>,
-) -> Result<GitLogResult, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    const COMMIT_META_PREFIX: &str = "__COMMIT__\0";
-    const MESSAGE_END_MARKER: &str = "__COMMIT_MESSAGE_END__";
-
-    let limit_str = format!("-{}", limit.unwrap_or(100));
-    let mut args = vec![
-        "log".to_string(),
-        limit_str,
-        format!("--format=__COMMIT__%x00%h%x00%H%x00%an%x00%aI%n%B%n{MESSAGE_END_MARKER}"),
-        "--raw".to_string(),
-        "--numstat".to_string(),
-        "--no-renames".to_string(),
-    ];
-    if let Some(ref b) = branch {
-        args.push(b.clone());
-    }
-    let output = crate::process::tokio_command("git")
-        .args(["-c", "core.quotePath=false"])
-        .args(&args)
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        // Empty repo (no commits yet) — return empty list instead of error
-        let stderr_str = String::from_utf8_lossy(&output.stderr);
-        if stderr_str.contains("does not have any commits yet")
-            || stderr_str.contains("unknown revision or path not in the working tree")
-        {
-            return Ok(GitLogResult {
-                entries: Vec::new(),
-                has_upstream: false,
-            });
-        }
-        return Err(git_command_error("log", &output.stderr));
-    }
-
-    let mut entries = Vec::<GitLogEntry>::new();
-    let mut current: Option<GitLogEntryBuilder> = None;
-    let mut reading_message = false;
-
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        if let Some(meta) = line.strip_prefix(COMMIT_META_PREFIX) {
-            if let Some(entry) = current.take() {
-                entries.push(entry.finish());
-            }
-
-            let parts: Vec<&str> = meta.splitn(4, '\0').collect();
-            if parts.len() == 4 {
-                current = Some(GitLogEntryBuilder::new(parts));
-                reading_message = true;
-            } else {
-                reading_message = false;
-            }
-            continue;
-        }
-
-        let Some(entry) = current.as_mut() else {
-            continue;
-        };
-
-        if reading_message {
-            if line == MESSAGE_END_MARKER {
-                reading_message = false;
-                entry.finalize_message();
-            } else {
-                entry.push_message_line(line);
-            }
-            continue;
-        }
-
-        if line.is_empty() {
-            continue;
-        }
-
-        if line.starts_with(':') {
-            if let Some((status, file_path)) = parse_raw_file_line(line) {
-                let file = entry.get_or_insert_file(file_path);
-                file.status = status;
-            }
-            continue;
-        }
-
-        if let Some((additions, deletions, file_path)) = parse_numstat_file_line(line) {
-            let file = entry.get_or_insert_file(file_path);
-            file.additions = additions;
-            file.deletions = deletions;
-        }
-    }
-
-    if let Some(entry) = current {
-        entries.push(entry.finish());
-    }
-
-    let log_limit = limit.unwrap_or(100);
-    let (unpushed_hashes, has_upstream) =
-        get_unpushed_hashes(&path, log_limit, remote.as_deref(), branch.as_deref())
-            .await
-            .unwrap_or((None, false));
-    for entry in entries.iter_mut() {
-        entry.pushed = unpushed_hashes
-            .as_ref()
-            .map(|hashes| !hashes.contains(&entry.full_hash));
-    }
-
-    Ok(GitLogResult {
-        entries,
-        has_upstream,
-    })
-}
-
-#[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn git_commit_branches(
-    path: String,
-    commit: String,
-) -> Result<Vec<String>, AppCommandError> {
-    ensure_git_repo(&path)?;
-
-    let contains_arg = format!("--contains={commit}");
-    let output = crate::process::tokio_command("git")
-        .args([
-            "for-each-ref",
-            &contains_arg,
-            "--format=%(refname:short)",
-            "refs/heads",
-            "refs/remotes",
-        ])
-        .current_dir(&path)
-        .output()
-        .await
-        .map_err(AppCommandError::io)?;
-
-    if !output.status.success() {
-        return Err(git_command_error("for-each-ref", &output.stderr));
-    }
-
-    let mut seen = HashSet::new();
-    let mut branches = Vec::new();
-
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
-        let branch = line.trim();
-        if branch.is_empty() || branch.ends_with("/HEAD") {
-            continue;
-        }
-
-        if seen.insert(branch.to_string()) {
-            branches.push(branch.to_string());
-        }
-    }
-
-    branches.sort();
-    Ok(branches)
-}
-
-struct GitLogEntryBuilder {
-    hash: String,
-    full_hash: String,
-    author: String,
-    date: String,
-    message: String,
-    files: Vec<GitLogFileChange>,
-    index_by_path: HashMap<String, usize>,
-}
-
-impl GitLogEntryBuilder {
-    fn new(parts: Vec<&str>) -> Self {
-        Self {
-            hash: parts[0].to_string(),
-            full_hash: parts[1].to_string(),
-            author: parts[2].to_string(),
-            date: parts[3].to_string(),
-            message: String::new(),
-            files: Vec::new(),
-            index_by_path: HashMap::new(),
-        }
-    }
-
-    fn push_message_line(&mut self, line: &str) {
-        if !self.message.is_empty() {
-            self.message.push('\n');
-        }
-        self.message.push_str(line);
-    }
-
-    fn finalize_message(&mut self) {
-        self.message = self.message.trim_end_matches('\n').to_string();
-    }
-
-    fn get_or_insert_file(&mut self, path: String) -> &mut GitLogFileChange {
-        let index = if let Some(index) = self.index_by_path.get(&path) {
-            *index
-        } else {
-            self.files.push(GitLogFileChange {
-                path: path.clone(),
-                status: "M".to_string(),
-                additions: 0,
-                deletions: 0,
-            });
-            let index = self.files.len() - 1;
-            self.index_by_path.insert(path, index);
-            index
-        };
-
-        &mut self.files[index]
-    }
-
-    fn finish(self) -> GitLogEntry {
-        GitLogEntry {
-            hash: self.hash,
-            full_hash: self.full_hash,
-            author: self.author,
-            date: self.date,
-            message: self.message,
-            files: self.files,
-            pushed: None,
-        }
-    }
-}
-
-fn parse_raw_file_line(line: &str) -> Option<(String, String)> {
+pub fn parse_raw_file_line(line: &str) -> Option<(String, String)> {
     let mut parts = line.split('\t');
     let meta = parts.next()?;
     let file_path = unquote_git_path(parts.next()?);
@@ -4152,7 +2040,7 @@ fn parse_raw_file_line(line: &str) -> Option<(String, String)> {
     Some((status, file_path))
 }
 
-fn parse_numstat_file_line(line: &str) -> Option<(u32, u32, String)> {
+pub fn parse_numstat_file_line(line: &str) -> Option<(u32, u32, String)> {
     let mut parts = line.splitn(3, '\t');
     let additions = parse_numstat_count(parts.next()?);
     let deletions = parse_numstat_count(parts.next()?);
@@ -4169,7 +2057,7 @@ fn parse_numstat_count(value: &str) -> u32 {
 }
 
 /// Returns (unpushed_hashes, has_upstream).
-async fn get_unpushed_hashes(
+pub async fn get_unpushed_hashes(
     path: &str,
     limit: u32,
     remote_override: Option<&str>,

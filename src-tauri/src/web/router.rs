@@ -102,6 +102,18 @@ pub fn build_router(
             post(handlers::vision_bridge::set_vision_bridge_settings),
         )
         .route(
+            "/image_generation_get_config",
+            post(handlers::image_generation::get_image_generation_settings),
+        )
+        .route(
+            "/image_generation_save_config",
+            post(handlers::image_generation::set_image_generation_settings),
+        )
+        .route(
+            "/image_generation_fetch_models",
+            post(handlers::image_generation::fetch_image_generation_models),
+        )
+        .route(
             "/openwiki_get_config",
             post(handlers::openwiki::get_openwiki_config),
         )
@@ -815,6 +827,36 @@ pub fn build_router(
         .route(
             "/experts_open_central_dir",
             post(handlers::experts::experts_open_central_dir),
+        )
+        // ─── Science skills ───
+        .route("/science_list", post(handlers::science::science_list))
+        .route(
+            "/science_get_install_status",
+            post(handlers::science::science_get_install_status),
+        )
+        .route(
+            "/science_list_all_install_statuses",
+            post(handlers::science::science_list_all_install_statuses),
+        )
+        .route(
+            "/science_link_to_agent",
+            post(handlers::science::science_link_to_agent),
+        )
+        .route(
+            "/science_apply_links",
+            post(handlers::science::science_apply_links),
+        )
+        .route(
+            "/science_unlink_from_agent",
+            post(handlers::science::science_unlink_from_agent),
+        )
+        .route(
+            "/science_read_content",
+            post(handlers::science::science_read_content),
+        )
+        .route(
+            "/science_open_central_dir",
+            post(handlers::science::science_open_central_dir),
         )
         // ─── Office tools ───
         .route(

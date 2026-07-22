@@ -205,30 +205,30 @@ pub struct BrokerVisionAnalyzeRequest {
     pub prompt: String,
 }
 
-/// Generate an image using the Gemini image generation API. Backs the
+/// Generate an image via the platform OpenAI-compatible gateway. Backs the
 /// `generate_image` MCP tool. The companion forwards the user's prompt and
-/// optional parameters, and the main process calls the Gemini API and returns
-/// the image URL.
+/// optional parameters; the main process uses Settings → Image Generation
+/// (`model_name` when `model` is omitted / legacy alias).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerGenerateImageRequest {
     pub token: String,
     /// The user's original prompt text (must be passed verbatim).
     pub prompt: String,
-    /// Model: "gemini" or "doubao". Default "gemini".
-    #[serde(default = "default_model")]
-    pub model: String,
-    /// Image resolution: "1K", "2K", "4K". Default "2K".
+    /// Optional model id override. Prefer omitting so the platform uses the
+    /// model configured in Image Generation settings. Legacy aliases like
+    /// `gemini` / `doubao` are ignored by `resolve_model`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Image resolution: "1K", "2K", "4K", or OpenAI-style "1024x1024".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_size: Option<String>,
-    /// Image aspect ratio: "1:1", "4:3", "16:9", "9:16", "3:4". Default "1:1".
+    /// Image aspect ratio: "1:1", "4:3", "16:9", "9:16", "3:4".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<String>,
     /// Reference image URLs for image-to-image generation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ref_urls: Option<Vec<String>>,
 }
-
-fn default_model() -> String { "gemini".to_string() }
 
 /// Iteratively modify a previously generated image. Backs the `modify_image`
 /// MCP tool.
@@ -237,9 +237,10 @@ pub struct BrokerModifyImageRequest {
     pub token: String,
     /// The user's modification request text (must be passed verbatim).
     pub prompt: String,
-    /// Model: "gemini" or "doubao". Default "gemini".
-    #[serde(default = "default_model")]
-    pub model: String,
+    /// Optional model id override. Prefer omitting so the platform uses the
+    /// model configured in Image Generation settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     /// Reference image URLs for the previous image.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ref_urls: Option<Vec<String>>,

@@ -9,6 +9,7 @@
   | "code_buddy"
   | "kimi_code"
   | "pi"
+  | "mimo_code"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -370,6 +371,9 @@ export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
  *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
 export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
 
+/** Payload: `ImageGenerationConfig`. */
+export const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT = "image-generation-settings://changed"
+
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
  *  `TabsChanged` struct. The full conversation-bound tab set is sent as a
@@ -477,6 +481,7 @@ export const AGENT_DISPLAY_ORDER: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
+  "mimo_code",
 ]
 
 const AGENT_DISPLAY_ORDER_INDEX = new Map(
@@ -500,6 +505,7 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
+  "mimo_code",
 ]
 
 /** Process-level resident butlers (match backend registry.resident). */
@@ -518,6 +524,7 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "open_code",
   "pi",
   "code_buddy",
+  "mimo_code",
 ]
 
 /**
@@ -831,6 +838,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   code_buddy: "CodeBuddy",
   kimi_code: "Kimi Code",
   pi: "Pi",
+  mimo_code: "MiMo Code",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -844,6 +852,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   code_buddy: "bg-[#0052D9]",
   kimi_code: "bg-[#1783FF]",
   pi: "bg-[#0D9488]",
+  mimo_code: "bg-[#FF6900]",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)
@@ -1343,7 +1352,10 @@ export type AcpEvent =
 
 /** Which settings surface drifted (mirror of Rust `ConfigStaleKind`), used to
  *  word the "restart to apply" banner. */
-export type ConfigStaleKind = "agent_config" | "model_provider"
+export type ConfigStaleKind =
+  | "agent_config"
+  | "model_provider"
+  | "image_generation"
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to
@@ -1890,6 +1902,7 @@ export type McpAppType =
   | "hermes"
   | "code_buddy"
   | "kimi_code"
+  | "mimo_code"
 
 export interface LocalMcpServer {
   id: string

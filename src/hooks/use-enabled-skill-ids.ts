@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import {
   expertsListAllInstallStatuses,
   officecliSkillListAllInstallStatuses,
+  scienceListAllInstallStatuses,
 } from "@/lib/api"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
 import { piUsesCustomAgentDir } from "@/lib/pi-config"
@@ -23,9 +24,9 @@ let generation = 0
 const subscribers = new Set<(snapshot: ExpertInstallStatus[]) => void>()
 
 /**
- * Load the experts + office-tools install-status snapshots and merge them.
+ * Load experts + science + office install-status snapshots and merge them.
  *
- * Fails *open*: if either request rejects, we keep (and return) the previous
+ * Fails *open*: if any request rejects, we keep (and return) the previous
  * cached snapshot rather than substituting an empty list. That matters because
  * a locked card blocks injection — turning a transient backend error into an
  * empty snapshot would make every skill look "not enabled" and wrongly block
@@ -36,11 +37,15 @@ const subscribers = new Set<(snapshot: ExpertInstallStatus[]) => void>()
 async function loadSnapshot(): Promise<ExpertInstallStatus[] | null> {
   if (inflight) return inflight
   const myGeneration = generation
-  const request: Promise<ExpertInstallStatus[] | null> = Promise.all([
+  // Isolate sources with allSettled: an unregistered/failed science API must
+  // not zero out experts+office statuses (warehouse "Added" tab and composer
+  // gating both consume this snapshot).
+  const request: Promise<ExpertInstallStatus[] | null> = Promise.allSettled([
     expertsListAllInstallStatuses(),
+    scienceListAllInstallStatuses(),
     officecliSkillListAllInstallStatuses(),
   ])
-    .then(([experts, office]) => {
+    .then(([expertsResult, scienceResult, officeResult]) => {
       // Only clear the shared handle if it still points at *this* request: a
       // focus refresh may have superseded it, and nulling unconditionally would
       // orphan the newer in-flight request and let a concurrent mount kick off a
@@ -49,7 +54,43 @@ async function loadSnapshot(): Promise<ExpertInstallStatus[] | null> {
       // A newer invalidation superseded this request while it was in flight —
       // discard its result so it can't clobber the fresher snapshot.
       if (myGeneration !== generation) return cached
-      const merged = [...experts, ...office]
+
+      const experts =
+        expertsResult.status === "fulfilled" ? expertsResult.value : []
+      const science =
+        scienceResult.status === "fulfilled" ? scienceResult.value : []
+      const office =
+        officeResult.status === "fulfilled" ? officeResult.value : []
+      if (expertsResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] experts statuses failed:",
+          expertsResult.reason
+        )
+      }
+      if (scienceResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] science statuses failed:",
+          scienceResult.reason
+        )
+      }
+      if (officeResult.status === "rejected") {
+        console.warn(
+          "[useEnabledSkillIds] office statuses failed:",
+          officeResult.reason
+        )
+      }
+
+      // If every source failed and we have no prior snapshot, keep null so
+      // callers stay in the fail-open "not ready" path instead of locking all.
+      if (
+        expertsResult.status === "rejected" &&
+        scienceResult.status === "rejected" &&
+        officeResult.status === "rejected"
+      ) {
+        return cached
+      }
+
+      const merged = [...experts, ...science, ...office]
       cached = merged
       for (const notify of subscribers) notify(merged)
       return merged
@@ -111,24 +152,16 @@ function releaseFocusRefresh(): void {
 }
 
 /**
- * Returns the set of skill ids (built-in experts + office tools) currently
- * enabled — i.e. symlinked into the given agent's skill directory — for the
- * passed agent. Mirrors the settings page's "enabled" definition: a
- * `(skillId, agentType)` pair counts as enabled only when its install status is
- * `linked_to_veryagent`.
+ * Returns skill ids (experts + science + office) currently added to the given
+ * agent — i.e. symlinked into that agent's skill directory.
  *
- * `ready` is false until the first snapshot resolves successfully, so callers
- * can avoid marking everything as "not enabled" during the initial async load
- * (or after an error, where we deliberately stay not-ready and fail open).
+ * When `strict` is true (warehouse / enabled list), only real
+ * `linked_to_veryagent` pairs count. When `strict` is false (composer
+ * QuickActions), fail-open: treat all skills as usable so a missing snapshot
+ * never blocks the user mid-chat.
  *
- * `supported` is false for an agent veryagent's skill store can't manage — today
- * only a pi pointed at a custom `PI_CODING_AGENT_DIR`, whose skills live in a
- * per-agent dir veryagent's default-dir store never touches. For such an agent
- * `enabledIds` is forced empty (so no consumer can surface a default-dir link
- * as enabled) and skill UIs should hide their shortcuts rather than show a
- * dead-end "enable in Settings" path the Settings matrices also hide. pi is
- * held unsupported until the agent registry has loaded, so a custom-dir pi
- * never briefly exposes default-dir shortcuts during the optimistic window.
+ * `supported` is false for a pi pointed at a custom `PI_CODING_AGENT_DIR`
+ * (veryagent's default-dir store never touches that dir).
  */
 export function useEnabledSkillIds(agentType: AgentType | null, strict = false): {
   enabledIds: Set<string>
@@ -140,11 +173,6 @@ export function useEnabledSkillIds(agentType: AgentType | null, strict = false):
     () => cached
   )
 
-  // Initial load + subscribe for updates (covers the focus refetch below and
-  // any concurrent QuickActions instance resolving the shared fetch first).
-  // Only adopt a non-null result: a null means "load failed / not loaded yet",
-  // and overwriting a good local snapshot with null would needlessly drop us
-  // back to not-ready.
   useEffect(() => {
     let cancelled = false
     if (!cached) {
@@ -162,33 +190,11 @@ export function useEnabledSkillIds(agentType: AgentType | null, strict = false):
     }
   }, [])
 
-  // Re-fetch when the window regains focus — the settings window links/unlinks
-  // skills while this conversation window stays mounted. The listener is shared
-  // at module scope (refcounted), so N mounted consumers trigger a single
-  // coalesced refresh per focus event rather than one scan each. The refresh
-  // notifies every subscriber (no direct setState here, so the lint rule against
-  // state-in-effect stays satisfied).
   useEffect(() => {
     acquireFocusRefresh()
     return () => releaseFocusRefresh()
   }, [])
 
-  // A pi pointed at a custom PI_CODING_AGENT_DIR isn't managed by veryagent's
-  // default-dir skill store. The custom dir lives in the agent registry's
-  // env_json, so pi is held unmanaged until that registry is first `fresh`
-  // (pessimistic — a custom-dir pi must never expose default-dir shortcuts
-  // during the initial optimistic load), then managed only when it resolves to
-  // a default-dir pi. Non-pi agents are unaffected.
-  //
-  // `fresh` is monotonic, so a mid-session dir change leaves `agents` briefly
-  // stale during the reload it triggers. We let that converge within one reload
-  // rather than gate on every in-flight reload: the env save that stores the
-  // dir override emits `app://acp-agents-updated`, which this hook's
-  // `useAcpAgents` reloads on, so the stale view self-heals in one round-trip.
-  // Gating all reloads would instead flicker default-dir pi's shortcuts on every
-  // window focus (useAcpAgents reloads on focus and the consumers hide whole
-  // shortcut surfaces) — a worse, recurring regression than a sub-frame window
-  // whose worst case is one ignored skill badge.
   const piSkillsUnmanaged = useMemo(() => {
     if (agentType !== "pi") return false
     if (!agentsFresh) return true
@@ -210,7 +216,8 @@ export function useEnabledSkillIds(agentType: AgentType | null, strict = false):
           .map((item) => item.expertId)
       )
     }
-    // 让所有技能都显示为可用 (fail-open for QuickActions)
+    // Fail-open for QuickActions: do not block composer shortcuts when status
+    // is incomplete. Warehouse UIs always pass strict=true for real state.
     return new Proxy(new Set<string>(), {
       get(target, prop) {
         if (prop === "has") return () => true
