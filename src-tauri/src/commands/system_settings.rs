@@ -1,6 +1,8 @@
 use sea_orm::DatabaseConnection;
 #[cfg(feature = "tauri-runtime")]
 use tauri::State;
+#[cfg(feature = "tauri-runtime")]
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::app_error::AppCommandError;
 use crate::db::service::app_metadata_service;
@@ -21,6 +23,7 @@ use crate::terminal::manager::resolve_shell;
 pub(crate) const SYSTEM_PROXY_SETTINGS_KEY: &str = "system_proxy_settings";
 pub(crate) const SYSTEM_LANGUAGE_SETTINGS_KEY: &str = "system_language_settings";
 pub(crate) const SYSTEM_TERMINAL_SETTINGS_KEY: &str = "system_terminal_settings";
+pub(crate) const APP_AUTOSTART_SETTINGS_KEY: &str = "app_autostart_enabled";
 pub(crate) const APP_UPDATE_SOURCE_KEY: &str = "app_update_source";
 pub(crate) const LANGUAGE_SETTINGS_UPDATED_EVENT: &str = "app://language-settings-updated";
 pub(crate) const TERMINAL_SETTINGS_UPDATED_EVENT: &str = "app://terminal-settings-updated";
@@ -192,6 +195,62 @@ pub(crate) fn probe_terminal_shell_path_core(path: &str) -> bool {
     shell_exists(path)
 }
 
+pub(crate) async fn load_app_autostart_preference(
+    conn: &DatabaseConnection,
+) -> Result<Option<bool>, AppCommandError> {
+    let raw = app_metadata_service::get_value(conn, APP_AUTOSTART_SETTINGS_KEY)
+        .await
+        .map_err(AppCommandError::from)?;
+
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+
+    serde_json::from_str::<bool>(&raw).map(Some).map_err(|e| {
+        AppCommandError::configuration_invalid("Failed to parse stored autostart setting")
+            .with_detail(e.to_string())
+    })
+}
+
+pub(crate) async fn store_app_autostart_preference(
+    conn: &DatabaseConnection,
+    enabled: bool,
+) -> Result<(), AppCommandError> {
+    let serialized = serde_json::to_string(&enabled).map_err(|e| {
+        AppCommandError::invalid_input("Failed to serialize autostart setting")
+            .with_detail(e.to_string())
+    })?;
+
+    app_metadata_service::upsert_value(conn, APP_AUTOSTART_SETTINGS_KEY, &serialized)
+        .await
+        .map_err(AppCommandError::from)
+}
+
+#[cfg(feature = "tauri-runtime")]
+pub(crate) async fn apply_app_autostart_preference(
+    app: &tauri::AppHandle,
+    conn: &DatabaseConnection,
+) -> Result<bool, AppCommandError> {
+    let enabled = load_app_autostart_preference(conn).await?.unwrap_or(true);
+    let autostart = app.autolaunch();
+
+    let currently_enabled = autostart.is_enabled().unwrap_or(false);
+    if enabled != currently_enabled {
+        let result = if enabled {
+            autostart.enable()
+        } else {
+            autostart.disable()
+        };
+        result.map_err(|e| {
+            AppCommandError::configuration_invalid("Failed to apply app autostart setting")
+                .with_detail(e.to_string())
+        })?;
+    }
+
+    store_app_autostart_preference(conn, enabled).await?;
+    Ok(enabled)
+}
+
 pub(crate) async fn load_system_terminal_settings(
     conn: &DatabaseConnection,
 ) -> Result<SystemTerminalSettings, AppCommandError> {
@@ -265,6 +324,38 @@ pub async fn get_available_terminal_shells() -> Result<AvailableTerminalShells, 
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn probe_terminal_shell_path(path: String) -> Result<bool, AppCommandError> {
     Ok(probe_terminal_shell_path_core(&path))
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn get_app_autostart_enabled(
+    app: tauri::AppHandle,
+    db: State<'_, AppDatabase>,
+) -> Result<bool, AppCommandError> {
+    apply_app_autostart_preference(&app, &db.conn).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn set_app_autostart_enabled(
+    enabled: bool,
+    app: tauri::AppHandle,
+    db: State<'_, AppDatabase>,
+) -> Result<bool, AppCommandError> {
+    let autostart = app.autolaunch();
+    let result = if enabled {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    };
+
+    result.map_err(|e| {
+        AppCommandError::configuration_invalid("Failed to update app autostart setting")
+            .with_detail(e.to_string())
+    })?;
+
+    store_app_autostart_preference(&db.conn, enabled).await?;
+    Ok(enabled)
 }
 
 #[cfg(feature = "tauri-runtime")]

@@ -69,7 +69,7 @@ export function PermissionDialog({
   const hasStructured = hasOtherStructured || hasContentText
 
   return (
-    <div className="mx-4 mb-3 rounded-xl border border-border/70 bg-card/95 p-3 shadow-sm">
+    <div className="mx-4 mb-3 max-w-2xl rounded-xl border border-border/70 bg-card/95 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-1.5 text-sm font-medium">
@@ -83,7 +83,7 @@ export function PermissionDialog({
         </Badge>
       </div>
 
-      <div className="mt-3 max-h-[min(36vh,18rem)] space-y-2 overflow-y-auto pr-1">
+      <div className="mt-3 max-h-[min(24vh,12rem)] space-y-2 overflow-y-auto pr-1">
         {parsed.command && (
           <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -209,7 +209,7 @@ export function PermissionDialog({
         )}
 
         {!hasStructured && (
-          <pre className="rounded-md border border-border/60 bg-muted/20 p-2 text-xs whitespace-pre-wrap break-all text-foreground/90">
+          <pre className="max-h-44 overflow-auto rounded-md border border-border/60 bg-muted/20 p-2 text-xs whitespace-pre text-foreground/90">
             {parsed.jsonPreview}
           </pre>
         )}
