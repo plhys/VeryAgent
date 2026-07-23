@@ -202,7 +202,7 @@ const SKILLS_WITH_SETTINGS = new Set(["veryagent-image"])
 /** Product display names that must win over embedded experts.toml (no rebuild). */
 const SKILL_DISPLAY_NAME_OVERRIDE: Record<string, { zh: string; en: string }> =
   {
-    "veryagent-image": { zh: "出图网关", en: "Image Gateway" },
+    "veryagent-image": { zh: "通用出图网关", en: "Universal Image Gateway" },
   }
 
 function SkillCard({
@@ -461,6 +461,18 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         ...experts.map(expertToUnified),
         ...science.map(scienceToUnified),
         ...officeSkills.map(officeSkillToUnified),
+        // ── Built-in PPT generation skill (always present) ──
+        {
+          id: "pptx-generator",
+          name: { zh: "PPT 幻灯片生成", en: "PPT Slide Generator" },
+          description: {
+            zh: "将 Markdown 或 HTML 幻灯片批量转换为可编辑的 .pptx 文件，支持中文字体、表格、图片和演讲者备注。",
+            en: "Batch convert Markdown or HTML slides into editable .pptx files. Supports Chinese fonts, tables, images, and speaker notes.",
+          },
+          category: "presentations",
+          icon: "Presentation",
+          source: "office",
+        } as UnifiedSkillItem,
       ]
       setAllSkills(unified)
     } catch (err) {

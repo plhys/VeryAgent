@@ -3439,6 +3439,48 @@ export async function imageGenerationFetchModels(params: {
   })
 }
 
+// ─── PPT Generation (slide-generator.mjs) ─────────────────────────────────
+
+export interface PptxSlideContent {
+  title?: string
+  bullets?: string[]
+  images?: { url: string; caption?: string }[]
+  table?: { headers: string[]; rows: string[][] }
+  note?: string
+}
+
+export type PptxMode = "markdown" | "html"
+
+export interface PptxMarkdownRequest {
+  mode: "markdown"
+  title: string
+  slides: PptxSlideContent[]
+  output_path: string
+  background_color?: string
+  font_face?: string
+}
+
+export interface PptxHtmlRequest {
+  mode: "html"
+  html_dir: string
+  output_path: string
+  title?: string
+  include_screenshots?: boolean
+}
+
+export type PptxRequest = PptxMarkdownRequest | PptxHtmlRequest
+
+export interface PptxResult {
+  output_path: string
+  slide_count: number
+}
+
+export async function pptxGenerate(
+  req: PptxRequest,
+): Promise<PptxResult> {
+  return getTransport().call("ppt_generation", req)
+}
+
 /** Mirror of Rust `OpenWikiAgentCapability`. */
 export type OpenWikiAgentCapability =
   | "read_wiki"
