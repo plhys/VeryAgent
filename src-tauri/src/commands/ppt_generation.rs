@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use crate::app_error::AppCommandError;
+// paths is only used when tauri-runtime feature is enabled (for get_generator_script_path fallback)
+#[allow(unused_imports)]
 use crate::paths;
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -173,6 +175,18 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
 
     Err(AppCommandError::new(
         crate::app_error::AppErrorCode::TaskExecutionFailed,
-        "pptx generator script not found.".into(),
+        "pptx generator script not found.",
     ))
+}
+
+// ─── Tauri command wrapper ──────────────────────────────────────────────
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn __cmd__ppt_generation(
+    req: PptxRequest,
+) -> Result<PptxResult, String> {
+    generate_pptx(req)
+        .await
+        .map_err(|e| e.to_string())
 }

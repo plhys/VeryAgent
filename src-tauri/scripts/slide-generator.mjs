@@ -14,27 +14,48 @@ import { readFileSync, existsSync } from "node:fs"
 import { dirname, resolve, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const PROJECT_ROOT = resolve(__dirname, "..", "..")
-
-// ─── Load dependencies ──────────────────────────────────────────────────
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+// Try multiple paths since the script location varies between dev and release
+const projectRoots = [
+  resolve(scriptDir, "..", ".."),           // src-tauri/scripts → VeryAgent
+  resolve(scriptDir, "..", "..", ".."),    // if in resources/ during runtime
+]
 
 let pptxgen
-const pptxPaths = [
-  // Main project node_modules
-  join(PROJECT_ROOT, "node_modules/pptxgenjs/dist/pptxgen.js"),
-  // Converter bundled node_modules
-  join(PROJECT_ROOT, "resources/slide_export_runtime/converter/node_modules/pptxgenjs/dist/pptxgen.js"),
-]
-for (const p of pptxPaths) {
-  if (existsSync(p)) {
-    const mod = await import(`file://${p}`)
-    pptxgen = mod.default || mod
-    break
+
+for (const root of projectRoots) {
+  // Try ESM build first (no extra deps needed)
+  const ppxPath = join(root, "node_modules/pptxgenjs/dist/pptxgen.es.js")
+  if (existsSync(ppxPath)) {
+    try {
+      const mod = await import(`file://${ppxPath}`)
+      pptxgen = mod.default || mod.PptxGenJS || mod
+      break
+    } catch (e) {
+      console.error("Failed to load from", ppxPath, ":", e.message);
+    }
+  }
+  // Fallback: bundled version (needs JSZip)
+  const ppxBundled = join(root, "node_modules/pptxgenjs/dist/pptxgen.bundle.js")
+  if (existsSync(ppxBundled)) {
+    try {
+      const mod = await import(`file://${ppxBundled}`)
+      pptxgen = mod.default || mod
+      break
+    } catch {}
+  }
+  // Also try converter bundled version
+  const convPpx = join(root, "resources/slide_export_runtime/converter/node_modules/pptxgenjs/dist/pptxgen.bundle.js")
+  if (existsSync(convPpx)) {
+    try {
+      const mod = await import(`file://${convPpx}`)
+      pptxgen = mod.default || mod
+      break
+    } catch {}
   }
 }
 if (!pptxgen) {
-  console.error("ERROR: pptxgenjs not found")
+  console.error("ERROR: pptxgenjs not found in any expected path")
   process.exit(1)
 }
 
@@ -48,7 +69,7 @@ try {
 // ─── Main ───────────────────────────────────────────────────────────────
 
 async function main() {
-  const [_, _, reqFile] = process.argv
+  const reqFile = process.argv[2]
   if (!reqFile) {
     console.error("Usage: slide-generator.mjs <request.json>")
     process.exit(1)
@@ -92,7 +113,7 @@ function generateFromMarkdown({ title, slides, output_path, background_color = "
       s.addText(slide.title, {
         x: 0.5, y, w: "80%", h: 0.5,
         fontSize: 24, bold: true, color: "1F2937",
-        fontFace, lineSpacingMultiple: 1.2,
+        fontFace: font_face, lineSpacingMultiple: 1.2,
       })
       y += 0.65
     }
@@ -135,7 +156,7 @@ function generateFromMarkdown({ title, slides, output_path, background_color = "
     if (slide.table) {
       const { headers, rows } = slide.table
       const tableRows = [headers.map(h => ({
-        text: h, options: { bold: true, fill: { color: "1F2937" }, color: "FFFFFF", fontSize: 12, fontFace }
+        text: h, options: { bold: true, fill: { color: "1F2937" }, color: "FFFFFF", fontSize: 12, fontFace: font_face }
       }))]
       for (const row of rows) {
         tableRows.push(row.map(text => ({
@@ -154,8 +175,8 @@ function generateFromMarkdown({ title, slides, output_path, background_color = "
     if (slide.note) s.notes = slide.note
   }
 
-  return pptx.writeFile({ fileName: output_path }).then(() => ({
-    output_path, slide_count: slides.length,
+  return pptx.writeFile({ fileName: output_path }).then((filePath) => ({
+    output_path: filePath, slide_count: slides.length,
   }))
 }
 

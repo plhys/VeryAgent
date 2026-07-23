@@ -28,9 +28,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../out": "web/",
-      "scripts/slide-generator.mjs": "slide-generator.mjs",
-      "scripts/pptxgen-wrapper.mjs": "pptxgen-wrapper.mjs"
+      "../out": "web/"
     },
     "externalBin": ["binaries/veryagent-mcp"],
     "windows": {

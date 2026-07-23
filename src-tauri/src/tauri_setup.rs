@@ -1278,7 +1278,7 @@ use crate::commands::git;
                 office_tools_commands::officecli_render_html,
                 office_tools_commands::start_office_watch,
                 office_tools_commands::stop_office_watch,
-                ppt_generation::ppt_generation,
+                ppt_generation::__cmd__ppt_generation,
                 folder_commands::list_folder_commands,
                 folder_commands::create_folder_command,
                 folder_commands::update_folder_command,
