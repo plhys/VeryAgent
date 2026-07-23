@@ -94,6 +94,28 @@ pnpm server:dev
 - Rust stable (2021 edition)
 - Tauri 2 构建依赖（仅桌面端需要）
 
+## CI / CD 自动构建
+
+本项目使用 GitHub Actions 自动构建桌面端安装包，换机器无需编译，直接下载 exe 即可运行。
+
+| Workflow | 触发方式 | 产物 |
+|---|---|---|
+| [`release.yml`](.github/workflows/release.yml) | `git tag v* && git push --tags` 或手动触发 | Windows/Mac/Linux 全平台安装包 + Release draft |
+| [`snapshot.yml`](.github/workflows/snapshot.yml) | push 到 `main` / `dev` 分支 或手动触发 | Windows exe（Actions Artifacts，保留 7 天） |
+
+**新机器上手：**
+1. 前往 [GitHub Releases](https://github.com/plhys/VeryAgent/releases) 页面
+2. 下载最新的 `.exe` 安装包，双击安装
+3. 零编译，直接运行
+
+**本地开发（首次编译后自动缓存）：**
+```bash
+pnpm install          # ~10 min（首次），后续 ~1 min（缓存命中）
+pnpm tauri dev        # ~3 min（首次 Rust 编译），后续 ~30s（rust-cache 增量）
+```
+
+CI 使用 `Swatinem/rust-cache@v2` 缓存编译产物，换机器后首次编译从 3 分钟降至 30-60 秒。
+
 ## 架构
 
 ```
