@@ -1,12 +1,10 @@
 //! PPT generation from Markdown or HTML slide directories.
 //!
-//! Delegates to a Node.js subprocess that uses `pptxgenjs` to build editable
-//! .pptx files. Two conversion modes:
-//!
-//! 1. **Markdown** — simple markdown → PPTX (no browser needed).
-//! 2. **HTML slides** — headless WebView2 screenshot + DOM extraction → PPTX.
-//!    Uses the system WebView2 runtime (already included in Tauri), no extra
-//!    Chromium bundle needed.
+//! Two conversion modes:
+//! 1. **Markdown** — pure Node.js subprocess (pptxgenjs), no browser needed.
+//! 2. **HTML slides** — uses Tauri's WebView2 (system-provided, zero extra size)
+//!    to render each slide and take a screenshot for visual fidelity, then
+//!    overlays editable text/tables/images on top via pptxgenjs.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -88,27 +86,25 @@ pub struct PptxResult {
 // ─── Core function (no Tauri dependency) ─────────────────────────────────
 
 /// Run the Node.js PPTX generator via subprocess.
-///
-/// The node script lives inside VeryAgent's bundled assets (embedded as
-/// an include_dir binary or shipped alongside the app). We invoke it through
-/// `node` which is already guaranteed to be on PATH by `ensure_node_in_path`.
 pub async fn generate_pptx(
     req: PptxRequest,
 ) -> Result<PptxResult, AppCommandError> {
-    // Resolve the embedded node script path.
-    // Strategy: ship the generator as a small self-contained Node script
-    // bundled with the app resources.
     let script_path = get_generator_script_path()?;
 
     // Write request JSON to a temp file (avoids shell escaping issues).
     let tmp_dir = std::env::temp_dir().join("veryagent-pptx");
     std::fs::create_dir_all(&tmp_dir).ok();
     let req_file = tmp_dir.join("request.json");
-    std::fs::write(&req_file, serde_json::to_string_pretty(&req).unwrap())
-        .map_err(|e| AppCommandError::new(
+    std::fs::write(&req_file, serde_json::to_string_pretty(&req).map_err(
+        |e| AppCommandError::new(
             crate::app_error::AppErrorCode::TaskExecutionFailed,
             format!("failed to write request JSON: {e}"),
-        ))?;
+        )
+    )?)
+    .map_err(|e| AppCommandError::new(
+        crate::app_error::AppErrorCode::TaskExecutionFailed,
+        format!("failed to write request JSON: {e}"),
+    ))?;
 
     let out = Command::new("node")
         .arg(script_path)
@@ -141,20 +137,14 @@ pub async fn generate_pptx(
     Ok(result)
 }
 
-/// Find the bundled generator script. Priority:
-/// 1. App resource dir (packaged with release build)
-/// 2. Fallback path near executable
+/// Find the bundled generator script.
 fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
-    // Look next to the app executable first (works for both debug & release).
+    // Priority 1: next to the executable (release build)
     if let Some(exe_dir) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
     {
-        let candidate = exe_dir.join("slide-generator.mjs");
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-        // Also check ./resources/
+        // Check ./resources/ first (bundled with Tauri)
         let res = exe_dir.join("resources");
         if res.is_dir() {
             let candidate = res.join("slide-generator.mjs");
@@ -162,12 +152,17 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
                 return Ok(candidate);
             }
         }
+        // Also check sibling to exe
+        let candidate = exe_dir.join("slide-generator.mjs");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
     }
 
-    // For development, look relative to Cargo target dir.
+    // Priority 2: development mode — relative to Cargo.toml
     let candidates = [
+        "src-tauri/scripts/slide-generator.mjs",
         "scripts/slide-generator.mjs",
-        "src/slide-generator.mjs",
     ];
 
     for c in &candidates {
@@ -180,16 +175,4 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
         crate::app_error::AppErrorCode::TaskExecutionFailed,
         "pptx generator script not found.".into(),
     ))
-}
-
-// ─── Tauri command wrapper ────────────────────────────────────────────────
-
-#[cfg(feature = "tauri-runtime")]
-#[tauri::command]
-pub async fn ppt_generation(
-    req: PptxRequest,
-) -> Result<PptxResult, String> {
-    generate_pptx(req)
-        .await
-        .map_err(|e| e.to_string())
 }
