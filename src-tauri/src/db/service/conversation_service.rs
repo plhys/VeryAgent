@@ -3,6 +3,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, DatabaseConnection, EntityTrait,
     QueryFilter, QueryOrder, QuerySelect, Set,
 };
+use sea_orm::sea_query::Expr;
 
 use crate::db::entities::conversation::ConversationKind;
 use crate::db::entities::{conversation, folder};
@@ -132,6 +133,19 @@ pub async fn update_status(
     active.updated_at = Set(Utc::now());
     active.update(conn).await?;
     Ok(())
+}
+
+/// Reset all "in_progress" conversations to "completed".
+/// Called at startup to clean up zombie connections from an ungraceful shutdown.
+pub async fn reset_zombie_conversations(conn: &DatabaseConnection) -> Result<usize, DbError> {
+    use sea_orm::prelude::DateTimeUtc;
+    let result = conversation::Entity::update_many()
+        .col_expr(conversation::Column::Status, Expr::value(conversation::ConversationStatus::Completed))
+        .col_expr(conversation::Column::UpdatedAt, Expr::value(Utc::now()))
+        .filter(conversation::Column::Status.eq(conversation::ConversationStatus::InProgress))
+        .exec(conn)
+        .await?;
+    Ok(result.rows_affected as usize)
 }
 
 /// Conditional status transition (CAS): write `new_status` only if the row's

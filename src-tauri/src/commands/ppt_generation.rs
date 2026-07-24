@@ -174,7 +174,7 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
 
     Err(AppCommandError::new(
         crate::app_error::AppErrorCode::TaskExecutionFailed,
-        "pptx generator script not found.".into(),
+        "pptx generator script not found.",
     ))
 }
 

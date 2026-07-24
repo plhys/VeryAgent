@@ -360,6 +360,24 @@ use crate::commands::git;
                     });
                 }
 
+                // Reset zombie conversations — any "in_progress" conversations left
+                // running after an ungraceful shutdown get marked as "completed".
+                // This prevents the spinning AI indicator on restart.
+                {
+                    let zc = db::AppDatabase {
+                        conn: app.state::<db::AppDatabase>().conn.clone(),
+                    };
+                    tauri::async_runtime::spawn(async move {
+                        match crate::db::service::conversation_service::reset_zombie_conversations(&zc.conn).await {
+                            Ok(n) if n > 0 => tracing::info!(
+                                "[startup] reset_zombie_conversations: marked {n} stale conversation(s) as completed"
+                            ),
+                            Ok(_) => {},
+                            Err(e) => tracing::warn!("[startup] reset_zombie_conversations skipped: {e}"),
+                        }
+                    });
+                }
+
                 // Start chat channel background tasks
                 {
                     let ccm = app.state::<ChatChannelManager>();
