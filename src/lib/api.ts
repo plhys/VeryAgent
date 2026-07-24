@@ -3451,7 +3451,7 @@ export interface PptxSlideContent {
 
 export type PptxMode = "markdown" | "html"
 
-export interface PptxMarkdownRequest {
+export interface PptxMarkdownRequest extends Record<string, unknown> {
   mode: "markdown"
   title: string
   slides: PptxSlideContent[]
@@ -3460,7 +3460,7 @@ export interface PptxMarkdownRequest {
   font_face?: string
 }
 
-export interface PptxHtmlRequest {
+export interface PptxHtmlRequest extends Record<string, unknown> {
   mode: "html"
   html_dir: string
   output_path: string
