@@ -501,3 +501,21 @@ fr = "Générer et modifier des images. Paramètres : plusieurs passerelles, not
 pt = "Gera e edita imagens. Em Configurações: vários gateways, notas e prioridade 0–9 (0 = máxima)."
 ar = "إنشاء الصور وتعديلها. الإعدادات: بوابات متعددة وملاحظات وأولوية 0–9 (0 الأعلى)."
 
+[[expert]]
+id = "pptx-generator"
+category = "presentations"
+icon = "Presentation"
+sort_order = 400
+
+[expert.display_name]
+en = "PPT Slide Generator"
+"zh-CN" = "PPT 幻灯片生成"
+"zh-TW" = "簡報投影片產生器"
+ja = "PPT スライドジェネレーター"
+
+[expert.description]
+en = "Convert Markdown or HTML slides into editable .pptx files. Supports Chinese fonts, tables, images, and speaker notes."
+"zh-CN" = "将 Markdown 或 HTML 幻灯片批量转换为可编辑的 .pptx 文件，支持中文字体、表格、图片和演讲者备注。"
+"zh-TW" = "將 Markdown 或 HTML 簡報轉換為可編輯的 .pptx 檔案，支援中文字型、表格、圖片與講者備註。"
+ja = "Markdown または HTML のスライドを編集可能な .pptx ファイルに変換します。中国語フォント、表、画像、スピーカーノートに対応。"
+

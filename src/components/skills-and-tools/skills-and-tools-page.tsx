@@ -471,7 +471,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
             },
             category: "presentations",
             icon: "Presentation",
-            source: "office",
+            source: "expert",
           } as UnifiedSkillItem,
         ]
         setAllSkills(unified)
@@ -516,16 +516,7 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     async (skillId: string, source: "expert" | "science" | "office") => {
       if (!lockedAgentType) return
       setTogglingSkillId(skillId)
-
-      // Built-in PPT skill — no linking needed, AI calls it directly via chat.
-      if (skillId === "pptx-generator") {
-        toast.info(navigatorLocale.toLowerCase().startsWith("zh")
-          ? "PPT 幻灯片生成已通过对话使用，无需单独启用。在聊天中告诉 AI '帮我做一个 PPT'即可。"
-          : "PPT Slide Generator is used via chat — no need to enable separately."
-        )
-        setTogglingSkillId(null)
-        return
-      }
+      const currentlyEnabled = enabledIds.has(skillId)
       try {
         if (source === "expert") {
           if (currentlyEnabled) {
@@ -821,7 +812,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             },
             category: "presentations",
             icon: "Presentation",
-            source: "office",
+            source: "expert",
           } as UnifiedSkillItem,
         ]
         // Group first (编程/艺术设计/科研/办公), then fine category, then name
@@ -854,17 +845,6 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     async (skillId: string, source: "expert" | "science" | "office") => {
       if (!lockedAgentType) return
       setTogglingId(skillId)
-
-      // Built-in PPT skill — no linking needed.
-      if (skillId === "pptx-generator") {
-        toast.info(navigatorLocale.toLowerCase().startsWith("zh")
-          ? "PPT 幻灯片生成已通过对话使用，无需单独启用。在聊天中告诉 AI '帮我做一个 PPT'即可。"
-          : "PPT Slide Generator is used via chat — no need to enable separately."
-        )
-        setTogglingId(null)
-        return
-      }
-
       const currentlyEnabled = enabledIds.has(skillId)
       try {
         if (source === "expert") {
