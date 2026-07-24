@@ -2,9 +2,9 @@
 //!
 //! Two conversion modes:
 //! 1. **Markdown** — pure Node.js subprocess (pptxgenjs), no browser needed.
-//! 2. **HTML slides** — uses Tauri's WebView2 (system-provided, zero extra size)
-//!    to render each slide and take a screenshot for visual fidelity, then
-//!    overlays editable text/tables/images on top via pptxgenjs.
+//! 2. **HTML slides** — renders each HTML slide via Tauri's WebView2 (system-provided,
+//!    zero extra size), takes a screenshot for visual fidelity, then overlays editable
+//!    text/tables/images on top via pptxgenjs.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -13,9 +13,6 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use crate::app_error::AppCommandError;
-// paths is only used when tauri-runtime feature is enabled (for get_generator_script_path fallback)
-#[allow(unused_imports)]
-use crate::paths;
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -36,6 +33,7 @@ pub enum PptxRequest {
     },
 
     /// Convert an HTML slide directory (one .html per slide, e.g. 01.html, 02.html).
+    /// Uses WebView2 screenshot for visual fidelity + DOM extraction for editability.
     #[serde(rename = "html")]
     Html {
         /// Directory containing numbered HTML slide files.
@@ -45,9 +43,9 @@ pub enum PptxRequest {
         /// Optional custom title for the deck.
         #[serde(default)]
         title: Option<String>,
-        /// Whether to also produce a screenshot-only background layer.
+        /// Whether to use WebView2 screenshot for background layer.
         #[serde(default = "default_true")]
-        include_screenshots: bool,
+        use_screenshot_fidelity: bool,
     },
 }
 
@@ -85,9 +83,10 @@ pub struct PptxResult {
     pub slide_count: u32,
 }
 
-// ─── Core function (no Tauri dependency) ─────────────────────────────────
+// ─── Core function ──────────────────────────────────────────────────────
 
 /// Run the Node.js PPTX generator via subprocess.
+/// The Node script handles both markdown and html modes internally.
 pub async fn generate_pptx(
     req: PptxRequest,
 ) -> Result<PptxResult, AppCommandError> {
@@ -175,7 +174,7 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
 
     Err(AppCommandError::new(
         crate::app_error::AppErrorCode::TaskExecutionFailed,
-        "pptx generator script not found.",
+        "pptx generator script not found.".into(),
     ))
 }
 
