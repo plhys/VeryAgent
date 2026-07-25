@@ -505,6 +505,43 @@ function extractRevisedPrompt(content: string | null): string | null {
   return trimmed
 }
 
+function extractAspectToken(text: string): string | null {
+  const ratio = text.match(/(?:^|[^0-9])(\d{1,2}\s*[:：/]\s*\d{1,2})(?:[^0-9]|$)/)
+  if (ratio?.[1]) return ratio[1].trim()
+  const size = text.match(/(?:^|[^0-9])(\d{3,4}\s*[x×]\s*\d{3,4})(?:[^0-9]|$)/)
+  if (size?.[1]) return size[1].trim()
+  if (/横版|横屏|landscape|宽屏/i.test(text)) return "16:9"
+  if (/竖版|竖屏|portrait|海报/i.test(text)) return "9:16"
+  return null
+}
+
+function extractRequestedImageAspect(rawInput: string | null): string | null {
+  if (!rawInput) return null
+  try {
+    const parsed = JSON.parse(rawInput)
+    if (!parsed || typeof parsed !== "object") return null
+    const obj = parsed as Record<string, unknown>
+    for (const key of ["aspect_ratio", "aspectRatio", "image_size", "imageSize", "size"]) {
+      const value = obj[key]
+      if (typeof value === "string" && value.trim()) return value.trim()
+    }
+    const prompt = obj.prompt
+    if (typeof prompt === "string") {
+      const inferred = extractAspectToken(prompt)
+      if (inferred) return inferred
+    }
+  } catch {
+    // Some agents surface raw_input as pretty text rather than JSON.
+    const ratio = rawInput.match(/(?:aspect[_ ]?ratio|比例)["'\s:=]+(\d{1,2}\s*[:：/]\s*\d{1,2})/i)
+    if (ratio?.[1]) return ratio[1].trim()
+    const size = rawInput.match(/(?:image[_ ]?size|size|尺寸)["'\s:=]+(\d{3,4}\s*[x×]\s*\d{3,4})/i)
+    if (size?.[1]) return size[1].trim()
+    const inferred = extractAspectToken(rawInput)
+    if (inferred) return inferred
+  }
+  return null
+}
+
 /** First filesystem path from an ACP tool call's `locations` (`[{ path }]`), or null. */
 function firstLocationPath(locations: unknown): string | null {
   if (!Array.isArray(locations)) return null
@@ -801,6 +838,9 @@ export function buildStreamingTurnsFromLiveMessage(
             // image bytes arrived. Without this the in-flight skeleton would
             // sit there until TurnComplete clears `active_tool_calls`.
             const status = narrowToolCallStatus(block.info.status)
+            const requestedAspectRatio = isPlatformImage
+              ? extractRequestedImageAspect(block.info.raw_input)
+              : null
             if (recoveredImgs.length === 0) {
               // In-flight placeholder: title arrived, image hasn't (or the
               // call failed without producing one).
@@ -809,6 +849,7 @@ export function buildStreamingTurnsFromLiveMessage(
                 revised_prompt: revisedPrompt,
                 image: null,
                 status,
+                requested_aspect_ratio: requestedAspectRatio,
               })
             } else {
               for (const img of recoveredImgs) {
@@ -821,6 +862,7 @@ export function buildStreamingTurnsFromLiveMessage(
                     uri: img.uri ?? null,
                   },
                   status,
+                  requested_aspect_ratio: requestedAspectRatio,
                 })
               }
             }

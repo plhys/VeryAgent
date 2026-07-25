@@ -1,11 +1,17 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster, type ToasterProps } from "sonner"
 
 export function AppToaster(props: ToasterProps) {
-  const { resolvedTheme } = useTheme()
-  const theme = props.theme ?? (resolvedTheme === "dark" ? "dark" : "light")
+  // Theme is read from the <html data-theme="..."> attribute set by
+  // AppearanceProvider / the inline hydration script. Avoid next-themes here
+  // so the ThemeProvider swap does not break this component.
+  const theme =
+    props.theme ??
+    (typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme")?.startsWith("dark")
+      ? "dark"
+      : "light")
 
-  return <Toaster {...props} theme={theme} />
+  return <Toaster {...props} theme={theme} duration={3000} />
 }

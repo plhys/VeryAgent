@@ -13,7 +13,10 @@ export type MessageThreadProps = ComponentProps<typeof StickToBottom>
 
 export const MessageThread = ({ className, ...props }: MessageThreadProps) => (
   <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
+    className={cn(
+      "relative flex-1 overflow-y-hidden outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 [&_*]:outline-none [&_*]:ring-0 [&_*:focus]:outline-none [&_*:focus]:ring-0 [&_*:focus-visible]:outline-none [&_*:focus-visible]:ring-0",
+      className
+    )}
     initial="instant"
     resize="smooth"
     role="log"
@@ -30,7 +33,10 @@ export const MessageThreadContent = ({
   ...props
 }: MessageThreadContentProps) => (
   <StickToBottom.Content
-    className={cn("flex flex-col gap-8 p-4", className)}
+    className={cn(
+      "flex flex-col gap-8 p-4 outline-none focus:outline-none focus-visible:outline-none",
+      className
+    )}
     {...props}
   />
 )

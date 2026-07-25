@@ -12,7 +12,6 @@ import {
   type Ref,
 } from "react"
 import { useTranslations } from "next-intl"
-import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { Virtualizer, type VirtualizerHandle } from "virtua"
 import {
@@ -571,7 +570,6 @@ export function SidebarConversationList({
   const tCommon = useTranslations("Folder.common")
   const tFolderDropdown = useTranslations("Folder.folderNameDropdown")
   const tFileTree = useTranslations("Folder.fileTreeTab")
-  const { resolvedTheme } = useTheme()
   const { themeColor: appThemeColor } = useThemeColor()
   const { createTerminalInDirectory } = useTerminalContext()
   useZoomLevel()
@@ -962,7 +960,7 @@ export function SidebarConversationList({
     return ids
   }, [folders, dragOrder, childToParent])
 
-  const darkMode = resolvedTheme === "dark"
+  const darkMode = typeof document !== "undefined" && document.documentElement.classList.contains("dark")
 
   // Flat row model for windowing — the pinned section, the folders section, and
   // every conversation live in this ONE array fed to the single Virtualizer (no

@@ -1092,6 +1092,29 @@
   display: inline;
 }
 
+/* Global outline suppression for the chat workspace.
+   The base `* { outline-ring/50 }` rule adds a faint white frame around every
+   focusable element — especially OverlayScrollbars viewports and StickToBottom
+   containers — which intermittently shows up when users click around. For an
+   end-user product this looks like a "bug", so suppress it inside the chat
+   surface. Buttons/selects/etc. keep their own accessible focus rings where
+   they are intentionally interactive, not on the wrapping scroll container. */
+.stick-to-bottom,
+.stick-to-bottom * {
+  outline: none !important;
+}
+[data-stick-to-bottom] *,
+.os-viewport:focus-visible,
+.os-host:focus-visible,
+.ContextMenuTrigger:focus-visible .ContextMenuTrigger > *,
+.ContextMenuTrigger > *:focus-visible,
+.chat-workspace-host,
+.chat-workspace-host *,
+.chat-workspace-host :focus-visible,
+.chat-workspace-host .os-viewport:focus-visible {
+  outline: none !important;
+}
+
 /* Streamdown table overrides */
 [data-streamdown="table-wrapper"] {
   position: relative;

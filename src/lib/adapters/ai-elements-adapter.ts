@@ -71,6 +71,7 @@ export type AdaptedGeneratedImagePart = {
   /** `null` while the agent has emitted the ToolCall but no image yet. */
   image: UserImageDisplay | null
   status: ToolCallStatus | null
+  requestedAspectRatio?: string | null
 }
 
 export type AdaptedGoalRunPart = {
@@ -989,6 +990,7 @@ function adaptContentBlock(
         revisedPrompt: block.revised_prompt ?? null,
         image: display,
         status: block.status ?? null,
+        requestedAspectRatio: block.requested_aspect_ratio ?? null,
       }
     }
 

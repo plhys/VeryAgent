@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useState, useSyncExternalStore } from "react"
-import { RefreshCw, Unplug } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import {
@@ -173,12 +173,23 @@ export function StatusBarConnection() {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-1.5">
-                <Unplug className="h-3.5 w-3.5 text-muted-foreground/50" />
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeKey) void reapplyConfig(activeKey)
+                }}
+                className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-colors hover:bg-muted/50"
+              >
+                <span className="relative flex size-3 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-red-500" />
+                </span>
                 {model && <span>{model}</span>}
-              </div>
+              </button>
             </TooltipTrigger>
-            <TooltipContent side="top">{t("disconnected")}</TooltipContent>
+            <TooltipContent side="top">
+              {t("disconnected")}
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>

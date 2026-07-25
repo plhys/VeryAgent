@@ -1,8 +1,8 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { LayoutGrid, Monitor, Moon, Sun, Type } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useTheme } from "next-themes"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
@@ -28,11 +28,59 @@ type ThemeMode = "system" | "light" | "dark"
 
 export function AppearanceSettings() {
   const t = useTranslations("AppearanceSettings")
-  const { theme, resolvedTheme, setTheme } = useTheme()
-  // Theme color is fixed to "neutral" — no UI picker needed
   const { zoomLevel, setZoomLevel } = useZoomLevel()
   const { showWelcomeQuickActions, setShowWelcomeQuickActions } =
     useWelcomeQuickActions()
+
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "system"
+    return (localStorage.getItem("theme") as ThemeMode | null) ?? "system"
+  })
+
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof document === "undefined") return "light"
+    return document.documentElement.classList.contains("dark") ? "dark" : "light"
+  })
+
+  const applyTheme = (mode: ThemeMode) => {
+    const html = document.documentElement
+    const isDark =
+      mode === "dark" ||
+      (mode === "system" &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches)
+    if (isDark) {
+      html.classList.add("dark")
+    } else {
+      html.classList.remove("dark")
+    }
+    setResolvedTheme(isDark ? "dark" : "light")
+  }
+
+  useEffect(() => {
+    applyTheme(theme)
+    localStorage.setItem("theme", theme)
+    if (
+      typeof window !== "undefined" &&
+      "__TAURI_INTERNALS__" in window
+    ) {
+      import("@/lib/tauri").then((t) =>
+        t.updateAppearanceMode(theme).catch(() => {})
+      )
+    }
+  }, [theme])
+
+  // Listen for OS theme changes when in "system" mode
+  useEffect(() => {
+    if (theme !== "system" || typeof window === "undefined") return
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    const handler = () => applyTheme("system")
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [theme])
+
+  const setTheme = (value: ThemeMode) => {
+    setThemeState(value)
+  }
 
   const resolvedThemeLabel =
     resolvedTheme === "dark"

@@ -12,7 +12,6 @@ import {
   Sun,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useTheme } from "next-themes"
 import { openSettingsWindow } from "@/lib/api"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useActiveFolder } from "@/contexts/active-folder-context"
@@ -47,7 +46,10 @@ import {
 
 export function FolderTitleBar() {
   const tTitleBar = useTranslations("Folder.folderTitleBar")
-  const { theme, setTheme } = useTheme()
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === "undefined") return false
+    return document.documentElement.classList.contains("dark")
+  })
   const openFolder = useAppWorkspaceStore((s) => s.openFolder)
   const { activeFolder } = useActiveFolder()
   const isChatMode = useIsActiveChatMode()
@@ -196,17 +198,20 @@ export function FolderTitleBar() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 hover:text-foreground/80 border border-border rounded-md p-0.5 mt-2.5"
-                  onClick={() =>
-                    setTheme(theme === "dark" ? "light" : "dark")
-                  }
+                  onClick={() => {
+                    const next = !isDark
+                    setIsDark(next)
+                    document.documentElement.classList.toggle("dark", next)
+                    localStorage.setItem("theme", next ? "dark" : "light")
+                  }}
                   title={
-                    theme === "dark"
+                    isDark
                       ? tTitleBar("switchToLight")
                       : tTitleBar("switchToDark")
                   }
                 >
-                  <Sun className="h-5 w-5 dark:hidden" />
-                  <Moon className="hidden h-5 w-5 dark:block" />
+                  <Sun className="h-5 w-5" />
+                  {isDark && <Moon className="absolute h-5 w-5" />}
                 </Button>
                 <TitleBarUpdateButton />
               </div>

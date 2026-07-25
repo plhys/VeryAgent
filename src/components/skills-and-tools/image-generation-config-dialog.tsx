@@ -2,7 +2,7 @@
 
 /**
  * Image-generation config dialog opened from the veryagent-image skill card.
- * Reuses the same platform settings body / storage as Settings → 出图网关.
+ * Reuses the same platform settings body / storage as Settings → 通用出图网关.
  */
 
 import { useTranslations } from "next-intl"

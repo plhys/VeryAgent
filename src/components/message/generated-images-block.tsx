@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
 import Image from "next/image"
 import { invoke } from "@tauri-apps/api/core"
 import {
@@ -33,7 +33,42 @@ const GENERATED_IMAGE_MAX_BYTES = 20_000_000
 
 /** Shared frame for pending / failed / success image so the card does not jump size. */
 const IMAGE_FRAME_CLASS =
-  "h-64 w-64 max-w-full overflow-hidden rounded-md border border-border/70"
+  "max-w-full overflow-hidden rounded-lg"
+
+function inferRequestedAspectRatio(
+  prompt: string,
+  requestedAspectRatio?: string | null
+): { ratio: string; width: string } {
+  const hint = requestedAspectRatio?.trim()
+  const text = `${hint ?? ""} ${prompt}`.toLowerCase()
+  const explicit = text.match(/(?:^|[^0-9])(\d{1,2})\s*[:：/]\s*(\d{1,2})(?:[^0-9]|$)/)
+  if (explicit) {
+    const w = Number(explicit[1])
+    const h = Number(explicit[2])
+    if (w > 0 && h > 0) {
+      return {
+        ratio: `${w} / ${h}`,
+        width: w > h ? "24rem" : h > w ? "16rem" : "20rem",
+      }
+    }
+  }
+
+  const size = text.match(/(?:^|[^0-9])(\d{3,4})\s*[x×]\s*(\d{3,4})(?:[^0-9]|$)/)
+  if (size) {
+    const w = Number(size[1])
+    const h = Number(size[2])
+    if (w > 0 && h > 0) {
+      return {
+        ratio: `${w} / ${h}`,
+        width: w > h ? "24rem" : h > w ? "16rem" : "20rem",
+      }
+    }
+  }
+
+  if (/横版|横屏|landscape|宽屏/.test(text)) return { ratio: "16 / 9", width: "24rem" }
+  if (/竖版|竖屏|portrait|海报/.test(text)) return { ratio: "9 / 16", width: "16rem" }
+  return { ratio: "1 / 1", width: "20rem" }
+}
 
 function localPathFromUri(uri: string | null | undefined): string | null {
   if (!uri) return null
@@ -84,6 +119,7 @@ interface GeneratedImagesBlockProps {
   revisedPrompt: string | null
   image: UserImageDisplay | null
   status?: ToolCallStatus | null
+  requestedAspectRatio?: string | null
   className?: string
 }
 
@@ -95,6 +131,7 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
   revisedPrompt,
   image,
   status,
+  requestedAspectRatio,
   className,
 }: GeneratedImagesBlockProps) {
   const t = useTranslations("Folder.chat.messageList")
@@ -233,7 +270,7 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
         imageUrl,
         alt: img.name || t("imageGeneration"),
         skillId: "veryagent-image",
-        skillLabel: "出图网关",
+        skillLabel: "通用出图网关",
       })
     },
     [activeTabId, t]
@@ -242,119 +279,117 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
   const trimmedPrompt =
     typeof revisedPrompt === "string" ? revisedPrompt.trim() : ""
 
+  const requestedFrame = useMemo(
+    () => inferRequestedAspectRatio(trimmedPrompt, requestedAspectRatio),
+    [trimmedPrompt, requestedAspectRatio]
+  )
+  const frameStyle: CSSProperties = {
+    aspectRatio: requestedFrame.ratio,
+    width: requestedFrame.width,
+  }
+
   const displayImage = resolved
   const dataSrc = displayImage
     ? `data:${displayImage.mime_type};base64,${displayImage.data}`
     : ""
 
   return (
-    <div
-      className={cn(
-        // Fit content — no wide empty column beside the thumbnail.
-        "inline-flex max-w-full flex-col gap-2 rounded-md border border-border/70 bg-muted/20 p-2",
-        className
-      )}
-    >
-      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-        <ImagePlus className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span>{t("imageGeneration")}</span>
-      </div>
-
-      {trimmedPrompt.length > 0 ? (
-        <div className="max-w-[16rem] whitespace-pre-wrap break-words text-[11px] leading-snug text-muted-foreground">
-          {trimmedPrompt}
-        </div>
-      ) : null}
-
-      {displayImage ? (
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div
-              className={cn(
-                "group relative bg-muted/30",
-                IMAGE_FRAME_CLASS
-              )}
-            >
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(true)}
-                className="flex h-full w-full cursor-pointer items-center justify-center transition-opacity hover:opacity-80"
+    <>
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setPreviewOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              setPreviewOpen(true)
+            }
+          }}
+          className={cn(
+            "group inline-block cursor-pointer overflow-hidden rounded-lg shadow-sm transition-opacity hover:opacity-80",
+            IMAGE_FRAME_CLASS
+          )}
+          style={frameStyle}
+        >
+            {displayImage ? (
+              <Image
+                src={dataSrc}
+                alt={displayImage.name}
+                width={256}
+                height={256}
+                unoptimized
+                className="h-full w-full object-contain"
+              />
+            ) : isFailed ? (
+              <div
+                className="flex items-center justify-center rounded-md border border-destructive/30 bg-destructive/5 px-3 text-center text-xs text-destructive"
+                style={frameStyle}
+                role="status"
+                aria-live="polite"
               >
-                <Image
-                  src={dataSrc}
-                  alt={displayImage.name}
-                  width={256}
-                  height={256}
-                  unoptimized
-                  className="h-full w-full object-contain"
-                />
-              </button>
+                <div className="flex flex-col items-center gap-1.5">
+                  <AlertCircle className="h-5 w-5 opacity-80" />
+                  <span>
+                    {isHydrateFailed
+                      ? t("imageGenerationUnavailable")
+                      : t("imageGenerationFailed")}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="flex animate-pulse items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/60 text-xs text-muted-foreground"
+                style={frameStyle}
+                role="status"
+                aria-live="polite"
+              >
+                <div className="flex flex-col items-center gap-1.5">
+                  <ImagePlus className="h-5 w-5 opacity-60" />
+                  <span>{t("imageGenerationPending")}</span>
+                </div>
+              </div>
+            )}
+            {displayImage && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   void handleDownload(displayImage)
                 }}
-                className="absolute right-1 top-1 rounded-full bg-background/80 p-1 text-foreground/80 opacity-0 shadow-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                className="absolute right-1.5 top-1.5 rounded-full bg-background/70 p-1 text-foreground/70 opacity-0 shadow-sm transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
                 aria-label={t("downloadImage")}
                 title={t("downloadImage")}
               >
                 <Download className="h-3.5 w-3.5" />
               </button>
-            </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuItem
-              onSelect={() => void handleCopyImage(displayImage)}
-              disabled={copyingImage}
-            >
-              <ImageIcon className="size-4" />
-              {copyingImage ? tImg("copyingImage") : tImg("copyImage")}
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => void handleDownload(displayImage)}>
-              <Download className="size-4" />
-              {tImg("downloadImage")}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => handleReferenceToChat(displayImage)}>
-              <SparklesIcon className="size-4" />
-              {tImg("referenceToChat")}
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      ) : isFailed ? (
-        <div
-          className={cn(
-            "flex items-center justify-center border-dashed border-destructive/40 bg-destructive/5 px-3 text-center text-xs text-destructive",
-            IMAGE_FRAME_CLASS
-          )}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex flex-col items-center gap-1.5">
-            <AlertCircle className="h-5 w-5 opacity-80" />
-            <span>
-              {isHydrateFailed
-                ? t("imageGenerationUnavailable")
-                : t("imageGenerationFailed")}
-            </span>
+            )}
           </div>
-        </div>
-      ) : (
-        <div
-          className={cn(
-            "flex animate-pulse items-center justify-center border-dashed bg-muted/40 text-xs text-muted-foreground",
-            IMAGE_FRAME_CLASS
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {displayImage && (
+            <>
+              <ContextMenuItem
+                onSelect={() => void handleCopyImage(displayImage)}
+                disabled={copyingImage}
+              >
+                <ImageIcon className="size-4" />
+                {copyingImage ? tImg("copyingImage") : tImg("copyImage")}
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => void handleDownload(displayImage)}>
+                <Download className="size-4" />
+                {tImg("downloadImage")}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => handleReferenceToChat(displayImage)}>
+                <SparklesIcon className="size-4" />
+                {tImg("referenceToChat")}
+              </ContextMenuItem>
+            </>
           )}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex flex-col items-center gap-1.5">
-            <ImagePlus className="h-5 w-5 opacity-60" />
-            <span>{t("imageGenerationPending")}</span>
-          </div>
-        </div>
-      )}
+        </ContextMenuContent>
+      </ContextMenu>
 
       <ImagePreviewDialog
         src={dataSrc}
@@ -366,6 +401,6 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
         }
         downloadLabel={t("downloadImage")}
       />
-    </div>
+    </>
   )
 })

@@ -51,6 +51,20 @@ function newGatewayId(): string {
   return `gw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+/** Distinct left-border accent colors for gateway cards. */
+const GATEWAY_COLORS = [
+  "border-l-4 border-l-sky-500",
+  "border-l-4 border-l-emerald-500",
+  "border-l-4 border-l-violet-500",
+  "border-l-4 border-l-amber-500",
+  "border-l-4 border-l-rose-500",
+  "border-l-4 border-l-cyan-500",
+  "border-l-4 border-l-orange-500",
+  "border-l-4 border-l-teal-500",
+  "border-l-4 border-l-pink-500",
+  "border-l-4 border-l-indigo-500",
+]
+
 function emptyGateway(priority = 0): ImageGatewayEntry {
   return {
     id: newGatewayId(),
@@ -435,6 +449,7 @@ export function ImageGenerationSettingsBody({
                   <div
                     className={cn(
                       "rounded-lg border bg-muted/20",
+                      GATEWAY_COLORS[index % GATEWAY_COLORS.length],
                       !gw.enabled && "opacity-60",
                       hasErr && "border-destructive/50"
                     )}

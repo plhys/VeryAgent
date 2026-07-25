@@ -69,21 +69,21 @@ export function PermissionDialog({
   const hasStructured = hasOtherStructured || hasContentText
 
   return (
-    <div className="mx-4 mb-3 max-w-2xl rounded-xl border border-border/70 bg-card/95 p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-1.5 text-sm font-medium">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
+    <div className="mx-auto w-full max-w-md rounded-lg border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 shadow-md">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold leading-tight text-amber-900 dark:text-amber-100">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="truncate">{parsed.title}</span>
           </div>
-          <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
+          <p className="text-[11px] leading-tight text-amber-700/80 dark:text-amber-300/80">{t("subtitle")}</p>
         </div>
-        <Badge variant="outline" className="shrink-0 text-[10px]">
+        <Badge variant="outline" className="shrink-0 border-amber-500 text-amber-700 dark:text-amber-300 text-[10px] bg-amber-100 dark:bg-amber-900/40">
           {formatKindLabel(parsed.normalizedKind, t("kindFallbackTool"))}
         </Badge>
       </div>
 
-      <div className="mt-3 max-h-[min(24vh,12rem)] space-y-2 overflow-y-auto pr-1">
+      <div className="mt-2 max-h-[min(18vh,9rem)] space-y-1.5 overflow-y-auto pr-0.5 text-xs">
         {parsed.command && (
           <div className="space-y-1.5 rounded-md border border-border/60 bg-muted/20 p-2">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -215,7 +215,7 @@ export function PermissionDialog({
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {permission.options.map((opt) => {
           const reject = isRejectKind(opt.kind)
           const label = localizer.localizePermissionKind(opt.kind, opt.name)
@@ -223,7 +223,7 @@ export function PermissionDialog({
             <Button
               key={opt.option_id}
               variant={reject ? "destructive" : "default"}
-              className="h-auto min-h-9 whitespace-normal break-words text-left"
+              className="h-auto min-h-8 whitespace-normal break-words text-left px-3 text-sm rounded-full"
               onClick={() => onRespond(permission.request_id, opt.option_id)}
             >
               {label}

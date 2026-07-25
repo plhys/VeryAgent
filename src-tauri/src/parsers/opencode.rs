@@ -418,10 +418,11 @@ impl OpenCodeParser {
                         .get("text")
                         .and_then(|t| t.as_str())
                         .map(str::trim)
+                        .and_then(clean_opencode_skill_injected_text)
                         .filter(|s| !s.is_empty())
                     {
                         blocks.push(ContentBlock::Text {
-                            text: text.to_string(),
+                            text,
                         });
                     }
                 }
@@ -638,7 +639,52 @@ impl AgentParser for OpenCodeParser {
     }
 }
 
-pub(crate) fn resolve_opencode_base_dir() -> PathBuf {
+pub(crate) fn clean_opencode_skill_injected_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    let marker = "Base directory for this skill:";
+    if !trimmed.contains(marker) {
+        return Some(trimmed.to_string());
+    }
+
+    let skill_name = if let Some(path_start) = trimmed.find(marker) {
+        let after_marker = &trimmed[path_start + marker.len()..];
+        let base_line = after_marker.lines().next().unwrap_or("").trim();
+        base_line
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("skill")
+            .to_string()
+    } else {
+        "skill".to_string()
+    };
+
+    // OpenCode stores slash-command skill expansion as one user text part:
+    //   <SKILL.md content>
+    //   Base directory for this skill: .../<skill>
+    //   Relative paths in this skill ...
+    //
+    //   <actual user prompt>
+    // Hide the injected instructions in history and keep only a badgeable skill
+    // token plus the user's real prompt.
+    let user_prompt = trimmed
+        .split_once("Relative paths in this skill")
+        .and_then(|(_, rest)| {
+            rest.split_once('\n')
+                .map(|(_, after_line)| after_line.trim().to_string())
+        })
+        .unwrap_or_default();
+
+    if user_prompt.is_empty() {
+        Some(format!("/{skill_name}"))
+    } else {
+        Some(format!("/{skill_name}\n\n{user_prompt}"))
+    }
+}
+
+pub fn resolve_opencode_base_dir() -> PathBuf {
     resolve_xdg_data_home(std::env::var_os("XDG_DATA_HOME"), dirs::home_dir())
         .map(|xdg_data_home| xdg_data_home.join("opencode"))
         .unwrap_or_else(|| PathBuf::from("opencode"))

@@ -14,6 +14,8 @@ import { AgentIcon } from "@/components/agent-icon"
 import { type AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
+import { getSkillDisplayName } from "@/lib/skill-display-names"
+
 import type { ReferenceAttrs } from "../types"
 
 const ICON_CLASS = "size-3.5 shrink-0"
@@ -148,7 +150,11 @@ export function ReferenceBadge({ data, className }: ReferenceBadgeProps) {
       )}
     >
       <ReferenceIcon data={data} />
-      <span className="truncate">{data.label || data.id}</span>
+      <span className="truncate">
+        {data.refType === "skill"
+          ? getSkillDisplayName(data.id)
+          : data.label || data.id}
+      </span>
     </span>
   )
 }

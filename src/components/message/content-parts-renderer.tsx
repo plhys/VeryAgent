@@ -2726,6 +2726,7 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
           revisedPrompt={part.revisedPrompt}
           image={part.image}
           status={part.status}
+          requestedAspectRatio={part.requestedAspectRatio}
         />
       )
     }

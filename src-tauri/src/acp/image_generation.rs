@@ -245,6 +245,12 @@ impl ImageGenerationService {
             "size": size,
             "response_format": "b64_json",
         });
+        let fallback_body = serde_json::json!({
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": size,
+        });
 
         // Transient transport errors (TLS reset, brief network blip) are common
         // on long image calls; retry a couple of times before failing the tool.
@@ -260,7 +266,34 @@ impl ImageGenerationService {
                 .await;
 
             match result {
-                Ok(resp) => return parse_images_response(resp, model).await,
+                Ok(resp) => {
+                    let parsed = parse_images_response(resp, model).await;
+                    if is_unsupported_response_format_error(&parsed) {
+                        tracing::info!(
+                            url = %full_url,
+                            model = %model,
+                            "image gateway rejected response_format; retrying without it"
+                        );
+                        let retry = self
+                            .client
+                            .post(&full_url)
+                            .header("Content-Type", "application/json")
+                            .header("Authorization", format!("Bearer {}", config.api_key))
+                            .json(&fallback_body)
+                            .send()
+                            .await;
+                        return match retry {
+                            Ok(resp) => parse_images_response(resp, model).await,
+                            Err(e) => serde_json::json!({
+                                "error": format!(
+                                    "Image generation API retry without response_format failed: {}",
+                                    truncate_error(&e.to_string(), 500)
+                                )
+                            }),
+                        };
+                    }
+                    return parsed;
+                }
                 Err(e) => {
                     let msg = e.to_string();
                     tracing::warn!(
@@ -337,7 +370,6 @@ impl ImageGenerationService {
             .text("model", model.to_string())
             .text("prompt", prompt.to_string())
             .text("n", "1")
-            .text("response_format", "b64_json")
             .part("image", part);
 
         if let Some(s) = size.filter(|s| !s.is_empty()) {
@@ -353,10 +385,7 @@ impl ImageGenerationService {
             .await;
 
         match result {
-            Ok(resp) => {
-                // Some gateways only support generations. Surface the body clearly.
-                parse_images_response(resp, model).await
-            }
+            Ok(resp) => parse_images_response(resp, model).await,
             Err(e) => serde_json::json!({
                 "error": format!("Image edit API call failed: {}", truncate_error(&e.to_string(), 500))
             }),
@@ -551,6 +580,19 @@ async fn parse_images_response(resp: reqwest::Response, model: &str) -> serde_js
             truncate_error(&item.to_string(), 400)
         )
     })
+}
+
+fn is_unsupported_response_format_error(value: &serde_json::Value) -> bool {
+    let Some(error) = value.get("error").and_then(|v| v.as_str()) else {
+        return false;
+    };
+    let lower = error.to_ascii_lowercase();
+    lower.contains("response_format")
+        && (lower.contains("not support")
+            || lower.contains("unsupported")
+            || lower.contains("unrecognized")
+            || lower.contains("unknown parameter")
+            || lower.contains("invalid parameter"))
 }
 
 fn persist_base64_image(b64: &str, mime: &str, model: &str) -> serde_json::Value {

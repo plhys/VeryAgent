@@ -134,6 +134,7 @@ export type ContentBlock =
       revised_prompt?: string | null
       image?: ImageData | null
       status?: ToolCallStatus | null
+      requested_aspect_ratio?: string | null
     }
   | {
       type: "tool_use"
