@@ -58,6 +58,7 @@ import { FileWorkspaceTabBar } from "@/components/files/file-workspace-tab-bar"
 import { FileWorkspacePanel } from "@/components/files/file-workspace-panel"
 import { ExternalConflictDialog } from "@/components/files/external-conflict-dialog"
 import { AppToaster } from "@/components/ui/app-toaster"
+import { PetFloating } from "@/components/layout/pet-floating"
 import {
   DeepLinkBootstrap,
   PetFocusBridge,
@@ -838,6 +839,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
         <FolderWorkspaceShell>{children}</FolderWorkspaceShell>
       )}
       <StatusBar />
+      <PetFloating />
       <AppToaster
         position="bottom-right"
         duration={TOAST_DURATION_MS}
