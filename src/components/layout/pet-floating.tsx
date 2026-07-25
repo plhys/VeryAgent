@@ -9,12 +9,15 @@ import {
 } from "@/lib/pet/sprite-url"
 import { PetSprite } from "@/app/pet/_components/PetSprite"
 import { usePetState } from "@/app/pet/_hooks/usePetState"
+import type { PetState } from "@/lib/pet/animation"
+import { PetBadge } from "@/app/pet/_components/PetBadge"
 
 export function PetFloating() {
   const [pet, setPet] = useState<PetDetail | null>(null)
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null)
   const [renderMode, setRenderMode] = useState<PetRenderMode>("webm")
-  const [scale, setScale] = useState(0.35)
+  const [scale, setScale] = useState(0.5)
+  const [loaded, setLoaded] = useState(false)
   const agentState = usePetState()
 
   const renderState: PetState = agentState
@@ -32,7 +35,8 @@ export function PetFloating() {
         if (cancelled) return
         setPet(detail)
         setRenderMode(detail.renderMode)
-        setScale((config.scale ?? 1) * 0.35)
+        setScale((config.scale ?? 1) * 0.5)
+        setLoaded(true)
 
         if (detail.renderMode === "spritesheet" && detail.spritesheetPath) {
           const sprite = await readPetSpritesheet("default")
@@ -50,7 +54,8 @@ export function PetFloating() {
           setPet(null)
           setSpritesheetUrl(null)
           setRenderMode("webm")
-          setScale(0.35)
+          setScale(0.5)
+          setLoaded(true)
         }
       }
     }
@@ -62,12 +67,15 @@ export function PetFloating() {
     }
   }, [])
 
+  if (!loaded) return null
+
   return (
     <div
-      className="pointer-events-none fixed bottom-8 right-4 z-40 select-none"
+      className="pointer-events-none fixed bottom-9 right-5 z-40 select-none"
       aria-label="桌面宠物"
     >
-      <div className="pointer-events-auto">
+      <div className="pointer-events-auto relative">
+        <PetBadge />
         <PetSprite
           spritesheetUrl={renderMode === "spritesheet" ? spritesheetUrl : null}
           state={renderState}
