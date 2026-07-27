@@ -705,92 +705,9 @@ use crate::commands::git;
                     }
                 }
 
-                // Auto-open the pet window on startup so it's always visible.
-                if app.get_webview_window("pet").is_none() {
-                    let db = app.state::<crate::db::AppDatabase>();
-                    let pet_app = app.handle().clone();
-                    let pet_db = db.conn.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let db_ref = &pet_db;
-                        let config = match crate::commands::pet::pet_get_settings_core(db_ref).await {
-                            Ok(c) => c,
-                            Err(_) => return,
-                        };
-                        let pet_id = config.active_pet_id.clone().unwrap_or_else(|| "default".to_string());
-                        let scale = config.scale.clamp(0.5, 3.0);
-                        let win_w = windows::PET_BASE_WIDTH * scale;
-                        let win_h = windows::PET_BASE_HEIGHT * scale;
-
-                        // Calculate bottom-right position from the primary monitor's
-                        // work area BEFORE building the window. Using work_area
-                        // excludes the Windows taskbar / macOS Dock.  Setting
-                        // position on the builder avoids the race where
-                        // current_monitor() returns None on a just-created window.
-                        let mut pos_x = 100.0f64;
-                        let mut pos_y = 100.0f64;
-                        if let Ok(Some(monitor)) = pet_app.primary_monitor() {
-                            let sf = monitor.scale_factor();
-                            let area_pos: tauri::LogicalPosition<f64> =
-                                monitor.work_area().position.to_logical(sf);
-                            let area_size: tauri::LogicalSize<f64> =
-                                monitor.work_area().size.to_logical(sf);
-                            // On Windows, even decorations-less windows have an invisible
-                            // ~7px resize border (Aero Snap), so a small negative margin
-                            // compensates and makes the visible content truly flush with
-                            // the screen edge.
-                            #[cfg(target_os = "windows")]
-                            let margin = -7.0;
-                            #[cfg(not(target_os = "windows"))]
-                            let margin = 0.0;
-                            pos_x = area_pos.x + area_size.width - win_w - margin;
-                            pos_y = area_pos.y + area_size.height - win_h - margin;
-                        }
-
-                        let url = tauri::WebviewUrl::App(format!("pet?petId={pet_id}").into());
-                        let builder = tauri::WebviewWindowBuilder::new(&pet_app, "pet", url)
-                            .title("veryagent pet")
-                            .inner_size(win_w, win_h)
-                            .position(pos_x, pos_y)
-                            .resizable(false)
-                            .decorations(false)
-                            .transparent(true)
-                            .always_on_top(config.always_on_top)
-                            .skip_taskbar(true)
-                            .shadow(false)
-                            .focused(false)
-                            .accept_first_mouse(true);
-
-                        let _win = match windows::apply_pet_window_style(builder).build() {
-                            Ok(w) => w,
-                            Err(e) => {
-                                tracing::warn!("[Pet] auto-open failed: {e}");
-                                return;
-                            }
-                        };
-
-                        // Also create the bubble window (hidden)
-                        if pet_app.get_webview_window("pet-bubble").is_none() {
-                            let bubble_url = tauri::WebviewUrl::App("pet-bubble".into());
-                            let bubble_builder =
-                                tauri::WebviewWindowBuilder::new(&pet_app, "pet-bubble", bubble_url)
-                                    .title("veryagent pet bubble")
-                                    .inner_size(windows::PET_BUBBLE_WIDTH, windows::PET_BUBBLE_HEIGHT)
-                                    .decorations(false)
-                                    .transparent(true)
-                                    .always_on_top(true)
-                                    .resizable(false)
-                                    .skip_taskbar(true)
-                                    .shadow(false)
-                                    .focused(false)
-                                    .visible(false);
-                            if let Err(e) = windows::apply_pet_window_style(bubble_builder).build() {
-                                tracing::warn!("[Pet] auto-open bubble failed: {e}");
-                            }
-                        }
-
-                        windows::spawn_pet_hover_watcher(pet_app);
-                    });
-                }
+                // Auto-open pet window disabled - pet now floats inside workspace only
+                // Disabled: standalone pet window removed in favor of embedded PetFloating
+                // See src/components/layout/pet-floating.tsx for the embedded pet implementation
 
                 // Listen for bubble window visibility requests from the
                 // pet-bubble frontend. The bubble page emits
@@ -1368,6 +1285,7 @@ use crate::commands::git;
                 model_provider_commands::create_model_provider,
                 model_provider_commands::update_model_provider,
                 model_provider_commands::delete_model_provider,
+                model_provider_commands::fetch_provider_models,
                 web::start_web_server,
                 web::stop_web_server,
                 web::get_web_server_status,

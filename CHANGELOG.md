@@ -3,11 +3,21 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.4**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.7**）。
 
 ---
 
 ## [Unreleased]
+
+### 修复
+
+- **`fetch_provider_models` 命令注册**：修复设置页选中智能体后刷新模型列表报 `Command fetch_provider_models not found`——后端 `tauri_setup.rs` 的 invoke 注册表遗漏了该命令，补加注册行。
+- **`model_provider.rs` 门控**：补回 `fetch_provider_models` 上的 `#[cfg(feature = "tauri-runtime")]` 门控，防止 web/standalone 构建编译失败。
+
+### 变更
+
+- **桌宠内嵌化**：移除启动时自动打开的独立 pet 窗口（`WebviewWindow`），改为 workspace 内嵌常驻图标（`src/components/layout/pet-floating.tsx`）；仅对话窗口显示（欢迎页隐藏），进入对话时触发从小到大放大入场动画。
+- **桌宠位置调整**：最终锁定 `bottom: 80px, right: -30px`，避开对话框按钮区域。
 
 ---
 
