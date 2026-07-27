@@ -82,3 +82,18 @@ src-tauri/target/
 
 # sccache local cache (do not commit; migrate manually per BUILD-SPEED.md)
 .sccache/
+
+# WorkBuddy workspace memory (project-specific, not for git)
+.workbuddy/
+
+# Slide generation runtime dependencies
+src-tauri/resources/slide_runtime/
+
+# Separate project cloned inside the repo by mistake
+veryagent-plus/
+
+# Runtime error logs from dev scripts
+*.err
+
+# Windows reserved device name (can't be deleted via normal means)
+nul

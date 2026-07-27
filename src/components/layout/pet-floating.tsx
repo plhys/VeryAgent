@@ -13,13 +13,13 @@ import type { PetState } from "@/lib/pet/animation"
 import { PetBadge } from "@/app/pet/_components/PetBadge"
 import { useTabStore } from "@/stores/tab-store"
 
-export function PetFloating({ isConversationActive }: { isConversationActive?: boolean }) {
+export function PetFloating() {
   const [pet, setPet] = useState<PetDetail | null>(null)
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null)
   const [renderMode, setRenderMode] = useState<PetRenderMode>("webm")
   const [scale, setScale] = useState(1)
   const [loaded, setLoaded] = useState(false)
-const [animate, setAnimate] = useState(false) // Entrance animation flag
+  const [animate, setAnimate] = useState(false) // Entrance animation flag
   const agentState = usePetState()
 
   // Only surface the floating pet inside an active conversation window — not on
@@ -32,21 +32,6 @@ const [animate, setAnimate] = useState(false) // Entrance animation flag
   })
 
   const renderState: PetState = agentState
-  const shouldShow = Boolean(isConversationActive && mounted)
-
-  // Detect when this component becomes visible inside a conversation tab
-  useEffect(() => {
-    if (isConversationActive) {
-      const timer = setTimeout(() => {
-        setMounted(true)
-        setShow(true)
-      }, 100)
-      return () => clearTimeout(timer)
-    } else {
-      setMounted(false)
-      setShow(false)
-    }
-  }, [isConversationActive])
 
   // Load pet data and settings on mount.
   useEffect(() => {
