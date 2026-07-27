@@ -19,6 +19,8 @@ export type PetState =
   | "failed"
   | "waiting"
   | "running"
+  | "running_right"
+  | "running_left"
   | "review"
 
 // Row index (0..=8) in the sprite sheet for each state, top-to-bottom.
@@ -29,6 +31,8 @@ export const PET_STATE_ROW: Record<PetState, number> = {
   failed: 5,
   waiting: 6,
   running: 7,
+  running_right: 7,
+  running_left: 7,
   review: 8,
 }
 
@@ -42,6 +46,8 @@ export const PET_FRAME_DURATIONS_MS: Record<PetState, number[]> = {
   failed: [140, 140, 140, 140, 140, 140, 140, 240],
   waiting: [150, 150, 150, 150, 150, 260],
   running: [120, 120, 120, 120, 120, 220],
+  running_right: [120, 120, 120, 120, 120, 220],
+  running_left: [120, 120, 120, 120, 120, 220],
   review: [150, 150, 150, 150, 150, 280],
 }
 
