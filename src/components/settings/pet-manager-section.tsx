@@ -53,7 +53,6 @@ import {
 import { PetEditor } from "./pet-editor"
 import { PetImporter } from "./pet-importer"
 import { PetActionPreviewGrid } from "./pet-action-preview-grid"
-import { PetMarketplaceDialog } from "./pet-marketplace-dialog"
 
 const SPRITE_PREVIEW_CONCURRENCY = 4
 
@@ -66,7 +65,6 @@ export function PetManagerSection() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorTarget, setEditorTarget] = useState<PetSummary | null>(null)
   const [importOpen, setImportOpen] = useState(false)
-  const [marketplaceOpen, setMarketplaceOpen] = useState(false)
   const [codexAvailable, setCodexAvailable] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PetSummary | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -253,16 +251,6 @@ export function PetManagerSection() {
               >
                 <Import className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                onClick={() => setMarketplaceOpen(true)}
-                title={tMarket("openMarketplace")}
-                aria-label={tMarket("openMarketplace")}
-              >
-                <Store className="h-3.5 w-3.5" />
-              </Button>
             </div>
           </div>
         </CollapsibleTrigger>
@@ -442,13 +430,6 @@ export function PetManagerSection() {
             setImportOpen(false)
             await refresh()
           }}
-        />
-
-        <PetMarketplaceDialog
-          open={marketplaceOpen}
-          onOpenChange={setMarketplaceOpen}
-          installedIds={installedIds}
-          onInstalled={refresh}
         />
 
         <AlertDialog

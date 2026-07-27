@@ -14,8 +14,6 @@ export const SPRITE_FRAME_HEIGHT = SPRITE_SHEET_HEIGHT / SPRITE_GRID_ROWS // 208
 // Server-emitted PetState (see Rust `PetState` enum, snake_case JSON).
 export type PetState =
   | "idle"
-  | "running_right"
-  | "running_left"
   | "waving"
   | "jumping"
   | "failed"
@@ -26,8 +24,6 @@ export type PetState =
 // Row index (0..=8) in the sprite sheet for each state, top-to-bottom.
 export const PET_STATE_ROW: Record<PetState, number> = {
   idle: 0,
-  running_right: 1,
-  running_left: 2,
   waving: 3,
   jumping: 4,
   failed: 5,
@@ -41,8 +37,6 @@ export const PET_STATE_ROW: Record<PetState, number> = {
 // sheet are blank.
 export const PET_FRAME_DURATIONS_MS: Record<PetState, number[]> = {
   idle: [1680, 660, 660, 840, 840, 1920],
-  running_right: [120, 120, 120, 120, 120, 120, 120, 220],
-  running_left: [120, 120, 120, 120, 120, 120, 120, 220],
   waving: [140, 140, 140, 280],
   jumping: [140, 140, 140, 140, 280],
   failed: [140, 140, 140, 140, 140, 140, 140, 240],

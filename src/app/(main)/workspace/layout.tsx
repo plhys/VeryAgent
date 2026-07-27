@@ -8,9 +8,8 @@ import {
   useRef,
   useState,
 } from "react"
-import type { ImperativePanelGroupHandle } from "react-resizable-panels"
-import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
+import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StatusBar } from "@/components/layout/status-bar"
 import {
@@ -822,6 +821,7 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
 
 function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
+  const isChatMode = useIsActiveChatMode()
   const { isOpen: sidebarOpen, width: sidebarWidth } = useSidebarContext()
 
   return (
@@ -839,7 +839,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
         <FolderWorkspaceShell>{children}</FolderWorkspaceShell>
       )}
       <StatusBar />
-      <PetFloating />
+      <PetFloating isConversationActive={isChatMode} />
       <AppToaster
         position="bottom-right"
         duration={TOAST_DURATION_MS}

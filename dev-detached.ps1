@@ -109,8 +109,13 @@ function Ensure-Binary {
     }
 
     Write-Host "[rust] cargo build (debug, incremental)..." -ForegroundColor Yellow
+    # 兼容 PowerShell 5.1：$ErrorActionPreference=Stop 会把 cargo 正常的编译进度(stderr)误判为错误并中断。
+    # 这里临时放宽，仅用 $LASTEXITCODE 判断真正的编译失败。
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     cargo build --manifest-path (Join-Path $PSScriptRoot "src-tauri\Cargo.toml") `
         --no-default-features --features tauri-runtime
+    $ErrorActionPreference = $prevEAP
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[rust] build failed" -ForegroundColor Red
         exit $LASTEXITCODE

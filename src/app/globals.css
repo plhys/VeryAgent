@@ -1229,6 +1229,21 @@
   user-select: none;
 }
 
+.animate-fade-in-scale {
+  animation: petFadeInScale 0.4s ease-out;
+}
+
+@keyframes petFadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Monaco widgets: align popups/menus with shadcn surface style */
 .context-view .monaco-menu,
 .monaco-editor .suggest-widget,

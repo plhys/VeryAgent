@@ -32,8 +32,6 @@ pub const PET_MANIFEST_FILENAME: &str = "pet.json";
 pub enum PetState {
     #[default]
     Idle,
-    RunningRight,
-    RunningLeft,
     Waving,
     Jumping,
     Failed,
@@ -46,8 +44,6 @@ impl PetState {
     pub const fn row(self) -> u8 {
         match self {
             PetState::Idle => 0,
-            PetState::RunningRight => 1,
-            PetState::RunningLeft => 2,
             PetState::Waving => 3,
             PetState::Jumping => 4,
             PetState::Failed => 5,
@@ -390,8 +386,6 @@ mod tests {
     fn pet_state_rows_are_unique_and_sequential() {
         let states = [
             PetState::Idle,
-            PetState::RunningRight,
-            PetState::RunningLeft,
             PetState::Waving,
             PetState::Jumping,
             PetState::Failed,

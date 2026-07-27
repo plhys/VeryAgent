@@ -12,15 +12,32 @@ import { usePetState } from "@/app/pet/_hooks/usePetState"
 import type { PetState } from "@/lib/pet/animation"
 import { PetBadge } from "@/app/pet/_components/PetBadge"
 
-export function PetFloating() {
+export function PetFloating({ isConversationActive }: { isConversationActive?: boolean }) {
   const [pet, setPet] = useState<PetDetail | null>(null)
   const [spritesheetUrl, setSpritesheetUrl] = useState<string | null>(null)
   const [renderMode, setRenderMode] = useState<PetRenderMode>("webm")
   const [scale, setScale] = useState(0.5)
   const [loaded, setLoaded] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [show, setShow] = useState(false)
   const agentState = usePetState()
 
   const renderState: PetState = agentState
+  const shouldShow = Boolean(isConversationActive && mounted)
+
+  // Detect when this component becomes visible inside a conversation tab
+  useEffect(() => {
+    if (isConversationActive) {
+      const timer = setTimeout(() => {
+        setMounted(true)
+        setShow(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    } else {
+      setMounted(false)
+      setShow(false)
+    }
+  }, [isConversationActive])
 
   useEffect(() => {
     let cancelled = false
@@ -63,15 +80,15 @@ export function PetFloating() {
     void load()
     return () => {
       cancelled = true
-      revokePetSpriteObjectUrl(objectUrl)
+      if (objectUrl) revokePetSpriteObjectUrl(objectUrl)
     }
   }, [])
 
-  if (!loaded) return null
+  if (!loaded || !shouldShow) return null
 
   return (
     <div
-      className="pointer-events-none fixed bottom-9 right-5 z-40 select-none"
+      className="pointer-events-none fixed bottom-9 right-5 z-40 select-none animate-fade-in-scale"
       aria-label="桌面宠物"
     >
       <div className="pointer-events-auto relative">
