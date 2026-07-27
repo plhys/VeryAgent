@@ -1996,6 +1996,7 @@ export function SidebarConversationList({
     if (row.kind === "empty") return `empty-${row.folderId}`
     if (row.kind === "chats-empty") return "chats-empty"
     if (row.kind === "subsession-loading") return `subloading-${row.parentId}`
+    if (row.kind === "divider") return "divider"
     return `conv-${row.conversation.agent_type}-${row.conversation.id}`
   }
 
