@@ -18,6 +18,7 @@ import {
   ArrowUp,
 } from "lucide-react"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
+import { SidebarSummaryBubble } from "./sidebar-summary-bubble"
 import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
 import { STATUS_ORDER } from "@/lib/types"
@@ -25,11 +26,6 @@ import { cn, copyTextToClipboard } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import { useTabStore } from "@/contexts/tab-context"
 import { toast } from "sonner"
-import {
-  HoverCard,
-  HoverCardTrigger,
-  HoverCardContent,
-} from "@/components/ui/hover-card"
 import { getFolderConversation } from "@/lib/api"
 import {
   ContextMenu,
@@ -370,54 +366,18 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   />
                 </div>
 
-                {isPinned ? (
-                  <HoverCard openDelay={300}>
-                    <HoverCardTrigger asChild>
-                      <span
-                        className={cn(
-                          "relative min-w-0 flex-1 truncate text-[0.875rem]",
-                          isSelected
-                            ? "font-medium text-sidebar-foreground"
-                            : "font-normal",
-                          isOpenInTab && "text-primary"
-                        )}
-                      >
-                        {formatConversationTitle(conversation.title) ||
-                          t("untitledConversation")}
-                      </span>
-                    </HoverCardTrigger>
-                    <HoverCardContent
-                      side="right"
-                      align="start"
-                      sideOffset={120}
-                      className="w-[36rem] whitespace-pre-wrap rounded-xl border-border/60 p-5 text-sm leading-relaxed shadow-xl"
-                    >
-                      <p className="mb-2 text-xs font-semibold text-muted-foreground/80">
-                        📝 对话总结
-                      </p>
-                      {summary ? (
-                        <p className="text-foreground/90">{summary}</p>
-                      ) : (
-                        <p className="text-muted-foreground/60 italic">
-                          正在生成总结…
-                        </p>
-                      )}
-                    </HoverCardContent>
-                  </HoverCard>
-                ) : (
-                  <span
-                    className={cn(
-                      "relative min-w-0 flex-1 truncate text-[0.875rem]",
-                      isSelected
-                        ? "font-medium text-sidebar-foreground"
-                        : "font-normal",
-                      isOpenInTab && "text-primary"
-                    )}
-                  >
-                    {formatConversationTitle(conversation.title) ||
-                      t("untitledConversation")}
-                  </span>
-                )}
+                <span
+                  className={cn(
+                    "relative min-w-0 flex-1 truncate text-[0.875rem]",
+                    isSelected
+                      ? "font-medium text-sidebar-foreground"
+                      : "font-normal",
+                    isOpenInTab && "text-primary"
+                  )}
+                >
+                  {formatConversationTitle(conversation.title) ||
+                    t("untitledConversation")}
+                </span>
               </button>
 
               {/* Expand/collapse affordance for delegation children. It overlays
@@ -729,6 +689,13 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
         isHovered={isHovered}
         rawTimestamp={rawTimestamp}
       />
+      {isPinned && (
+        <SidebarSummaryBubble
+          hostRef={cardRef}
+          isHovered={isHovered}
+          summary={summary}
+        />
+      )}
     </>
   )
 })
