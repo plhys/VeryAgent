@@ -392,13 +392,13 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     <HoverCardContent
                       side="right"
                       align="start"
-                      sideOffset={8}
-                      className="w-96 whitespace-pre-wrap text-sm leading-relaxed"
+                      sideOffset={120}
+                      className="w-[36rem] whitespace-pre-wrap rounded-xl border-border/60 p-5 text-sm leading-relaxed shadow-xl"
                     >
-                      <p className="font-medium text-xs text-muted-foreground mb-1">
-                        对话总结
+                      <p className="mb-2 text-xs font-semibold text-muted-foreground/80">
+                        📝 对话总结
                       </p>
-                      <p>{summary}</p>
+                      <p className="text-foreground/90">{summary}</p>
                     </HoverCardContent>
                   </HoverCard>
                 ) : (
