@@ -1897,7 +1897,7 @@ export function SidebarConversationList({
       )
     }
     if (row.kind === "divider") {
-      return <div className="mx-2 my-1 border-t border-border/40" />
+      return <div className="mx-2 my-1.5 border-t-2 border-border/60" />
     }
     if (row.kind === "folder") {
       return themeWrap(
