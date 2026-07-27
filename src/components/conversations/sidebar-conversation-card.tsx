@@ -334,13 +334,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 )}
                 {isPinned && (
                   <span
-                    className="pointer-events-none absolute top-1/2 z-10 flex items-center justify-center"
-                    style={{
-                      left: "calc(var(--conv-rail-axis, 0.875rem) + 0.125rem)",
-                      width: "0.875rem",
-                      height: "0.875rem",
-                      transform: "translate(-50%, -50%)",
-                    }}
+                    className="inline-flex shrink-0 items-center justify-center"
                     aria-hidden
                   >
                     <ArrowUp className="h-3 w-3 text-primary" />
