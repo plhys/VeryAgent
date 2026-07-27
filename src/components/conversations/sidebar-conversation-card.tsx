@@ -295,6 +295,20 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   }}
                 />
                 )}
+                {isPinned && (
+                  <span
+                    className="pointer-events-none absolute top-1/2 z-10 flex items-center justify-center"
+                    style={{
+                      left: "calc(var(--conv-rail-axis, 0.875rem) - 0.625rem)",
+                      width: "0.875rem",
+                      height: "0.875rem",
+                      transform: "translate(-50%, -50%)",
+                    }}
+                    aria-hidden
+                  >
+                    <ArrowUp className="h-3 w-3 text-primary" />
+                  </span>
+                )}
                 <div
                   className={cn(
                     "pointer-events-none absolute top-1/2 z-10 flex items-center justify-center",
@@ -334,9 +348,6 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     isOpenInTab && "text-primary"
                   )}
                 >
-                  {isPinned && (
-                    <ArrowUp className="mr-0.5 inline-block h-3.5 w-3.5 shrink-0 align-text-top text-primary" />
-                  )}
                   {formatConversationTitle(conversation.title) ||
                     t("untitledConversation")}
                 </span>

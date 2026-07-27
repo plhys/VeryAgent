@@ -316,6 +316,10 @@ export interface SectionHeaderRow {
   count: number
 }
 
+export interface DividerRow {
+  kind: "divider"
+}
+
 /**
  * A transient placeholder at the child indent, shown while a conversation's
  * delegation children are being lazily fetched (between expand and the
@@ -330,6 +334,7 @@ export interface SubsessionLoadingRow {
 
 export type SidebarRow =
   | SectionHeaderRow
+  | DividerRow
   | FolderHeaderRow
   | ConversationRow
   | EmptyHintRow
@@ -517,6 +522,7 @@ export function buildRows(args: {
         )
       }
     }
+    rows.push({ kind: "divider" })
   }
 
   // The Folders and Chat sections sit below the (always-top) Pinned section in
