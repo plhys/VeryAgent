@@ -15,6 +15,7 @@ import {
   ChevronRight,
   LayoutGrid,
   Link2,
+  ArrowUp,
 } from "lucide-react"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { useTranslations } from "next-intl"
@@ -333,6 +334,9 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     isOpenInTab && "text-primary"
                   )}
                 >
+                  {isPinned && (
+                    <ArrowUp className="mr-0.5 inline-block h-3.5 w-3.5 shrink-0 align-text-top text-primary" />
+                  )}
                   {formatConversationTitle(conversation.title) ||
                     t("untitledConversation")}
                 </span>
