@@ -299,7 +299,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   <span
                     className="pointer-events-none absolute top-1/2 z-10 flex items-center justify-center"
                     style={{
-                      left: "calc(var(--conv-rail-axis, 0.875rem) - 0.625rem)",
+                      left: "calc(var(--conv-rail-axis, 0.875rem) - 1rem)",
                       width: "0.875rem",
                       height: "0.875rem",
                       transform: "translate(-50%, -50%)",
