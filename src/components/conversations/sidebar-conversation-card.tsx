@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, useRef, type CSSProperties } from "react"
+import { memo, useState, useCallback, useEffect, useRef, type CSSProperties } from "react"
 import {
   Pencil,
   Trash2,
@@ -25,6 +25,12 @@ import { cn, copyTextToClipboard } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import { useTabStore } from "@/contexts/tab-context"
 import { toast } from "sonner"
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card"
+import { getFolderConversation } from "@/lib/api"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -222,6 +228,34 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   // time / running badge then stays visible on hover (nothing swaps in for it).
   const isSubsession = conversation.parent_id != null
 
+  // ── Pinned conversation summary ──────────────────────────────────────
+  const [summary, setSummary] = useState<string | null>(null)
+  useEffect(() => {
+    if (!isPinned) return
+    let cancelled = false
+    // In a future step, this will call a backend RPC to get the stored summary.
+    // For now, placeholder: fetch the conversation turns to verify the flow works.
+    getFolderConversation(conversation.id)
+      .then((detail) => {
+        if (cancelled) return
+        const texts = detail.turns
+          .map((t) => t.blocks
+            .filter((b): b is { type: "text"; text: string } => b.type === "text")
+            .map((b) => b.text)
+            .join("\n")
+          )
+          .filter(Boolean)
+          .join("\n")
+        // Simple extractive summary: first 200 chars
+        const short = texts.length > 200 ? texts.slice(0, 200) + "..." : texts
+        setSummary(short || "（空对话）")
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null)
+      })
+    return () => { cancelled = true }
+  }, [isPinned, conversation.id])
+
   return (
     <>
       <ContextMenu>
@@ -339,18 +373,48 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   />
                 </div>
 
-                <span
-                  className={cn(
-                    "relative min-w-0 flex-1 truncate text-[0.875rem]",
-                    isSelected
-                      ? "font-medium text-sidebar-foreground"
-                      : "font-normal",
-                    isOpenInTab && "text-primary"
-                  )}
-                >
-                  {formatConversationTitle(conversation.title) ||
-                    t("untitledConversation")}
-                </span>
+                {isPinned && summary ? (
+                  <HoverCard openDelay={300}>
+                    <HoverCardTrigger asChild>
+                      <span
+                        className={cn(
+                          "relative min-w-0 flex-1 truncate text-[0.875rem]",
+                          isSelected
+                            ? "font-medium text-sidebar-foreground"
+                            : "font-normal",
+                          isOpenInTab && "text-primary"
+                        )}
+                      >
+                        {formatConversationTitle(conversation.title) ||
+                          t("untitledConversation")}
+                      </span>
+                    </HoverCardTrigger>
+                    <HoverCardContent
+                      side="right"
+                      align="start"
+                      sideOffset={8}
+                      className="w-96 whitespace-pre-wrap text-sm leading-relaxed"
+                    >
+                      <p className="font-medium text-xs text-muted-foreground mb-1">
+                        对话总结
+                      </p>
+                      <p>{summary}</p>
+                    </HoverCardContent>
+                  </HoverCard>
+                ) : (
+                  <span
+                    className={cn(
+                      "relative min-w-0 flex-1 truncate text-[0.875rem]",
+                      isSelected
+                        ? "font-medium text-sidebar-foreground"
+                        : "font-normal",
+                      isOpenInTab && "text-primary"
+                    )}
+                  >
+                    {formatConversationTitle(conversation.title) ||
+                      t("untitledConversation")}
+                  </span>
+                )}
               </button>
 
               {/* Expand/collapse affordance for delegation children. It overlays
