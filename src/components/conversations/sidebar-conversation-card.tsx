@@ -14,14 +14,16 @@ import {
   Info,
   ChevronRight,
   LayoutGrid,
+  Link2,
 } from "lucide-react"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { useTranslations } from "next-intl"
 import type { DbConversationSummary, ConversationStatus } from "@/lib/types"
 import { STATUS_ORDER } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, copyTextToClipboard } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import { useTabStore } from "@/contexts/tab-context"
+import { toast } from "sonner"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -540,6 +542,18 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           <ContextMenuItem onSelect={() => setDetailsOpen(true)}>
             <Info className="h-4 w-4" />
             {tDetails("menuLabel")}
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={async () => {
+              const link = `veryagent://session/${conversation.agent_type}_${conversation.id}`
+              const ok = await copyTextToClipboard(link)
+              if (ok) {
+                toast.success("对话链接已复制")
+              }
+            }}
+          >
+            <Link2 className="h-4 w-4" />
+            复制对话链接
           </ContextMenuItem>
           <ContextMenuItem onSelect={toggleTileMode}>
             <LayoutGrid className="h-4 w-4" />

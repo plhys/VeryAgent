@@ -8,6 +8,7 @@ import type { Components, LinkSafetyModalProps } from "streamdown"
 import { ReferenceBadge } from "@/components/chat/composer/badges/reference-badge"
 import { parseVeryAgentReferenceUri } from "@/components/chat/composer/reference-uri"
 import type { ReferenceAttrs } from "@/components/chat/composer/types"
+import { useTabStore } from "@/stores/tab-store"
 import { classifyResourceKind, type ResourceKind } from "@/lib/resource-kind"
 import { cn } from "@/lib/utils"
 import { useStreamdownLinkSafety } from "./link-safety"
@@ -100,9 +101,37 @@ export function MarkdownLink({
   // bytes travel out of band, so it has no openable target). The same parser the
   // editor uses on draft restore recovers refType/id/meta from the uri; the link
   // text is the label.
+  //
+  // Session references are clickable — clicking opens the conversation in a new tab.
   if (!isIncomplete && href.toLowerCase().startsWith("veryagent:")) {
     const reference = parseVeryAgentReferenceUri(href, nodeText(children))
-    if (reference) return <ReferenceBadge data={reference} />
+    if (!reference) {
+      return <a className={cn("wrap-anywhere font-medium text-primary underline", className)} {...rest}>{children}</a>
+    }
+    if (reference.refType === "session") {
+      const openTab = useTabStore.getState().openTab
+      const agentType = reference.meta?.agentType
+      const rawId = reference.id
+      let conversationId: number | null = null
+      if (agentType && rawId.startsWith(agentType + "_")) {
+        conversationId = Number(rawId.slice(agentType.length + 1))
+      } else {
+        conversationId = Number(rawId)
+      }
+      if (!isNaN(conversationId)) {
+        return (
+          <button
+            type="button"
+            title={reference.uri ?? reference.label}
+            onClick={() => openTab(0, conversationId!, agentType ?? "openai", false)}
+            className="inline-flex cursor-pointer appearance-none items-center align-middle leading-none hover:opacity-80"
+          >
+            <ReferenceBadge data={reference} />
+          </button>
+        )
+      }
+    }
+    return <ReferenceBadge data={reference} />
   }
 
   const kind = isIncomplete ? null : classifyResourceKind(href)
