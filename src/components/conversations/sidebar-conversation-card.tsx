@@ -250,8 +250,11 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
         const short = texts.length > 200 ? texts.slice(0, 200) + "..." : texts
         setSummary(short || "（空对话）")
       })
-      .catch(() => {
-        if (!cancelled) setSummary(null)
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("[PetSummary] getFolderConversation failed:", err)
+          setSummary(null)
+        }
       })
     return () => { cancelled = true }
   }, [isPinned, conversation.id])
@@ -333,7 +336,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   <span
                     className="pointer-events-none absolute top-1/2 z-10 flex items-center justify-center"
                     style={{
-                      left: "calc(var(--conv-rail-axis, 0.875rem) - 1rem)",
+                      left: "calc(var(--conv-rail-axis, 0.875rem) + 0.125rem)",
                       width: "0.875rem",
                       height: "0.875rem",
                       transform: "translate(-50%, -50%)",
@@ -373,7 +376,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                   />
                 </div>
 
-                {isPinned && summary ? (
+                {isPinned ? (
                   <HoverCard openDelay={300}>
                     <HoverCardTrigger asChild>
                       <span
@@ -398,7 +401,13 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                       <p className="mb-2 text-xs font-semibold text-muted-foreground/80">
                         📝 对话总结
                       </p>
-                      <p className="text-foreground/90">{summary}</p>
+                      {summary ? (
+                        <p className="text-foreground/90">{summary}</p>
+                      ) : (
+                        <p className="text-muted-foreground/60 italic">
+                          正在生成总结…
+                        </p>
+                      )}
                     </HoverCardContent>
                   </HoverCard>
                 ) : (
