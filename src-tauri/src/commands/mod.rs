@@ -42,3 +42,4 @@ pub mod openwiki;
 #[cfg(feature = "tauri-runtime")]
 pub mod image_proxy;
 pub mod ppt_generation;
+pub mod summary;

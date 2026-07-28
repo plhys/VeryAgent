@@ -535,7 +535,10 @@ pub async fn get_folder_conversation_core(
                     // and started_at from the parsed conversation list.
                     if matches!(
                         at,
-                        AgentType::OpenClaw | AgentType::Cline | AgentType::Gemini
+                        AgentType::OpenClaw
+                            | AgentType::Cline
+                            | AgentType::Gemini
+                            | AgentType::Hermes
                     ) {
                         if let Ok(all) = parser.list_conversations() {
                             // Filter by folder_path first, then find the closest

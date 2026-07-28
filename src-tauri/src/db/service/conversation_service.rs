@@ -115,6 +115,7 @@ async fn create_inner(
         updated_at: Set(now),
         deleted_at: Set(None),
         pinned_at: Set(None),
+        summary: Set(None),
     };
     Ok(model.insert(conn).await?)
 }
@@ -360,6 +361,7 @@ fn conv_to_summary(r: conversation::Model) -> DbConversationSummary {
         parent_id: r.parent_id,
         parent_tool_use_id: r.parent_tool_use_id,
         delegation_call_id: r.delegation_call_id,
+        summary: r.summary,
     }
 }
 

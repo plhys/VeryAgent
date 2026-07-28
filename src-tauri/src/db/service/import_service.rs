@@ -171,6 +171,7 @@ async fn import_one(
         updated_at: Set(updated_at),
         deleted_at: Set(None),
         pinned_at: Set(None),
+        summary: Set(None),
     };
     conv.insert(conn).await?;
     Ok(ImportOutcome::Imported)

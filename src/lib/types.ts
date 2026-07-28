@@ -339,6 +339,8 @@ export interface DbConversationSummary {
   parent_id?: number | null
   parent_tool_use_id?: string | null
   delegation_call_id?: string | null
+  /** AI-generated structured summary. null or absent means not yet generated. */
+  summary?: string | null
 }
 
 /** Payload for the global `conversation://changed` side-channel that keeps

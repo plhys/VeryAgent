@@ -185,14 +185,26 @@ pub(crate) async fn handle_event(
             };
             let conversation_id = state_arc.read().await.conversation_id;
             if let Some(cid) = conversation_id {
-                conversation_service::update_external_id(db_conn, cid, session_id.clone()).await?;
-                // The external_id just landed on the row. The create-time
-                // sidebar upsert carried `external_id: null` (no session yet),
-                // so re-broadcast the full summary on `conversation://changed`
-                // to converge every client. Root-only (the helper skips
-                // delegation children). Best-effort, after the DB write.
-                crate::commands::conversations::emit_conversation_upsert(&emitter, db_conn, cid)
-                    .await;
+                // Preserve existing external_id — the conversation already has a
+                // reference to an older session (e.g. from a previous agent start).
+                // Overwriting it would orphan the old session data and prevent the
+                // user from resuming the conversation via ACP session/resume.
+                let conv = conversation_service::get_by_id(db_conn, cid).await?;
+                if conv.external_id.is_none() {
+                    conversation_service::update_external_id(
+                        db_conn,
+                        cid,
+                        session_id.clone(),
+                    )
+                    .await?;
+                    // The external_id just landed on the row. The create-time
+                    // sidebar upsert carried `external_id: null` (no session yet),
+                    // so re-broadcast the full summary on `conversation://changed`
+                    // to converge every client. Root-only (the helper skips
+                    // delegation children). Best-effort, after the DB write.
+                    crate::commands::conversations::emit_conversation_upsert(&emitter, db_conn, cid)
+                        .await;
+                }
             }
             Ok(())
         }

@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom"
 import type { RefObject } from "react"
+import ReactMarkdown from "react-markdown"
 
 interface SidebarSummaryBubbleProps {
   hostRef: RefObject<HTMLElement | null>
@@ -23,26 +24,26 @@ export function SidebarSummaryBubble({
 }: SidebarSummaryBubbleProps) {
   if (!isHovered || !summary || !hostRef.current) return null
 
-  const rect = hostRef.current.getBoundingClientRect()
-
   return createPortal(
     <div
       className="pointer-events-none fixed z-[9999]"
       style={{
-        top: rect.top + rect.height / 2,
+        top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
       }}
     >
       <div
-        className="w-[36rem] whitespace-pre-wrap rounded-2xl border border-border/30 bg-popover/95 p-6 text-sm leading-relaxed shadow-2xl backdrop-blur-xl"
+        className="w-[36rem] rounded-xl border border-border/40 bg-background/60 p-0 text-sm leading-relaxed shadow-2xl backdrop-blur-2xl [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_strong]:font-semibold"
       >
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary/70">
+        <div className="flex items-center gap-1.5 rounded-t-xl bg-primary/15 px-5 py-2.5 text-xs font-semibold text-primary">
           <span>📝</span>
           <span>对话总结</span>
-        </p>
-        <div className="border-l-2 border-primary/20 pl-4">
-          <p className="text-foreground/80 leading-relaxed">{summary}</p>
+        </div>
+        <div className="p-5">
+          <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground/85">
+            <ReactMarkdown>{summary}</ReactMarkdown>
+          </div>
         </div>
       </div>
     </div>,

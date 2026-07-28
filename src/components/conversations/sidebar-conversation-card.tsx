@@ -26,7 +26,7 @@ import { cn, copyTextToClipboard } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import { useTabStore } from "@/contexts/tab-context"
 import { toast } from "sonner"
-import { getFolderConversation } from "@/lib/api"
+import { generateConversationSummary, getFolderConversation } from "@/lib/api"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -226,34 +226,90 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
 
   // ── Pinned conversation summary ──────────────────────────────────────
   const [summary, setSummary] = useState<string | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   useEffect(() => {
     if (!isPinned) return
     let cancelled = false
-    // In a future step, this will call a backend RPC to get the stored summary.
-    // For now, placeholder: fetch the conversation turns to verify the flow works.
+
+    // If the backend already has a stored summary, use it directly.
+    if (conversation.summary) {
+      setSummary(conversation.summary)
+      return
+    }
+
+    // Build an extractive summary from conversation turns.
+    setSummaryLoading(true)
     getFolderConversation(conversation.id)
       .then((detail) => {
         if (cancelled) return
-        const texts = detail.turns
-          .map((t) => t.blocks
+
+        const turns = detail.turns
+        const turnCount = turns.length
+        if (turnCount === 0) { setSummary(null); return }
+
+        // Helper: check if text is just greeting / small talk.
+        const isGreeting = (text: string) =>
+          /^(你好|hello|hi|hey|早上好|下午好|晚上好|请问|你好你好|我是|有什么可以帮|nice to meet|how are you)/i.test(text.trim())
+
+        // Find the first SUBSTANTIVE user message (skip greetings).
+        const firstUserTurn = turns.find((t) => {
+          if (t.role !== "user") return false
+          const text = t.blocks
             .filter((b): b is { type: "text"; text: string } => b.type === "text")
             .map((b) => b.text)
             .join("\n")
-          )
-          .filter(Boolean)
-          .join("\n")
-        // Simple extractive summary: first 200 chars
-        const short = texts.length > 200 ? texts.slice(0, 200) + "..." : texts
-        setSummary(short || "（空对话）")
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error("[PetSummary] getFolderConversation failed:", err)
-          setSummary(null)
+            .trim()
+          return text.length > 0 && !isGreeting(text)
+        }) ?? turns.find((t) => t.role === "user") // fallback: any user turn
+        const firstUserText = firstUserTurn
+          ? firstUserTurn.blocks
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
+              .map((b) => b.text)
+              .join("\n")
+              .slice(0, 150)
+          : ""
+
+        // Find the last assistant message (the "conclusion").
+        const lastAssistantTurn = [...turns].reverse().find((t) => t.role === "assistant")
+        const lastAssistantText = lastAssistantTurn
+          ? lastAssistantTurn.blocks
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
+              .map((b) => b.text)
+              .join("\n")
+              .slice(0, 200)
+          : ""
+
+        // Build a structured summary.
+        const parts: string[] = []
+        if (firstUserText) {
+          parts.push(`📋 用户提问：${firstUserText}${firstUserText.length >= 150 ? "..." : ""}`)
+        }
+        parts.push(`💬 共 ${turnCount} 轮对话`)
+        if (lastAssistantText) {
+          parts.push(`📌 最终结论：${lastAssistantText}${lastAssistantText.length >= 200 ? "..." : ""}`)
+        }
+
+        const structured = parts.join("\n\n")
+        setSummary(structured || null)
+
+        // Try AI summary in the background (best-effort).
+        if (turnCount > 0) {
+          generateConversationSummary(conversation.id)
+            .then((result) => {
+              if (!cancelled) setSummary(result.summary)
+            })
+            .catch(() => { /* AI summary is best-effort; keep extractive */ })
         }
       })
+      .catch(() => {
+        if (!cancelled) setSummary(null)
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false)
+      })
+
     return () => { cancelled = true }
-  }, [isPinned, conversation.id])
+  }, [isPinned, conversation.id, conversation.summary])
 
   return (
     <>

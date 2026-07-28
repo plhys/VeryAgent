@@ -1140,7 +1140,11 @@
     "restartRequired": "已保存，重启应用后生效。",
     "restartNow": "立即重启",
     "restartFailed": "重启失败：{message}",
-    "loadFailed": "加载失败：{message}"
+    "loadFailed": "加载失败：{message}",
+    "pinSummaryTitle": "置顶对话总结",
+    "pinSummaryDescription": "开启后，悬停置顶对话时自动调用 AI 模型生成结构化总结。",
+    "enablePinSummary": "启用置顶对话总结",
+    "pinSummarySaveFailed": "保存设置失败：{message}"
   },
   "LoginPage": {
     "documentTitle": "登录 - veryAgent",

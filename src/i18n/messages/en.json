@@ -1140,7 +1140,11 @@
     "restartRequired": "Saved. Restart the app for the change to take effect.",
     "restartNow": "Restart now",
     "restartFailed": "Failed to restart: {message}",
-    "loadFailed": "Load failed: {message}"
+    "loadFailed": "Load failed: {message}",
+    "pinSummaryTitle": "Pinned Conversation Summary",
+    "pinSummaryDescription": "When enabled, hover over a pinned conversation to auto-generate an AI summary.",
+    "enablePinSummary": "Enable pinned conversation summary",
+    "pinSummarySaveFailed": "Failed to save setting: {message}"
   },
   "LoginPage": {
     "documentTitle": "Login - veryAgent",

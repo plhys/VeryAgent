@@ -3981,3 +3981,26 @@ export async function scanExternalConflictsWeb(
     { timeoutMs: BACKUP_LONG_CALL_TIMEOUT_MS }
   )
 }
+
+// ── Conversation Summary ─────────────────────────────────────────────────────
+
+export async function getPinnedSummaryEnabled(): Promise<boolean> {
+  return getTransport().call("get_pinned_summary_enabled")
+}
+
+export async function setPinnedSummaryEnabled(enabled: boolean): Promise<void> {
+  return getTransport().call("set_pinned_summary_enabled", { enabled })
+}
+
+export interface SummaryResult {
+  summary: string
+  model: string
+}
+
+export async function generateConversationSummary(
+  conversationId: number
+): Promise<SummaryResult> {
+  return getTransport().call("generate_conversation_summary", {
+    conversationId,
+  })
+}

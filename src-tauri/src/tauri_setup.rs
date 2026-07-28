@@ -9,6 +9,7 @@ use crate::commands::git;
         chat_channel as chat_channel_commands, conversations, delegation as delegation_commands,
         experts as experts_commands, feedback as feedback_commands, file_io, folder_commands,
         office_tools as office_tools_commands, ppt_generation,
+        summary as summary_commands,
         science as science_commands,
         folders, logging as logging_commands, mcp as mcp_commands,
         model_provider as model_provider_commands, notification, pet as pet_commands, project_boot,
@@ -1297,6 +1298,9 @@ use crate::commands::git;
                 vision_bridge_commands::vision_bridge_save_config,
                 image_generation_commands::image_generation_save_config,
                 image_generation_commands::image_generation_fetch_models,
+                summary_commands::get_pinned_summary_enabled,
+                summary_commands::set_pinned_summary_enabled,
+                summary_commands::generate_conversation_summary,
             ])
             .build(tauri::generate_context!())
             .expect("error while building tauri application")

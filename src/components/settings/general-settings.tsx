@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2, MonitorCog, Power, RefreshCw, SquareTerminal } from "lucide-react"
+import { Loader2, MonitorCog, Pin, Power, RefreshCw, SquareTerminal } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -19,10 +19,12 @@ import {
 import {
   getAppAutostartEnabled,
   getAvailableTerminalShells,
+  getPinnedSummaryEnabled,
   getSystemRenderingSettings,
   getSystemTerminalSettings,
   probeTerminalShellPath,
   setAppAutostartEnabled,
+  setPinnedSummaryEnabled,
   updateSystemRenderingSettings,
   updateSystemTerminalSettings,
 } from "@/lib/api"
@@ -92,6 +94,9 @@ export function GeneralSettings() {
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   const [savingAutostart, setSavingAutostart] = useState(false)
 
+  const [pinSummaryEnabled, setPinSummaryEnabled] = useState(false)
+  const [savingPinSummary, setSavingPinSummary] = useState(false)
+
   const [disableHwAccel, setDisableHwAccel] = useState(false)
   const [savingRendering, setSavingRendering] = useState(false)
   const [persistedDisableHwAccel, setPersistedDisableHwAccel] = useState(false)
@@ -106,7 +111,7 @@ export function GeneralSettings() {
     setLoadError(null)
 
     try {
-      const [terminalSettings, terminalShells, renderingSettings, autostart] =
+      const [terminalSettings, terminalShells, renderingSettings, autostart, pinSummary] =
         await Promise.all([
           getSystemTerminalSettings(),
           getAvailableTerminalShells(),
@@ -116,6 +121,7 @@ export function GeneralSettings() {
           autostartSectionVisible
             ? getAppAutostartEnabled()
             : Promise.resolve(false),
+          getPinnedSummaryEnabled(),
         ])
 
       setAvailableShells(terminalShells)
@@ -147,6 +153,7 @@ export function GeneralSettings() {
       }
 
       setAutostartEnabled(autostart)
+      setPinSummaryEnabled(pinSummary)
     } catch (err) {
       const message = toErrorMessage(err)
       setLoadError(message)
@@ -232,6 +239,23 @@ export function GeneralSettings() {
         toast.error(t("autostartSaveFailed", { message }))
       } finally {
         setSavingAutostart(false)
+      }
+    },
+    [t]
+  )
+
+  const savePinSummarySetting = useCallback(
+    async (next: boolean, prev: boolean) => {
+      setSavingPinSummary(true)
+      try {
+        await setPinnedSummaryEnabled(next)
+        setPinSummaryEnabled(next)
+      } catch (err) {
+        setPinSummaryEnabled(prev)
+        const message = toErrorMessage(err)
+        toast.error(t("pinSummarySaveFailed", { message }))
+      } finally {
+        setSavingPinSummary(false)
       }
     },
     [t]
@@ -454,6 +478,33 @@ export function GeneralSettings() {
         <AskQuestionSettingsSection />
 
         <SessionInfoSettingsSection />
+
+        {/* ── Pinned conversation summary toggle ── */}
+        <section className="rounded-xl border bg-card p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Pin className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">{t("pinSummaryTitle")}</h2>
+          </div>
+          <p className="text-xs text-muted-foreground leading-5">
+            {t("pinSummaryDescription")}
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="pin-summary" className="text-sm">
+              {t("enablePinSummary")}
+            </label>
+            <Switch
+              id="pin-summary"
+              checked={pinSummaryEnabled}
+              onCheckedChange={(next) => {
+                const prev = pinSummaryEnabled
+                setPinSummaryEnabled(next)
+                savePinSummarySetting(next, prev)
+              }}
+              disabled={savingPinSummary}
+              className="shrink-0"
+            />
+          </div>
+        </section>
       </div>
     </ScrollArea>
   )
