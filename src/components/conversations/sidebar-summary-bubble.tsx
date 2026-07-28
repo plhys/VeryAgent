@@ -35,12 +35,15 @@ export function SidebarSummaryBubble({
       }}
     >
       <div
-        className="w-[36rem] whitespace-pre-wrap rounded-2xl border border-border/40 bg-background/80 p-6 text-sm leading-relaxed shadow-2xl backdrop-blur-lg"
+        className="w-[36rem] whitespace-pre-wrap rounded-2xl border border-border/30 bg-popover/95 p-6 text-sm leading-relaxed shadow-2xl backdrop-blur-xl"
       >
-        <p className="mb-2 text-xs font-semibold text-muted-foreground/70">
-          📝 对话总结
+        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary/70">
+          <span>📝</span>
+          <span>对话总结</span>
         </p>
-        <p className="text-foreground/85">{summary}</p>
+        <div className="border-l-2 border-primary/20 pl-4">
+          <p className="text-foreground/80 leading-relaxed">{summary}</p>
+        </div>
       </div>
     </div>,
     document.body
