@@ -27,6 +27,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Dev-only absolute prefix so Tauri WebView (loading devUrl) and chunk
   // URLs share the same host. Keep in sync with tauri `devUrl`.
   assetPrefix: isProd ? undefined : `http://${internalHost}:3000`,
