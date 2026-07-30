@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 "use client"
 
 import {
@@ -219,7 +219,7 @@ export function AcpAgentSettings() {
   const [openCodeCatalogLoading, setOpenCodeCatalogLoading] = useState(false)
   // True once the catalog fetch has settled at least once (success OR failure).
   // Gates "Add custom provider" so the catalog-id collision check runs against a
-  // known set — an empty catalog while still loading must not let a catalog id
+  // known set 鈥?an empty catalog while still loading must not let a catalog id
   // (e.g. "openai") slip in as a custom provider.
   const [openCodeCatalogReady, setOpenCodeCatalogReady] = useState(false)
   // Dedupe the one-shot catalog fetch without putting volatile state in the
@@ -340,7 +340,7 @@ export function AcpAgentSettings() {
 
         // Re-sync `available` from the authoritative backend status. It is
         // recomputed live (e.g. `uvx_agent_launchable` for Hermes), so an
-        // install that provisions the runtime flips it true here — otherwise
+        // install that provisions the runtime flips it true here 鈥?otherwise
         // the version-status panel would stay stuck on the unavailable /
         // "runtime not ready" branch with the freshly installed version shown.
         if (statusState.status === "fulfilled") {
@@ -789,7 +789,7 @@ export function AcpAgentSettings() {
         )
         if (clearCache) {
           // The cache was cleared before downloading, so a failure here may
-          // have removed the previously working binary — resync local state so
+          // have removed the previously working binary 鈥?resync local state so
           // the UI doesn't keep showing a phantom version.
           try {
             const detected = await acpDetectAgentLocalVersion(agent.agent_type)
@@ -916,7 +916,7 @@ export function AcpAgentSettings() {
           }
         )
         if (cleanFirst) {
-          // Clean reinstall may have removed the old install before failing —
+          // Clean reinstall may have removed the old install before failing 鈥?
           // resync local state so the UI doesn't keep showing a phantom version.
           try {
             const detected = await acpDetectAgentLocalVersion(agent.agent_type)
@@ -996,7 +996,7 @@ export function AcpAgentSettings() {
     [runPreflight, t, installStream.start]
   )
 
-  // Install ONLY the uv runtime (uvx) — separate from preparing a uvx agent's
+  // Install ONLY the uv runtime (uvx) 鈥?separate from preparing a uvx agent's
   // package. Triggered by the uv preflight check's "Install uv" fix. On success
   // `runPreflight` re-syncs the uv check + `available`, unblocking the agent's
   // version-status install action.
@@ -1287,7 +1287,7 @@ export function AcpAgentSettings() {
     // kimi_code uses a self-contained panel; its model_provider state is
     // tracked inside KimiCodeConfigPanel, not in AgentDraft. When the parent
     // needs to know (e.g. to hide the generic env-editor), check the agent's
-    // persisted model_provider_id or the panel-internal mode — for now, just
+    // persisted model_provider_id or the panel-internal mode 鈥?for now, just
     // check the agent's model_provider_id.
     if (at === "kimi_code")
       return selectedAgent.model_provider_id != null
@@ -1302,8 +1302,6 @@ export function AcpAgentSettings() {
     if (at === "pi") return selectedDraft.piAuthMode === "model_provider"
     if (at === "code_buddy")
       return selectedDraft.codeBuddyAuthMode === "model_provider"
-    if (at === "mimo_code")
-      return selectedAgent.model_provider_id != null
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -1364,12 +1362,12 @@ export function AcpAgentSettings() {
     [openCodeCatalog]
   )
   // Split connected providers into two single-purpose surfaces:
-  //  - well-known (catalog) providers connected via auth.json → top list
+  //  - well-known (catalog) providers connected via auth.json 鈫?top list
   //  - custom OpenAI-compatible endpoints (a `provider.<id>` block NOT in the
-  //    catalog) → the bottom "custom provider" editor.
+  //    catalog) 鈫?the bottom "custom provider" editor.
   // The discriminator is `hasConfigBlock && !inCatalog`, so an auth-only
   // well-known provider (no block) stays in the top list even if the catalog
-  // fails to load — it can never be misfiled as custom and vanish.
+  // fails to load 鈥?it can never be misfiled as custom and vanish.
   const openCodeWellKnownConnected = useMemo(
     () => openCodeConnected.filter((p) => !(p.hasConfigBlock && !p.inCatalog)),
     [openCodeConnected]
@@ -1382,10 +1380,10 @@ export function AcpAgentSettings() {
     [selectedOpenCodeConfig, openCodeCatalogIds]
   )
   // Lazily load the models.dev catalog the first time an OpenCode agent is
-  // viewed. Backend resolves live → cache → bundled snapshot, so this never
+  // viewed. Backend resolves live 鈫?cache 鈫?bundled snapshot, so this never
   // hard-fails; on error we keep an empty catalog (custom-only flow) and allow
   // a retry the next time OpenCode is selected. The ref dedupes so we depend
-  // only on `selectedAgentKind` — depending on the loading flag we set here
+  // only on `selectedAgentKind` 鈥?depending on the loading flag we set here
   // would re-run the effect and cancel its own in-flight request.
   useEffect(() => {
     if (selectedAgentKind !== "open_code") return
@@ -1699,7 +1697,7 @@ export function AcpAgentSettings() {
         return
       }
 
-      // "custom" or "model_provider" — keep existing values, just switch mode
+      // "custom" or "model_provider" 鈥?keep existing values, just switch mode
       updateSelectedDraft((current) => ({
         ...current,
         claudeAuthMode: nextMode,
@@ -1841,7 +1839,7 @@ export function AcpAgentSettings() {
           { apiKey, authMode: null }
         )
         const nextAuthJsonText = nextAuthPatch.authJsonText
-        // Credentials only — keep the agent's currently selected model.
+        // Credentials only 鈥?keep the agent's currently selected model.
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
@@ -1982,8 +1980,8 @@ export function AcpAgentSettings() {
           apiBaseUrl: apiUrl,
           apiKey,
           model: keepModel,
-          // A计划 is additive via ~/.codebuddy/models.json (backend cascade).
-          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL — those
+          // A璁″垝 is additive via ~/.codebuddy/models.json (backend cascade).
+          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL 鈥?those
           // own the native China/overseas Tencent catalog.
           envText: patchEnvText(current.envText, {
             CODEBUDDY_MODEL: keepModel,
@@ -2118,8 +2116,8 @@ export function AcpAgentSettings() {
       }
 
       if (agentType === "code_buddy") {
-        // Remember the A计划 selection; backend rewrites models.json on save.
-        // Do not force ANTHROPIC_MODEL / disable built-ins — native Tencent
+        // Remember the A璁″垝 selection; backend rewrites models.json on save.
+        // Do not force ANTHROPIC_MODEL / disable built-ins 鈥?native Tencent
         // models must remain selectable (China vs overseas region).
         updateSelectedDraft((current) => ({
           ...current,
@@ -2446,7 +2444,7 @@ export function AcpAgentSettings() {
         }
         // Switching provider: the projection only carries the *configured*
         // provider's key, so restore it when returning to that provider and
-        // clear otherwise — never carry one provider's secret into another's
+        // clear otherwise 鈥?never carry one provider's secret into another's
         // env var. An empty key field then means "leave the stored key as-is".
         const projected = parseHermesConfig(
           typeof selectedAgent.config_json === "string"
@@ -2556,8 +2554,8 @@ export function AcpAgentSettings() {
               }
             : {
                 provider: draft.hermesProvider,
-                // Blank key, or a provider with no key field (OAuth / AWS) →
-                // null → backend leaves the stored ~/.hermes/.env value
+                // Blank key, or a provider with no key field (OAuth / AWS) 鈫?
+                // null 鈫?backend leaves the stored ~/.hermes/.env value
                 // untouched (so switching providers can't wipe it).
                 apiKey:
                   providerOption?.kind !== "apiKey" || !draft.apiKey.trim()
@@ -2577,7 +2575,7 @@ export function AcpAgentSettings() {
           })
         }
         await refreshAgents()
-        // Drop the draft so it rebuilds from the freshly-persisted projection —
+        // Drop the draft so it rebuilds from the freshly-persisted projection 鈥?
         // otherwise the *other* mode (structured fields vs. raw config.yaml)
         // keeps stale content and a later save could overwrite this one.
         setDrafts((prev) => {
@@ -5292,7 +5290,7 @@ supports_websockets = true`}
                                       size="xs"
                                       variant="ghost"
                                       onClick={() => {
-                                        // Top list is well-known only → the
+                                        // Top list is well-known only 鈫?the
                                         // guided dialog edits the key/base URL.
                                         setOpenCodeEditProviderId(provider.id)
                                         setOpenCodeConnectOpen(true)
@@ -7291,13 +7289,7 @@ supports_websockets = true`}
                       />
                     )}
                   </div>
-                ) : selectedAgent.agent_type === "mimo_code" ? (
-                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
-                    <div>
-                      <label className="text-xs font-medium">
-                        {t("configManagement")}
-                      </label>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                ) : eground">
                         {t("modelProviderHint")}
                       </p>
                     </div>
@@ -7760,11 +7752,11 @@ supports_websockets = true`}
                           // When a Claude provider is bound, the on-disk config
                           // loaded into configText may carry stale model keys
                           // (e.g. a leftover custom model option) from before the
-                          // binding — re-derive them from the provider so
+                          // binding 鈥?re-derive them from the provider so
                           // persistConfig cannot write a stale value back over
                           // the backend bind cascade (invalid JSON passes through
                           // so persistConfig still surfaces the error). Sequence
-                          // env→config (never parallel): persistEnv also rewrites
+                          // env鈫抍onfig (never parallel): persistEnv also rewrites
                           // config.env on the backend, so concurrent writes would
                           // interleave two writers of ~/.claude/settings.json.
                           const configToSave = configTextForClaudeSave(
@@ -7791,7 +7783,7 @@ supports_websockets = true`}
                               // Reflect the provider-authoritative rewrite in the
                               // editor so the textarea doesn't keep showing a
                               // stale value (e.g. a cleared custom model option)
-                              // until reload — only when the rewrite changed it.
+                              // until reload 鈥?only when the rewrite changed it.
                               // The inner guard preserves any edit the user typed
                               // into the still-editable textarea while the save
                               // was in flight (don't clobber a newer draft).
@@ -8017,3 +8009,4 @@ supports_websockets = true`}
     </div>
   )
 }
+

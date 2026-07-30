@@ -48,7 +48,6 @@ const KNOWN_AGENT_TYPES: ReadonlySet<string> = new Set<AgentType>([
   "code_buddy",
   "kimi_code",
   "pi",
-  "mimo_code",
 ])
 
 export type ParsedMeta = {
@@ -554,3 +553,4 @@ export function resolveDelegationStatus({
   // terminal output arrives.
   return "starting"
 }
+

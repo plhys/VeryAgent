@@ -9,7 +9,6 @@
   | "code_buddy"
   | "kimi_code"
   | "pi"
-  | "mimo_code"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -484,7 +483,6 @@ export const AGENT_DISPLAY_ORDER: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
-  "mimo_code",
 ]
 
 const AGENT_DISPLAY_ORDER_INDEX = new Map(
@@ -508,7 +506,6 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
-  "mimo_code",
 ]
 
 /** Process-level resident butlers (match backend registry.resident). */
@@ -527,7 +524,6 @@ export const MODEL_PROVIDER_AGENT_TYPES: AgentType[] = [
   "open_code",
   "pi",
   "code_buddy",
-  "mimo_code",
 ]
 
 /**
@@ -841,7 +837,6 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   code_buddy: "CodeBuddy",
   kimi_code: "Kimi Code",
   pi: "Pi",
-  mimo_code: "MiMo Code",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -855,7 +850,6 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   code_buddy: "bg-[#0052D9]",
   kimi_code: "bg-[#1783FF]",
   pi: "bg-[#0D9488]",
-  mimo_code: "bg-[#FF6900]",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)
@@ -1905,7 +1899,6 @@ export type McpAppType =
   | "hermes"
   | "code_buddy"
   | "kimi_code"
-  | "mimo_code"
 
 export interface LocalMcpServer {
   id: string
