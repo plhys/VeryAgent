@@ -1,9 +1,1 @@
-﻿// @ts-nocheck
-// Agent check state type
-interface AgentCheckState {
-  result?: PreflightResult
-  error?: string
-}
-
-export type { AgentReadiness, AgentReadinessKind }
-
+// Type definitions for acp-agent-settings
