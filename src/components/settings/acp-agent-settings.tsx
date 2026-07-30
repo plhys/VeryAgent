@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import {
   useCallback,
@@ -197,7 +197,7 @@ interface AgentDraft {
   openCodeAuthMode: OpenCodeAuthMode
   piAuthMode: PiAuthMode
   codeBuddyAuthMode: CodeBuddyAuthMode
-  // Hermes — `apiKey`/`model`/`apiBaseUrl` are reused for the active provider's
+  // Hermes 鈥?`apiKey`/`model`/`apiBaseUrl` are reused for the active provider's
   // key, model.default, and model.base_url. These carry the rest.
   hermesProvider: string
   hermesConfigYaml: string
@@ -343,7 +343,7 @@ function normalizeClaudeEffortLevel(value: unknown): ClaudeEffortLevel {
   if (typeof value !== "string") return ""
   const normalized = value.trim().toLowerCase()
   // Upstream claude-agent-acp >=0.37 exposes the sentinel string "default";
-  // collapse it to "" so our UI's "默认/Default" placeholder stays
+  // collapse it to "" so our UI's "榛樿/Default" placeholder stays
   // canonical regardless of which side wrote the config.
   if (normalized === "" || normalized === "default") return ""
   if (
@@ -1714,7 +1714,7 @@ function parseCodexAuthJsonText(authJsonText: string): string | null {
 function inferCodexAuthMode(authJsonText: string): CodexAuthMode {
   const { authObject } = parseCodexAuthJsonObject(authJsonText)
   if (authObject) {
-    // 官网订阅：auth_mode 为 chatgpt，或没有 OPENAI_API_KEY，或值为 null
+    // 瀹樼綉璁㈤槄锛歛uth_mode 涓?chatgpt锛屾垨娌℃湁 OPENAI_API_KEY锛屾垨鍊间负 null
     if (
       authObject.auth_mode === "chatgpt" ||
       !("OPENAI_API_KEY" in authObject) ||
@@ -1987,7 +1987,7 @@ function upsertTomlSectionBooleanKey(
   return lines.join("\n").trim()
 }
 
-/** Codex appends `/chat/completions` or `/responses` itself — force `/v1`. */
+/** Codex appends `/chat/completions` or `/responses` itself 鈥?force `/v1`. */
 function normalizeOpenAiCompatibleBaseUrl(apiBaseUrl: string): string {
   let base = apiBaseUrl.trim().replace(/\/+$/, "")
   if (!base) return ""
@@ -2419,7 +2419,7 @@ export function patchImportantConfigText(
  * Make a Claude agent's native config provider-authoritative. When a provider
  * was bound in an earlier session, the on-disk config loaded into the draft can
  * still carry stale model keys (e.g. a leftover ANTHROPIC_CUSTOM_MODEL_OPTION)
- * that no longer match the provider — `handleModelProviderSelect` only rewrites
+ * that no longer match the provider 鈥?`handleModelProviderSelect` only rewrites
  * configText when the dropdown changes, not on reload. A config-management save
  * would otherwise persist that stale text back over the backend bind cascade, so
  * re-derive the provider-controlled keys here (empty => cleared by `assignEnv`)
@@ -2441,7 +2441,7 @@ export function applyClaudeProviderToConfigText(
  * Decide the config text to persist for a config-management save. For a bound
  * Claude agent with VALID config JSON, rewrite the provider-controlled keys to be
  * provider-authoritative (see {@link applyClaudeProviderToConfigText}). Anything
- * else — non-Claude, unbound, or INVALID JSON — passes through unchanged. The
+ * else 鈥?non-Claude, unbound, or INVALID JSON 鈥?passes through unchanged. The
  * invalid-JSON passthrough is important: persistConfig must still surface the
  * parse error, otherwise patchImportantConfigText would silently recover the bad
  * text as `{}` and persist provider-derived config over the user's broken edits.
@@ -2753,7 +2753,7 @@ function isValidCustomVersion(value: string): boolean {
   return /^[0-9][0-9A-Za-z.\-+]*$/.test(normalized) && normalized.includes(".")
 }
 
-// `uvReady` reports whether the uv runtime (uvx) is installed — only meaningful
+// `uvReady` reports whether the uv runtime (uvx) is installed 鈥?only meaningful
 // for uvx agents (Hermes). Derived from the uv preflight check by the caller.
 // uvx agents need uv installed before their package can be prepared, so when
 // uv isn't ready every managed install/upgrade action is surfaced disabled and
@@ -2774,7 +2774,7 @@ export function buildVersionCheck(
     agent.installed_version ?? acpText("version.notInstalled", "Not installed")
   const versionText = acpText(
     "version.remoteLocal",
-    "Remote: {remoteVersion} · Local: {localVersion}",
+    "Remote: {remoteVersion} 路 Local: {localVersion}",
     { remoteVersion, localVersion }
   )
   const installAction: RunningActionKind =
@@ -2789,8 +2789,8 @@ export function buildVersionCheck(
   // uv" preflight action below, with the agent-install action shown disabled.
   // This covers both the fresh case (available=false) and the rare system-CLI
   // case (available=true via a global `hermes`, but uvx still missing).
-  // Uninstall stays available even without uv — it only clears the prepared
-  // marker — so a prepared package can still be removed when uv is gone.
+  // Uninstall stays available even without uv 鈥?it only clears the prepared
+  // marker 鈥?so a prepared package can still be removed when uv is gone.
   if (agent.distribution_type === "uvx" && !uvReady) {
     const blockedFixes: UiFixAction[] = [
       {
@@ -2813,7 +2813,7 @@ export function buildVersionCheck(
       status: "warn",
       message: acpText(
         "version.uvxNotReady",
-        "{versionText}. The uv runtime isn't installed — install it from the uv check below to use this agent.",
+        "{versionText}. The uv runtime isn't installed 鈥?install it from the uv check below to use this agent.",
         { versionText }
       ),
       fixes: blockedFixes,
@@ -2821,7 +2821,7 @@ export function buildVersionCheck(
   }
 
   // Only binary agents can be genuinely platform-unsupported (no binary for
-  // this platform). uvx runs everywhere — a uvx agent that reaches here (uv
+  // this platform). uvx runs everywhere 鈥?a uvx agent that reaches here (uv
   // treated as ready, i.e. preflight unknown) falls through to an actionable
   // install rather than a dead-end "unsupported" message.
   if (!agent.available && agent.distribution_type !== "uvx") {
@@ -2975,7 +2975,7 @@ export function getAgentChecks(
 ): UiCheckItem[] {
   // For uvx agents, only treat uv as not-ready when the preflight result is
   // present AND its uv check isn't passing. With no result yet (or an errored
-  // preflight) stay optimistic — otherwise we'd block the version-status
+  // preflight) stay optimistic 鈥?otherwise we'd block the version-status
   // install while the "Install uv" button (which lives in that same preflight
   // result) is absent, a dead end. When the result IS present, the button is
   // present alongside it, so blocking is always paired with an actionable fix.
@@ -3075,10 +3075,10 @@ const KIMI_MODEL_PLACEHOLDER = "kimi-k2.7-code"
 /**
  * Kimi credential mode. `apikey` writes a veryagent-managed config.toml provider/model
  * block AND seeds a synthetic gate token, so the API key actually authenticates
- * `kimi acp` — whose session gate only checks for a stored token and rejects an
+ * `kimi acp` 鈥?whose session gate only checks for a stored token and rejects an
  * API key on its own. `login` clears the managed block and removes our synthetic
  * token so a real OAuth login (`kimi login`, needs a Kimi subscription) governs.
- * Exactly one is authoritative — saving clears the rest. A raw config.toml editor
+ * Exactly one is authoritative 鈥?saving clears the rest. A raw config.toml editor
  * is the escape hatch.
  */
 export type KimiAuthMode = "apikey" | "login" | "model_provider"
@@ -3109,9 +3109,9 @@ export type KimiEndpointRegion = "international" | "china" | "custom"
 
 export interface KimiInterfaceTypeMeta {
   value: KimiInterfaceType
-  /** Product label (proper noun — intentionally not localized). */
+  /** Product label (proper noun 鈥?intentionally not localized). */
   label: string
-  /** Base URL pre-filled when this interface is selected ("" → SDK default). */
+  /** Base URL pre-filled when this interface is selected ("" 鈫?SDK default). */
   defaultBaseUrl: string
   /** vertexai authenticates via GCP ADC, so it exposes no API key field. */
   usesApiKey: boolean
@@ -3166,8 +3166,8 @@ export function kimiInterfaceMeta(
 }
 
 /**
- * Region implied by an env-mode base URL: `.cn` → china, `.ai` or empty →
- * international, any other non-empty endpoint → custom (an OpenAI-compatible
+ * Region implied by an env-mode base URL: `.cn` 鈫?china, `.ai` or empty 鈫?
+ * international, any other non-empty endpoint 鈫?custom (an OpenAI-compatible
  * third party such as DeepSeek / OpenRouter / a local server).
  */
 export function kimiEndpointRegionFromBaseUrl(
@@ -3242,9 +3242,9 @@ export function kimiInitialMode(config: KimiManagedConfig): KimiAuthMode {
  * AND a synthetic gate token under `credentials/` (so the session opens). The
  * panel keeps exactly one source authoritative (enforced server-side by
  * `acpUpdateKimiCodeConfig`):
- *   • apikey — write the veryagent-managed config.toml block (any of the six
+ *   鈥?apikey 鈥?write the veryagent-managed config.toml block (any of the six
  *     interface types) + seed the gate token. The working path for a plain key.
- *   • login — clear the managed block + remove our synthetic token, so a real
+ *   鈥?login 鈥?clear the managed block + remove our synthetic token, so a real
  *     OAuth login (`kimi login`, needs a Kimi subscription) governs.
  * A `<details>` raw config.toml editor is the escape hatch. Initial state is
  * derived from the projected `agent.config_json`; it resets on remount when a
@@ -4053,7 +4053,7 @@ export function AcpAgentSettings() {
   const [openCodeCatalogLoading, setOpenCodeCatalogLoading] = useState(false)
   // True once the catalog fetch has settled at least once (success OR failure).
   // Gates "Add custom provider" so the catalog-id collision check runs against a
-  // known set — an empty catalog while still loading must not let a catalog id
+  // known set 鈥?an empty catalog while still loading must not let a catalog id
   // (e.g. "openai") slip in as a custom provider.
   const [openCodeCatalogReady, setOpenCodeCatalogReady] = useState(false)
   // Dedupe the one-shot catalog fetch without putting volatile state in the
@@ -4174,7 +4174,7 @@ export function AcpAgentSettings() {
 
         // Re-sync `available` from the authoritative backend status. It is
         // recomputed live (e.g. `uvx_agent_launchable` for Hermes), so an
-        // install that provisions the runtime flips it true here — otherwise
+        // install that provisions the runtime flips it true here 鈥?otherwise
         // the version-status panel would stay stuck on the unavailable /
         // "runtime not ready" branch with the freshly installed version shown.
         if (statusState.status === "fulfilled") {
@@ -4623,7 +4623,7 @@ export function AcpAgentSettings() {
         )
         if (clearCache) {
           // The cache was cleared before downloading, so a failure here may
-          // have removed the previously working binary — resync local state so
+          // have removed the previously working binary 鈥?resync local state so
           // the UI doesn't keep showing a phantom version.
           try {
             const detected = await acpDetectAgentLocalVersion(agent.agent_type)
@@ -4750,7 +4750,7 @@ export function AcpAgentSettings() {
           }
         )
         if (cleanFirst) {
-          // Clean reinstall may have removed the old install before failing —
+          // Clean reinstall may have removed the old install before failing 鈥?
           // resync local state so the UI doesn't keep showing a phantom version.
           try {
             const detected = await acpDetectAgentLocalVersion(agent.agent_type)
@@ -4830,7 +4830,7 @@ export function AcpAgentSettings() {
     [runPreflight, t, installStream.start]
   )
 
-  // Install ONLY the uv runtime (uvx) — separate from preparing a uvx agent's
+  // Install ONLY the uv runtime (uvx) 鈥?separate from preparing a uvx agent's
   // package. Triggered by the uv preflight check's "Install uv" fix. On success
   // `runPreflight` re-syncs the uv check + `available`, unblocking the agent's
   // version-status install action.
@@ -5121,7 +5121,7 @@ export function AcpAgentSettings() {
     // kimi_code uses a self-contained panel; its model_provider state is
     // tracked inside KimiCodeConfigPanel, not in AgentDraft. When the parent
     // needs to know (e.g. to hide the generic env-editor), check the agent's
-    // persisted model_provider_id or the panel-internal mode — for now, just
+    // persisted model_provider_id or the panel-internal mode 鈥?for now, just
     // check the agent's model_provider_id.
     if (at === "kimi_code")
       return selectedAgent.model_provider_id != null
@@ -5198,12 +5198,12 @@ export function AcpAgentSettings() {
     [openCodeCatalog]
   )
   // Split connected providers into two single-purpose surfaces:
-  //  - well-known (catalog) providers connected via auth.json → top list
+  //  - well-known (catalog) providers connected via auth.json 鈫?top list
   //  - custom OpenAI-compatible endpoints (a `provider.<id>` block NOT in the
-  //    catalog) → the bottom "custom provider" editor.
+  //    catalog) 鈫?the bottom "custom provider" editor.
   // The discriminator is `hasConfigBlock && !inCatalog`, so an auth-only
   // well-known provider (no block) stays in the top list even if the catalog
-  // fails to load — it can never be misfiled as custom and vanish.
+  // fails to load 鈥?it can never be misfiled as custom and vanish.
   const openCodeWellKnownConnected = useMemo(
     () => openCodeConnected.filter((p) => !(p.hasConfigBlock && !p.inCatalog)),
     [openCodeConnected]
@@ -5216,10 +5216,10 @@ export function AcpAgentSettings() {
     [selectedOpenCodeConfig, openCodeCatalogIds]
   )
   // Lazily load the models.dev catalog the first time an OpenCode agent is
-  // viewed. Backend resolves live → cache → bundled snapshot, so this never
+  // viewed. Backend resolves live 鈫?cache 鈫?bundled snapshot, so this never
   // hard-fails; on error we keep an empty catalog (custom-only flow) and allow
   // a retry the next time OpenCode is selected. The ref dedupes so we depend
-  // only on `selectedAgentKind` — depending on the loading flag we set here
+  // only on `selectedAgentKind` 鈥?depending on the loading flag we set here
   // would re-run the effect and cancel its own in-flight request.
   useEffect(() => {
     if (selectedAgentKind !== "open_code") return
@@ -5533,7 +5533,7 @@ export function AcpAgentSettings() {
         return
       }
 
-      // "custom" or "model_provider" — keep existing values, just switch mode
+      // "custom" or "model_provider" 鈥?keep existing values, just switch mode
       updateSelectedDraft((current) => ({
         ...current,
         claudeAuthMode: nextMode,
@@ -5675,7 +5675,7 @@ export function AcpAgentSettings() {
           { apiKey, authMode: null }
         )
         const nextAuthJsonText = nextAuthPatch.authJsonText
-        // Credentials only — keep the agent's currently selected model.
+        // Credentials only 鈥?keep the agent's currently selected model.
         const nextConfigTomlText = patchCodexConfigTomlText(
           selectedDraft.codexConfigTomlText,
           {
@@ -5816,8 +5816,8 @@ export function AcpAgentSettings() {
           apiBaseUrl: apiUrl,
           apiKey,
           model: keepModel,
-          // A计划 is additive via ~/.codebuddy/models.json (backend cascade).
-          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL — those
+          // A璁″垝 is additive via ~/.codebuddy/models.json (backend cascade).
+          // Do not overwrite CODEBUDDY_API_KEY / region / BASE_URL 鈥?those
           // own the native China/overseas Tencent catalog.
           envText: patchEnvText(current.envText, {
             CODEBUDDY_MODEL: keepModel,
@@ -5952,8 +5952,8 @@ export function AcpAgentSettings() {
       }
 
       if (agentType === "code_buddy") {
-        // Remember the A计划 selection; backend rewrites models.json on save.
-        // Do not force ANTHROPIC_MODEL / disable built-ins — native Tencent
+        // Remember the A璁″垝 selection; backend rewrites models.json on save.
+        // Do not force ANTHROPIC_MODEL / disable built-ins 鈥?native Tencent
         // models must remain selectable (China vs overseas region).
         updateSelectedDraft((current) => ({
           ...current,
@@ -6280,7 +6280,7 @@ export function AcpAgentSettings() {
         }
         // Switching provider: the projection only carries the *configured*
         // provider's key, so restore it when returning to that provider and
-        // clear otherwise — never carry one provider's secret into another's
+        // clear otherwise 鈥?never carry one provider's secret into another's
         // env var. An empty key field then means "leave the stored key as-is".
         const projected = parseHermesConfig(
           typeof selectedAgent.config_json === "string"
@@ -6307,14 +6307,29 @@ export function AcpAgentSettings() {
         selectedAgent.agent_type !== "hermes"
       )
         return
-      updateSelectedDraft((current) => ({
-        ...current,
-        hermesAuthMode: nextMode,
-        modelProviderId:
-          nextMode === "model_provider" ? current.modelProviderId : null,
-      }))
+      updateSelectedDraft((current) => {
+        if (nextMode !== "model_provider") {
+          return { ...current, hermesAuthMode: nextMode, modelProviderId: null }
+        }
+        const provider = modelProviders.find((p) => p.id === current.modelProviderId)
+        if (!provider) {
+          return { ...current, hermesAuthMode: nextMode }
+        }
+        let modelName = ""
+        if (provider.model) {
+          try { const parsed = JSON.parse(provider.model); modelName = parsed.main || "" }
+          catch { modelName = provider.model }
+        }
+        return {
+          ...current,
+          hermesAuthMode: nextMode,
+          apiKey: provider.api_key,
+          apiBaseUrl: provider.api_url,
+          model: modelName,
+        }
+      })
     },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
+    [selectedAgent, selectedDraft, updateSelectedDraft, modelProviders]
   )
 
   const handleOpenCodeAuthModeChange = useCallback(
@@ -6390,8 +6405,8 @@ export function AcpAgentSettings() {
               }
             : {
                 provider: draft.hermesProvider,
-                // Blank key, or a provider with no key field (OAuth / AWS) →
-                // null → backend leaves the stored ~/.hermes/.env value
+                // Blank key, or a provider with no key field (OAuth / AWS) 鈫?
+                // null 鈫?backend leaves the stored ~/.hermes/.env value
                 // untouched (so switching providers can't wipe it).
                 apiKey:
                   providerOption?.kind !== "apiKey" || !draft.apiKey.trim()
@@ -6411,7 +6426,7 @@ export function AcpAgentSettings() {
           })
         }
         await refreshAgents()
-        // Drop the draft so it rebuilds from the freshly-persisted projection —
+        // Drop the draft so it rebuilds from the freshly-persisted projection 鈥?
         // otherwise the *other* mode (structured fields vs. raw config.yaml)
         // keeps stale content and a later save could overwrite this one.
         setDrafts((prev) => {
@@ -9126,7 +9141,7 @@ supports_websockets = true`}
                                       size="xs"
                                       variant="ghost"
                                       onClick={() => {
-                                        // Top list is well-known only → the
+                                        // Top list is well-known only 鈫?the
                                         // guided dialog edits the key/base URL.
                                         setOpenCodeEditProviderId(provider.id)
                                         setOpenCodeConnectOpen(true)
@@ -11594,11 +11609,11 @@ supports_websockets = true`}
                           // When a Claude provider is bound, the on-disk config
                           // loaded into configText may carry stale model keys
                           // (e.g. a leftover custom model option) from before the
-                          // binding — re-derive them from the provider so
+                          // binding 鈥?re-derive them from the provider so
                           // persistConfig cannot write a stale value back over
                           // the backend bind cascade (invalid JSON passes through
                           // so persistConfig still surfaces the error). Sequence
-                          // env→config (never parallel): persistEnv also rewrites
+                          // env鈫抍onfig (never parallel): persistEnv also rewrites
                           // config.env on the backend, so concurrent writes would
                           // interleave two writers of ~/.claude/settings.json.
                           const configToSave = configTextForClaudeSave(
@@ -11625,7 +11640,7 @@ supports_websockets = true`}
                               // Reflect the provider-authoritative rewrite in the
                               // editor so the textarea doesn't keep showing a
                               // stale value (e.g. a cleared custom model option)
-                              // until reload — only when the rewrite changed it.
+                              // until reload 鈥?only when the rewrite changed it.
                               // The inner guard preserves any edit the user typed
                               // into the still-editable textarea while the save
                               // was in flight (don't clobber a newer draft).
@@ -11851,3 +11866,4 @@ supports_websockets = true`}
     </div>
   )
 }
+
