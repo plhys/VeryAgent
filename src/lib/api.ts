@@ -3998,9 +3998,12 @@ export interface SummaryResult {
 }
 
 export async function generateConversationSummary(
-  conversationId: number
+  conversationId: number,
+  agentType?: AgentType
 ): Promise<SummaryResult> {
-  return getTransport().call("generate_conversation_summary", {
-    conversationId,
-  })
+  const params: Record<string, unknown> = { conversationId }
+  if (agentType) {
+    params.agentType = agentType
+  }
+  return getTransport().call("generate_conversation_summary", params)
 }

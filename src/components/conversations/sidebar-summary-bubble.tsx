@@ -28,7 +28,12 @@ export function SidebarSummaryBubble({
   const updatePosition = useCallback(() => {
     if (!hostRef.current) return
     const rect = hostRef.current.getBoundingClientRect()
-    const mainAreaCenterX = (rect.right + window.innerWidth) / 2
+    // Prefer the main content area element for positioning; fall back to window center.
+    const mainEl = document.querySelector('[data-main-area], .main-area, .workspace-main')
+    const mainRect = mainEl?.getBoundingClientRect()
+    const mainAreaCenterX = mainRect
+      ? mainRect.left + mainRect.width / 2
+      : (rect.right + window.innerWidth) / 2
     setPosition({
       top: rect.top + rect.height / 2,
       left: mainAreaCenterX,

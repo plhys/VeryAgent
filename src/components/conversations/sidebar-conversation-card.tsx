@@ -225,84 +225,39 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   // time / running badge then stays visible on hover (nothing swaps in for it).
   const isSubsession = conversation.parent_id != null
 
-  // ── Pinned conversation summary ──────────────────────────────────────
+  // ── // Pinned conversation summary
   const [summary, setSummary] = useState<string | null>(null)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const tabs = useTabStore((s) => s.tabs)
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+  const activeAgentType = activeTab?.agentType
+  // Stagger summary generation for pinned conversations to avoid thundering herd.
+  // Each card picks a random delay up to 500ms based on its id.
+  const [staggerReady, setStaggerReady] = useState(false)
   useEffect(() => {
     if (!isPinned) return
+    const delay = ((conversation.id * 137) % 500) + 50  // deterministic 50-550ms
+    const timer = setTimeout(() => setStaggerReady(true), delay)
+    return () => clearTimeout(timer)
+  }, [isPinned, conversation.id])
+
+  useEffect(() => {
+    if (!isPinned) return
+    if (!staggerReady) return  // wait for stagger delay
     let cancelled = false
 
-    // If the backend already has a stored summary, use it directly.
-    if (conversation.summary) {
-      setSummary(conversation.summary)
-      return
-    }
-
-    // Build an extractive summary from conversation turns.
+    // If we already have a cached summary, combine with time range below
     getFolderConversation(conversation.id)
       .then((detail) => {
         if (cancelled) return
-
         const turns = detail.turns
-        const turnCount = turns.length
-        if (turnCount === 0) { setSummary(null); return }
-
-        // Helper: check if text is just greeting / small talk / filler.
-        const isTrivial = (text: string) => {
-          const t = text.trim()
-          if (!t) return true
-          // 纯标点/纯表情
-          if (/^[\p{P}\p{S}\s]+$/u.test(t)) return true
-          // 单字回复
-          if (/^(嗯|哦|好|行|是|对|ok|okay|yep|yes|no|y|n|啊|呃|噢|哈|嗨|hi|hey|hello)$/i.test(t)) return true
-          // 简短确认
-          if (/^(好的|好的吧|好的呢|好嘞|好哒|好滴|嗯嗯|嗯呢|嗯好|哦哦|噢噢|收到|明白|知道了|了解了|可以|可以啊|没问题|行吧|行啊|对了|是的|对的|对啊|不错|挺好|好的谢谢|谢谢|thank you|thanks|thx|ok|okay|okay|got it|i see|understood|sure|fine|right|wait|等一下|稍等|让我想想|让我看看)$/i.test(t)) return true
-          // 斜杠命令
-          if (/^\s*\//.test(t)) return true
-          // 问候语
-          if (/^(你好|hello|hi|hey|早上好|下午好|晚上好|请问|你好你好|我是|有什么可以帮|nice to meet|how are you|good morning|good afternoon|good evening)/i.test(t)) return true
-          return false
+        if (turns.length === 0) {
+          setSummary(null)
+          toast.error(t("noMessagesSummary"), { duration: 3000 })
+          return
         }
 
-        // Find the first SUBSTANTIVE user message (skip trivial filler).
-        const firstUserTurn = turns.find((t) => {
-          if (t.role !== "user") return false
-          const text = t.blocks
-            .filter((b): b is { type: "text"; text: string } => b.type === "text")
-            .map((b) => b.text)
-            .join("\n")
-            .trim()
-          return text.length > 0 && !isTrivial(text)
-        }) ?? turns.find((t) => {
-          // Fallback: any user message with actual text length > 10 (even if it's a command).
-          if (t.role !== "user") return false
-          const text = t.blocks
-            .filter((b): b is { type: "text"; text: string } => b.type === "text")
-            .map((b) => b.text)
-            .join("\n")
-            .trim()
-          return text.length > 10
-        }) ?? turns.find((t) => {
-          // Last user fallback: any user message at all.
-          if (t.role !== "user") return false
-          const text = t.blocks
-            .filter((b): b is { type: "text"; text: string } => b.type === "text")
-            .map((b) => b.text)
-            .join("\n")
-            .trim()
-          return text.length > 0
-        })
-        // If still nothing from user, use the first assistant response as topic.
-        const summarySource = firstUserTurn ?? turns.find((t) => t.role === "assistant" && t.blocks.some((b) => b.type === "text"))
-        const summaryText = summarySource
-          ? summarySource.blocks
-              .filter((b): b is { type: "text"; text: string } => b.type === "text")
-              .map((b) => b.text)
-              .join("\n")
-              .slice(0, 150)
-          : ""
-
-        // Build a structured summary.
-        const formatTimestamp = (iso: string) => {
+        const formatTS = (iso: string) => {
           try {
             const d = new Date(iso)
             if (Number.isNaN(d.getTime())) return ""
@@ -313,38 +268,33 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
         const lastTurn = [...turns].reverse().find((t) => t.role === "user" || t.role === "assistant")
         const timeRange =
           firstTurn && lastTurn && firstTurn.timestamp && lastTurn.timestamp
-            ? `${formatTimestamp(firstTurn.timestamp)} ~ ${formatTimestamp(lastTurn.timestamp)}`
+            ? "🕐 " + formatTS(firstTurn.timestamp) + " ~ " + formatTS(lastTurn.timestamp)
             : ""
 
-        const parts: string[] = []
-        parts.push(`💬 共 ${turnCount} 轮对话`)
-        if (timeRange) parts.push(`🕐 ${timeRange}`)
-        if (summaryText) {
-          parts.push(`📝 ${summaryText}${summaryText.length >= 150 ? "..." : ""}`)
+        // If we already have a cached summary, combine with time range and skip API
+        if (conversation.summary) {
+          setSummary(timeRange ? timeRange + "\n\n" + conversation.summary : conversation.summary)
+          return
         }
 
-        const structured = parts.join("\n\n")
-        setSummary(structured || null)
+        setSummary(timeRange || null)
 
-        // Try AI summary in the background (best-effort).
-        if (turnCount > 0) {
-          generateConversationSummary(conversation.id)
-            .then((result) => {
-              if (!cancelled) {
-                // Preserve the structured header (turns + time) and use AI summary as content.
-                const header = structured.split("\n\n").slice(0, -1).join("\n\n")
-                setSummary(header ? `${header}\n\n📝 ${result.summary}` : result.summary)
-              }
-            })
-            .catch(() => { /* AI summary is best-effort; keep extractive */ })
-        }
+        const agentForSummary = activeAgentType || conversation.agent_type
+        console.log("[Summary] agentForSummary:", agentForSummary, "activeAgentType:", activeAgentType, "conv.agent_type:", conversation.agent_type);
+          generateConversationSummary(conversation.id, agentForSummary)
+          .then((result) => {
+            if (!cancelled) {
+              setSummary(timeRange
+                ? timeRange + "\n\n" + result.summary
+                : result.summary)
+            }
+          })
+          .catch((err) => { console.error('[Summary] AI summary failed:', err) })
       })
-      .catch(() => {
-        if (!cancelled) setSummary(null)
-      })
+      .catch(() => { if (!cancelled) setSummary(null) })
 
     return () => { cancelled = true }
-  }, [isPinned, conversation.id, conversation.summary])
+  }, [isPinned, conversation.id, conversation.summary, activeAgentType, staggerReady])
 
   return (
     <>
@@ -790,3 +740,5 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
     </>
   )
 })
+
+

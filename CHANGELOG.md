@@ -9,15 +9,17 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **对话总结气泡重构**：移除标题栏，改用纯文本气泡+更明显的背景色和边框；气泡位置改为跟随卡片并实时响应滚动/缩放，宽度自适应小屏。
+- **总结内容过滤优化**：跳过斜杠命令（如 `/veryagent-image`）和废话（问候/确认/单字回复/纯表情）；用户消息全是命令时改用助手回复作为内容描述。
+
 ### 修复
 
 - **`fetch_provider_models` 命令注册**：修复设置页选中智能体后刷新模型列表报 `Command fetch_provider_models not found`——后端 `tauri_setup.rs` 的 invoke 注册表遗漏了该命令，补加注册行。
 - **`model_provider.rs` 门控**：补回 `fetch_provider_models` 上的 `#[cfg(feature = "tauri-runtime")]` 门控，防止 web/standalone 构建编译失败。
-
-### 变更
-
-- **桌宠内嵌化**：移除启动时自动打开的独立 pet 窗口（`WebviewWindow`），改为 workspace 内嵌常驻图标（`src/components/layout/pet-floating.tsx`）；仅对话窗口显示（欢迎页隐藏），进入对话时触发从小到大放大入场动画。
-- **桌宠位置调整**：最终锁定 `bottom: 80px, right: -30px`，避开对话框按钮区域。
+- **AI 总结不再覆盖轮次和时间信息**：AI 异步总结返回后，保留 `💬 共X轮 🕐 时间范围` 头部，只替换内容部分。
+- **删除无用代码**：移除 `summaryLoading` 和 `lastAssistantText` 未使用变量。
 
 ---
 

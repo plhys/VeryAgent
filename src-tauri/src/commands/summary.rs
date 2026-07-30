@@ -48,18 +48,20 @@ pub struct SummaryResult {
     pub model: String,
 }
 
-/// Generate a structured AI summary for a conversation.
+/// Generate a structured AI summary for a pinned conversation.
 ///
-/// Reads the conversation turns, builds a prompt with the user's 4-point
-/// structure, calls the first available model provider, and stores the result
-/// in the `summary` field of the conversation row.
+/// Reads the conversation turns, builds a prompt asking the LLM to describe
+/// what the conversation is about (not raw content), calls the model provider
+/// that matches the given `agent_type` (the currently active agent), and
+/// stores the result in the `summary` field of the conversation row.
 #[tauri::command]
 pub async fn generate_conversation_summary(
     db: State<'_, AppDatabase>,
     conversation_id: i32,
+    agent_type: Option<String>,
 ) -> Result<SummaryResult, AppCommandError> {
-    // 1. Load conversation turns + get the agent type and model used.
-    let (turns_text, agent_type, conv_model) =
+    // 1. Load conversation turns.
+    let (turns_text, conv_agent_type, conv_model) =
         load_conversation_turns(&db.conn, conversation_id).await?;
 
     if turns_text.is_empty() {
@@ -68,7 +70,10 @@ pub async fn generate_conversation_summary(
         )));
     }
 
-    // 2. Find the model provider that matches this conversation's agent type.
+    // 2. Use active agent_type if provided, otherwise fall back to conversation's agent_type.
+    let effective_agent_type = agent_type.unwrap_or_else(|| conv_agent_type.clone());
+
+    // 3. Find the model provider for the effective agent type.
     let providers = model_provider_service::list_all(&db.conn)
         .await
         .map_err(AppCommandError::from)?;
@@ -77,41 +82,39 @@ pub async fn generate_conversation_summary(
         .find(|p| {
             !p.api_url.is_empty()
                 && !p.api_key.is_empty()
-                && (p.agent_type.is_empty()          // catch-all provider
-                    || p.agent_type == agent_type
-                    || p.agent_types_json.contains(&agent_type))
+                && (p.agent_type.is_empty()
+                    || p.agent_type == effective_agent_type
+                    || p.agent_types_json.contains(&effective_agent_type))
         })
         .ok_or_else(|| {
             AppCommandError::not_found(format!(
-                "No model provider found for agent type '{agent_type}'. \
-                 Please configure one in Settings → Model Providers."
+                "No model provider found for active agent type '{effective_agent_type}'. \
+                 Please configure one in Settings -> Model Providers."
             ))
         })?;
 
-    // Use the conversation's model, or fall back to the provider's default model.
-    let model_name = conv_model
-        .filter(|m| !m.is_empty())
-        .or_else(|| provider.model.filter(|m| !m.is_empty()))
-        .unwrap_or_else(|| "very-flash".to_string());
+    let model_name = resolve_model_name(
+        conv_model.as_deref(),
+        provider.model.as_deref(),
+    );
 
-    // 3. Build the prompt.
+    // 4. Build the prompt.
     let prompt = format!(
-        r#"对当前对话的内容做一个总结性的报告。过滤掉寒暄废话，只总结实质性内容。用 Markdown 格式输出。
+        r#"请用一句话总结这段对话是关于什么事情的。过滤掉寒暄废话，只概括实质性的任务、问题或目标。
 
-对话内容（{} 轮，智能体类型：{}）：
+对话内容（{} 轮）：
 
 {}
 
-请用中文回答。"#,
+请用中文简洁回答，不超过 50 字。"#,
         turns_text.lines().count(),
-        agent_type,
         turns_text,
     );
 
-    // 4. Call the OpenAI-compatible API.
+    // 5. Call the OpenAI-compatible API.
     let summary: String = call_llm(&provider.api_url, &provider.api_key, &model_name, &prompt).await?;
 
-    // 5. Store the summary in the conversation row.
+    // 6. Store the summary.
     store_summary(&db.conn, conversation_id, &summary).await?;
 
     Ok(SummaryResult {
@@ -161,7 +164,6 @@ async fn call_llm(
     model: &str,
     prompt: &str,
 ) -> Result<String, AppCommandError> {
-    // Ensure api_url has /v1 suffix.
     let base = ensure_v1_suffix(api_url);
     let full_url = format!("{}/chat/completions", base.trim_end_matches('/'));
 
@@ -263,7 +265,55 @@ async fn store_summary(
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/// Ensure the API URL ends with `/v1`.
+/// Resolve the model name from conversation model or provider model config.
+///
+/// The `provider_model` may be:
+/// - `None` / empty string → use fallback
+/// - A plain model name like `"deepseek-v4-flash"` → use as-is
+/// - A JSON object like `{"main":"deepseek-v4-flash"}` → extract `main` field
+fn resolve_model_name(conv_model: Option<&str>, provider_model: Option<&str>) -> String {
+    // 1. Try the conversation's stored model first.
+    if let Some(m) = conv_model {
+        let m = m.trim();
+        if !m.is_empty() {
+            return m.to_string();
+        }
+    }
+
+    // 2. Try the provider's model config (may be a JSON object).
+    if let Some(m) = provider_model {
+        let m = m.trim();
+        if !m.is_empty() {
+            // Try to parse as JSON object with a "main" field.
+            if let Ok(obj) = serde_json::from_str::<serde_json::Value>(m) {
+                if let Some(main) = obj.get("main").and_then(|v| v.as_str()) {
+                    let main = main.trim();
+                    if !main.is_empty() {
+                        return main.to_string();
+                    }
+                }
+                // If JSON but no "main", try to extract any string value.
+                if let Some(obj) = obj.as_object() {
+                    for (_, v) in obj.iter() {
+                        if let Some(s) = v.as_str() {
+                            let s = s.trim();
+                            if !s.is_empty() {
+                                return s.to_string();
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Plain string, use as-is.
+                return m.to_string();
+            }
+        }
+    }
+
+    // 3. Fallback.
+    "deepseek-v4-flash".to_string()
+}
+
 fn ensure_v1_suffix(url: &str) -> String {
     let url = url.trim_end_matches('/');
     if url.ends_with("/v1") {
@@ -273,7 +323,6 @@ fn ensure_v1_suffix(url: &str) -> String {
     }
 }
 
-/// Truncate an error message to a maximum length for safe display.
 fn truncate_error(msg: &str, max_len: usize) -> String {
     if msg.len() > max_len {
         format!("{}... (truncated)", &msg[..max_len])
@@ -281,3 +330,6 @@ fn truncate_error(msg: &str, max_len: usize) -> String {
         msg.to_string()
     }
 }
+
+
+
