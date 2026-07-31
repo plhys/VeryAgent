@@ -3,16 +3,26 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.7**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.8**）。
 
 ---
 
 ## [Unreleased]
 
+### 新增
+
+- **桌面宠物内嵌主窗口**：宠物不再脱离应用窗口，气泡锁定跟随、自下向上生长、缩放与 320 基数对齐；全局 `cursor-pointer`；防闪烁处理。
+- **侧边栏置顶对话标志**：置顶对话左侧显示上箭头标志，置顶与普通对话间分割线加粗提高透明度。
+- **侧边栏右键菜单「复制对话链接」**：右键菜单可复制对话链接，点击跳转原对话。
+- **侧边栏对话/项目列表悬停绝对时间旗标**：悬停显示 `yyyy-MM-dd HH:mm` 格式。
+- **文件夹 + 会话双选中**：会话点击走 `openTab`。
+
 ### 变更
 
 - **对话总结气泡重构**：移除标题栏，改用纯文本气泡+更明显的背景色和边框；气泡位置改为跟随卡片并实时响应滚动/缩放，宽度自适应小屏。
 - **总结内容过滤优化**：跳过斜杠命令（如 `/veryagent-image`）和废话（问候/确认/单字回复/纯表情）；用户消息全是命令时改用助手回复作为内容描述。
+- HoverCard 从 radix-ui 改为 @radix-ui/react-hover-card 直连导入；箭头改为内联元素避免被图标遮挡或裁剪；用 portal 气泡替换 HoverCard 避免侧边栏裁剪。
+- `dev-detached.ps1` PowerShell 5.1 兼容性改进。
 
 ### 修复
 
@@ -20,8 +30,54 @@
 - **`model_provider.rs` 门控**：补回 `fetch_provider_models` 上的 `#[cfg(feature = "tauri-runtime")]` 门控，防止 web/standalone 构建编译失败。
 - **AI 总结不再覆盖轮次和时间信息**：AI 异步总结返回后，保留 `💬 共X轮 🕐 时间范围` 头部，只替换内容部分。
 - **删除无用代码**：移除 `summaryLoading` 和 `lastAssistantText` 未使用变量。
+- **divider 行缺少 rowKey 处理**：修复 `Cannot read properties of undefined (reading agent_type)`。
+- **JSON BOM 及版本同步**：修复文件编码和版本号不一致问题。
 
 ---
+
+## [0.9.7] — 2026-07-20
+
+### 变更
+
+- 版本号统一抬升至 0.9.7，CHANGELOG 补充 0.9.5/0.9.6 遗漏记录。
+
+## [0.9.6] — 2026-07-19
+
+### 修复
+
+- 启动不再闪 PowerShell 窗口。
+- 恢复主窗口先隐藏再显示，消除启动闪窗。
+- PluginsTab 使用 refreshKey 刷新。
+- 权限对话框卡片布局缩小。
+
+## [0.9.5] — 2026-07-18
+
+### 新增
+
+- **出图网关 Skills 化与多网关配置**：图片生成能力重构为 Skill 体系，支持多网关配置。
+- **技能仓库主路径**：技能可从仓库添加进当前智能体。
+- **MiMo Code（小米）智能体支持**：新增小米 MiMo Code 智能体，支持历史对话解析与模型供应商绑定。
+- **开机自启设置**：设置页新增开机自启开关。
+- **CI/CD 自动构建**：GitHub Actions 工作流自动构建与发布。
+- **PPT 幻灯片生成技能**：支持 Markdown 和 HTML 两种模式生成 .pptx 幻灯片。
+
+### 变更
+
+- 启动时重置僵尸 `in_progress` 会话，防止 AI 加载指示器空转。
+- 用户消息气泡使用主题变量配色。
+- 更新签名公钥并补充密钥保管文档。
+
+### 修复
+
+- 技能仓库可用性与 UX 对齐，清理出图技能空壳。
+- 注册 openwiki 模块（`mod.rs` 遗漏）。
+- 恢复 `#[cfg(feature = "tauri-runtime")]` 门控。
+
+### 重构
+
+- **ACP 模块化**：将 `commands/acp.rs` 拆分为按智能体（Codex/Cline/OpenCode/Kimi/Pi/OpenClaw/Hermes/CodeBuddy）和通用工具（binary/npm/uvx）的独立模块。
+- MCP 模块拆分：`mcp.rs` → `mod.rs`（marketplace）+ `agent_servers.rs`（per-agent MCP）。
+- 替换 `tokio::Mutex` 为 `std::Mutex` 避免 server 路径下 `blocking_lock` panic。
 
 ## [0.9.4] — 2026-07-17
 

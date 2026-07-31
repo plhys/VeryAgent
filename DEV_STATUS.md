@@ -1,64 +1,84 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-07-16
+> 更新日期：2026-07-31
 
 ---
 
 ## 一、已完成
 
-### 2026-07-16（0.9.3）
+### 0.9.8（当前版本 · package/tauri.conf 已抬至 0.9.8，Cargo.toml 0.9.7）
 
-- [x] 产品版本号抬升至 **0.9.3**（package / tauri.conf / Cargo.toml / Cargo.lock + CHANGELOG）
+#### 对话总结气泡重构（[Unreleased] 区）
+
+- [x] 移除标题栏，改用纯文本气泡+更明显背景色和边框
+- [x] 气泡位置跟随卡片并实时响应滚动/缩放，宽度自适应小屏
+- [x] 跳过斜杠命令（如 `/veryagent-image`）和废话（问候/确认/单字回复/纯表情）
+- [x] 用户消息全是命令时改用助手回复作为内容描述
+- [x] 修复 AI 总结异步返回后覆盖轮次和时间信息的问题
+- [x] 修复 `fetch_provider_models` 命令注册遗漏（`Command not found`）
+- [x] 补回 `fetch_provider_models` 的 `#[cfg(feature = "tauri-runtime")]` 门控
+
+#### 侧边栏功能增强
+
+- [x] 置顶对话左侧上箭头标志 + 分割线 + 摘要气泡（提取式+AI 异步）
+- [x] 右键菜单「复制对话链接」+ 点击跳转原对话
+- [x] 侧边栏对话/项目列表悬停绝对时间旗标
+- [x] 文件夹 + 会话双选中；会话点击走 `openTab`
+
+#### 桌面宠物
+
+- [x] 宠物内嵌主窗口，不脱离应用
+- [x] 气泡锁定跟随、自下向上生长、缩放与 320 基数对齐
+- [x] 全局 `cursor-pointer`；防闪烁处理
+
+#### 模型供应商 & 智能体（0.9.3/0.9.4）
+
 - [x] 共享模型供应商（A计划）：Pi / CodeBuddy 可绑定；聊天仅展示可用模型
-- [x] CodeBuddy：自定义模型追加，保留原生中国/海外/iOA
+- [x] CodeBuddy 自定义模型追加，保留原生中国/海外/iOA
 - [x] 智能体默认全关（新建 `agent_setting`）
 - [x] Codex 模型供应商 Responses API 边界提示
-- [x] 项目侧栏：文件夹 + 会话双选中；会话点击走 `openTab`
-- [x] i18n：zh-CN authMode 中英混杂清理；CodeBuddy 文案口径修正
 - [x] 模型供应商 + 视觉桥接合并设置页
-- [x] **双更新源管道**：GitHub（`plhys/VeryAgent`）/ Gitea（`10.10.100.233:3030/boss/veryagent`）可选；桌面 check 走 Rust endpoint 覆盖；`createUpdaterArtifacts` + 文档
-- [x] 标题栏主题切换旁绿色「更新」按钮（有新版本时显示，点击下载/重启）
+- [x] 双更新源管道：GitHub / Gitea 可选；标题栏绿色更新按钮
 
-### 2026-07-15（已并入 0.9.3）
+#### 技能/插件（0.9.4）
 
-- [x] OpenClaw / Hermes readiness：安装 ≠ 可用；Gateway 探测 + auto ensure
-- [x] OpenClaw resident（类 Hermes 常驻）
-- [x] 欢迎页通用 / 专家模式（通用：Hermes + OpenClaw）
-- [x] OpenClaw 会话设置中文短标签 + 说明（思考/快速/工具/插件/推理/用量/提权）
+- [x] web-search 技能（网页搜索 + 图片搜索，经 MCP 代理）
+- [x] doubao-image 技能（豆包出图）
+- [x] gemini-image 技能重构（MCP 端点迁移）
+- [x] OpenWiki 插件化：技能卡片启用 + 齿轮配置弹窗；npm CLI 安装流
+- [x] 恢复 transcripts 图片右键「引用二次创作」
+
+#### OpenClaw / Hermes（0.9.3）
+
+- [x] readiness 探测（安装 ≠ 可用；Gateway 实时可达）
+- [x] OpenClaw resident（类 Hermes 常驻进程）
+- [x] 欢迎页通用 / 专家模式
+- [x] 会话设置中文短标签（思考/快速/工具/插件/推理/用量/提权）
 - [x] 修正 off→「拒绝」误映射
-- [x] 独立开发启动文档与脚本（`dev-detached.ps1`，进程不随 agent 被杀）
-- [x] 补写 `CHANGELOG.md` 版本更新说明
-- [x] **移除**共享身份 / 共享记忆（后端 + 设置页 + 注入路径）
-- [x] OpenWiki 插件化：技能和插件卡片启用 + 齿轮配置弹窗；npm CLI 安装流
-- [x] 侧边栏对话/项目列表悬停绝对时间旗标
-- [x] 设置侧栏：通用设置 / 专家设置分组；shared-preferences 重定向防白屏
-- [x] 桌宠位置与气泡锚定、缩放尺寸修正；全局 pointer 光标
-- [x] 修复 MessageInput `collapsedSettings` TDZ 崩溃
 
-### codeg v0.20.0 → v0.20.2 合并（0.9.2）
+#### 其他
 
-- [x] Icon 暗淡修复（agent-icon.tsx）
-- [x] Badge 前缀修正（restampSkillPrefixes + 测试）
-- [x] Unresumable Session Banner（classify_session_load_failure）
-- [x] Science 科研技能（13 个内置技能 + 管理模块）
-- [x] Skill Packs Hub（专家/科研/办公三合一设置页）
-- [x] 模型选择器滚动条修复（宽视图 + 窄视图）
-
-### 前端入口改造（0.9.2）
-
-- [x] "+"菜单技能改为分类套娃（专家/科研/办公 → 分类 → 技能）
-- [x] 侧边栏"技能和插件"面板：三大技能包合一 + 分类标签筛选 + 一键启用/禁用
-- [x] 办公技能 OfficeAction 加 category 字段
+- [x] 独立开发启动文档与脚本（`dev-detached.ps1`）
+- [x] 移除共享身份/共享记忆（产品决策）
+- [x] 设置侧栏分组：通用 / 专家
+- [x] 桌宠位置与气泡锚定、缩放尺寸修正
+- [x] codeg v0.20.0 → v0.20.2 合并（0.9.2）
+- [x] 前端入口改造：技能分类套娃 + 三大技能包合一（0.9.2）
+- [x] PPT 技能修复：注册为专家、正确归类、稳定切换
 
 ---
 
 ## 二、待定
 
-### 0.9.3 发版前
+### 发版前
 
-- [ ] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏双选中；新库默认关智能体）
+- [ ] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏；新库默认关智能体）
 - [ ] 正式包构建与安装/升级冒烟
-- [ ] 提交并推送工作区改动（当前尚未 commit）
+- [ ] 提交并推送工作区改动（当前 HEAD 与 origin/main 一致，但本地有未跟踪的辅助脚本/调试文件）
+
+### 对话总结
+
+- [ ] AI 总结后端对接（当前提取式摘要已上，AI 异步总结待后续改进）
 
 ### OpenClaw 模型鉴权
 
@@ -69,14 +89,14 @@
 
 - [ ] 短标签已上；是否再默认折叠部分 OpenClaw 开关待产品确认
 
-### 项目拆分/重构
-
-- [ ] 状态：**待定**
-
 ### 用户偏好记忆系统
 
 - [x] 已移除 shared identity / memory 路径（产品决策）
 - [ ] 若后续重做「跨智能体偏好」，需新方案（不再沿用已删模块）
+
+### 项目拆分/重构
+
+- [ ] 状态：**待定**
 
 ---
 
