@@ -100,3 +100,9 @@ nul
 
 # Agnes agent cache (auto-generated)
 .agnes/
+
+# Next.js auto-generated
+next-env.d.ts
+
+# Dev output logs
+dev_output.log

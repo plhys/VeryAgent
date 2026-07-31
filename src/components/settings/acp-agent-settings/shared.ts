@@ -2,18 +2,17 @@ import type { AgentType, CheckStatus, HermesLocalConfig, AcpAgentInfo } from "@/
 import { toErrorMessage } from "@/lib/app-error"
 import type { AgentReadiness, AgentReadinessKind } from "@/lib/agent-readiness"
 
-import { buildConnectedModelOptions, type OpenCodeModelOptionGroup } from "@/lib/opencode-connect"
+import type { OpenCodeModelOptionGroup } from "@/lib/opencode-connect"
 
 import type {
-  AcpTranslator, UiCheckItem, UiFixAction, AgentDraft,
+  AcpTranslator, UiCheckItem, AgentDraft,
   ImportantEnvKeys, ClaudeEffortLevel, 
   GeminiImportantValues, ClineImportantValues, OpenClawImportantValues,
   HermesDraftValues,
   OpenCodeConfigView, OpenCodeProviderView, OpenCodeModelView,
   HermesAuthMode, OpenClawAuthMode, ClineAuthMode, OpenCodeAuthMode, PiAuthMode, CodeBuddyAuthMode,
 } from "./types"
-import { KIMI_BASE_URL_INTERNATIONAL, KIMI_BASE_URL_CHINA, KIMI_MODEL_PLACEHOLDER, KIMI_INTERFACE_TYPES } from "./types"
-import { CLAUDE_MODEL_ENV_KEYS, CLAUDE_EFFORT_LEVEL_CONFIG_KEY, CLAUDE_EFFORT_LEVEL_VALUES } from "./types"
+import { CLAUDE_MODEL_ENV_KEYS, CLAUDE_EFFORT_LEVEL_CONFIG_KEY } from "./types"
 
 
 let acpTranslator: AcpTranslator | null = null
@@ -988,33 +987,6 @@ const CODEX_AUTH_MODES = [
 type CodexAuthMode = (typeof CODEX_AUTH_MODES)[number]
 
 type CodexReasoningEffort = "low" | "medium" | "high" | "xhigh"
-
-const CODEX_REASONING_EFFORT_OPTIONS: ReadonlyArray<{
-  value: CodexReasoningEffort
-  label: string
-  description: string
-}> = [
-  {
-    value: "low",
-    label: "Low",
-    description: "Fast responses with lighter reasoning",
-  },
-  {
-    value: "medium",
-    label: "Medium",
-    description: "Balances speed and reasoning depth for everyday tasks",
-  },
-  {
-    value: "high",
-    label: "High",
-    description: "Greater reasoning depth for complex problems",
-  },
-  {
-    value: "xhigh",
-    label: "Extra High",
-    description: "Extra high reasoning depth for complex problems",
-  },
-]
 
 const CODEX_DEFAULT_REASONING_EFFORT: CodexReasoningEffort = "high"
 

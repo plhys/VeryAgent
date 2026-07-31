@@ -132,7 +132,6 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
   image,
   status,
   requestedAspectRatio,
-  className,
 }: GeneratedImagesBlockProps) {
   const t = useTranslations("Folder.chat.messageList")
   const tImg = useTranslations("MarkdownImage")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 import {
   ChevronDown,
@@ -10,7 +10,6 @@ import {
   PawPrint,
   Pencil,
   Plus,
-  Store,
   Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -58,7 +57,6 @@ const SPRITE_PREVIEW_CONCURRENCY = 4
 
 export function PetManagerSection() {
   const t = useTranslations("Pet.manager")
-  const tMarket = useTranslations("Pet.marketplace")
   const [pets, setPets] = useState<PetSummary[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -177,8 +175,6 @@ export function PetManagerSection() {
   }, [t])
 
   const summonDisabled = !isDesktop() || !activeId && pets.length === 0
-
-  const installedIds = useMemo(() => new Set(pets.map((p) => p.id)), [pets])
 
   return (
     <Collapsible

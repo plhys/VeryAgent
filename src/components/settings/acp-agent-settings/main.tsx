@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { Reorder, useDragControls } from "motion/react"
+import { Reorder } from "motion/react"
 import { useLocale, useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
 import {
@@ -58,16 +58,6 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxGroup,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxLabel,
-  ComboboxList,
-} from "@/components/ui/combobox"
 import { cn, copyTextToClipboard, randomUUID } from "@/lib/utils"
 import {
   acpClearBinaryCache,
@@ -83,8 +73,6 @@ import {
   acpUpdateAgentConfig,
   acpUpdateAgentEnv,
   acpUpdateHermesConfig,
-  acpUpdateKimiCodeConfig,
-  acpFetchKimiModels,
   acpRevealHermesHome,
   acpOpenHermesSetupTerminal,
   acpDiscoverOpenClawGateway,
@@ -99,12 +87,9 @@ import type {
   AcpAgentInfo,
   AgentType,
   CheckStatus,
-  FixAction,
-  HermesLocalConfig,
   ModelProviderInfo,
   OpenClawGatewayDiscovery,
   OpenCodeCatalogProvider,
-  PreflightResult,
   ProviderModelItem,
 } from "@/lib/types"
 import { HERMES_PROVIDERS } from "@/lib/types"
@@ -112,9 +97,7 @@ import {
   buildAgentReadiness,
   isReadinessPilotAgent,
   readinessToneClass,
-  type AgentReadiness,
-  type AgentReadinessKind,
-} from "@/lib/agent-readiness"
+  } from "@/lib/agent-readiness"
 import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
@@ -123,12 +106,10 @@ import {
   buildConnectedModelOptions,
   buildConnectedProviders,
   disconnectProvider,
-  formatContextWindow,
   modelReferencesProvider,
   setProviderApiKey,
   setProviderEnabled,
-  type OpenCodeModelOptionGroup,
-} from "@/lib/opencode-connect"
+  } from "@/lib/opencode-connect"
 import { toErrorMessage } from "@/lib/app-error"
 import { getInstallErrorHintKey } from "@/lib/agent-install-error"
 import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
@@ -136,37 +117,26 @@ import { OpencodePluginsModal } from "../opencode-plugins-modal"
 import { CodeBuddyConfigPanel } from "../codebuddy-config-panel"
 import { PiConfigPanel } from "../pi-config-panel"
 
-
-
-// ── Extracted module imports ───────────────────────────────────────
 import type {
-  AgentCheckState, ClaudeAuthMode, ClaudeEffortLevel, ClaudeModelKey,
-  ImportantConfigKey, ImportantDraftPatch, RunningActionKind, UiFixAction,
-  UiCheckItem, AcpTranslator, ConfigParseResult, ImportantEnvKeys,
-  GeminiAuthMode, GeminiImportantValues, ClineProvider, ClineImportantValues,
-  OpenClawImportantValues, OpenCodeConfigView, OpenCodeProviderView, OpenCodeModelView,
-  CodexAuthMode, CodexReasoningEffort, CodexImportantValues, CodexTomlImportantValues,
-  HermesDraftValues, AgentDraft, AgentReorderItemProps,
-  KimiAuthMode, HermesAuthMode, OpenClawAuthMode, ClineAuthMode,
+  AgentCheckState, ClaudeAuthMode, ClaudeEffortLevel,
+  ImportantConfigKey, RunningActionKind, UiFixAction, UiCheckItem, AcpTranslator,
+  AgentDraft,
+  GeminiAuthMode,
+  CodexAuthMode,
+  HermesAuthMode, OpenClawAuthMode, ClineAuthMode,
   OpenCodeAuthMode, PiAuthMode, CodeBuddyAuthMode,
-  KimiInterfaceType, KimiNativeAuthType, KimiEndpointRegion,
-  KimiInterfaceTypeMeta, KimiManagedConfig,
 } from "./types"
 import {
-  CLAUDE_AUTH_MODES, CLAUDE_MODEL_ENV_KEYS, CLAUDE_EFFORT_LEVEL_CONFIG_KEY,
-  CLAUDE_EFFORT_LEVEL_VALUES, GEMINI_AUTH_MODES, GEMINI_ENV_KEYS,
-  OPENCLAW_ENV_KEYS, CLINE_PROVIDERS,
+  CLAUDE_EFFORT_LEVEL_CONFIG_KEY, CLAUDE_EFFORT_LEVEL_VALUES,
+  GEMINI_AUTH_MODES, OPENCLAW_ENV_KEYS, CLINE_PROVIDERS,
   CODEX_DEFAULT_MODEL_PROVIDER, CODEX_AUTH_MODES, CODEX_REASONING_EFFORT_OPTIONS,
   CODEX_DEFAULT_REASONING_EFFORT, OPENCODE_PROVIDER_NPM_OPTIONS,
-  KIMI_BASE_URL_INTERNATIONAL, KIMI_BASE_URL_CHINA, KIMI_MODEL_PLACEHOLDER,
-  KIMI_INTERFACE_TYPES,
 } from "./types"
-import { setAcpTranslator, acpText, statusTone, summarizeChecks, envMapToText, parseEnvText, patchEnvText } from "./shared"
-import { importantEnvKeysByAgent, parseConfigJsonText, asObjectRecord, parseOpenCodeAuthJsonText, patchOpenCodeAuthJsonText, envFromConfig, pickFirstString, findEnvValue, extractImportantConfigValues, normalizeClaudeEffortLevel, extractGeminiImportantValues, inferGeminiAuthMode, extractClineImportantValues, extractOpenClawImportantValues, patchGeminiConfigText, patchGeminiEnvText, patchGeminiAuthMode, geminiAuthModeLabel, geminiAuthModeHint, markRemovedKeysNull, normalizeConfigText, buildOpenCodeModelOptions, extractOpenCodeConfigValues, patchOpenCodeConfigText, ensureOpenCodeProviderNpm, buildOpenCodeNpmOptions, extractCodexTomlImportantValues, parseCodexAuthJsonObject, parseCodexAuthJsonText, inferCodexAuthMode, hasCodexChatgptTokens, extractCodexImportantValues, escapeRegExp, findTomlRootEndIndex, findTomlRootAssignmentIndex, preferredTomlRootInsertionIndex, updateTomlRootStringKey, updateTomlRootBooleanKey, findTomlSectionRange, removeTomlSection, upsertTomlSectionBooleanKey, normalizeOpenAiCompatibleBaseUrl, patchCodexProviderBaseUrl, patchCodexProviderField, ensureCodexProviderDefaults, patchCodexAuthJsonText, patchCodexConfigTomlText, normalizeCodexReasoningEffort, buildCodexProviderOptions, parseTomlStringLiteral, parseTomlStringAssignment, parseTomlAssignmentKey, parseTomlBooleanAssignment, parseHermesConfig, buildAgentDraft, compareVersion, hasComparableVersion, isValidCustomVersion, patchEnvByImportantKey, applyImportantFieldToDraft, buildImportantPatchFromDraft } from "./shared"
-import { patchImportantConfigText, applyClaudeProviderToConfigText, configTextForClaudeSave, buildVersionCheck, getAgentChecks } from "./checks"
+import { setAcpTranslator, statusTone, summarizeChecks, envMapToText, parseEnvText, patchEnvText, importantEnvKeysByAgent, parseConfigJsonText, asObjectRecord, patchOpenCodeAuthJsonText, extractImportantConfigValues, extractGeminiImportantValues, extractClineImportantValues, patchGeminiConfigText, patchGeminiEnvText, patchGeminiAuthMode, geminiAuthModeLabel, geminiAuthModeHint, markRemovedKeysNull, normalizeConfigText, buildOpenCodeModelOptions, extractOpenCodeConfigValues, patchOpenCodeConfigText, ensureOpenCodeProviderNpm, buildOpenCodeNpmOptions, parseCodexAuthJsonText, hasCodexChatgptTokens, extractCodexImportantValues, updateTomlRootStringKey, removeTomlSection, patchCodexAuthJsonText, patchCodexConfigTomlText, normalizeCodexReasoningEffort, parseHermesConfig, buildAgentDraft, isValidCustomVersion, patchEnvByImportantKey, applyImportantFieldToDraft, buildImportantPatchFromDraft } from "./shared"
+import { patchImportantConfigText, configTextForClaudeSave, getAgentChecks } from "./checks"
 import { OpenCodeModelCombobox } from "./opencode-model-combobox"
 import { AgentReorderItem } from "./agent-reorder-item"
-import { KimiCodeConfigPanel, kimiInterfaceMeta, kimiEndpointRegionFromBaseUrl, kimiBaseUrlForRegion, parseKimiManagedConfig, kimiInitialMode } from "./kimi-code-config"
+import { KimiCodeConfigPanel } from "./kimi-code-config"
 
 export function AcpAgentSettings() {
   const locale = useLocale()
@@ -8032,7 +8002,6 @@ supports_websockets = true`}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
 
 // ── Extracted modules ────────────────────────────────────────────────
       <OpencodePluginsModal
