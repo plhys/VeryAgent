@@ -106,11 +106,35 @@ export function applyClaudeProviderToConfigText(
   configText: string,
   provider: Pick<ModelProviderInfo, "api_url" | "api_key" | "model">
 ): string {
-  const model = provider.model ?? ""
+  // provider.model is a JSON string like `{"main":"...","customOption":"...",...}`
+  // that encodes per-model keys for the Claude env. Unwrap it so the main model
+  // and any custom option are set individually.
+  let claudeMainModel = ""
+  let claudeCustomModelOption = ""
+  let claudeCustomModelOptionName = ""
+  let claudeCustomModelOptionDescription = ""
+  const raw = provider.model ?? ""
+  if (raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, string>
+      if (typeof parsed.main === "string") claudeMainModel = parsed.main
+      if (typeof parsed.customOption === "string")
+        claudeCustomModelOption = parsed.customOption
+      if (typeof parsed.customOptionName === "string")
+        claudeCustomModelOptionName = parsed.customOptionName
+      if (typeof parsed.customOptionDescription === "string")
+        claudeCustomModelOptionDescription = parsed.customOptionDescription
+    } catch {
+      claudeMainModel = raw.trim()
+    }
+  }
   return patchImportantConfigText("claude_code", configText, {
     apiBaseUrl: provider.api_url,
     apiKey: provider.api_key,
-    claudeMainModel: model,
+    claudeMainModel,
+    claudeCustomModelOption,
+    claudeCustomModelOptionName,
+    claudeCustomModelOptionDescription,
   }).configText
 }
 export function configTextForClaudeSave(
