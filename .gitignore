@@ -97,3 +97,6 @@ veryagent-plus/
 
 # Windows reserved device name (can't be deleted via normal means)
 nul
+
+# Agnes agent cache (auto-generated)
+.agnes/
