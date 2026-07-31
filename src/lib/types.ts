@@ -9,6 +9,7 @@
   | "code_buddy"
   | "kimi_code"
   | "pi"
+  | "mimo_code"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -837,6 +838,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   code_buddy: "CodeBuddy",
   kimi_code: "Kimi Code",
   pi: "Pi",
+  mimo_code: "Mimo Code",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -850,6 +852,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   code_buddy: "bg-[#0052D9]",
   kimi_code: "bg-[#1783FF]",
   pi: "bg-[#0D9488]",
+  mimo_code: "bg-[#FF6B35]",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)

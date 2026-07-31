@@ -27,6 +27,9 @@
 ### 修复
 
 - **acp-agent-settings.tsx 拆分回滚**：远程提交的模块拆分未完成（空文件、截断内容、循环自引用），恢复备份并删除不完整拆分目录，确保构建通过。
+- **acp-agent-settings.tsx 正确拆分**：将 11853 行/466KB 的单一文件拆分为 7 个模块——`types.ts`、`shared.ts`、`checks.ts`、`kimi-code-config.tsx`、`opencode-model-combobox.tsx`、`agent-reorder-item.tsx`、`main.tsx`，通过 barrel `index.ts` 统一导出。
+- **AgentType 添加 mimo_code**：补充 `mimo_code` 类型的缺失定义，修复 `AGENT_LABELS`/`AGENT_COLORS` 的 Record 完整性。
+- **测试文件修复**：`acp-agent-settings.test.tsx` 补充 `resident` 属性。
 - **`fetch_provider_models` 命令注册**：修复设置页选中智能体后刷新模型列表报 `Command fetch_provider_models not found`——后端 `tauri_setup.rs` 的 invoke 注册表遗漏了该命令，补加注册行。
 - **`model_provider.rs` 门控**：补回 `fetch_provider_models` 上的 `#[cfg(feature = "tauri-runtime")]` 门控，防止 web/standalone 构建编译失败。
 - **AI 总结不再覆盖轮次和时间信息**：AI 异步总结返回后，保留 `💬 共X轮 🕐 时间范围` 头部，只替换内容部分。

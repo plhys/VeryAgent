@@ -96,7 +96,8 @@
 
 ### 项目拆分/重构
 
-- [ ] 状态：**待定**
+- [x] **acp-agent-settings.tsx 拆分**：11853 行 → 7 个模块文件（types/shared/checks/kimi-code-config/opencode-combobox/agent-reorder-item/main.tsx）
+- [ ] 其他大文件（mcp-settings.tsx / skills-settings.tsx 等）待后续拆分
 
 ---
 

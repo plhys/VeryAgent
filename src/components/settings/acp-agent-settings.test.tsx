@@ -30,6 +30,7 @@ function makeAgent(overrides: Partial<AcpAgentInfo>): AcpAgentInfo {
     codex_config_toml: null,
     hermes_config_yaml: null,
     model_provider_id: null,
+    resident: false,
     ...overrides,
   }
 }
