@@ -332,7 +332,7 @@ interface BuiltStreamingTurns {
 // joined string without re-running O(n) concatenation.
 const joinedOutputCache = new WeakMap<readonly string[], string>()
 
-function getJoinedChunks(chunks: readonly string[]): string {
+export function getJoinedChunks(chunks: readonly string[]): string {
   if (chunks.length === 0) return ""
   if (chunks.length === 1) return chunks[0]
   const cached = joinedOutputCache.get(chunks)
@@ -350,7 +350,7 @@ function getJoinedChunks(chunks: readonly string[]): string {
  * `<task_result>` XML tags (OpenCode). This function extracts the human-
  * readable text so the Agent card displays clean output.
  */
-function cleanAgentOutput(output: string | null): string | null {
+export function cleanAgentOutput(output: string | null): string | null {
   if (!output) return null
   let text = output.trim()
   if (!text) return null
@@ -430,7 +430,7 @@ function cleanAgentOutput(output: string | null): string | null {
  * The function is intentionally NOT a generic `kind === "other"` matcher
  * because many tools surface as ToolKind::Other.
  */
-function isImageGenerationToolCall(info: {
+export function isImageGenerationToolCall(info: {
   title?: string | null
   images?: { length: number } | null
 }): boolean {
@@ -450,7 +450,7 @@ function isImageGenerationToolCall(info: {
 }
 
 /** True when the normalized live tool name is the platform image MCP tool. */
-function isPlatformImageToolName(toolName: string): boolean {
+export function isPlatformImageToolName(toolName: string): boolean {
   const n = toolName.toLowerCase()
   return (
     n === "generate_image" ||
@@ -468,7 +468,7 @@ function isPlatformImageToolName(toolName: string): boolean {
  * values, but the type system doesn't see that. Anything else falls back
  * to `null` and the renderer treats it as in-flight.
  */
-function narrowToolCallStatus(status: string): ToolCallStatus | null {
+export function narrowToolCallStatus(status: string): ToolCallStatus | null {
   switch (status) {
     case "pending":
     case "in_progress":
@@ -490,7 +490,7 @@ function narrowToolCallStatus(status: string): ToolCallStatus | null {
  * Returns `null` when content is missing, empty after trimming, or doesn't
  * carry a recognisable revised-prompt frame.
  */
-function extractRevisedPrompt(content: string | null): string | null {
+export function extractRevisedPrompt(content: string | null): string | null {
   if (!content) return null
   const trimmed = content.trim()
   if (trimmed.length === 0) return null
@@ -505,7 +505,7 @@ function extractRevisedPrompt(content: string | null): string | null {
   return trimmed
 }
 
-function extractAspectToken(text: string): string | null {
+export function extractAspectToken(text: string): string | null {
   const ratio = text.match(/(?:^|[^0-9])(\d{1,2}\s*[:：/]\s*\d{1,2})(?:[^0-9]|$)/)
   if (ratio?.[1]) return ratio[1].trim()
   const size = text.match(/(?:^|[^0-9])(\d{3,4}\s*[x×]\s*\d{3,4})(?:[^0-9]|$)/)
@@ -515,7 +515,7 @@ function extractAspectToken(text: string): string | null {
   return null
 }
 
-function extractRequestedImageAspect(rawInput: string | null): string | null {
+export function extractRequestedImageAspect(rawInput: string | null): string | null {
   if (!rawInput) return null
   try {
     const parsed = JSON.parse(rawInput)
