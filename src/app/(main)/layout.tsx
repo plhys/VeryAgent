@@ -19,12 +19,7 @@ export default function MainLayout({
           __html: `@media(prefers-color-scheme:dark){html:not(.light){background-color:#09090b;color-scheme:dark}}`,
         }}
       />
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
+      <ThemeProvider>
         <AppearanceProvider>
           <OverlayScrollbarsInit />
           <ClipboardFallbackInit />

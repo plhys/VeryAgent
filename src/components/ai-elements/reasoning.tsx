@@ -255,8 +255,7 @@ export const ReasoningContent = memo(
         <Streamdown
           plugins={plugins}
           remarkPlugins={remarkPlugins}
-          {...props}
-          // Enforce the link icon + safety override after spreading props.
+          // Enforce the link icon + safety override.
           components={markdownLinkComponents}
         >
           {normalized}

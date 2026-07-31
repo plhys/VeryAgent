@@ -12,6 +12,7 @@ import { useIsActiveChatMode } from "@/hooks/use-is-active-chat-mode"
 import { FolderTitleBar } from "@/components/layout/folder-title-bar"
 import { Sidebar } from "@/components/layout/sidebar"
 import { StatusBar } from "@/components/layout/status-bar"
+import type { ImperativePanelGroupHandle } from "react-resizable-panels"
 import {
   AppWorkspaceProvider,
   ConversationStatusEventBridge,
@@ -839,7 +840,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
         <FolderWorkspaceShell>{children}</FolderWorkspaceShell>
       )}
       <StatusBar />
-      <PetFloating isConversationActive={isChatMode} />
+      <PetFloating />
       <AppToaster
         position="bottom-right"
         duration={TOAST_DURATION_MS}

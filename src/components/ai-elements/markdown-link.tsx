@@ -5,6 +5,7 @@ import { useCallback, useState } from "react"
 import { FileText, Globe, Mail, Phone, type LucideIcon } from "lucide-react"
 import type { Components, LinkSafetyModalProps } from "streamdown"
 
+import type { AgentType } from "@/lib/types"
 import { ReferenceBadge } from "@/components/chat/composer/badges/reference-badge"
 import { parseVeryAgentReferenceUri } from "@/components/chat/composer/reference-uri"
 import type { ReferenceAttrs } from "@/components/chat/composer/types"
@@ -123,7 +124,7 @@ export function MarkdownLink({
           <button
             type="button"
             title={reference.uri ?? reference.label}
-            onClick={() => openTab(0, conversationId!, agentType ?? "openai", false)}
+            onClick={() => openTab(0, conversationId!, (agentType ?? "openai") as AgentType, false)}
             className="inline-flex cursor-pointer appearance-none items-center align-middle leading-none hover:opacity-80"
           >
             <ReferenceBadge data={reference} />
