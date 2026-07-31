@@ -13,7 +13,6 @@ import {
   MONO_FALLBACK,
   MONO_FONTS,
   SANS_FALLBACK,
-  UI_FONTS,
   fontSupportsLigatures,
   isValidFontId,
   isValidFontSize,
@@ -40,8 +39,8 @@ describe("font catalog integrity", () => {
     for (const f of FONTS) expect(FONT_BY_ID[f.id]).toBe(f)
   })
 
-  it("UI_FONTS exposes every font; MONO_FONTS only monospace", () => {
-    expect(UI_FONTS).toEqual(FONTS)
+  it("FONTS exposes every font; MONO_FONTS only monospace", () => {
+    // FONTS is the canonical export; UI_FONTS alias removed
     expect(MONO_FONTS.length).toBeGreaterThan(0)
     for (const f of MONO_FONTS) expect(f.category).toBe("mono")
   })

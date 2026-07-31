@@ -1077,7 +1077,7 @@ export function McpSettings() {
                     const spec = isObject(server.spec) ? server.spec : {}
                     return (
                       <ContextMenu key={server.id}>
-                        <ContextMenuTrigger asChild>
+                        <ContextMenuTrigger asChild data-context-menu="true">
                           <button
                             className={cn(
                               "w-full rounded-md border p-2 text-left transition-colors",

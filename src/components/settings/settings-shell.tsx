@@ -24,6 +24,7 @@ import {
   Server,
   Settings,
   SlidersHorizontal,
+  Pencil,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { usePathname } from "next/navigation"
@@ -49,9 +50,9 @@ type SettingsNavLabelKey =
   | "model_providers"
   | "image_generation"
   | "mcp"
-  | "experts"
   | "office_tools"
   | "skill_packs"
+  | "skills"
   | "quick_messages"
   | "shortcuts"
   | "version_control"
@@ -117,6 +118,11 @@ const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
     href: "/settings/skill-packs",
     labelKey: "skill_packs",
     icon: Boxes,
+  },
+  {
+    href: "/settings/skills",
+    labelKey: "skills",
+    icon: Pencil,
   },
   {
     href: "/settings/quick-messages",

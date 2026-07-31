@@ -99,7 +99,7 @@ export function AuxPanelProvider({ children }: AuxPanelProviderProps) {
     const isMobileViewport = window.innerWidth < 768
     const defaultOpen = isMobileViewport ? false : DEFAULT_IS_OPEN
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setIsOpen(isMobileViewport ? false : (stored?.isOpen ?? defaultOpen))
     setWidthState(clampWidth(stored?.width ?? DEFAULT_WIDTH))
     setRestored(true)
@@ -114,7 +114,6 @@ export function AuxPanelProvider({ children }: AuxPanelProviderProps) {
   // state is content-driven by the workspace contexts and will refetch
   // naturally via its folder-path dependency.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPendingRevealPath(null)
   }, [activeFolderId])
 

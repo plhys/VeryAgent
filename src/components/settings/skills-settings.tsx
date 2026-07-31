@@ -974,7 +974,7 @@ export function SkillsSettings() {
 
                       return (
                         <ContextMenu key={skill.id}>
-                          <ContextMenuTrigger asChild>
+                          <ContextMenuTrigger asChild data-context-menu="true">
                             <button
                               type="button"
                               className={cn(

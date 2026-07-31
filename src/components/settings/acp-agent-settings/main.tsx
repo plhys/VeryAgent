@@ -452,7 +452,6 @@ export function AcpAgentSettings() {
 
   useEffect(() => {
     return () => installStream.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -471,7 +470,6 @@ export function AcpAgentSettings() {
         runPreflight(streamAgentType).catch(() => {})
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installStream.status])
 
   useEffect(() => {
@@ -871,7 +869,7 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [runPreflight, t, installStream.start]
   )
 
@@ -998,7 +996,7 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [runPreflight, t, installStream.start]
   )
 
@@ -1046,7 +1044,7 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [runPreflight, t, installStream.start]
   )
 
@@ -1089,7 +1087,7 @@ export function AcpAgentSettings() {
         }))
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [runPreflight, t, installStream.start]
   )
 

@@ -187,6 +187,7 @@ export function FolderTitleBar() {
                     ),
                   })}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="/logo-01.png"
                     alt=""

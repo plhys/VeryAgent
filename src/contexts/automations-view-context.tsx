@@ -67,7 +67,7 @@ export function AutomationsViewProvider({ children }: { children: ReactNode }) {
     // "subscribe to an external system, setState in the callback" effect), and
     // its deps are stable, so this can't cascade. Same block-disable idiom as
     // workspace-context.tsx.
-    /* eslint-disable react-hooks/set-state-in-effect */
+
     void refetch()
     let unsub: (() => void) | undefined
     let cancelled = false
@@ -88,7 +88,6 @@ export function AutomationsViewProvider({ children }: { children: ReactNode }) {
       unsub?.()
       offReconnect?.()
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [refetch])
 
   const unseenFailures = useMemo(

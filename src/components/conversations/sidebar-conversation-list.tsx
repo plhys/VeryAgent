@@ -332,7 +332,7 @@ const FolderHeader = memo(function FolderHeader({
                 // Re-open the SAME context menu as right-click (single source of
                 // truth — the menu has 3 submenus, duplicating it would drift).
                 // Dispatch a synthetic contextmenu event from this button; it
-                // bubbles to the enclosing <ContextMenuTrigger>, which Radix opens
+                // bubbles to the enclosing <ContextMenuTrigger> data-context-menu="true", which Radix opens
                 // at the given coords — anchored just under the button.
                 const rect = e.currentTarget.getBoundingClientRect()
                 e.currentTarget.dispatchEvent(

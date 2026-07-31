@@ -103,7 +103,7 @@ pub fn is_encrypted(path: &Path) -> Result<bool, AppCommandError> {
     if n < ENVELOPE_MAGIC.len() {
         return Ok(false);
     }
-    Ok(&head == ENVELOPE_MAGIC || &head == ENVELOPE_MAGIC)
+    Ok(&head == ENVELOPE_MAGIC)
 }
 
 fn derive_key(passphrase: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; 32], AppCommandError> {
@@ -274,7 +274,7 @@ fn validate_header(h: &EnvelopeHeader) -> Result<(), AppCommandError> {
 fn read_header<R: Read>(reader: &mut R) -> Result<EnvelopeHeader, AppCommandError> {
     let mut magic = [0u8; 8];
     read_fill(reader, &mut magic).map_err(AppCommandError::io)?;
-    if &magic != ENVELOPE_MAGIC && &magic != ENVELOPE_MAGIC {
+    if &magic != ENVELOPE_MAGIC {
         return Err(corrupt_header_error());
     }
     let mut ver = [0u8; 1];

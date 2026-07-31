@@ -5,6 +5,7 @@ import { ClipboardFallbackInit } from "@/components/clipboard-fallback-init"
 import { WebConnectionGuard } from "@/components/connection/web-connection-guard"
 import { WindowResizeGrips } from "@/components/layout/window-resize-grips"
 import { MainReadySignal } from "@/components/main-ready-signal"
+import { GlobalContextMenuGuard } from "@/components/global-context-guard"
 
 export default function MainLayout({
   children,
@@ -26,6 +27,7 @@ export default function MainLayout({
           <WebConnectionGuard />
           <WindowResizeGrips />
           <MainReadySignal />
+          <GlobalContextMenuGuard />
           {children}
         </AppearanceProvider>
       </ThemeProvider>

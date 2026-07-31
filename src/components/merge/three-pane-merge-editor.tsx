@@ -715,7 +715,6 @@ function ArrowGutter({
       })
       .filter((item): item is { hunk: MergeHunk; top: number } => item !== null)
     // scrollTick is included to recompute on scroll
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, items, scrollTick])
 
   return (

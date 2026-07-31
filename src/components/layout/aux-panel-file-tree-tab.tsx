@@ -549,7 +549,7 @@ function RenderNode({
 
     return (
       <ContextMenu>
-        <ContextMenuTrigger>
+        <ContextMenuTrigger data-context-menu="true">
           <FileTreeFile
             path={node.path}
             name={node.name}
@@ -708,7 +708,7 @@ function RenderNode({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger>
+      <ContextMenuTrigger data-context-menu="true">
         <FileTreeFolder
           path={node.path}
           name={node.name}
@@ -2091,7 +2091,7 @@ export function FileTreeTab() {
         <WorkspaceDegradedBanner onRetry={workspaceState.restart} />
       )}
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild data-context-menu="true">
           <ScrollArea className="flex-1 min-h-0 pb-1" x="scroll">
             <FileTree
               key={folder?.path ?? "file-tree-empty"}
@@ -2103,7 +2103,7 @@ export function FileTreeTab() {
             >
               {folder?.path && (
                 <ContextMenu>
-                  <ContextMenuTrigger>
+                  <ContextMenuTrigger data-context-menu="true">
                     <FileTreeFolder
                       path={FILE_TREE_ROOT_PATH}
                       name={rootNodeName}

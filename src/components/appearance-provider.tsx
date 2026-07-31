@@ -295,7 +295,6 @@ export function AppearanceProvider({
     } catch {
       // localStorage unavailable
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 仅界面字体需要在 mount 时重新解析并应用 --font-sans，吸收跨版本字体目录变更
@@ -308,7 +307,6 @@ export function AppearanceProvider({
       document.documentElement.style.setProperty("--font-sans", sans)
       persist(STORAGE_KEY_UI_FONT_STACK, sans)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 跨标签页同步：用户在另一个窗口改了设置时，本窗口实时跟进

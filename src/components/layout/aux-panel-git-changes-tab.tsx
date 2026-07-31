@@ -966,7 +966,7 @@ export function GitChangesTab() {
 
         return (
           <ContextMenu key={`tracked:${node.path}`}>
-            <ContextMenuTrigger>
+            <ContextMenuTrigger data-context-menu="true">
               <FileTreeFolder
                 path={node.path}
                 name={node.name}
@@ -1040,7 +1040,7 @@ export function GitChangesTab() {
 
       return (
         <ContextMenu key={`tracked:${file.path}`}>
-          <ContextMenuTrigger>
+          <ContextMenuTrigger data-context-menu="true">
             <FileTreeFile
               className="w-full min-w-0 cursor-pointer"
               name={node.name}
@@ -1145,7 +1145,7 @@ export function GitChangesTab() {
 
         return (
           <ContextMenu key={`untracked:${node.path}`}>
-            <ContextMenuTrigger>
+            <ContextMenuTrigger data-context-menu="true">
               <FileTreeFolder
                 path={node.path}
                 name={node.name}
@@ -1222,7 +1222,7 @@ export function GitChangesTab() {
 
       return (
         <ContextMenu key={`untracked:${file.path}`}>
-          <ContextMenuTrigger>
+          <ContextMenuTrigger data-context-menu="true">
             <FileTreeFile
               className="w-full min-w-0 cursor-pointer"
               name={node.name}
@@ -1400,7 +1400,7 @@ export function GitChangesTab() {
                   onExpandedChange={setExpandedTrackedPaths}
                 >
                   <ContextMenu>
-                    <ContextMenuTrigger>
+                    <ContextMenuTrigger data-context-menu="true">
                       <FileTreeFolder
                         path={TRACKED_ROOT_PATH}
                         name={folderName}
@@ -1517,7 +1517,7 @@ export function GitChangesTab() {
                   onExpandedChange={setExpandedUntrackedPaths}
                 >
                   <ContextMenu>
-                    <ContextMenuTrigger>
+                    <ContextMenuTrigger data-context-menu="true">
                       <FileTreeFolder
                         path={UNTRACKED_ROOT_PATH}
                         name={folderName}

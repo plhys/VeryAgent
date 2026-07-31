@@ -266,7 +266,6 @@ export function SystemNetworkSettings() {
     loadServerUpdateStatus().catch((err) => {
       console.error("[Settings] load server update status failed:", err)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

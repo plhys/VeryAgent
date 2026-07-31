@@ -384,6 +384,7 @@ mod tests {
             updated_at: Set(now),
             deleted_at: Set(None),
             pinned_at: Set(None),
+            summary: Set(None),
         }
         .insert(&db.conn)
         .await

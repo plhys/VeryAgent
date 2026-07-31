@@ -1777,3 +1777,14 @@
   outline: 2px solid var(--ring);
   outline-offset: 1px;
 }
+
+/* Disable native context menu globally; applications use Radix ContextMenu instead */
+[data-context-guard="enabled"] {
+  /* Chromium/WebView2 respects this; falls back gracefully on other browsers */
+  /* no-op CSS — actual suppression happens via JS listener below */
+}
+
+/* Suppress native context menu on empty/non-interactive areas */
+body {
+  /* No-op in browsers that support it; actual suppression is JS-driven */
+}

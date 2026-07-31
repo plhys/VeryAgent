@@ -67,7 +67,7 @@ export function SidebarProvider({ children }: SidebarProviderProps) {
     const isMobileViewport = window.innerWidth < 768
     const defaultOpen = isMobileViewport ? false : DEFAULT_IS_OPEN
     // Hydrate from localStorage after mount to keep SSR/CSR markup consistent.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setIsOpen(isMobileViewport ? false : (stored?.isOpen ?? defaultOpen))
     setWidthState(clampWidth(stored?.width ?? DEFAULT_WIDTH))
     setRestored(true)

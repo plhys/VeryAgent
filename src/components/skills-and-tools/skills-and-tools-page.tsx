@@ -505,7 +505,6 @@ function EnabledTab({
   useEffect(() => {
     void fetchSkills({ silent: allSkills.length > 0 })
     // Only re-run when parent signals a toggle; list identity is intentionally ignored.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchSkills, refreshKey])
 
   // Filter to only enabled skills, grouped by category
@@ -625,7 +624,6 @@ function EnabledTab({
 
   useEffect(() => {
     void fetchPlugins({ silent: plugins.length > 0 })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPlugins, refreshKey])
 
   const enabledPlugins = useMemo(

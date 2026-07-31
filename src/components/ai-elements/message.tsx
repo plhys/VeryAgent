@@ -28,7 +28,7 @@ import {
   defaultRehypePlugins,
   defaultRemarkPlugins,
 } from "streamdown"
-import { markdownLinkComponents } from "./markdown-link"
+import { markdownComponents } from "./markdown-link"
 import { rehypePluginsAllowingVeryAgent } from "./rehype-allow-veryagent"
 import { remarkRewriteFileUriLinks } from "./remark-file-uri-links"
 import { useStreamdownPlugins } from "./streamdown-plugins"
@@ -395,7 +395,7 @@ function MessageResponseImpl({
       {...props}
       // Merge after spreading props so a caller can still override other
       // elements, but the link icon + safety routing on `a` always wins.
-      components={{ ...props.components, ...markdownLinkComponents }}
+      components={{ ...props.components, ...markdownComponents }}
     >
       {normalized}
     </Streamdown>

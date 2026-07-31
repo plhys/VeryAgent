@@ -95,7 +95,6 @@ function WeixinQrcodeContent({
 
   // Fetch QR code on mount + cleanup on unmount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
     fetchQrcode()
     return () => stopPolling()
   }, [fetchQrcode, stopPolling])

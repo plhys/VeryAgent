@@ -514,9 +514,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   // later starts from the normal split instead of a stale maximized layout.
   useEffect(() => {
     if (fileTabs.length === 0 && filesMaximized) {
-      /* eslint-disable react-hooks/set-state-in-effect */
       setFilesMaximized(false)
-      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [fileTabs.length, filesMaximized])
 
@@ -2246,13 +2244,12 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     if (tab.loading || tab.isDirty) return
     const key = conflictKey(tab.path)
     conflictSignatureByKeyRef.current.delete(key)
-    /* eslint-disable react-hooks/set-state-in-effect */
+
     setExternalConflictQueue((prev) =>
       prev.some((conflict) => conflictKey(conflict.path) === key)
         ? prev.filter((conflict) => conflictKey(conflict.path) !== key)
         : prev
     )
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [activeFileTab])
 
   // The watcher: per-root FS stream subscriptions derived from the open

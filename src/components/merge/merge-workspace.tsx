@@ -66,7 +66,7 @@ export function MergeWorkspace({
   // Load conflict files on mount
   useEffect(() => {
     loadConflicts()
-  }, [folderPath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [folderPath])
 
   async function loadConflicts() {
     try {

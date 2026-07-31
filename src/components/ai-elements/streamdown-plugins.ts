@@ -212,7 +212,6 @@ export function useStreamdownPlugins(
     // module `loaded` cache and bumps the version, so this memo re-runs and
     // splices the freshly-loaded engine in. The needs booleans are the other
     // deps; `loaded` itself is intentionally read untracked (version covers it).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needCode, needMath, needMermaid, currentVersion])
 }
 

@@ -56,7 +56,7 @@ function nodeText(children: ReactNode): string {
  * element/attribute added upstream in a remark/rehype plugin).
  */
 export function MarkdownLink({
-  node,
+  node: _node,
   href,
   children,
   className,
@@ -244,6 +244,3 @@ export const markdownComponents: Components = {
   a: MarkdownLink as Components["a"],
   img: MarkdownImage as Components["img"],
 }
-
-/** @deprecated Use {@link markdownComponents} instead — now includes img override. */
-export const markdownLinkComponents = markdownComponents

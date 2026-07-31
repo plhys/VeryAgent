@@ -264,14 +264,14 @@ function MarkdownDocumentPreview({
       <Streamdown
         plugins={plugins}
         components={{
-          img: ({ node, ...imgProps }) => (
+          img: ({ node: _node, ...imgProps }) => (
             <PreviewImage
               {...imgProps}
               fileDir={localRefsEnabled ? fileDir : null}
             />
           ),
 
-          a: ({ node, href, children, ...aProps }) => {
+          a: ({ node: _node, href, children, ...aProps }) => {
             // Protocol-relative "//host/…" is a WEB url — exclude it
             // from the local branch (^\/\/) so it opens externally
             // instead of being collapsed into a local file path.
@@ -907,7 +907,7 @@ function DiffFileList({
         <div className="py-1">
           {diffOutline.files.map((file) => (
             <ContextMenu key={file.key}>
-              <ContextMenuTrigger asChild>
+              <ContextMenuTrigger asChild data-context-menu="true">
                 <button
                   type="button"
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors group"

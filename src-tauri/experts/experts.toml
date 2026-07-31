@@ -519,3 +519,23 @@ en = "Convert Markdown or HTML slides into editable .pptx files. Supports Chines
 "zh-TW" = "將 Markdown 或 HTML 簡報轉換為可編輯的 .pptx 檔案，支援中文字型、表格、圖片與講者備註。"
 ja = "Markdown または HTML のスライドを編集可能な .pptx ファイルに変換します。中国語フォント、表、画像、スピーカーノートに対応。"
 
+
+[[expert]]
+id = "veryagent-help"
+category = "meta"
+icon = "CircleHelp"
+sort_order = 999
+
+[expert.display_name]
+en = "VeryAgent Help"
+"zh-CN" = "VeryAgent 助手"
+"zh-TW" = "VeryAgent 助手"
+ja = "VeryAgent ヘルプ"
+ko = "VeryAgent 도움말"
+
+[expert.description]
+en = "Internal assistant — knows the platform architecture, configurations, and feature navigation. Answers questions about where things are, how to configure agents, and how to use features."
+"zh-CN" = "VeryAgent 内部助手 — 熟悉平台架构、配置和功能导航，帮助用户快速找到所需功能和正确用法。"
+"zh-TW" = "VeryAgent 內部助手 — 熟悉平台架構、配置和功能導航，幫助使用者快速找到所需功能和正確用法。"
+ja = "VeryAgent 内部アシスタント — プラットフォームのアーキテクチャ、設定、機能ナビゲーションに精通し、必要な機能や使い方を迅速に案内します。"
+ko = "VeryAgent 내부 도우미 — 플랫폼 아키텍처, 구성, 기능 탐색에詳하여 필요한 기능과 사용법을 빠르게 안내합니다."

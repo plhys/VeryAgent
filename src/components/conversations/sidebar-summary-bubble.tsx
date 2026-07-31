@@ -1,80 +1,78 @@
 "use client"
 
 import { createPortal } from "react-dom"
-import { useState, useEffect, useCallback, type RefObject } from "react"
+import { useState, useEffect, useRef } from "react"
 import ReactMarkdown from "react-markdown"
 
-interface SidebarSummaryBubbleProps {
-  hostRef: RefObject<HTMLElement | null>
-  /** Whether the host is currently hovered. */
+const MAX_CHARS = 600
+const SAFE_MARGIN = 100 // min distance from any viewport edge
+const BUBBLE_W = 448 // ~36rem minus padding
+const BUBBLE_H = 280 // typical summary height
+
+interface Props {
+  hostRef: React.RefObject<HTMLElement | null>
   isHovered: boolean
-  /** Summary text to display. null / undefined / empty = don't render. */
   summary: string | null | undefined
 }
 
-/**
- * Summary bubble for pinned conversations. Portaled to `document.body` so
- * sidebar overflow clipping cannot hide it. Appears centered in the main
- * content area (right of the sidebar), vertically aligned with the card.
- * Position recalculates on scroll / resize to stay in sync with the card.
- */
-export function SidebarSummaryBubble({
-  hostRef,
-  isHovered,
-  summary,
-}: SidebarSummaryBubbleProps) {
-  const [position, setPosition] = useState<{
-    top: number
-    left: number
-  } | null>(null)
+export function SidebarSummaryBubble({ hostRef, isHovered, summary }: Props) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const rafRef = useRef(0)
 
-  const updatePosition = useCallback(() => {
+  const calc = () => {
     if (!hostRef.current) return
-    const rect = hostRef.current.getBoundingClientRect()
-    // Prefer the main content area element for positioning; fall back to window center.
-    const mainEl = document.querySelector(
-      "[data-main-area], .main-area, .workspace-main"
+    const cardRect = hostRef.current.getBoundingClientRect()
+
+    // Center the bubble horizontally in the viewport (main content area width)
+    const centerX = window.innerWidth / 2 - BUBBLE_W / 2
+
+    // Vertically center around the card's center line
+    const centerY = cardRect.top + cardRect.height / 2 - BUBBLE_H / 2
+
+    const left = Math.max(
+      SAFE_MARGIN,
+      Math.min(centerX, window.innerWidth - SAFE_MARGIN - BUBBLE_W)
     )
-    const mainRect = mainEl?.getBoundingClientRect()
-    const mainAreaCenterX = mainRect
-      ? mainRect.left + mainRect.width / 2
-      : (rect.right + window.innerWidth) / 2
-    setPosition({
-      top: rect.top + rect.height / 2,
-      left: mainAreaCenterX,
-    })
-  }, [hostRef])
+    const top = Math.max(
+      SAFE_MARGIN,
+      Math.min(centerY, window.innerHeight - SAFE_MARGIN - BUBBLE_H)
+    )
+
+    setPos({ top, left })
+  }
 
   useEffect(() => {
     if (!isHovered || !summary || !hostRef.current) {
-      setPosition(null)
+      setPos(null)
       return
     }
-
-    updatePosition()
-
-    window.addEventListener("scroll", updatePosition, true)
-    window.addEventListener("resize", updatePosition)
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true)
-      window.removeEventListener("resize", updatePosition)
+    const tick = () => {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(calc)
     }
-  }, [isHovered, summary, hostRef, updatePosition])
+    calc()
+    window.addEventListener("scroll", tick, true)
+    window.addEventListener("resize", tick)
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener("scroll", tick, true)
+      window.removeEventListener("resize", tick)
+    }
+  }, [isHovered, summary, hostRef])
 
-  if (!isHovered || !summary || !position) return null
+  if (!isHovered || !summary || !pos) return null
+
+  const text =
+    summary.length > MAX_CHARS ? summary.slice(0, MAX_CHARS) + "…" : summary
 
   return createPortal(
     <div
       className="pointer-events-none fixed z-[9999]"
-      style={{
-        top: position.top,
-        left: position.left,
-        transform: "translate(-50%, -50%)",
-      }}
+      style={{ top: pos.top, left: pos.left }}
     >
-      <div className="w-[36rem] max-w-[calc(100vw-4rem)] rounded-xl border border-border/80 bg-muted/85 p-5 text-sm leading-relaxed shadow-2xl backdrop-blur-xl [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_strong]:font-semibold">
+      <div className="w-[36rem] max-w-[calc(100vw-4rem)] rounded-xl border border-border/80 bg-muted/90 p-4 text-sm leading-relaxed shadow-2xl backdrop-blur-xl [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_strong]:font-semibold">
         <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground/85">
-          <ReactMarkdown>{summary}</ReactMarkdown>
+          <ReactMarkdown>{text}</ReactMarkdown>
         </div>
       </div>
     </div>,

@@ -310,7 +310,7 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild data-context-menu="true">
           <div
             role="button"
             tabIndex={0}

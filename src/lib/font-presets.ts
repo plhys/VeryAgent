@@ -91,7 +91,6 @@ export const FONT_BY_ID: Record<string, FontDef> = Object.fromEntries(
 )
 
 /** 界面字体可选项：无衬线 + 等宽全部允许（当前默认 Inter 为无衬线）。 */
-export const UI_FONTS: readonly FontDef[] = FONTS
 /** 编辑器 / 终端字体可选项：仅等宽。 */
 export const MONO_FONTS: readonly FontDef[] = FONTS.filter(
   (f) => f.category === "mono"

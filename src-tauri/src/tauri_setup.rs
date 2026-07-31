@@ -316,6 +316,48 @@ use crate::commands::git;
                     }
                 });
 
+                // Auto-link default skills (e.g. veryagent-help) to every
+                // agent that supports them. Runs in the background; failures are
+                // logged but never block startup — a user can always manually
+                // enable/disable skills in Settings → Skill Packs.
+                tauri::async_runtime::spawn(async move {
+                    let default_skills = vec!["veryagent-help"];
+                    let agents = vec![
+                        crate::models::agent::AgentType::ClaudeCode,
+                        crate::models::agent::AgentType::Codex,
+                        crate::models::agent::AgentType::OpenCode,
+                        crate::models::agent::AgentType::Gemini,
+                        crate::models::agent::AgentType::OpenClaw,
+                        crate::models::agent::AgentType::Cline,
+                        crate::models::agent::AgentType::Hermes,
+                        crate::models::agent::AgentType::CodeBuddy,
+                        crate::models::agent::AgentType::KimiCode,
+                        crate::models::agent::AgentType::Pi,
+                    ];
+                    let mut linked = Vec::new();
+                    for agent in agents {
+                        for skill in &default_skills {
+                            match experts_commands::experts_link_to_agent(skill.to_string(), agent).await {
+                                Ok(_) => linked.push((agent, skill)),
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "[Experts] auto-link '{}@{}': {}",
+                                        skill, agent, e
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    if !linked.is_empty() {
+                        tracing::info!(
+                            "[Experts] auto-linked {} skill(s) to {} agent(s): {:?}",
+                            default_skills.len(),
+                            linked.len(),
+                            linked
+                        );
+                    }
+                });
+
                 // Install bundled science skills into the same central store.
                 // Separate spawn so experts install is not blocked by science.
                 tauri::async_runtime::spawn(async move {

@@ -297,7 +297,7 @@ export function StashWorkspace({ folderPath }: StashWorkspaceProps) {
 
     return (
       <ContextMenu key={node.path}>
-        <ContextMenuTrigger>
+        <ContextMenuTrigger data-context-menu="true">
           <FileTreeFile
             name={node.name}
             path={node.path}
@@ -435,7 +435,7 @@ function StashCard({
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger>
+        <ContextMenuTrigger data-context-menu="true">
           <Collapsible open={isExpanded} onOpenChange={onToggle}>
             <div className="group rounded-lg border bg-card">
               <div className="relative flex items-center">

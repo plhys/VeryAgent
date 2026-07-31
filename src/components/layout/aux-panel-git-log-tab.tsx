@@ -467,7 +467,7 @@ function CommitFilesTree({
     const file = node.change
     return (
       <ContextMenu key={`${commitHash}:${file.path}`}>
-        <ContextMenuTrigger>
+        <ContextMenuTrigger data-context-menu="true">
           <FileTreeFile
             className="w-full min-w-0 cursor-pointer"
             name={node.name}
@@ -1199,7 +1199,7 @@ export function GitLogTab() {
   return (
     <div className="flex flex-col h-full">
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild data-context-menu="true">
           <ScrollArea
             onScroll={handleScroll}
             className="flex-1 min-h-0 px-3 py-3"
@@ -1234,7 +1234,7 @@ export function GitLogTab() {
 
                 return (
                   <ContextMenu key={entry.full_hash}>
-                    <ContextMenuTrigger asChild>
+                    <ContextMenuTrigger asChild data-context-menu="true">
                       <div>
                         <Commit
                           onOpenChange={(open) => {

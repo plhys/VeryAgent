@@ -682,7 +682,7 @@ function AutomationListItem({
   return (
     <li>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild data-context-menu="true">
           <div
             className={cn(
               "group flex h-8 w-full items-center rounded-full pr-1 transition-colors",

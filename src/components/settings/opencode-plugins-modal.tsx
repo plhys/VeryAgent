@@ -57,7 +57,6 @@ export function OpencodePluginsModal({
       refresh()
       stream.reset()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   useEffect(() => {
@@ -71,7 +70,6 @@ export function OpencodePluginsModal({
     if (stream.status === "success" || stream.status === "failed") {
       refresh()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream.status])
 
   const handleInstallAll = useCallback(async () => {

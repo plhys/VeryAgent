@@ -72,7 +72,7 @@ export function TerminalTabBar() {
     <div className="flex items-center h-8 bg-muted/50 border-b gap-0.5 px-1 shrink-0">
       {tabs.map((tab) => (
         <ContextMenu key={tab.id}>
-          <ContextMenuTrigger asChild>
+          <ContextMenuTrigger asChild data-context-menu="true">
             <div
               className={`flex items-center gap-1 h-6 px-2 rounded-sm text-xs cursor-pointer select-none ${
                 tab.id === activeTabId

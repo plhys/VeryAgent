@@ -754,7 +754,7 @@ export function CommitWorkspace({
         )
         return (
           <ContextMenu key={`tracked:${node.path}`}>
-            <ContextMenuTrigger>
+            <ContextMenuTrigger data-context-menu="true">
               <FileTreeFolder name={node.name} path={node.path}>
                 {node.children.map(renderNode)}
               </FileTreeFolder>
@@ -782,7 +782,7 @@ export function CommitWorkspace({
 
       return (
         <ContextMenu key={`tracked:${node.path}`}>
-          <ContextMenuTrigger>
+          <ContextMenuTrigger data-context-menu="true">
             <FileTreeFile
               name={node.name}
               path={node.path}
@@ -860,7 +860,7 @@ export function CommitWorkspace({
         const dirFiles = collectFilePaths(node)
         return (
           <ContextMenu key={`untracked:${node.path}`}>
-            <ContextMenuTrigger>
+            <ContextMenuTrigger data-context-menu="true">
               <FileTreeFolder name={node.name} path={node.path}>
                 {node.children.map(renderNode)}
               </FileTreeFolder>
@@ -887,7 +887,7 @@ export function CommitWorkspace({
 
       return (
         <ContextMenu key={`untracked:${node.path}`}>
-          <ContextMenuTrigger>
+          <ContextMenuTrigger data-context-menu="true">
             <FileTreeFile
               name={node.name}
               path={node.path}
@@ -1061,7 +1061,7 @@ export function CommitWorkspace({
                           onSelect={handleSelectPath}
                         >
                           <ContextMenu>
-                            <ContextMenuTrigger>
+                            <ContextMenuTrigger data-context-menu="true">
                               <FileTreeFolder
                                 name={folderName}
                                 path={folderName}
@@ -1143,7 +1143,7 @@ export function CommitWorkspace({
                             onSelect={handleSelectPath}
                           >
                             <ContextMenu>
-                              <ContextMenuTrigger>
+                              <ContextMenuTrigger data-context-menu="true">
                                 <FileTreeFolder
                                   name={folderName}
                                   path={folderName}

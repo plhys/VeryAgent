@@ -324,7 +324,6 @@ export function OfficeToolsBody({
   // Tear down the install log subscription when the panel unmounts.
   useEffect(() => {
     return () => installStream.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Keep the install log scrolled to the latest line.

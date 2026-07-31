@@ -119,7 +119,7 @@ export function normalizeClaudeEffortLevel(value: unknown): ClaudeEffortLevel {
   return ""
 }
 
-const GEMINI_AUTH_MODES = [
+const _GEMINI_AUTH_MODES = [
   "custom",
   "login_google",
   "gemini_api_key",
@@ -129,7 +129,7 @@ const GEMINI_AUTH_MODES = [
   "model_provider",
 ] as const
 
-type GeminiAuthMode = (typeof GEMINI_AUTH_MODES)[number]
+type GeminiAuthMode = (typeof _GEMINI_AUTH_MODES)[number]
 
 const GEMINI_ENV_KEYS = {
   baseUrl: "GOOGLE_GEMINI_BASE_URL",
@@ -150,7 +150,7 @@ const OPENCLAW_ENV_KEYS = {
   sessionKey: "OPENCLAW_SESSION_KEY",
 } as const
 
-const CLINE_PROVIDERS = [
+const _CLINE_PROVIDERS = [
   { value: "anthropic", label: "Anthropic" },
   { value: "openai-native", label: "OpenAI" },
   { value: "openai", label: "OpenAI Compatible" },
@@ -162,7 +162,7 @@ const CLINE_PROVIDERS = [
   { value: "ollama", label: "Ollama" },
 ] as const
 
-type ClineProvider = (typeof CLINE_PROVIDERS)[number]["value"]
+type ClineProvider = (typeof _CLINE_PROVIDERS)[number]["value"]
 
 type ClaudeModelKey = keyof typeof CLAUDE_MODEL_ENV_KEYS
 type ImportantConfigKey = "apiBaseUrl" | "apiKey" | "model" | ClaudeModelKey
@@ -1002,12 +1002,12 @@ interface CodexImportantValues {
 
 const CODEX_DEFAULT_MODEL_PROVIDER = "veryagent"
 
-const CODEX_AUTH_MODES = [
+const _CODEX_AUTH_MODES = [
   "api_key",
   "chatgpt_subscription",
   "model_provider",
 ] as const
-type CodexAuthMode = (typeof CODEX_AUTH_MODES)[number]
+type CodexAuthMode = (typeof _CODEX_AUTH_MODES)[number]
 
 type CodexReasoningEffort = "low" | "medium" | "high" | "xhigh"
 

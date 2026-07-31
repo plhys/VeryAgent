@@ -281,8 +281,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           .find((t) => t.role === "user" || t.role === "assistant")
         const timeRange =
           firstTurn && lastTurn && firstTurn.timestamp && lastTurn.timestamp
-            ? "🕐 " +
-              formatTS(firstTurn.timestamp) +
+            ? formatTS(firstTurn.timestamp) +
               " ~ " +
               formatTS(lastTurn.timestamp)
             : ""
@@ -297,7 +296,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
           return
         }
 
-        setSummary(timeRange || null)
+        setSummary(null)
 
         const agentForSummary = activeAgentType || conversation.agent_type
         console.log(
@@ -317,7 +316,19 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             }
           })
           .catch((err) => {
-            console.error("[Summary] AI summary failed:", err)
+            // Suppress expected failures silently; unknown errors are logged once.
+            // When err is a plain object (common with Tauri IPC), String(err) === '[object Object]'
+            // so we can't match message substrings — just fall back to timeRange regardless.
+            const errMsg = typeof err === "string" ? err : JSON.stringify(err)
+            const isExpected =
+              errMsg.includes("No model provider") ||
+              errMsg.includes("model_not_found") ||
+              errMsg.includes("HTTP 503")
+            if (!isExpected) {
+              console.warn("[Summary] AI summary failed:", errMsg)
+            }
+            // Always show timeRange as fallback so the bubble is never empty
+            if (!cancelled && timeRange) setSummary(timeRange)
           })
       })
       .catch(() => {
@@ -338,7 +349,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
+        <ContextMenuTrigger asChild data-context-menu="true">
           <div
             ref={cardRef}
             className="relative h-[2.125rem] bg-sidebar"
