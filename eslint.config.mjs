@@ -3,6 +3,7 @@ import nextVitals from "eslint-config-next/core-web-vitals"
 import nextTs from "eslint-config-next/typescript"
 import eslintConfigPrettier from "eslint-config-prettier"
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended"
+import unusedImports from "eslint-plugin-unused-imports"
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -21,8 +22,16 @@ const eslintConfig = defineConfig([
   eslintConfigPrettier,
   eslintPluginPrettierRecommended,
   {
+    plugins: { "unused-imports": unusedImports },
     rules: {
       "prettier/prettier": "error",
+      "unused-imports/no-unused-imports": "error",
+      // Disable the base rule and let the plugin handle it
+      "@typescript-eslint/no-unused-vars": "off",
+      "unused-imports/no-unused-vars": [
+        "warn",
+        { args: "after-used", argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
   {

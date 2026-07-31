@@ -822,7 +822,6 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
 
 function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
-  const isChatMode = useIsActiveChatMode()
   const { isOpen: sidebarOpen, width: sidebarWidth } = useSidebarContext()
 
   return (
