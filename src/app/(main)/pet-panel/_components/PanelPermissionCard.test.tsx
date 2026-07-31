@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react"
+import { NextIntlClientProvider } from "next-intl"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // Stub the backend command with a never-resolving promise so `busy` stays true
@@ -9,6 +10,15 @@ vi.mock("@/lib/api", () => ({
 
 import { acpRespondPermission } from "@/lib/api"
 import { PanelPermissionCard } from "./PanelPermissionCard"
+import enMessages from "@/i18n/messages/en.json"
+
+function renderWithIntl(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
 
 const permission = {
   requestId: "r1",
@@ -24,15 +34,19 @@ describe("PanelPermissionCard", () => {
   afterEach(() => cleanup())
 
   it("forwards a single response with the right ids", () => {
-    render(<PanelPermissionCard connectionId="c1" permission={permission} />)
-    fireEvent.click(screen.getByRole("button", { name: "Allow" }))
+    renderWithIntl(
+      <PanelPermissionCard connectionId="c1" permission={permission} />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Allow once" }))
     expect(acpRespondPermission).toHaveBeenCalledTimes(1)
     expect(acpRespondPermission).toHaveBeenCalledWith("c1", "r1", "allow")
   })
 
   it("ignores rapid double-clicks while a response is in flight", () => {
-    render(<PanelPermissionCard connectionId="c1" permission={permission} />)
-    const allow = screen.getByRole("button", { name: "Allow" })
+    renderWithIntl(
+      <PanelPermissionCard connectionId="c1" permission={permission} />
+    )
+    const allow = screen.getByRole("button", { name: "Allow once" })
     fireEvent.click(allow)
     fireEvent.click(allow)
     fireEvent.click(allow)

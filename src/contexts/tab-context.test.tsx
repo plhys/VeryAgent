@@ -753,8 +753,11 @@ describe("TabProvider cross-client sync", () => {
   })
 
   it("synthesizes a replacement draft when a remote snapshot is empty", async () => {
-    listOpenedTabsMock.mockResolvedValue({ items: [tabItem(1, 1)], version: 1 })
     await renderHydrated()
+    // Open a conversation tab explicitly (hydrate ignores persisted tabs).
+    act(() => {
+      latestContext?.openTab(1, 1, "codex", true, "First")
+    })
     expect(screen.getByTestId("tabs")).toHaveTextContent("conv-1-codex-1")
 
     act(() => {
@@ -820,15 +823,16 @@ describe("TabProvider cross-client sync", () => {
   })
 
   it("mirrors the focused tab from a remote snapshot", async () => {
-    // Seed real tabs so no recovery draft is synthesized on empty hydration — an
-    // active draft would legitimately hold focus (see "does not steal focus from
-    // an in-progress local draft"), which would mask the focus-mirror behavior
-    // this test isolates.
-    listOpenedTabsMock.mockResolvedValue({
-      items: [tabItem(1, 1, true), tabItem(1, 2)],
-      version: 0,
-    })
     await renderHydrated()
+    // Open two conversation tabs (hydrate ignores persisted tabs).
+    act(() => {
+      latestContext?.openTab(1, 1, "codex", true, "First")
+      latestContext?.openTab(1, 2, "codex", true, "Second")
+    })
+    // Focus on c1.
+    act(() => {
+      latestContext?.switchTab("conv-1-codex-1")
+    })
     expect(screen.getByTestId("active")).toHaveTextContent("conv-1-codex-1")
 
     act(() => {
@@ -870,11 +874,15 @@ describe("TabProvider cross-client sync", () => {
   })
 
   it("saves the focused tab so focus syncs across clients", async () => {
-    listOpenedTabsMock.mockResolvedValue({
-      items: [tabItem(1, 1, true), tabItem(1, 2)],
-      version: 1,
-    })
     await renderHydrated()
+    // Open two conversation tabs and focus on c1.
+    act(() => {
+      latestContext?.openTab(1, 1, "codex", true, "First")
+      latestContext?.openTab(1, 2, "codex", true, "Second")
+    })
+    act(() => {
+      latestContext?.switchTab("conv-1-codex-1")
+    })
     expect(screen.getByTestId("active")).toHaveTextContent("conv-1-codex-1")
     saveOpenedTabsMock.mockClear()
 
@@ -893,13 +901,12 @@ describe("TabProvider cross-client sync", () => {
   })
 
   it("restores the focused tab from is_active on hydrate", async () => {
-    listOpenedTabsMock.mockResolvedValue({
-      items: [tabItem(1, 1), tabItem(1, 2, true)],
-      version: 3,
-    })
+    // Hydrate no longer restores persisted tabs (always starts fresh with a
+    // welcome-page draft). The is_active focus mirroring from remote snapshots
+    // is covered by "mirrors the focused tab from a remote snapshot".
     await renderHydrated()
-
-    expect(screen.getByTestId("active")).toHaveTextContent("conv-1-codex-2")
+    expect(screen.getByTestId("active")).not.toHaveTextContent("none")
+    expect(screen.getByTestId("tabs").textContent ?? "").toMatch(/^new-/)
   })
 
   it("cancels a pending local save when a remote snapshot supersedes it", async () => {
@@ -948,10 +955,6 @@ describe("TabProvider cross-client sync", () => {
   })
 
   it("re-saves to reconcile when the set reverts while a save is in flight", async () => {
-    listOpenedTabsMock.mockResolvedValue({
-      items: [tabItem(1, 1, true)],
-      version: 1,
-    })
     // Control save resolution so we can revert mid-flight.
     let resolveSave: (r: SaveTabsOutcome) => void = () => {}
     saveOpenedTabsMock.mockImplementation(
@@ -961,6 +964,11 @@ describe("TabProvider cross-client sync", () => {
         })
     )
     await renderHydrated()
+    // Open conversation c1 as the initial active tab.
+    act(() => {
+      latestContext?.openTab(1, 1, "codex", true, "First")
+    })
+    saveOpenedTabsMock.mockClear()
 
     // Open c2 → arm a save; let the 500ms debounce fire (now in flight).
     act(() => {
@@ -1151,6 +1159,8 @@ describe("TabProvider cross-client sync", () => {
     act(() => {
       latestContext?.openNewConversationTab(1, "/repo")
     })
+    // Flush the async draft retarget (folderId update) before binding.
+    await act(async () => {})
     const draftId = latestContext?.activeTabId
     expect(draftId).toMatch(/^new-/)
 
@@ -1219,29 +1229,15 @@ describe("TabProvider post-hydration recovery", () => {
     return latestContext?.tabs.find((t) => t.id === latestContext?.activeTabId)
   }
 
-  it("restores a draft on the hinted folder when it still exists", async () => {
-    loadLastActiveContextMock.mockReturnValue({
-      folderId: 2,
-      isChat: false,
-    })
+  it("always opens a chat-mode draft on cold start (welcome page)", async () => {
     await renderHydrated()
     await waitFor(() =>
-      expect(screen.getByTestId("active-folder")).toHaveTextContent("2")
+      expect(screen.getByTestId("active")).not.toHaveTextContent("none")
     )
     expect(activeTab()?.id).toMatch(/^new-/)
     expect(activeTab()?.conversationId).toBeNull()
-  })
-
-  it("falls back to the first folder when the hinted folder is gone", async () => {
-    loadLastActiveContextMock.mockReturnValue({
-      folderId: 999,
-      isChat: false,
-    })
-    await renderHydrated()
-    await waitFor(() =>
-      expect(screen.getByTestId("active-folder")).toHaveTextContent("1")
-    )
-    expect(activeTab()?.conversationId).toBeNull()
+    expect(activeTab()?.isChat).toBe(true)
+    expect(activeTab()?.folderId).toBe(0)
   })
 
   it("restores chat mode when the hint is a chat draft", async () => {
@@ -1255,15 +1251,6 @@ describe("TabProvider post-hydration recovery", () => {
     )
     expect(activeTab()?.isChat).toBe(true)
     expect(activeTab()?.folderId).toBe(0)
-    expect(activeTab()?.conversationId).toBeNull()
-  })
-
-  it("synthesizes a first-folder draft when there is no hint", async () => {
-    await renderHydrated()
-    await waitFor(() =>
-      expect(screen.getByTestId("active-folder")).toHaveTextContent("1")
-    )
-    expect(activeTab()?.id).toMatch(/^new-/)
     expect(activeTab()?.conversationId).toBeNull()
   })
 
@@ -1299,7 +1286,7 @@ describe("TabProvider post-hydration recovery", () => {
     await renderHydrated()
     await waitFor(() =>
       expect(saveLastActiveContextMock).toHaveBeenCalledWith(
-        expect.objectContaining({ folderId: 1, isChat: false })
+        expect.objectContaining({ folderId: 0, isChat: true })
       )
     )
   })
@@ -1325,13 +1312,14 @@ describe("TabProvider post-hydration recovery", () => {
       isChat: false,
     })
     await renderHydrated()
+    // Hydrate intentionally ignores persisted tabs and always starts fresh
+    // with a welcome-page draft.
     await waitFor(() =>
-      expect(screen.getByTestId("tabs")).toHaveTextContent("conv-1-codex-1")
+      expect(screen.getByTestId("active")).not.toHaveTextContent("none")
     )
-    const drafts =
-      latestContext?.tabs.filter((t) => t.conversationId == null) ?? []
-    expect(drafts).toHaveLength(0)
-    expect(screen.getByTestId("active")).toHaveTextContent("conv-1-codex-1")
+    const tabsText = screen.getByTestId("tabs").textContent ?? ""
+    expect(tabsText).toMatch(/^new-/)
+    expect(activeTab()?.conversationId).toBeNull()
   })
 })
 

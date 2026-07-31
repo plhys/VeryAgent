@@ -37,6 +37,18 @@
 - **divider 行缺少 rowKey 处理**：修复 `Cannot read properties of undefined (reading agent_type)`。
 - **JSON BOM 及版本同步**：修复文件编码和版本号不一致问题。
 
+### 测试
+
+- **修复 30 个预存测试失败**：涵盖 9 个测试文件，类型包括——
+  - 缺少 `NextIntlClientProvider` 包装器（`PanelPermissionCard`、`session-config-selector`）
+  - 组件本地化后按钮文字变更（`permission-dialog`：`Reject` → `Deny`）
+  - 实现新增 divider 行未同步测试（`sidebar-conversation-grouping`）
+  - 组件树中 `CloneDialog` → `useGitCredential` 缺少 mock（`sidebar`）
+  - jsdom 不支持 CSS 变量值（`sidebar-conversation-card`：`style.left` → className 断言）
+  - 语义错误/无障碍角色变更（`markdown-link`：`getByRole("button")` → `querySelector("a")`）
+  - CSS class 重构后断言过时（`conversation-detail-panel-layout`）
+  - hydrate 行为变更后重写 11 个测试（`tab-context`：不再恢复持久化标签，始终打开欢迎页）
+
 ---
 
 ## [0.9.7] — 2026-07-20

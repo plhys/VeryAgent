@@ -378,7 +378,8 @@ describe("buildRows", () => {
       conversation: p1,
       depth: 0,
     })
-    expect(rows[2]).toEqual({
+    expect(rows[2]).toEqual({ kind: "divider" })
+    expect(rows[3]).toEqual({
       kind: "section",
       section: "folders",
       expanded: true,
@@ -400,9 +401,11 @@ describe("buildRows", () => {
       chatsExpanded: true,
     })
     // Pinned section collapsed → header only; the always-present Chat section
-    // trails (empty → header + hint).
+    // trails (empty → header + hint). A divider separates the pinned section
+    // from the sections below.
     expect(rows).toEqual([
       { kind: "section", section: "pinned", expanded: false, count: 1 },
+      { kind: "divider" },
       { kind: "section", section: "chats", expanded: true, count: 0 },
       { kind: "chats-empty" },
     ])

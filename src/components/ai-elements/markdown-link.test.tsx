@@ -144,8 +144,13 @@ describe("MarkdownLink", () => {
     })
 
     it("leaves a non-reference veryagent uri as a normal link", () => {
-      render(<MarkdownLink href="veryagent://unknown/x">x</MarkdownLink>)
-      expect(screen.getByRole("button")).toBeInTheDocument()
+      const { container } = render(
+        <MarkdownLink href="veryagent://unknown/x">x</MarkdownLink>
+      )
+      // An unparseable veryagent:// uri renders as a plain anchor, not a button.
+      const anchor = container.querySelector("a")
+      expect(anchor).toBeInTheDocument()
+      expect(anchor).toHaveTextContent("x")
     })
   })
 

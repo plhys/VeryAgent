@@ -1,10 +1,20 @@
 import { render, screen, cleanup, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { NextIntlClientProvider } from "next-intl"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { InlineSessionConfigSelector } from "./session-config-selector"
 import { deriveModelGroups } from "@/lib/model-config-groups"
 import type { SessionConfigOptionInfo } from "@/lib/types"
+import enMessages from "@/i18n/messages/en.json"
+
+function renderWithIntl(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
 
 function modelOption(
   options: { value: string; name: string; description?: string | null }[],
@@ -37,7 +47,7 @@ describe("InlineSessionConfigSelector — model grouping", () => {
       "anthropic/claude-opus"
     )
     const onSelect = vi.fn()
-    render(
+    renderWithIntl(
       <InlineSessionConfigSelector
         option={option}
         derivedGroups={deriveModelGroups(option)}
@@ -71,7 +81,7 @@ describe("InlineSessionConfigSelector — model grouping", () => {
       "opencode/big-pickle"
     )
     const onSelect = vi.fn()
-    render(
+    renderWithIntl(
       <InlineSessionConfigSelector
         option={option}
         derivedGroups={deriveModelGroups(option)}
@@ -99,7 +109,7 @@ describe("InlineSessionConfigSelector — model grouping", () => {
       { value: "openai/gpt-4o", name: "openai/gpt-4o" },
     ])
     const onSelect = vi.fn()
-    render(
+    renderWithIntl(
       <InlineSessionConfigSelector
         option={option}
         derivedGroups={deriveModelGroups(option)}
@@ -122,7 +132,7 @@ describe("InlineSessionConfigSelector — model grouping", () => {
       ],
       "default"
     )
-    render(
+    renderWithIntl(
       <InlineSessionConfigSelector
         option={option}
         derivedGroups={deriveModelGroups(option)}
@@ -153,7 +163,7 @@ describe("InlineSessionConfigSelector — model grouping", () => {
       ],
       "opus"
     )
-    render(
+    renderWithIntl(
       <InlineSessionConfigSelector
         option={option}
         derivedGroups={deriveModelGroups(option)}

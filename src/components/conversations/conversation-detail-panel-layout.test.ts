@@ -86,14 +86,16 @@ describe("ConversationDetailPanel new conversation layout", () => {
     expect(messageInputSource).toContain(': "contents"')
     // The rounded border lives in the always-on base (so the active-session flow
     // gradient can overlay a real 1px border without a layout shift); the
-    // attached folder-branch-picker treatment still adds bg-background + the
-    // inset focus ring on top.
+    // attached folder-branch-picker treatment still adds bg-background on top.
     expect(messageInputSource).toContain(
       "rounded-xl border border-input bg-transparent transition-colors"
     )
+    // bg-background is added conditionally when folderBranchPickerAttached is true.
     expect(messageInputSource).toContain(
-      '"bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-inset focus-within:ring-ring/50"'
+      'folderBranchPickerAttached ? "bg-background" : ""'
     )
+    // The composer chrome uses custom focus handling (no standard ring).
+    expect(messageInputSource).toContain("focus-within:!ring-0")
     expect(pickerWrapper).not.toContain("border-t border-input")
     expect(pickerWrapper).not.toContain("bg-muted/30")
     expect(pickerWrapper).toContain("pt-1")

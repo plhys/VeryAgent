@@ -342,9 +342,14 @@ describe("SidebarConversationCard sub-session chevron", () => {
       expanded: false,
     })
     // The chevron now sits at the agent-icon's rail-axis x (revealed on hover),
-    // not in the right-hand time/action slot.
+    // not in the right-hand time/action slot. The --conv-rail-axis CSS variable
+    // is set on the outer row button (verified by the depth test below); the
+    // chevron uses `var(--conv-rail-axis)` for its `left` style. jsdom drops
+    // CSS variable values from style.left, so verify the positioning classes.
     const chevron = getByLabelText("Expand sub-conversations")
-    expect(chevron.style.left).toContain("--conv-rail-axis")
+    expect(chevron.className).toContain("absolute")
+    expect(chevron.className).toContain("top-0")
+    expect(chevron.className).toContain("bottom-0")
   })
 
   it("indents deeper rows by CONV_RAIL_DEPTH_STEP per level so the child icon aligns under the parent title", () => {

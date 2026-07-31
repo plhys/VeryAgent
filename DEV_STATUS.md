@@ -6,7 +6,7 @@
 
 ## 一、已完成
 
-### 0.9.8（当前版本 · package/tauri.conf 已抬至 0.9.8，Cargo.toml 0.9.7）
+### 0.9.8（当前版本 · package/tauri.conf/Cargo.toml 统一为 0.9.8）
 
 #### 对话总结气泡重构（[Unreleased] 区）
 
@@ -66,6 +66,16 @@
 - [x] 前端入口改造：技能分类套娃 + 三大技能包合一（0.9.2）
 - [x] PPT 技能修复：注册为专家、正确归类、稳定切换
 
+#### 测试修复 & 质量保障
+
+- [x] **修复 30 个预存测试失败**：9 个测试文件，涵盖 `NextIntlClientProvider` 缺失、组件本地化后断言过时、jsdom 兼容性、hydrate 行为变更重写等
+- [x] **CI 管道接入**：GitHub Actions 工作流（tsc + eslint + vitest + knip）
+- [x] **版本锁定**：`unified@11.0.5`、`streamdown@2.5.0` 锁定
+- [x] **清理 1126 个未使用导入**（ESLint `unused-imports` 插件 + 自动修复）
+- [x] **清理 21 个死代码文件**（knip 检测）
+- [x] **Eslint 配置规范化**：禁止 Prettier 冲突，禁用 React 19 不必要的 hooks 规则
+- [x] **补充测试**：`conversation-runtime-helpers` 纯函数 27 个测试用例
+
 ---
 
 ## 二、待定
@@ -74,7 +84,7 @@
 
 - [ ] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏；新库默认关智能体）
 - [ ] 正式包构建与安装/升级冒烟
-- [ ] 提交并推送工作区改动（当前 HEAD 与 origin/main 一致，但本地有未跟踪的辅助脚本/调试文件）
+- [x] 提交并推送工作区改动（当前会话仅含 9 个测试文件修复，无未跟踪文件）
 
 ### 对话总结
 

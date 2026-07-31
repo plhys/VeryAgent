@@ -23,6 +23,9 @@ const mockState = vi.hoisted(() => ({
 vi.mock("@/components/conversations/sidebar-conversation-list", () => ({
   SidebarConversationList: () => null,
 }))
+vi.mock("@/components/layout/clone-dialog", () => ({
+  CloneDialog: () => null,
+}))
 vi.mock("@/contexts/sidebar-context", () => ({
   useSidebarContext: () => ({ isOpen: true, toggle: vi.fn() }),
 }))

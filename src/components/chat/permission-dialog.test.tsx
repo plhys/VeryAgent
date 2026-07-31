@@ -65,7 +65,7 @@ describe("PermissionDialog", () => {
     expect(
       screen.getByRole("button", { name: "Allow once" })
     ).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Deny" })).toBeInTheDocument()
   })
 
   it("invokes onRespond with the request_id + chosen option_id when clicked", () => {
