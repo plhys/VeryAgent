@@ -55,6 +55,7 @@ function makeAgent(agentType: AgentType, sortOrder: number): AcpAgentInfo {
     cline_secrets_json: null,
     hermes_config_yaml: null,
     model_provider_id: null,
+    resident: false,
   }
 }
 
