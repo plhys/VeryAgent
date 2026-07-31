@@ -35,7 +35,6 @@ import type {
   QuickMessage,
 } from "../types"
 
-
 export async function listConversations(params?: {
   agent_type?: AgentType | null
   search?: string | null
@@ -50,7 +49,6 @@ export async function listConversations(params?: {
   })
 }
 
-
 export async function getConversation(
   agentType: AgentType,
   conversationId: string
@@ -58,16 +56,13 @@ export async function getConversation(
   return getTransport().call("get_conversation", { agentType, conversationId })
 }
 
-
 export async function listFolders(): Promise<FolderInfo[]> {
   return getTransport().call("list_folders")
 }
 
-
 export async function getStats(): Promise<AgentStats> {
   return getTransport().call("get_stats")
 }
-
 
 export async function getSidebarData(): Promise<SidebarData> {
   return getTransport().call("get_sidebar_data")
@@ -75,16 +70,13 @@ export async function getSidebarData(): Promise<SidebarData> {
 
 // ACP commands
 
-
 export async function loadFolderHistory(): Promise<FolderHistoryEntry[]> {
   return getTransport().call("load_folder_history")
 }
 
-
 export async function getFolder(folderId: number): Promise<FolderDetail> {
   return getTransport().call("get_folder", { folderId })
 }
-
 
 export async function listAllConversations(params?: {
   folder_ids?: number[] | null
@@ -104,7 +96,6 @@ export async function listAllConversations(params?: {
   })
 }
 
-
 export async function listChildConversations(
   parentConversationId: number
 ): Promise<DbConversationSummary[]> {
@@ -113,11 +104,9 @@ export async function listChildConversations(
   })
 }
 
-
 export async function listOpenedTabs(): Promise<OpenedTabsSnapshot> {
   return getTransport().call("list_opened_tabs")
 }
-
 
 export async function saveOpenedTabs(
   items: OpenedTab[],
@@ -131,21 +120,17 @@ export async function saveOpenedTabs(
   })
 }
 
-
 export async function listOpenFolderDetails(): Promise<FolderDetail[]> {
   return getTransport().call("list_open_folder_details")
 }
-
 
 export async function listAllFolderDetails(): Promise<FolderDetail[]> {
   return getTransport().call("list_all_folder_details")
 }
 
-
 export async function openFolderById(folderId: number): Promise<FolderDetail> {
   return getTransport().call("open_folder_by_id", { folderId })
 }
-
 
 export async function removeFolderFromWorkspace(
   folderId: number
@@ -153,11 +138,9 @@ export async function removeFolderFromWorkspace(
   return getTransport().call("remove_folder_from_workspace", { folderId })
 }
 
-
 export async function reorderFolders(ids: number[]): Promise<void> {
   return getTransport().call("reorder_folders", { ids })
 }
-
 
 export async function updateFolderColor(
   folderId: number,
@@ -165,7 +148,6 @@ export async function updateFolderColor(
 ): Promise<FolderDetail> {
   return getTransport().call("update_folder_color", { folderId, color })
 }
-
 
 export async function updateFolderDefaultAgent(
   folderId: number,
@@ -177,13 +159,11 @@ export async function updateFolderDefaultAgent(
   })
 }
 
-
 export async function importLocalConversations(
   folderId: number
 ): Promise<ImportResult> {
   return getTransport().call("import_local_conversations", { folderId })
 }
-
 
 export async function getFolderConversation(
   conversationId: number
@@ -191,16 +171,13 @@ export async function getFolderConversation(
   return getTransport().call("get_folder_conversation", { conversationId })
 }
 
-
 export async function removeFolderFromHistory(path: string): Promise<void> {
   return getTransport().call("remove_folder_from_history", { path })
 }
 
-
 export async function createFolderDirectory(path: string): Promise<void> {
   return getTransport().call("create_folder_directory", { path })
 }
-
 
 export async function cloneRepository(
   url: string,
@@ -213,7 +190,6 @@ export async function cloneRepository(
     credentials: credentials ?? null,
   })
 }
-
 
 export async function openFolder(path: string): Promise<FolderDetail> {
   return getTransport().call("open_folder", { path })
@@ -248,7 +224,6 @@ export async function resolveWorktreeFolder(
   return getTransport().call("resolve_worktree_folder", { repoPath, branch })
 }
 
-
 export async function openCommitWindow(folderId: number): Promise<void> {
   const locale = getCurrentEffectiveAppLocale()
   if (isDesktop()) {
@@ -265,7 +240,6 @@ export async function openCommitWindow(folderId: number): Promise<void> {
   window.open(result.path, `commit-${folderId}`)
 }
 
-
 export type SettingsSection =
   | "appearance"
   | "agents"
@@ -280,7 +254,6 @@ export type SettingsSection =
 interface OpenSettingsWindowOptions {
   agentType?: AgentType | null
 }
-
 
 export async function openSettingsWindow(
   section?: SettingsSection,
@@ -307,7 +280,6 @@ export async function openSettingsWindow(
   window.open(result.path, `settings-${section ?? "general"}`)
 }
 
-
 export async function openProjectBootWindow(source?: string): Promise<void> {
   if (isDesktop()) {
     return getShellTransport().call("open_project_boot_window", {
@@ -331,20 +303,17 @@ export async function openProjectBootWindow(source?: string): Promise<void> {
 // workspace subscribes via WorkspaceOpenFolderListener.
 export const FOLDER_OPEN_IN_WORKSPACE_EVENT = "folder://open-in-workspace"
 
-
 export async function openFolderInWorkspace(
   path: string
 ): Promise<FolderDetail> {
   return getTransport().call("open_folder_in_workspace", { path })
 }
 
-
 export async function detectPackageManager(
   name: string
 ): Promise<PackageManagerInfo> {
   return getTransport().call("detect_package_manager", { name })
 }
-
 
 export async function createShadcnProject(params: {
   projectName: string
@@ -393,7 +362,6 @@ export async function installHyperframesSkills(
   )
 }
 
-
 export async function createHyperframesProject(params: {
   projectName: string
   example: string
@@ -415,7 +383,6 @@ export async function createHyperframesProject(params: {
 }
 
 // Conversation CRUD commands
-
 
 export async function createConversation(
   folderId: number,
@@ -460,7 +427,6 @@ export async function createChatDir(): Promise<CreateChatDirResult> {
   return getTransport().call("create_chat_dir", {})
 }
 
-
 export async function updateConversationStatus(
   conversationId: number,
   status: string
@@ -470,7 +436,6 @@ export async function updateConversationStatus(
     status,
   })
 }
-
 
 export async function updateConversationTitle(
   conversationId: number,
@@ -482,7 +447,6 @@ export async function updateConversationTitle(
   })
 }
 
-
 export async function updateConversationPinned(
   conversationId: number,
   pinned: boolean
@@ -493,7 +457,6 @@ export async function updateConversationPinned(
   })
 }
 
-
 export async function deleteConversation(
   conversationId: number
 ): Promise<void> {
@@ -502,13 +465,11 @@ export async function deleteConversation(
 
 // Folder command management
 
-
 export async function listFolderCommands(
   folderId: number
 ): Promise<FolderCommand[]> {
   return getTransport().call("list_folder_commands", { folderId })
 }
-
 
 export async function createFolderCommand(
   folderId: number,
@@ -521,7 +482,6 @@ export async function createFolderCommand(
     command,
   })
 }
-
 
 export async function updateFolderCommand(
   id: number,
@@ -537,11 +497,9 @@ export async function updateFolderCommand(
   })
 }
 
-
 export async function deleteFolderCommand(id: number): Promise<void> {
   return getTransport().call("delete_folder_command", { id })
 }
-
 
 export async function reorderFolderCommands(
   folderId: number,
@@ -549,7 +507,6 @@ export async function reorderFolderCommands(
 ): Promise<void> {
   return getTransport().call("reorder_folder_commands", { folderId, ids })
 }
-
 
 export async function bootstrapFolderCommandsFromPackageJson(
   folderId: number,
@@ -563,11 +520,9 @@ export async function bootstrapFolderCommandsFromPackageJson(
 
 // Quick message management
 
-
 export async function quickMessagesList(): Promise<QuickMessage[]> {
   return getTransport().call("quick_messages_list")
 }
-
 
 export async function quickMessagesCreate(params: {
   title: string
@@ -578,7 +533,6 @@ export async function quickMessagesCreate(params: {
     content: params.content,
   })
 }
-
 
 export async function quickMessagesUpdate(params: {
   id: number
@@ -592,11 +546,9 @@ export async function quickMessagesUpdate(params: {
   })
 }
 
-
 export async function quickMessagesDelete(id: number): Promise<void> {
   return getTransport().call("quick_messages_delete", { id })
 }
-
 
 export async function quickMessagesReorder(ids: number[]): Promise<void> {
   return getTransport().call("quick_messages_reorder", { ids })
@@ -604,16 +556,13 @@ export async function quickMessagesReorder(ids: number[]): Promise<void> {
 
 // Automations
 
-
 export async function automationList(): Promise<Automation[]> {
   return getTransport().call("automation_list")
 }
 
-
 export async function automationGet(id: number): Promise<Automation> {
   return getTransport().call("automation_get", { id })
 }
-
 
 export async function automationRuns(
   automationId: number,
@@ -622,13 +571,11 @@ export async function automationRuns(
   return getTransport().call("automation_runs", { automationId, limit })
 }
 
-
 export async function automationCreate(
   draft: AutomationDraft
 ): Promise<Automation> {
   return getTransport().call("automation_create", { draft })
 }
-
 
 export async function automationUpdate(
   id: number,
@@ -637,7 +584,6 @@ export async function automationUpdate(
   return getTransport().call("automation_update", { id, draft })
 }
 
-
 export async function automationSetEnabled(
   id: number,
   enabled: boolean
@@ -645,11 +591,9 @@ export async function automationSetEnabled(
   return getTransport().call("automation_set_enabled", { id, enabled })
 }
 
-
 export async function automationDelete(id: number): Promise<void> {
   return getTransport().call("automation_delete", { id })
 }
-
 
 export async function automationMarkSeen(): Promise<void> {
   return getTransport().call("automation_mark_seen")
@@ -679,7 +623,6 @@ export async function automationCancelRun(runId: number): Promise<void> {
 
 // Directory browser (for web/server mode)
 
-
 export async function createChatChannel(params: {
   name: string
   channelType: string
@@ -697,5 +640,3 @@ export async function createChatChannel(params: {
     dailyReportTime: params.dailyReportTime ?? null,
   })
 }
-
-

@@ -11,8 +11,7 @@ import {
  * reference to show as an inline badge.
  */
 export type UserMessageSegment =
-  | { kind: "text"; text: string }
-  | { kind: "reference"; attrs: ReferenceAttrs }
+  { kind: "text"; text: string } | { kind: "reference"; attrs: ReferenceAttrs }
 
 /**
  * Only these schemes become badges. A `[label](https://…)` a user typed is NOT a

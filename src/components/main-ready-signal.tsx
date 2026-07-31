@@ -14,8 +14,7 @@ export function MainReadySignal() {
   useEffect(() => {
     if (!isDesktop()) return
     try {
-      const { emit } = require("@tauri-apps/api/event") as typeof import("@tauri-apps/api/event")
-      emit("main://ready")
+      import("@tauri-apps/api/event").then(({ emit }) => emit("main://ready"))
     } catch {
       // Tauri API not available (web mode) — ignore
     }

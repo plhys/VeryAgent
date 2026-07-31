@@ -1,17 +1,13 @@
-import {
-  getTransport,
-} from "../transport"
+import { getTransport } from "../transport"
 import type {
   ModelProviderInfo,
   ProviderModelItem,
   UpdateModelProviderResult,
 } from "../types"
 
-
 export async function listModelProviders(): Promise<ModelProviderInfo[]> {
   return getTransport().call("list_model_providers")
 }
-
 
 export async function createModelProvider(params: {
   name: string
@@ -24,7 +20,6 @@ export async function createModelProvider(params: {
     apiKey: params.apiKey,
   })
 }
-
 
 export async function updateModelProvider(params: {
   id: number
@@ -39,7 +34,6 @@ export async function updateModelProvider(params: {
     apiKey: params.apiKey ?? null,
   })
 }
-
 
 export async function deleteModelProvider(id: number): Promise<void> {
   return getTransport().call("delete_model_provider", { id })
@@ -57,5 +51,3 @@ export async function fetchModelProviderModels(
 }
 
 // ─── Delegation settings ───────────────────────────────────────────────
-
-

@@ -199,7 +199,11 @@ export function SessionSelectorsPanel({
                     </span>
                     <DropdownRadioItemContent
                       label={localizer.localize(opt.name)}
-                      description={opt.description ? localizer.localize(opt.description) : opt.description}
+                      description={
+                        opt.description
+                          ? localizer.localize(opt.description)
+                          : opt.description
+                      }
                     />
                   </button>
                 )

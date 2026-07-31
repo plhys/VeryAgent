@@ -56,7 +56,6 @@ function nodeText(children: ReactNode): string {
  * element/attribute added upstream in a remark/rehype plugin).
  */
 export function MarkdownLink({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   node,
   href,
   children,
@@ -107,7 +106,17 @@ export function MarkdownLink({
   if (!isIncomplete && href.toLowerCase().startsWith("veryagent:")) {
     const reference = parseVeryAgentReferenceUri(href, nodeText(children))
     if (!reference) {
-      return <a className={cn("wrap-anywhere font-medium text-primary underline", className)} {...rest}>{children}</a>
+      return (
+        <a
+          className={cn(
+            "wrap-anywhere font-medium text-primary underline",
+            className
+          )}
+          {...rest}
+        >
+          {children}
+        </a>
+      )
     }
     if (reference.refType === "session") {
       const openTab = useTabStore.getState().openTab
@@ -124,7 +133,14 @@ export function MarkdownLink({
           <button
             type="button"
             title={reference.uri ?? reference.label}
-            onClick={() => openTab(0, conversationId!, (agentType ?? "openai") as AgentType, false)}
+            onClick={() =>
+              openTab(
+                0,
+                conversationId!,
+                (agentType ?? "openai") as AgentType,
+                false
+              )
+            }
             className="inline-flex cursor-pointer appearance-none items-center align-middle leading-none hover:opacity-80"
           >
             <ReferenceBadge data={reference} />

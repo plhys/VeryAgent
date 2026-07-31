@@ -1,12 +1,9 @@
-import {
-  getTransport,
-} from "../transport"
+import { getTransport } from "../transport"
 import type {
   AgentType,
   OpenClawGatewayDiscovery,
   OpenClawGatewayEnsureResult,
 } from "../types"
-
 
 export async function acpUpdateAgentEnv(
   agentType: AgentType,
@@ -172,9 +169,7 @@ export async function loadPiConfig(): Promise<{
  * "not found" — never a fabricated default port.
  */
 
-export async function acpDiscoverOpenClawGateway(): Promise<
-  OpenClawGatewayDiscovery
-> {
+export async function acpDiscoverOpenClawGateway(): Promise<OpenClawGatewayDiscovery> {
   return getTransport().call("acp_discover_openclaw_gateway", {})
 }
 
@@ -209,4 +204,3 @@ export async function acpValidatePiCommand(command: string): Promise<{
  * shared `app://agent-install` topic; pass `taskId` to `useAgentInstallStream`
  * (or `acpInstallStream`) to receive the log lines.
  */
-

@@ -1,11 +1,5 @@
-import {
-  getTransport,
-} from "../transport"
-import type {
-  AgentType,
-  AgentOptionsSnapshot,
-} from "../types"
-
+import { getTransport } from "../transport"
+import type { AgentType, AgentOptionsSnapshot } from "../types"
 
 export interface VisionBridgeSettings {
   enabled: boolean
@@ -21,18 +15,15 @@ export interface VisionBridgeConfig extends VisionBridgeSettings {
   updated_at: string
 }
 
-
 export async function visionBridgeGetConfig(): Promise<VisionBridgeConfig> {
   return getTransport().call("vision_bridge_get_config")
 }
-
 
 export async function visionBridgeSaveConfig(
   settings: VisionBridgeSettings
 ): Promise<VisionBridgeConfig> {
   return getTransport().call("vision_bridge_save_config", { settings })
 }
-
 
 /** One image gateway entry (note + priority 0–9, 0 = highest). */
 
@@ -69,7 +60,6 @@ export interface ImageGenerationConfig extends ImageGenerationSettings {
   updated_at: string
 }
 
-
 export async function imageGenerationGetConfig(): Promise<ImageGenerationConfig> {
   return getTransport().call("image_generation_get_config")
 }
@@ -80,7 +70,6 @@ export interface ImageGenerationSaveResult {
   config: ImageGenerationConfig
   affectedRunningSessions: number
 }
-
 
 export async function imageGenerationSaveConfig(
   settings: ImageGenerationSettings
@@ -94,7 +83,6 @@ export interface ImageGenerationModelItem {
   id: string
   name: string
 }
-
 
 export interface ImageGenerationModelsResult {
   models: ImageGenerationModelItem[]
@@ -118,7 +106,6 @@ export async function imageGenerationFetchModels(params: {
 
 // ─── PPT Generation (slide-generator.mjs) ─────────────────────────────────
 
-
 export interface PptxSlideContent {
   title?: string
   bullets?: string[]
@@ -127,9 +114,7 @@ export interface PptxSlideContent {
   note?: string
 }
 
-
 export type PptxMode = "markdown" | "html"
-
 
 export interface PptxMarkdownRequest extends Record<string, unknown> {
   mode: "markdown"
@@ -140,7 +125,6 @@ export interface PptxMarkdownRequest extends Record<string, unknown> {
   font_face?: string
 }
 
-
 export interface PptxHtmlRequest extends Record<string, unknown> {
   mode: "html"
   html_dir: string
@@ -149,29 +133,21 @@ export interface PptxHtmlRequest extends Record<string, unknown> {
   include_screenshots?: boolean
 }
 
-
 export type PptxRequest = PptxMarkdownRequest | PptxHtmlRequest
-
 
 export interface PptxResult {
   output_path: string
   slide_count: number
 }
 
-
-export async function pptxGenerate(
-  req: PptxRequest,
-): Promise<PptxResult> {
+export async function pptxGenerate(req: PptxRequest): Promise<PptxResult> {
   return getTransport().call("ppt_generation", req)
 }
 
 /** Mirror of Rust `OpenWikiAgentCapability`. */
 
 export type OpenWikiAgentCapability =
-  | "read_wiki"
-  | "request_update"
-  | "request_init"
-  | "request_chat"
+  "read_wiki" | "request_update" | "request_init" | "request_chat"
 
 /** Mirror of Rust `OpenWikiAgentPermission`. */
 
@@ -258,17 +234,14 @@ export interface OpenWikiRunResult {
   duration_ms: number
 }
 
-
 export interface OpenWikiInstructions {
   content: string
   path: string
 }
 
-
 export async function openwikiGetConfig(): Promise<OpenWikiConfig> {
   return getTransport().call("openwiki_get_config")
 }
-
 
 export async function openwikiSaveConfig(
   settings: OpenWikiConfig
@@ -276,13 +249,13 @@ export async function openwikiSaveConfig(
   return getTransport().call("openwiki_save_config", { settings })
 }
 
-
 export async function openwikiStatus(
   workspace?: string | null
 ): Promise<OpenWikiStatus> {
-  return getTransport().call("openwiki_status", { workspace: workspace ?? null })
+  return getTransport().call("openwiki_status", {
+    workspace: workspace ?? null,
+  })
 }
-
 
 export async function openwikiRun(
   action: OpenWikiAction,
@@ -293,7 +266,6 @@ export async function openwikiRun(
   })
 }
 
-
 export async function openwikiGetInstructions(
   workspace: string
 ): Promise<OpenWikiInstructions> {
@@ -301,7 +273,6 @@ export async function openwikiGetInstructions(
     params: { workspace },
   })
 }
-
 
 export async function openwikiSaveInstructions(
   workspace: string,
@@ -349,7 +320,6 @@ export async function openwikiUninstallCli(): Promise<OpenWikiInstallResult> {
 // Adding a new plugin no longer requires a Rust recompile.
 // ---------------------------------------------------------------------------
 
-
 export interface NpmInstallParams {
   packageName: string
   binaryName: string
@@ -357,7 +327,6 @@ export interface NpmInstallParams {
   taskId: string
   includeOptional?: boolean
 }
-
 
 export interface NpmUninstallParams {
   packageName: string
@@ -380,9 +349,13 @@ export interface NpmInstallResult {
 export async function npmInstallCli(
   params: NpmInstallParams
 ): Promise<NpmInstallResult> {
-  return getTransport().call("npm_install_cli", { params }, {
-    timeoutMs: 630_000,
-  })
+  return getTransport().call(
+    "npm_install_cli",
+    { params },
+    {
+      timeoutMs: 630_000,
+    }
+  )
 }
 
 /** Uninstall an npm-based CLI from default global + user npm prefixes. */
@@ -390,9 +363,13 @@ export async function npmInstallCli(
 export async function npmUninstallCli(
   params: NpmUninstallParams
 ): Promise<NpmInstallResult> {
-  return getTransport().call("npm_uninstall_cli", { params }, {
-    timeoutMs: 120_000,
-  })
+  return getTransport().call(
+    "npm_uninstall_cli",
+    { params },
+    {
+      timeoutMs: 120_000,
+    }
+  )
 }
 
 /** Live probe — opens a transient ACP connection to `agent_type`, reads what
@@ -425,5 +402,3 @@ export async function describeAgentOptions(
 // ───────────────────────────────────────────────────────────────────────────
 // Backup & restore
 // ───────────────────────────────────────────────────────────────────────────
-
-

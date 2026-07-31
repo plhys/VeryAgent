@@ -23,13 +23,18 @@ export function SidebarSummaryBubble({
   isHovered,
   summary,
 }: SidebarSummaryBubbleProps) {
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const [position, setPosition] = useState<{
+    top: number
+    left: number
+  } | null>(null)
 
   const updatePosition = useCallback(() => {
     if (!hostRef.current) return
     const rect = hostRef.current.getBoundingClientRect()
     // Prefer the main content area element for positioning; fall back to window center.
-    const mainEl = document.querySelector('[data-main-area], .main-area, .workspace-main')
+    const mainEl = document.querySelector(
+      "[data-main-area], .main-area, .workspace-main"
+    )
     const mainRect = mainEl?.getBoundingClientRect()
     const mainAreaCenterX = mainRect
       ? mainRect.left + mainRect.width / 2
@@ -67,9 +72,7 @@ export function SidebarSummaryBubble({
         transform: "translate(-50%, -50%)",
       }}
     >
-      <div
-        className="w-[36rem] max-w-[calc(100vw-4rem)] rounded-xl border border-border/80 bg-muted/85 p-5 text-sm leading-relaxed shadow-2xl backdrop-blur-xl [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_strong]:font-semibold"
-      >
+      <div className="w-[36rem] max-w-[calc(100vw-4rem)] rounded-xl border border-border/80 bg-muted/85 p-5 text-sm leading-relaxed shadow-2xl backdrop-blur-xl [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_strong]:font-semibold">
         <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground/85">
           <ReactMarkdown>{summary}</ReactMarkdown>
         </div>

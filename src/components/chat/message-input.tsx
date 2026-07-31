@@ -575,15 +575,24 @@ export function MessageInput({
   const expertCategoryLabel = useCallback(
     (cat: string) => {
       switch (cat) {
-        case "discovery": return t("expertCatDiscovery")
-        case "planning": return t("expertCatPlanning")
-        case "execution": return t("expertCatExecution")
-        case "quality": return t("expertCatQuality")
-        case "debugging": return t("expertCatDebugging")
-        case "review": return t("expertCatReview")
-        case "meta": return t("expertCatMeta")
-        case "creative": return t("expertCatCreative")
-        default: return cat
+        case "discovery":
+          return t("expertCatDiscovery")
+        case "planning":
+          return t("expertCatPlanning")
+        case "execution":
+          return t("expertCatExecution")
+        case "quality":
+          return t("expertCatQuality")
+        case "debugging":
+          return t("expertCatDebugging")
+        case "review":
+          return t("expertCatReview")
+        case "meta":
+          return t("expertCatMeta")
+        case "creative":
+          return t("expertCatCreative")
+        default:
+          return cat
       }
     },
     [t]
@@ -591,13 +600,20 @@ export function MessageInput({
   const scienceCategoryLabel = useCallback(
     (cat: string) => {
       switch (cat) {
-        case "ideation": return t("scienceCatIdeation")
-        case "design": return t("scienceCatDesign")
-        case "analysis": return t("scienceCatAnalysis")
-        case "visualization": return t("scienceCatVisualization")
-        case "evaluation": return t("scienceCatEvaluation")
-        case "literature": return t("scienceCatLiterature")
-        default: return cat
+        case "ideation":
+          return t("scienceCatIdeation")
+        case "design":
+          return t("scienceCatDesign")
+        case "analysis":
+          return t("scienceCatAnalysis")
+        case "visualization":
+          return t("scienceCatVisualization")
+        case "evaluation":
+          return t("scienceCatEvaluation")
+        case "literature":
+          return t("scienceCatLiterature")
+        default:
+          return cat
       }
     },
     [t]
@@ -605,11 +621,16 @@ export function MessageInput({
   const officeCategoryLabel = useCallback(
     (cat: string) => {
       switch (cat) {
-        case "general": return t("officeCatGeneral")
-        case "presentations": return t("officeCatPresentations")
-        case "documents": return t("officeCatDocuments")
-        case "spreadsheets": return t("officeCatSpreadsheets")
-        default: return cat
+        case "general":
+          return t("officeCatGeneral")
+        case "presentations":
+          return t("officeCatPresentations")
+        case "documents":
+          return t("officeCatDocuments")
+        case "spreadsheets":
+          return t("officeCatSpreadsheets")
+        default:
+          return cat
       }
     },
     [t]
@@ -2103,7 +2124,9 @@ export function MessageInput({
     }
   }, [])
 
-  const [enabledPlugins, setEnabledPlugins] = useState<{ mcp: LocalMcpServer[] }>({ mcp: [] })
+  const [enabledPlugins, setEnabledPlugins] = useState<{
+    mcp: LocalMcpServer[]
+  }>({ mcp: [] })
   const [pluginsLoading, setPluginsLoading] = useState(false)
 
   const loadEnabledPlugins = useCallback(async () => {
@@ -2129,9 +2152,7 @@ export function MessageInput({
         }
       })()
       const local = await mcpScanLocal().catch(() => [] as LocalMcpServer[])
-      const mcp = mcpApp
-        ? local.filter((p) => p.apps.includes(mcpApp))
-        : []
+      const mcp = mcpApp ? local.filter((p) => p.apps.includes(mcpApp)) : []
       setEnabledPlugins({ mcp })
     } catch (error) {
       console.error("[MessageInput] load enabled plugins failed:", error)
@@ -2152,7 +2173,6 @@ export function MessageInput({
     },
     [loadEnabledPlugins, loadQuickMessages]
   )
-
 
   const handleMcpPluginHint = useCallback(
     (serverId: string) => {
@@ -2363,14 +2383,14 @@ export function MessageInput({
     if (!attachmentTabId) return
 
     const handleAttachImageRef = (event: Event) => {
-      const customEvent = event as CustomEvent<AttachImageReferenceToSessionDetail>
+      const customEvent =
+        event as CustomEvent<AttachImageReferenceToSessionDetail>
       if (!customEvent.detail) return
       if (customEvent.detail.tabId !== attachmentTabId) return
       const { imageUrl, alt, skillId, skillLabel } = customEvent.detail
       if (!imageUrl) return
 
-      const label =
-        alt || imageUrl.split(/[/\\]/).pop() || "参考图片"
+      const label = alt || imageUrl.split(/[/\\]/).pop() || "参考图片"
       setComposerImageRefs((prev) => {
         const without = prev.filter((r) => r.imageUrl !== imageUrl)
         return [
@@ -2930,7 +2950,9 @@ export function MessageInput({
         key: "mode",
         title: t("modeLabel"),
         currentValue: effectiveModeId ?? "",
-        currentLabel: localizer.localize(selected?.name ?? effectiveModeId ?? ""),
+        currentLabel: localizer.localize(
+          selected?.name ?? effectiveModeId ?? ""
+        ),
         groups: [
           {
             key: "__modes__",
@@ -3215,9 +3237,7 @@ export function MessageInput({
             >
               <ConversationContextBar
                 hasExtraContent={hasContextBarContent}
-                scrollEndTrigger={
-                  attachments.length + composerImageRefs.length
-                }
+                scrollEndTrigger={attachments.length + composerImageRefs.length}
                 extraContent={
                   <>
                     {composerImageRefs.map((ref) => {
@@ -3544,15 +3564,28 @@ export function MessageInput({
 
                           // --- Category sort orders (mirrors each pack's settings page) ---
                           const EXPERT_CATEGORY_SORT: Record<string, number> = {
-                            discovery: 1, planning: 2, execution: 3, quality: 4,
-                            debugging: 5, review: 6, meta: 7, creative: 8,
+                            discovery: 1,
+                            planning: 2,
+                            execution: 3,
+                            quality: 4,
+                            debugging: 5,
+                            review: 6,
+                            meta: 7,
+                            creative: 8,
                           }
-                          const SCIENCE_CATEGORY_SORT: Record<string, number> = {
-                            ideation: 1, design: 2, analysis: 3,
-                            visualization: 4, evaluation: 5, literature: 6,
-                          }
+                          const SCIENCE_CATEGORY_SORT: Record<string, number> =
+                            {
+                              ideation: 1,
+                              design: 2,
+                              analysis: 3,
+                              visualization: 4,
+                              evaluation: 5,
+                              literature: 6,
+                            }
                           const OFFICE_CATEGORY_SORT: Record<string, number> = {
-                            general: 0, presentations: 1, documents: 2,
+                            general: 0,
+                            presentations: 1,
+                            documents: 2,
                             spreadsheets: 3,
                           }
 
@@ -3664,48 +3697,46 @@ export function MessageInput({
                                         "min(32rem, var(--radix-dropdown-menu-content-available-height))",
                                     }}
                                   >
-                                    {scienceGroups.map(
-                                      ([category, items]) => (
-                                        <DropdownMenuSub key={category}>
-                                          <DropdownMenuSubTrigger>
-                                            {scienceCategoryLabel(category)}
-                                          </DropdownMenuSubTrigger>
-                                          <DropdownMenuSubContent
-                                            className="min-w-40 overflow-y-auto"
-                                            style={{
-                                              maxWidth:
-                                                "min(18rem, calc(100vw - 1rem))",
-                                              maxHeight:
-                                                "min(28rem, var(--radix-dropdown-menu-content-available-height))",
-                                            }}
-                                          >
-                                            {items.map((item) => {
-                                              const Icon = getScienceIcon(
-                                                item.metadata.icon
-                                              )
-                                              const label =
-                                                pickLocalized(
-                                                  item.metadata.display_name,
-                                                  locale
-                                                ) || item.metadata.id
-                                              return (
-                                                <DropdownMenuItem
-                                                  key={item.metadata.id}
-                                                  onClick={() =>
-                                                    handleScienceShortcut(item)
-                                                  }
-                                                >
-                                                  <Icon className="size-4" />
-                                                  <span className="flex-1 truncate">
-                                                    {label}
-                                                  </span>
-                                                </DropdownMenuItem>
-                                              )
-                                            })}
-                                          </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
-                                      )
-                                    )}
+                                    {scienceGroups.map(([category, items]) => (
+                                      <DropdownMenuSub key={category}>
+                                        <DropdownMenuSubTrigger>
+                                          {scienceCategoryLabel(category)}
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent
+                                          className="min-w-40 overflow-y-auto"
+                                          style={{
+                                            maxWidth:
+                                              "min(18rem, calc(100vw - 1rem))",
+                                            maxHeight:
+                                              "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                                          }}
+                                        >
+                                          {items.map((item) => {
+                                            const Icon = getScienceIcon(
+                                              item.metadata.icon
+                                            )
+                                            const label =
+                                              pickLocalized(
+                                                item.metadata.display_name,
+                                                locale
+                                              ) || item.metadata.id
+                                            return (
+                                              <DropdownMenuItem
+                                                key={item.metadata.id}
+                                                onClick={() =>
+                                                  handleScienceShortcut(item)
+                                                }
+                                              >
+                                                <Icon className="size-4" />
+                                                <span className="flex-1 truncate">
+                                                  {label}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )
+                                          })}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    ))}
                                   </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                               )}
@@ -3724,54 +3755,51 @@ export function MessageInput({
                                         "min(32rem, var(--radix-dropdown-menu-content-available-height))",
                                     }}
                                   >
-                                    {officeGroups.map(
-                                      ([category, items]) => (
-                                        <DropdownMenuSub key={category}>
-                                          <DropdownMenuSubTrigger>
-                                            {officeCategoryLabel(category)}
-                                          </DropdownMenuSubTrigger>
-                                          <DropdownMenuSubContent
-                                            className="min-w-40 overflow-y-auto"
-                                            style={{
-                                              maxWidth:
-                                                "min(18rem, calc(100vw - 1rem))",
-                                              maxHeight:
-                                                "min(28rem, var(--radix-dropdown-menu-content-available-height))",
-                                            }}
-                                          >
-                                            {items.map((action) => {
-                                              const Icon = action.icon
-                                              const label = tQa(
-                                                action.id as Parameters<
-                                                  typeof tQa
-                                                >[0]
-                                              )
-                                              return (
-                                                <DropdownMenuItem
-                                                  key={action.id}
-                                                  onClick={() =>
-                                                    handleOfficeShortcut(action)
-                                                  }
-                                                >
-                                                  <Icon className="size-4" />
-                                                  <span className="flex-1 truncate">
-                                                    {label}
-                                                  </span>
-                                                </DropdownMenuItem>
-                                              )
-                                            })}
-                                          </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
-                                      )
-                                    )}
+                                    {officeGroups.map(([category, items]) => (
+                                      <DropdownMenuSub key={category}>
+                                        <DropdownMenuSubTrigger>
+                                          {officeCategoryLabel(category)}
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent
+                                          className="min-w-40 overflow-y-auto"
+                                          style={{
+                                            maxWidth:
+                                              "min(18rem, calc(100vw - 1rem))",
+                                            maxHeight:
+                                              "min(28rem, var(--radix-dropdown-menu-content-available-height))",
+                                          }}
+                                        >
+                                          {items.map((action) => {
+                                            const Icon = action.icon
+                                            const label = tQa(
+                                              action.id as Parameters<
+                                                typeof tQa
+                                              >[0]
+                                            )
+                                            return (
+                                              <DropdownMenuItem
+                                                key={action.id}
+                                                onClick={() =>
+                                                  handleOfficeShortcut(action)
+                                                }
+                                              >
+                                                <Icon className="size-4" />
+                                                <span className="flex-1 truncate">
+                                                  {label}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )
+                                          })}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    ))}
                                   </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                               )}
                             </>
                           )
                         })()}
-                      {(pluginsLoading ||
-                        enabledPlugins.mcp.length > 0) && (
+                      {(pluginsLoading || enabledPlugins.mcp.length > 0) && (
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger>
                             <Puzzle className="size-4" />
@@ -3791,7 +3819,7 @@ export function MessageInput({
                               </div>
                             ) : (
                               <>
-                                                                {enabledPlugins.mcp.map((plugin) => (
+                                {enabledPlugins.mcp.map((plugin) => (
                                   <DropdownMenuItem
                                     key={plugin.id}
                                     onClick={() =>
@@ -3799,7 +3827,9 @@ export function MessageInput({
                                     }
                                   >
                                     <Puzzle className="size-4" />
-                                    <span className="truncate">{plugin.id}</span>
+                                    <span className="truncate">
+                                      {plugin.id}
+                                    </span>
                                   </DropdownMenuItem>
                                 ))}
                                 {enabledPlugins.mcp.length === 0 ? (
@@ -3827,7 +3857,9 @@ export function MessageInput({
                       title={visionEnabled ? t("visionOn") : t("visionOff")}
                     >
                       <Eye className="size-3" />
-                      <span className="hidden @[24rem]:inline">{t("vision")}</span>
+                      <span className="hidden @[24rem]:inline">
+                        {t("vision")}
+                      </span>
                     </button>
                   )}
                   {hasInlineSelectors && (

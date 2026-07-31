@@ -11,7 +11,9 @@ export const SKILL_DISPLAY_NAMES: Record<string, string> = {
   veryagent_image: "通用出图网关",
 }
 
-export function getSkillDisplayName(skillId: string | null | undefined): string {
+export function getSkillDisplayName(
+  skillId: string | null | undefined
+): string {
   if (!skillId) return ""
   const key = skillId.replace(/-/g, "_")
   return SKILL_DISPLAY_NAMES[key] ?? skillId

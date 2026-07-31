@@ -950,12 +950,7 @@ export async function openCommitWindow(folderId: number): Promise<void> {
 }
 
 export type SettingsSection =
-  | "appearance"
-  | "agents"
-  | "mcp"
-  | "skills"
-  | "shortcuts"
-  | "system"
+  "appearance" | "agents" | "mcp" | "skills" | "shortcuts" | "system"
 
 interface OpenSettingsWindowOptions {
   agentType?: AgentType | null

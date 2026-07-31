@@ -1,7 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2, MonitorCog, Pin, Power, RefreshCw, SquareTerminal } from "lucide-react"
+import {
+  Loader2,
+  MonitorCog,
+  Pin,
+  Power,
+  RefreshCw,
+  SquareTerminal,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -111,18 +118,23 @@ export function GeneralSettings() {
     setLoadError(null)
 
     try {
-      const [terminalSettings, terminalShells, renderingSettings, autostart, pinSummary] =
-        await Promise.all([
-          getSystemTerminalSettings(),
-          getAvailableTerminalShells(),
-          renderingSettingsLoadable
-            ? getSystemRenderingSettings()
-            : Promise.resolve(null),
-          autostartSectionVisible
-            ? getAppAutostartEnabled()
-            : Promise.resolve(false),
-          getPinnedSummaryEnabled(),
-        ])
+      const [
+        terminalSettings,
+        terminalShells,
+        renderingSettings,
+        autostart,
+        pinSummary,
+      ] = await Promise.all([
+        getSystemTerminalSettings(),
+        getAvailableTerminalShells(),
+        renderingSettingsLoadable
+          ? getSystemRenderingSettings()
+          : Promise.resolve(null),
+        autostartSectionVisible
+          ? getAppAutostartEnabled()
+          : Promise.resolve(false),
+        getPinnedSummaryEnabled(),
+      ])
 
       setAvailableShells(terminalShells)
       const initialId = resolveSelectedShellId(

@@ -237,12 +237,12 @@ const FolderHeader = memo(function FolderHeader({
         <div
           inert={suppressed || undefined}
           aria-hidden={suppressed || undefined}
-	          className={cn("relative h-[2.125rem]", isDragging && "opacity-60")}
+          className={cn("relative h-[2.125rem]", isDragging && "opacity-60")}
         >
           <div
             onPointerDown={(e) => onGripPointerDown?.(folderId, e)}
             className={cn(
-	              "group flex h-[2.0625rem] w-full items-center",
+              "group flex h-[2.0625rem] w-full items-center",
               "rounded-full",
               "transition-colors duration-150",
               isDragging
@@ -960,7 +960,9 @@ export function SidebarConversationList({
     return ids
   }, [folders, dragOrder, childToParent])
 
-  const darkMode = typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  const darkMode =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark")
 
   // Flat row model for windowing — the pinned section, the folders section, and
   // every conversation live in this ONE array fed to the single Virtualizer (no
@@ -2066,46 +2068,46 @@ export function SidebarConversationList({
               >
                 <div className="pr-2.5">
                   {dragging !== null ? (
-                  // Drag surface: every folder collapsed to its header so any
-                  // folder (even one that was virtualized off-screen) is a valid
-                  // drop target. Non-virtualized — folder counts are small.
-                  <div ref={dragSurfaceRef} className="flex flex-col">
-                    {orderedFolderIds.map((folderId) => (
-                      <div key={folderId}>
-                        {themeWrap(
-                          folderId,
-                          folderHeaderElement(folderId, {
-                            dragging: dragging === folderId,
-                            collapsed: true,
-                            grip: false,
-                          })
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : viewportEl ? (
-                  <Virtualizer
-                    ref={virtualizerRef}
-                    scrollRef={viewportRef}
-                    data={rows}
-                    itemSize={34}
-                    bufferSize={400}
-                    onScroll={handleVirtuaScroll}
-                  >
-                    {(row: SidebarRow) => (
-                      <div key={rowKey(row)}>{renderRow(row)}</div>
-                    )}
-                  </Virtualizer>
-                ) : (
-                  <div className="flex flex-col gap-1.5 pt-1">
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <Skeleton
-                        key={i}
-                        className="h-[2rem] w-full rounded-md"
-                      />
-                    ))}
-                  </div>
-                )}
+                    // Drag surface: every folder collapsed to its header so any
+                    // folder (even one that was virtualized off-screen) is a valid
+                    // drop target. Non-virtualized — folder counts are small.
+                    <div ref={dragSurfaceRef} className="flex flex-col">
+                      {orderedFolderIds.map((folderId) => (
+                        <div key={folderId}>
+                          {themeWrap(
+                            folderId,
+                            folderHeaderElement(folderId, {
+                              dragging: dragging === folderId,
+                              collapsed: true,
+                              grip: false,
+                            })
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : viewportEl ? (
+                    <Virtualizer
+                      ref={virtualizerRef}
+                      scrollRef={viewportRef}
+                      data={rows}
+                      itemSize={34}
+                      bufferSize={400}
+                      onScroll={handleVirtuaScroll}
+                    >
+                      {(row: SidebarRow) => (
+                        <div key={rowKey(row)}>{renderRow(row)}</div>
+                      )}
+                    </Virtualizer>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <Skeleton
+                          key={i}
+                          className="h-[2rem] w-full rounded-md"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
               {/*

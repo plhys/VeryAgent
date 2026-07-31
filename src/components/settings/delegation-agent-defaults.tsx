@@ -368,9 +368,9 @@ function ModeRow({
             })}
           </SelectItem>
           {modes.map((mode) => (
-              <SelectItem key={mode.id} value={mode.id}>
-                {localizer.localize(mode.name)}
-              </SelectItem>
+            <SelectItem key={mode.id} value={mode.id}>
+              {localizer.localize(mode.name)}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -412,7 +412,9 @@ function ConfigOptionRow({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="space-y-0.5 min-w-0">
-        <label className="text-sm font-medium">{localizer.localize(option.name)}</label>
+        <label className="text-sm font-medium">
+          {localizer.localize(option.name)}
+        </label>
         <p className="text-xs text-muted-foreground">
           {t("agentDefaultHint", { value: agentDefaultLabel })}
         </p>
@@ -453,4 +455,3 @@ function ConfigOptionRow({
     </div>
   )
 }
-

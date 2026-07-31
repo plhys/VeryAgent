@@ -53,17 +53,25 @@ describe("isAgentLikeToolName", () => {
   it("matches delegate_to_agent across host naming conventions", () => {
     expect(isAgentLikeToolName("delegate_to_agent")).toBe(true)
     // Claude Code style (current + legacy server names)
-    expect(isAgentLikeToolName("mcp__veryagent-mcp__delegate_to_agent")).toBe(true)
-    expect(isAgentLikeToolName("mcp__veryagent-delegate__delegate_to_agent")).toBe(
+    expect(isAgentLikeToolName("mcp__veryagent-mcp__delegate_to_agent")).toBe(
       true
     )
+    expect(
+      isAgentLikeToolName("mcp__veryagent-delegate__delegate_to_agent")
+    ).toBe(true)
     expect(isAgentLikeToolName("mcp__veryagent__delegate_to_agent")).toBe(true)
     // Codex live ACP style (server/tool)
     expect(isAgentLikeToolName("veryagent-mcp/delegate_to_agent")).toBe(true)
-    expect(isAgentLikeToolName("veryagent-delegate/delegate_to_agent")).toBe(true)
+    expect(isAgentLikeToolName("veryagent-delegate/delegate_to_agent")).toBe(
+      true
+    )
     // Dot- and colon-separated forms other hosts may emit
-    expect(isAgentLikeToolName("veryagent-delegate.delegate_to_agent")).toBe(true)
-    expect(isAgentLikeToolName("veryagent-delegate:delegate_to_agent")).toBe(true)
+    expect(isAgentLikeToolName("veryagent-delegate.delegate_to_agent")).toBe(
+      true
+    )
+    expect(isAgentLikeToolName("veryagent-delegate:delegate_to_agent")).toBe(
+      true
+    )
   })
 
   it("matches the delegation companion tools across host naming conventions", () => {
@@ -92,7 +100,9 @@ describe("isAgentLikeToolName", () => {
   it("matches ask_user_question across host naming conventions", () => {
     expect(isAgentLikeToolName("question")).toBe(true)
     expect(isAgentLikeToolName("ask_user_question")).toBe(true)
-    expect(isAgentLikeToolName("mcp__veryagent-mcp__ask_user_question")).toBe(true)
+    expect(isAgentLikeToolName("mcp__veryagent-mcp__ask_user_question")).toBe(
+      true
+    )
     expect(isAgentLikeToolName("veryagent-mcp/ask_user_question")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp.ask_user_question")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp:ask_user_question")).toBe(true)
@@ -103,7 +113,9 @@ describe("isAgentLikeToolName", () => {
     expect(isAgentLikeToolName("mcp__veryagent-mcp__check_user_feedback")).toBe(
       true
     )
-    expect(isAgentLikeToolName("mcp__veryagent__check_user_feedback")).toBe(true)
+    expect(isAgentLikeToolName("mcp__veryagent__check_user_feedback")).toBe(
+      true
+    )
     expect(isAgentLikeToolName("veryagent-mcp/check_user_feedback")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp.check_user_feedback")).toBe(true)
     expect(isAgentLikeToolName("veryagent-mcp:check_user_feedback")).toBe(true)

@@ -16,7 +16,10 @@ import { useEffect, useState } from "react"
 
 import { visionBridgeGetConfig } from "@/lib/api"
 import { onTransportReconnect, subscribe } from "@/lib/platform"
-import { VISION_BRIDGE_SETTINGS_CHANGED_EVENT, type AgentType } from "@/lib/types"
+import {
+  VISION_BRIDGE_SETTINGS_CHANGED_EVENT,
+  type AgentType,
+} from "@/lib/types"
 import type { VisionBridgeConfig } from "@/lib/api"
 
 let cached: VisionBridgeConfig | null = null

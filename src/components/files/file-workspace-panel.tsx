@@ -264,14 +264,13 @@ function MarkdownDocumentPreview({
       <Streamdown
         plugins={plugins}
         components={{
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           img: ({ node, ...imgProps }) => (
             <PreviewImage
               {...imgProps}
               fileDir={localRefsEnabled ? fileDir : null}
             />
           ),
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
           a: ({ node, href, children, ...aProps }) => {
             // Protocol-relative "//host/…" is a WEB url — exclude it
             // from the local branch (^\/\/) so it opens externally

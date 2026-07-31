@@ -67,7 +67,10 @@ export function ScrollArea({
   return (
     <OverlayScrollbarsComponent
       ref={ref}
-      className={cn("outline-none [&_.os-viewport]:outline-none focus:outline-none", className)}
+      className={cn(
+        "outline-none [&_.os-viewport]:outline-none focus:outline-none",
+        className
+      )}
       options={options}
       events={events}
       defer

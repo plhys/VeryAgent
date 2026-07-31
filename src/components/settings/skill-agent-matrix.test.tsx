@@ -165,7 +165,11 @@ function renderMatrix(overrides: Partial<SkillAgentMatrixProps> = {}) {
         expertId: "brainstorming",
         agentType: "claude_code",
         ok: true,
-        status: makeStatus("brainstorming", "claude_code", "linked_to_veryagent"),
+        status: makeStatus(
+          "brainstorming",
+          "claude_code",
+          "linked_to_veryagent"
+        ),
         error: null,
       },
     ]),

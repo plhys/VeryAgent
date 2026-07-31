@@ -215,7 +215,9 @@ function AnimLayer({ type }: { type: WeatherType }) {
   const particles = useRef<React.ReactNode[]>([])
   if (particles.current.length === 0) {
     const p: React.ReactNode[] = []
-    const D = (style: React.CSSProperties) => <div key={p.length} style={style} />
+    const D = (style: React.CSSProperties) => (
+      <div key={p.length} style={style} />
+    )
     if (type === "lightRain") {
       for (let i = 0; i < 10; i++)
         p.push(
@@ -374,10 +376,13 @@ function AnimLayer({ type }: { type: WeatherType }) {
 function StormFlash() {
   const [v, setV] = useState(false)
   useEffect(() => {
-    const t = setInterval(() => {
-      setV(true)
-      setTimeout(() => setV(false), 60)
-    }, 2200 + Math.random() * 1500)
+    const t = setInterval(
+      () => {
+        setV(true)
+        setTimeout(() => setV(false), 60)
+      },
+      2200 + Math.random() * 1500
+    )
     return () => clearInterval(t)
   }, [])
   return (

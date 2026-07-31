@@ -21,10 +21,7 @@ import { AGENT_LABELS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 type ConnectionStatusLabelKey =
-  | "connected"
-  | "connecting"
-  | "prompting"
-  | "error"
+  "connected" | "connecting" | "prompting" | "error"
 
 const STATUS_STYLE: Record<
   string,
@@ -124,48 +121,45 @@ export function StatusBarConnection() {
     }
   }, [activeKey, actionDisabled, reapplyConfig, t])
 
-  const reconnectButton =
-    canReconnect ? (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* Wrapper so tooltip still fires while the button is disabled. */}
-            <span className="inline-flex">
-              <button
-                type="button"
-                disabled={actionDisabled}
-                onClick={() => void handleReconnect()}
-                aria-label={
-                  busy
-                    ? t("reconnecting")
-                    : configStale
-                      ? t("reconnectStale")
-                      : t("reconnect")
-                }
-                className={cn(
-                  "inline-flex h-5 w-5 items-center justify-center rounded-sm transition-colors",
-                  "disabled:pointer-events-none disabled:opacity-40",
-                  configStale
-                    ? "text-amber-600 hover:bg-amber-500/15 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <RefreshCw
-                  className={cn("h-3 w-3", busy && "animate-spin")}
-                />
-              </button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {turnInFlight
-              ? t("reconnectDisabledDuringTurn")
-              : configStale
-                ? t("reconnectStaleTooltip")
-                : t("reconnectTooltip")}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    ) : null
+  const reconnectButton = canReconnect ? (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Wrapper so tooltip still fires while the button is disabled. */}
+          <span className="inline-flex">
+            <button
+              type="button"
+              disabled={actionDisabled}
+              onClick={() => void handleReconnect()}
+              aria-label={
+                busy
+                  ? t("reconnecting")
+                  : configStale
+                    ? t("reconnectStale")
+                    : t("reconnect")
+              }
+              className={cn(
+                "inline-flex h-5 w-5 items-center justify-center rounded-sm transition-colors",
+                "disabled:pointer-events-none disabled:opacity-40",
+                configStale
+                  ? "text-amber-600 hover:bg-amber-500/15 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <RefreshCw className={cn("h-3 w-3", busy && "animate-spin")} />
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          {turnInFlight
+            ? t("reconnectDisabledDuringTurn")
+            : configStale
+              ? t("reconnectStaleTooltip")
+              : t("reconnectTooltip")}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : null
 
   if (!agentType || !status || status === "disconnected") {
     return (
@@ -187,9 +181,7 @@ export function StatusBarConnection() {
                 {model && <span>{model}</span>}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top">
-              {t("disconnected")}
-            </TooltipContent>
+            <TooltipContent side="top">{t("disconnected")}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </div>

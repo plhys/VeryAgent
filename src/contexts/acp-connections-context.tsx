@@ -4052,8 +4052,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
           // reverseMap, then drains any envelopes that arrived on the
           // global listener while the snapshot was in flight.
           let snapshotPatch:
-            | import("@/lib/snapshot-denormalize").SnapshotPatch
-            | null = null
+            import("@/lib/snapshot-denormalize").SnapshotPatch | null = null
           try {
             const snapshot = await acpGetSessionSnapshot(connectionId)
             if (snapshot) {

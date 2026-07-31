@@ -23,21 +23,17 @@ import type {
   GitCredentials,
 } from "../types"
 
-
 export async function getGitBranch(path: string): Promise<string | null> {
   return getTransport().call("get_git_branch", { path })
 }
-
 
 export async function getGitHead(path: string): Promise<GitHeadInfo> {
   return getTransport().call("get_git_head", { path })
 }
 
-
 export async function gitInit(path: string): Promise<void> {
   return getTransport().call("git_init", { path })
 }
-
 
 export async function gitPull(
   path: string,
@@ -49,7 +45,6 @@ export async function gitPull(
   })
 }
 
-
 export async function gitStartPullMerge(
   path: string,
   upstreamCommit?: string | null
@@ -57,11 +52,9 @@ export async function gitStartPullMerge(
   return getTransport().call("git_start_pull_merge", { path, upstreamCommit })
 }
 
-
 export async function gitHasMergeHead(path: string): Promise<boolean> {
   return getTransport().call("git_has_merge_head", { path })
 }
-
 
 export async function gitFetch(
   path: string,
@@ -73,11 +66,9 @@ export async function gitFetch(
   })
 }
 
-
 export async function gitPushInfo(path: string): Promise<GitPushInfo> {
   return getTransport().call("git_push_info", { path })
 }
-
 
 export async function gitPush(
   path: string,
@@ -93,7 +84,6 @@ export async function gitPush(
   })
 }
 
-
 export async function gitNewBranch(
   path: string,
   branchName: string,
@@ -105,7 +95,6 @@ export async function gitNewBranch(
     startPoint: startPoint ?? null,
   })
 }
-
 
 export async function gitWorktreeAdd(
   path: string,
@@ -119,7 +108,6 @@ export async function gitWorktreeAdd(
   })
 }
 
-
 export async function gitCheckout(
   path: string,
   branchName: string
@@ -127,16 +115,13 @@ export async function gitCheckout(
   return getTransport().call("git_checkout", { path, branchName })
 }
 
-
 export async function gitListBranches(path: string): Promise<string[]> {
   return getTransport().call("git_list_branches", { path })
 }
 
-
 export async function gitListAllBranches(path: string): Promise<GitBranchList> {
   return getTransport().call("git_list_all_branches", { path })
 }
-
 
 export async function gitMerge(
   path: string,
@@ -145,14 +130,12 @@ export async function gitMerge(
   return getTransport().call("git_merge", { path, branchName })
 }
 
-
 export async function gitRebase(
   path: string,
   branchName: string
 ): Promise<GitRebaseResult> {
   return getTransport().call("git_rebase", { path, branchName })
 }
-
 
 export async function gitDeleteBranch(
   path: string,
@@ -165,7 +148,6 @@ export async function gitDeleteBranch(
     force,
   })
 }
-
 
 export async function gitDeleteRemoteBranch(
   path: string,
@@ -181,11 +163,9 @@ export async function gitDeleteRemoteBranch(
   })
 }
 
-
 export async function gitListConflicts(path: string): Promise<string[]> {
   return getTransport().call("git_list_conflicts", { path })
 }
-
 
 export async function gitConflictFileVersions(
   path: string,
@@ -193,7 +173,6 @@ export async function gitConflictFileVersions(
 ): Promise<GitConflictFileVersions> {
   return getTransport().call("git_conflict_file_versions", { path, file })
 }
-
 
 export async function gitResolveConflict(
   path: string,
@@ -203,7 +182,6 @@ export async function gitResolveConflict(
   return getTransport().call("git_resolve_conflict", { path, file, content })
 }
 
-
 export async function gitAbortOperation(
   path: string,
   operation: string
@@ -211,14 +189,12 @@ export async function gitAbortOperation(
   return getTransport().call("git_abort_operation", { path, operation })
 }
 
-
 export async function gitContinueOperation(
   path: string,
   operation: string
 ): Promise<void> {
   return getTransport().call("git_continue_operation", { path, operation })
 }
-
 
 export async function openMergeWindow(
   folderId: number,
@@ -247,7 +223,6 @@ export async function openMergeWindow(
   window.open(result.path, `merge-${folderId}`)
 }
 
-
 export async function openStashWindow(folderId: number): Promise<void> {
   const locale = getCurrentEffectiveAppLocale()
   if (isDesktop()) {
@@ -263,7 +238,6 @@ export async function openStashWindow(folderId: number): Promise<void> {
   )
   window.open(result.path, `stash-${folderId}`)
 }
-
 
 export async function openPushWindow(folderId: number): Promise<void> {
   const locale = getCurrentEffectiveAppLocale()
@@ -281,7 +255,6 @@ export async function openPushWindow(folderId: number): Promise<void> {
   window.open(result.path, `push-${folderId}`)
 }
 
-
 export async function gitStashPush(
   path: string,
   message?: string,
@@ -294,7 +267,6 @@ export async function gitStashPush(
   })
 }
 
-
 export async function gitStashPop(
   path: string,
   stashRef?: string
@@ -305,11 +277,9 @@ export async function gitStashPop(
   })
 }
 
-
 export async function gitStashList(path: string): Promise<GitStashEntry[]> {
   return getTransport().call("git_stash_list", { path })
 }
-
 
 export async function gitStashApply(
   path: string,
@@ -318,7 +288,6 @@ export async function gitStashApply(
   return getTransport().call("git_stash_apply", { path, stashRef })
 }
 
-
 export async function gitStashDrop(
   path: string,
   stashRef: string
@@ -326,11 +295,9 @@ export async function gitStashDrop(
   return getTransport().call("git_stash_drop", { path, stashRef })
 }
 
-
 export async function gitStashClear(path: string): Promise<string> {
   return getTransport().call("git_stash_clear", { path })
 }
-
 
 export async function gitStashShow(
   path: string,
@@ -339,11 +306,9 @@ export async function gitStashShow(
   return getTransport().call("git_stash_show", { path, stashRef })
 }
 
-
 export async function gitListRemotes(path: string): Promise<GitRemote[]> {
   return getTransport().call("git_list_remotes", { path })
 }
-
 
 export async function gitFetchRemote(
   path: string,
@@ -357,7 +322,6 @@ export async function gitFetchRemote(
   })
 }
 
-
 export async function gitAddRemote(
   path: string,
   name: string,
@@ -366,14 +330,12 @@ export async function gitAddRemote(
   return getTransport().call("git_add_remote", { path, name, url })
 }
 
-
 export async function gitRemoveRemote(
   path: string,
   name: string
 ): Promise<void> {
   return getTransport().call("git_remove_remote", { path, name })
 }
-
 
 export async function gitSetRemoteUrl(
   path: string,
@@ -382,7 +344,6 @@ export async function gitSetRemoteUrl(
 ): Promise<void> {
   return getTransport().call("git_set_remote_url", { path, name, url })
 }
-
 
 export async function gitStatus(
   path: string,
@@ -394,11 +355,9 @@ export async function gitStatus(
   })
 }
 
-
 export async function gitDiff(path: string, file?: string): Promise<string> {
   return getTransport().call("git_diff", { path, file: file ?? null })
 }
-
 
 export async function gitDiffWithBranch(
   path: string,
@@ -412,7 +371,6 @@ export async function gitDiffWithBranch(
   })
 }
 
-
 export async function gitShowDiff(
   path: string,
   commit: string,
@@ -424,7 +382,6 @@ export async function gitShowDiff(
     file: file ?? null,
   })
 }
-
 
 export async function gitShowFile(
   path: string,
@@ -438,14 +395,12 @@ export async function gitShowFile(
   })
 }
 
-
 export async function gitIsTracked(
   path: string,
   file: string
 ): Promise<boolean> {
   return getTransport().call("git_is_tracked", { path, file })
 }
-
 
 export async function gitCommit(
   path: string,
@@ -461,14 +416,12 @@ export async function gitCommit(
   })
 }
 
-
 export async function gitRollbackFile(
   path: string,
   file: string
 ): Promise<void> {
   return getTransport().call("git_rollback_file", { path, file })
 }
-
 
 export async function gitAddFiles(
   path: string,
@@ -478,7 +431,6 @@ export async function gitAddFiles(
 }
 
 // Window management commands
-
 
 export async function gitLog(
   path: string,
@@ -494,14 +446,12 @@ export async function gitLog(
   })
 }
 
-
 export async function gitCommitBranches(
   path: string,
   commit: string
 ): Promise<string[]> {
   return getTransport().call("git_commit_branches", { path, commit })
 }
-
 
 export async function gitReset(
   path: string,
@@ -512,5 +462,3 @@ export async function gitReset(
 }
 
 // Terminal commands
-
-

@@ -2,10 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useTranslations } from "next-intl"
-import {
-  closePetWindow,
-  showPetContextMenu,
-} from "@/lib/pet/api"
+import { closePetWindow, showPetContextMenu } from "@/lib/pet/api"
 import { disposeTauriListener } from "@/lib/tauri-listener"
 import { isDesktop } from "@/lib/transport"
 

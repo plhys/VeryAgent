@@ -63,7 +63,10 @@ import type {
 } from "@/lib/types"
 import { copyTextToClipboard } from "@/lib/utils"
 import { VirtualizedMessageThread } from "@/components/message/virtualized-message-thread"
-import { MessageNavDots, type NavDotEntry } from "@/components/message/message-nav-dots"
+import {
+  MessageNavDots,
+  type NavDotEntry,
+} from "@/components/message/message-nav-dots"
 import type { MessageScrollContextValue } from "@/components/message/message-scroll-context"
 import { unescapeComposerText } from "@/lib/composer-copy-text"
 import { useStickToBottomContext } from "use-stick-to-bottom"

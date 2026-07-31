@@ -18,7 +18,8 @@ import {
  * component in WORKBENCH_ROUTES, and add a SidebarNavButton that calls
  * `setRoute("<id>")`. Nothing else needs to change.
  */
-export type WorkbenchRouteId = "conversations" | "automations" | "skillsAndTools"
+export type WorkbenchRouteId =
+  "conversations" | "automations" | "skillsAndTools"
 
 interface WorkbenchRouteContextValue {
   routeId: WorkbenchRouteId

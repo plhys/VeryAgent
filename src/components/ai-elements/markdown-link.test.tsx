@@ -102,7 +102,9 @@ describe("MarkdownLink", () => {
   describe("veryagent:// reference badges", () => {
     it("renders a session link as a session badge (conversation glyph, no agent icon or status dot)", () => {
       render(
-        <MarkdownLink href="veryagent://session/codex_abc">My chat</MarkdownLink>
+        <MarkdownLink href="veryagent://session/codex_abc">
+          My chat
+        </MarkdownLink>
       )
       // It's a badge, not a clickable link.
       expect(screen.queryByRole("button")).toBeNull()
@@ -187,7 +189,9 @@ describe("MarkdownLink", () => {
       // Path-less pasted bytes serialize to this inert display uri; the badge
       // name is the link text the composer wrote.
       render(
-        <MarkdownLink href="veryagent://embedded/abc-123">report.pdf</MarkdownLink>
+        <MarkdownLink href="veryagent://embedded/abc-123">
+          report.pdf
+        </MarkdownLink>
       )
       // It's a badge, not a clickable link (nothing to open — bytes are
       // appended out of band as a resource block on send).

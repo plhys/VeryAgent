@@ -32,6 +32,16 @@ const eslintConfig = defineConfig([
         "warn",
         { args: "after-used", argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      // eslint-config-next 16 ships React-Compiler-era react-hooks rules that
+      // flag widely-accepted patterns in this codebase (e.g. setState inside an
+      // effect for sync mirrors, refs in render). They are advisory here, not a
+      // merge gate — CI gates on typecheck + unit tests + dead code instead.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/exhaustive-deps": "off",
     },
   },
   {

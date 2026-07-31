@@ -31,9 +31,7 @@ import { Button } from "@/components/ui/button"
 import { AgentIcon } from "@/components/agent-icon"
 import { ImageGenerationConfigDialog } from "@/components/skills-and-tools/image-generation-config-dialog"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
-import {
-  invalidateAgentSkillsCache,
-} from "@/hooks/use-agent-skills"
+import { invalidateAgentSkillsCache } from "@/hooks/use-agent-skills"
 import {
   refreshEnabledSkillIds,
   useEnabledSkillIds,
@@ -83,13 +81,26 @@ const SOURCE_ORDER: Record<SkillDisplayGroup, number> = {
 // within the same source; not shown as filter chips.
 const CATEGORY_ORDER: Record<string, number> = {
   // Experts
-  discovery: 1, planning: 2, execution: 3, quality: 4,
-  debugging: 5, review: 6, meta: 7, creative: 8,
+  discovery: 1,
+  planning: 2,
+  execution: 3,
+  quality: 4,
+  debugging: 5,
+  review: 6,
+  meta: 7,
+  creative: 8,
   // Science
-  ideation: 11, design: 12, analysis: 13,
-  visualization: 14, evaluation: 15, literature: 16,
+  ideation: 11,
+  design: 12,
+  analysis: 13,
+  visualization: 14,
+  evaluation: 15,
+  literature: 16,
   // Office
-  general: 21, presentations: 22, documents: 23, spreadsheets: 24,
+  general: 21,
+  presentations: 22,
+  documents: 23,
+  spreadsheets: 24,
 }
 
 const EXPERT_ICONS: Record<string, typeof Lightbulb> = {
@@ -288,9 +299,15 @@ function SkillCard({
                   {isToggling ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : enabled ? (
-                    isZh ? "移除" : "Remove"
+                    isZh ? (
+                      "移除"
+                    ) : (
+                      "Remove"
+                    )
+                  ) : isZh ? (
+                    "添加"
                   ) : (
-                    isZh ? "添加" : "Add"
+                    "Add"
                   )}
                 </Button>
               </div>
@@ -301,7 +318,8 @@ function SkillCard({
           <Badge variant="outline" className="text-[0.625rem]">
             {(() => {
               const group = skillDisplayGroup(skill)
-              if (group === "creative") return isZh ? "艺术设计" : "Art & Design"
+              if (group === "creative")
+                return isZh ? "艺术设计" : "Art & Design"
               if (group === "expert") return isZh ? "编程" : "Coding"
               if (group === "science") return isZh ? "科研" : "Science"
               return isZh ? "办公" : "Office"
@@ -352,7 +370,9 @@ function PluginCard({
   const specType = (plugin.spec as Record<string, unknown>)?.type ?? ""
   const transportBadge =
     specType === "stdio"
-      ? locale.toLowerCase().startsWith("zh") ? "本地进程" : "Local"
+      ? locale.toLowerCase().startsWith("zh")
+        ? "本地进程"
+        : "Local"
       : specType === "sse"
         ? "SSE"
         : specType === "http" || specType === "streamable-http"
@@ -415,13 +435,18 @@ function PluginCard({
 /*  Enabled Tab (shows enabled skills + enabled plugins, with toggles) */
 /* ------------------------------------------------------------------ */
 
-function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshKey: number }) {
+function EnabledTab({
+  onToggled,
+  refreshKey,
+}: {
+  onToggled: () => void
+  refreshKey: number
+}) {
   const t = useTranslations("SkillsAndTools")
   const locale = useLocale()
   const navigatorLocale =
     typeof navigator !== "undefined" ? (navigator.language ?? locale) : locale
-  const { fresh, currentAgent, lockedAgentType } =
-    useSkillsPageAgentContext()
+  const { fresh, currentAgent, lockedAgentType } = useSkillsPageAgentContext()
   const { enabledIds } = useEnabledSkillIds(lockedAgentType, true)
 
   // Load unified skill list to know source (expert / science / office) for toggle API
@@ -434,11 +459,12 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
     try {
       // Isolate sources: one failing API (e.g. unregistered science_list)
       // must not wipe the whole warehouse.
-      const [expertsResult, scienceResult, officeResult] = await Promise.allSettled([
-        expertsList(),
-        scienceList(),
-        officecliListSkills(),
-      ])
+      const [expertsResult, scienceResult, officeResult] =
+        await Promise.allSettled([
+          expertsList(),
+          scienceList(),
+          officecliListSkills(),
+        ])
       const experts =
         expertsResult.status === "fulfilled" ? expertsResult.value : []
       const science =
@@ -446,10 +472,16 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
       const officeSkills =
         officeResult.status === "fulfilled" ? officeResult.value : []
       if (expertsResult.status === "rejected") {
-        console.warn("[SkillsAndTools] expertsList failed:", expertsResult.reason)
+        console.warn(
+          "[SkillsAndTools] expertsList failed:",
+          expertsResult.reason
+        )
       }
       if (scienceResult.status === "rejected") {
-        console.warn("[SkillsAndTools] scienceList failed:", scienceResult.reason)
+        console.warn(
+          "[SkillsAndTools] scienceList failed:",
+          scienceResult.reason
+        )
       }
       if (officeResult.status === "rejected") {
         console.warn(
@@ -508,21 +540,36 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
       try {
         if (source === "expert") {
           if (currentlyEnabled) {
-            await expertsUnlinkFromAgent({ expertId: skillId, agentType: lockedAgentType })
+            await expertsUnlinkFromAgent({
+              expertId: skillId,
+              agentType: lockedAgentType,
+            })
           } else {
-            await expertsLinkToAgent({ expertId: skillId, agentType: lockedAgentType })
+            await expertsLinkToAgent({
+              expertId: skillId,
+              agentType: lockedAgentType,
+            })
           }
         } else if (source === "science") {
           if (currentlyEnabled) {
-            await scienceUnlinkFromAgent({ skillId, agentType: lockedAgentType })
+            await scienceUnlinkFromAgent({
+              skillId,
+              agentType: lockedAgentType,
+            })
           } else {
             await scienceLinkToAgent({ skillId, agentType: lockedAgentType })
           }
         } else {
           if (currentlyEnabled) {
-            await officecliSkillUnlinkFromAgent({ skillId, agentType: lockedAgentType })
+            await officecliSkillUnlinkFromAgent({
+              skillId,
+              agentType: lockedAgentType,
+            })
           } else {
-            await officecliSkillLinkToAgent({ skillId, agentType: lockedAgentType })
+            await officecliSkillLinkToAgent({
+              skillId,
+              agentType: lockedAgentType,
+            })
           }
         }
         const agentName = currentAgent?.name ?? AGENT_LABELS[lockedAgentType]
@@ -545,7 +592,15 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         setTogglingSkillId(null)
       }
     },
-    [currentAgent?.name, enabledIds, fetchSkills, lockedAgentType, navigatorLocale, onToggled, t]
+    [
+      currentAgent?.name,
+      enabledIds,
+      fetchSkills,
+      lockedAgentType,
+      navigatorLocale,
+      onToggled,
+      t,
+    ]
   )
 
   // Load plugins
@@ -602,7 +657,8 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
           prev.map((p) => (p.id === serverId ? { ...p, apps: newApps } : p))
         )
 
-        const agentName = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
+        const agentName =
+          currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
         toast.success(
           navigatorLocale.toLowerCase().startsWith("zh")
             ? enable
@@ -621,10 +677,20 @@ function EnabledTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         setTogglingPluginId(null)
       }
     },
-    [currentAgent?.name, fetchPlugins, lockedAgentType, navigatorLocale, pluginAgentType, plugins, onToggled, t]
+    [
+      currentAgent?.name,
+      fetchPlugins,
+      lockedAgentType,
+      navigatorLocale,
+      pluginAgentType,
+      plugins,
+      onToggled,
+      t,
+    ]
   )
 
-  const agentLabel = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
+  const agentLabel =
+    currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
 
   if (!fresh) {
     return (
@@ -825,13 +891,22 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
       try {
         if (source === "expert") {
           if (currentlyEnabled) {
-            await expertsUnlinkFromAgent({ expertId: skillId, agentType: lockedAgentType })
+            await expertsUnlinkFromAgent({
+              expertId: skillId,
+              agentType: lockedAgentType,
+            })
           } else {
-            await expertsLinkToAgent({ expertId: skillId, agentType: lockedAgentType })
+            await expertsLinkToAgent({
+              expertId: skillId,
+              agentType: lockedAgentType,
+            })
           }
         } else if (source === "science") {
           if (currentlyEnabled) {
-            await scienceUnlinkFromAgent({ skillId, agentType: lockedAgentType })
+            await scienceUnlinkFromAgent({
+              skillId,
+              agentType: lockedAgentType,
+            })
           } else {
             await scienceLinkToAgent({ skillId, agentType: lockedAgentType })
           }
@@ -978,11 +1053,16 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
 /*  Plugins Tab (MCP servers scoped to current agent)                 */
 /* ------------------------------------------------------------------ */
 
-function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshKey: number }) {
+function PluginsTab({
+  onToggled,
+  refreshKey,
+}: {
+  onToggled: () => void
+  refreshKey: number
+}) {
   const t = useTranslations("SkillsAndTools")
   const locale = useLocale()
-  const { currentAgent, lockedAgentType } =
-    useSkillsPageAgentContext()
+  const { currentAgent, lockedAgentType } = useSkillsPageAgentContext()
   const pluginAgentType = useMemo(
     () => agentTypeToMcpAppType(lockedAgentType),
     [lockedAgentType]
@@ -1029,7 +1109,8 @@ function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
           prev.map((p) => (p.id === serverId ? { ...p, apps: newApps } : p))
         )
 
-        const agentName = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
+        const agentName =
+          currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
         toast.success(
           locale.toLowerCase().startsWith("zh")
             ? enable
@@ -1048,14 +1129,24 @@ function PluginsTab({ onToggled, refreshKey }: { onToggled: () => void; refreshK
         setTogglingId(null)
       }
     },
-    [currentAgent?.name, fetchData, locale, lockedAgentType, pluginAgentType, plugins, onToggled, t]
+    [
+      currentAgent?.name,
+      fetchData,
+      locale,
+      lockedAgentType,
+      pluginAgentType,
+      plugins,
+      onToggled,
+      t,
+    ]
   )
 
   const handleManagePlugins = useCallback(() => {
     openSettingsWindow("mcp")
   }, [])
 
-  const agentLabel = currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
+  const agentLabel =
+    currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
 
   // Split plugins into two groups: enabled for current agent, and others
   const enabledPlugins = useMemo(
@@ -1189,7 +1280,7 @@ interface SkillsPageAgentContext {
   availableAgents: SkillsPageAgent[]
   lockedAgentType: AgentType | null
   currentAgent: SkillsPageAgent | null
-  }
+}
 
 function useSkillsPageAgentContext(): SkillsPageAgentContext {
   const { agents, fresh } = useAcpAgents()
@@ -1220,7 +1311,7 @@ function useSkillsPageAgentContext(): SkillsPageAgentContext {
     availableAgents,
     lockedAgentType,
     currentAgent,
-      }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1315,14 +1406,20 @@ export function SkillsAndToolsPage() {
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
-            <EnabledTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
+            <EnabledTab
+              refreshKey={refreshKey}
+              onToggled={handleToggleHappened}
+            />
           </TabsContent>
           <TabsContent
             value="plugins"
             forceMount
             className="scrollbar-thin mt-0 flex-1 overflow-auto px-1 md:px-2"
           >
-            <PluginsTab refreshKey={refreshKey} onToggled={handleToggleHappened} />
+            <PluginsTab
+              refreshKey={refreshKey}
+              onToggled={handleToggleHappened}
+            />
           </TabsContent>
         </Tabs>
       </div>

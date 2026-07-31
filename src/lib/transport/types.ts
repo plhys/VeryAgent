@@ -16,9 +16,7 @@ export interface RemoteTransportConfig {
  * Mirrors `DetachReason` in `src-tauri/src/web/ws_attach.rs`.
  */
 export type AttachDetachReason =
-  | "connection_gone"
-  | "lagged"
-  | "server_shutdown"
+  "connection_gone" | "lagged" | "server_shutdown"
 
 /**
  * Per-subscription callbacks delivered by `EventStream.attach`. Exactly one

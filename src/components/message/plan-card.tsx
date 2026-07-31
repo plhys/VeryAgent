@@ -20,10 +20,7 @@ import {
 // two surfaces never drift.
 
 export type StatusKey =
-  | "status.completed"
-  | "status.inProgress"
-  | "status.pending"
-  | "status.unknown"
+  "status.completed" | "status.inProgress" | "status.pending" | "status.unknown"
 
 export function getStatusKey(status: string): StatusKey {
   switch (status) {
@@ -39,10 +36,7 @@ export function getStatusKey(status: string): StatusKey {
 }
 
 export type PriorityKey =
-  | "priority.high"
-  | "priority.medium"
-  | "priority.low"
-  | "priority.unknown"
+  "priority.high" | "priority.medium" | "priority.low" | "priority.unknown"
 
 export function getPriorityKey(priority: string): PriorityKey {
   switch (priority) {

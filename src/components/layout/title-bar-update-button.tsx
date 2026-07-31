@@ -31,7 +31,11 @@ export function TitleBarUpdateButton({ className }: { className?: string }) {
   const restarting =
     isRestarting || restartCountdown !== null || state.status === "restarting"
   const show =
-    !!availableVersion || ready || isUpdating || restarting || state.status === "error"
+    !!availableVersion ||
+    ready ||
+    isUpdating ||
+    restarting ||
+    state.status === "error"
 
   if (!show) return null
 

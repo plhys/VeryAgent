@@ -153,7 +153,9 @@ export function MarkdownImage({
 
   if (!src) {
     // No source — render a broken-image placeholder without a context menu.
-    return <span className="text-muted-foreground italic">{alt || "(image)"}</span>
+    return (
+      <span className="text-muted-foreground italic">{alt || "(image)"}</span>
+    )
   }
 
   return (
@@ -174,15 +176,15 @@ export function MarkdownImage({
             <ImageIcon className="size-4" />
             {copyingImage ? t("copyingImage") : t("copyImage")}
           </ContextMenuItem>
-<ContextMenuItem onSelect={handleCopyUrl}>
-          <LinkIcon className="size-4" />
-          {t("copyUrl")}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={handleDownloadImage}>
-          <Download className="size-4" />
-          {t("downloadImage")}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
+          <ContextMenuItem onSelect={handleCopyUrl}>
+            <LinkIcon className="size-4" />
+            {t("copyUrl")}
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={handleDownloadImage}>
+            <Download className="size-4" />
+            {t("downloadImage")}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuItem onSelect={handleReferenceToChat}>
             <SparklesIcon className="size-4" />
             {t("referenceToChat")}

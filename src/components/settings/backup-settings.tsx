@@ -195,7 +195,9 @@ export function BackupSettings() {
     const { open } = await import("@tauri-apps/plugin-dialog")
     const picked = await open({
       multiple: false,
-      filters: [{ name: "VeryAgent backup", extensions: ["veryagentbak", "zip"] }],
+      filters: [
+        { name: "VeryAgent backup", extensions: ["veryagentbak", "zip"] },
+      ],
     })
     if (typeof picked !== "string") return
     const name = picked.split(/[\\/]/).pop() ?? picked

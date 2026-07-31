@@ -289,10 +289,7 @@ const ConversationTabView = memo(function ConversationTabView({
     useState<ComposerInjectContent | null>(null)
   const configVisionEnabled = useVisionBridgeEnabledForAgent(selectedAgent)
   const [visionEnabled, setVisionEnabled] = useState(configVisionEnabled)
-  const handleToggleVision = useCallback(
-    () => setVisionEnabled((v) => !v),
-    []
-  )
+  const handleToggleVision = useCallback(() => setVisionEnabled((v) => !v), [])
   const pendingSkillInject = useConversationSkillInjectStore((s) => s.request)
   const clearPendingSkillInject = useConversationSkillInjectStore(
     (s) => s.clearRequest
@@ -1311,7 +1308,6 @@ const ConversationTabView = memo(function ConversationTabView({
   const showDraftHeader = !hasPersistedConversation && !hasSentMessage
   const isWelcomeMode = showDraftHeader
 
-
   useEffect(() => {
     if (!pendingSkillInject) return
     if (!isActive) return
@@ -1618,12 +1614,8 @@ export function ConversationDetailPanel() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const isTileMode = useTabStore((s) => s.isTileMode)
-  const {
-    openNewConversationTab,
-    closeTab,
-    switchTab,
-    onPreviewTabReplaced,
-  } = useTabActions()
+  const { openNewConversationTab, closeTab, switchTab, onPreviewTabReplaced } =
+    useTabActions()
   const newConversation = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
     if (!activeTab || activeTab.conversationId != null) return null
@@ -1823,7 +1815,6 @@ export function ConversationDetailPanel() {
     if (!activeTabId) return
     closeTab(activeTabId)
   }, [activeTabId, closeTab])
-
 
   // Narrow reactive reads for the ACTIVE conversation only — a background
   // conversation's streaming token no longer re-renders this panel. `canExport`

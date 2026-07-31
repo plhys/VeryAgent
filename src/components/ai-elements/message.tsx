@@ -57,17 +57,17 @@ export const MessageContent = ({
   className,
   ...props
 }: MessageContentProps) => (
-<div
-      className={cn(
-        "is-user:dark relative flex min-w-0 flex-col gap-2 overflow-hidden text-sm",
-        "group-[.is-user]:ml-auto group-[.is-user]:w-fit group-[.is-user]:max-w-md group-[.is-user]:rounded-tl-2xl group-[.is-user]:rounded-tr-2xl group-[.is-user]:rounded-bl-2xl group-[.is-user]:rounded-br-none group-[.is-user]:px-4 group-[.is-user]:py-2.5 group-[.is-user]:text-foreground",
-        "group-[.is-user]:bg-primary/[0.06] dark:group-[.is-user]:bg-primary/[0.12] group-[.is-user]:shadow-sm",
-        "group-[.is-user]:ring-1 group-[.is-user]:ring-primary/[0.08] dark:group-[.is-user]:ring-primary/[0.15]",
-        "group-[.is-assistant]:w-full group-[.is-assistant]:text-foreground",
-        className
-      )}
-      {...props}
-    >
+  <div
+    className={cn(
+      "is-user:dark relative flex min-w-0 flex-col gap-2 overflow-hidden text-sm",
+      "group-[.is-user]:ml-auto group-[.is-user]:w-fit group-[.is-user]:max-w-md group-[.is-user]:rounded-tl-2xl group-[.is-user]:rounded-tr-2xl group-[.is-user]:rounded-bl-2xl group-[.is-user]:rounded-br-none group-[.is-user]:px-4 group-[.is-user]:py-2.5 group-[.is-user]:text-foreground",
+      "group-[.is-user]:bg-primary/[0.06] dark:group-[.is-user]:bg-primary/[0.12] group-[.is-user]:shadow-sm",
+      "group-[.is-user]:ring-1 group-[.is-user]:ring-primary/[0.08] dark:group-[.is-user]:ring-primary/[0.15]",
+      "group-[.is-assistant]:w-full group-[.is-assistant]:text-foreground",
+      className
+    )}
+    {...props}
+  >
     {children}
   </div>
 )
@@ -404,8 +404,7 @@ function MessageResponseImpl({
 
 export const MessageResponse = memo(
   MessageResponseImpl,
-  (prevProps, nextProps) =>
-    prevProps.children === nextProps.children
+  (prevProps, nextProps) => prevProps.children === nextProps.children
 )
 
 MessageResponse.displayName = "MessageResponse"

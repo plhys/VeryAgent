@@ -182,9 +182,7 @@ export const ReasoningTrigger = memo(
         if (nextDuration === undefined) {
           return <span>{t("thoughtForFewSeconds")}</span>
         }
-        return (
-          <span>{t("thoughtForSeconds", { duration: nextDuration })}</span>
-        )
+        return <span>{t("thoughtForSeconds", { duration: nextDuration })}</span>
       },
       [t]
     )

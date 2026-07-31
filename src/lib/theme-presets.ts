@@ -4,9 +4,7 @@
  * 主题色预设标识符。当前仅保留 neutral（默认灰阶）。
  * 实际 CSS 变量值定义在 src/app/globals.css 的 [data-theme="..."] 选择器中。
  */
-export const THEME_COLORS = [
-  "neutral",
-] as const
+export const THEME_COLORS = ["neutral"] as const
 
 export type ThemeColor = (typeof THEME_COLORS)[number]
 

@@ -138,10 +138,7 @@ export type AppUpdateErrorKind =
 
 /** Why the release channel could not be used (for precise UI copy). */
 export type AppUpdateSourceFailureReason =
-  | "not_found"
-  | "network"
-  | "timeout"
-  | "unknown"
+  "not_found" | "network" | "timeout" | "unknown"
 
 export interface AppUpdateErrorInfo {
   kind: AppUpdateErrorKind
@@ -371,7 +368,12 @@ export function normalizeAppUpdateError(error: unknown): AppUpdateErrorInfo {
   // only one side mis-labels "no release yet" / 404 as a generic unknown.
   const appError = extractAppCommandError(error)
   const rawMessage = toErrorMessage(error)
-  const combined = [rawMessage, appError?.message, appError?.detail, appError?.code]
+  const combined = [
+    rawMessage,
+    appError?.message,
+    appError?.detail,
+    appError?.code,
+  ]
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .join("\n")
   const haystack = combined.toLowerCase()

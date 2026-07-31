@@ -19,18 +19,15 @@ import type {
   WorkspaceSnapshotResponse,
 } from "../types"
 
-
 export async function getHomeDirectory(): Promise<string> {
   return getTransport().call("get_home_directory")
 }
-
 
 export async function listDirectoryEntries(
   path: string
 ): Promise<DirectoryEntry[]> {
   return getTransport().call("list_directory_entries", { path })
 }
-
 
 export async function listDirectoryWithFiles(
   path: string
@@ -93,7 +90,6 @@ export class EmptyAttachmentError extends Error {
     this.fileName = fileName
   }
 }
-
 
 export function isEmptyAttachmentError(err: unknown): boolean {
   if (err instanceof EmptyAttachmentError) return true
@@ -219,7 +215,6 @@ export async function uploadLocalPathToRemote(
 // window is a Tauri runtime but its file ops must target the remote
 // host — it goes through the `remote_*_workspace_*` proxy commands.
 
-
 export interface UploadWorkspaceFileResult {
   path: string
   name: string
@@ -236,7 +231,6 @@ export interface UploadWorkspaceFileResult {
 function isWorkspaceFileApiAvailable(): boolean {
   return !isDesktop() || isRemoteDesktopMode()
 }
-
 
 function assertWorkspaceFileApiAvailable(action: string): void {
   if (!isWorkspaceFileApiAvailable()) {
@@ -276,7 +270,6 @@ async function workspaceFileFetch(
   }
   return res
 }
-
 
 export interface UploadWorkspaceFileArgs {
   rootPath: string
@@ -393,19 +386,16 @@ export async function uploadWorkspaceFile(
   })
 }
 
-
 export interface RemoteWorkspaceUploadPathEntry {
   localPath: string
   relativePath?: string | null
 }
-
 
 export interface RemoteWorkspaceUploadPathsResult {
   transferId: string
   files: UploadWorkspaceFileResult[]
   bytes: number
 }
-
 
 export async function uploadWorkspaceLocalPathsToRemote(args: {
   rootPath: string
@@ -436,7 +426,6 @@ export async function uploadWorkspaceLocalPathsToRemote(args: {
   }
 }
 
-
 export interface WorkspaceTransferProgress {
   transferId: string
   direction: "upload" | "download"
@@ -446,7 +435,6 @@ export interface WorkspaceTransferProgress {
   path?: string | null
   error?: string | null
 }
-
 
 export async function listenWorkspaceTransferProgress(
   handler: (event: WorkspaceTransferProgress) => void
@@ -459,7 +447,6 @@ export async function listenWorkspaceTransferProgress(
   )
 }
 
-
 export async function cancelWorkspaceTransfer(
   transferId: string
 ): Promise<boolean> {
@@ -467,7 +454,6 @@ export async function cancelWorkspaceTransfer(
     transferId,
   })
 }
-
 
 function isRemoteAuthenticationFailed(err: unknown): boolean {
   return (
@@ -477,7 +463,6 @@ function isRemoteAuthenticationFailed(err: unknown): boolean {
     (err as { code?: unknown }).code === "authentication_failed"
   )
 }
-
 
 export function isUploadAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError"
@@ -491,7 +476,6 @@ interface WorkspaceDownloadTicket {
 }
 
 type WorkspaceDownloadKind = "file" | "dir"
-
 
 function openBrowserDownloadUrl(url: string, filename: string): void {
   const anchor = document.createElement("a")
@@ -523,12 +507,10 @@ async function createWorkspaceDownloadTicket(args: {
  */
 export const WORKSPACE_DOWNLOAD_CANCELLED = "cancelled" as const
 
-
 export type WorkspaceDownloadResult =
   | { status: "started" }
   | { status: "done"; savedPath?: string; bytes?: number; transferId?: string }
   | { status: typeof WORKSPACE_DOWNLOAD_CANCELLED }
-
 
 export async function downloadWorkspaceFile(
   rootPath: string,
@@ -554,7 +536,6 @@ export async function downloadWorkspaceFile(
   openBrowserDownloadUrl(ticket.url, ticket.filename || fileName)
   return { status: "started" }
 }
-
 
 export async function downloadWorkspaceDir(
   rootPath: string,
@@ -626,7 +607,6 @@ async function downloadWorkspaceViaRemoteProxy(opts: {
 
 // File tree and git log commands
 
-
 export async function getFileTree(
   path: string,
   maxDepth?: number
@@ -636,7 +616,6 @@ export async function getFileTree(
     maxDepth: maxDepth ?? null,
   })
 }
-
 
 export async function startWorkspaceStateStream(
   rootPath: string,
@@ -648,7 +627,6 @@ export async function startWorkspaceStateStream(
   })
 }
 
-
 export async function stopWorkspaceStateStream(
   rootPath: string,
   wantsTreeGit = true
@@ -659,7 +637,6 @@ export async function stopWorkspaceStateStream(
   })
 }
 
-
 export async function getWorkspaceSnapshot(
   rootPath: string,
   sinceSeq?: number
@@ -669,7 +646,6 @@ export async function getWorkspaceSnapshot(
     sinceSeq: sinceSeq ?? null,
   })
 }
-
 
 export async function readFileBase64(
   path: string,
@@ -697,7 +673,6 @@ export async function readWorkspaceFileBase64(
   })
 }
 
-
 export async function readFilePreview(
   rootPath: string,
   path: string
@@ -705,14 +680,12 @@ export async function readFilePreview(
   return getTransport().call("read_file_preview", { rootPath, path })
 }
 
-
 export async function readFileForEdit(
   rootPath: string,
   path: string
 ): Promise<FileEditContent> {
   return getTransport().call("read_file_for_edit", { rootPath, path })
 }
-
 
 export async function saveFileContent(
   rootPath: string,
@@ -728,7 +701,6 @@ export async function saveFileContent(
   })
 }
 
-
 export async function saveFileCopy(
   rootPath: string,
   path: string,
@@ -740,7 +712,6 @@ export async function saveFileCopy(
     content,
   })
 }
-
 
 export async function renameFileTreeEntry(
   rootPath: string,
@@ -754,14 +725,12 @@ export async function renameFileTreeEntry(
   })
 }
 
-
 export async function deleteFileTreeEntry(
   rootPath: string,
   path: string
 ): Promise<void> {
   return getTransport().call("delete_file_tree_entry", { rootPath, path })
 }
-
 
 export async function createFileTreeEntry(
   rootPath: string,
@@ -776,7 +745,6 @@ export async function createFileTreeEntry(
     kind,
   })
 }
-
 
 export async function uploadBackupWeb(
   file: File,
@@ -823,4 +791,3 @@ export async function uploadBackupWeb(
 }
 
 /** Validate a backup (desktop: by path). */
-

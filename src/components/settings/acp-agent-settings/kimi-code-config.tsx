@@ -3,15 +3,41 @@ import { useTranslations } from "next-intl"
 import { Eye, EyeOff, Loader2, RefreshCw, Save } from "lucide-react"
 import { toast } from "sonner"
 import { toErrorMessage } from "@/lib/app-error"
-import { fetchModelProviderModels, acpFetchKimiModels, acpUpdateKimiCodeConfig } from "@/lib/api"
-import type { AcpAgentInfo, ModelProviderInfo, ProviderModelItem } from "@/lib/types"
+import {
+  fetchModelProviderModels,
+  acpFetchKimiModels,
+  acpUpdateKimiCodeConfig,
+} from "@/lib/api"
+import type {
+  AcpAgentInfo,
+  ModelProviderInfo,
+  ProviderModelItem,
+} from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import type { KimiAuthMode, KimiInterfaceType, KimiNativeAuthType, KimiEndpointRegion, KimiInterfaceTypeMeta, KimiManagedConfig } from "./types"
-import { KIMI_BASE_URL_INTERNATIONAL, KIMI_BASE_URL_CHINA, KIMI_MODEL_PLACEHOLDER, KIMI_INTERFACE_TYPES } from "./types"
+import type {
+  KimiAuthMode,
+  KimiInterfaceType,
+  KimiNativeAuthType,
+  KimiEndpointRegion,
+  KimiInterfaceTypeMeta,
+  KimiManagedConfig,
+} from "./types"
+import {
+  KIMI_BASE_URL_INTERNATIONAL,
+  KIMI_BASE_URL_CHINA,
+  KIMI_MODEL_PLACEHOLDER,
+  KIMI_INTERFACE_TYPES,
+} from "./types"
 import { findEnvValue, normalizeOpenAiCompatibleBaseUrl } from "./shared"
 
 export function kimiInterfaceMeta(
@@ -86,9 +112,7 @@ export function KimiCodeConfigPanel({
   // Determine initial auth mode: if model_provider_id is set, start in
   // model_provider mode; otherwise, infer from the config credentials.
   const [mode, setMode] = useState<KimiAuthMode>(() =>
-    agent.model_provider_id != null
-      ? "model_provider"
-      : kimiInitialMode(config)
+    agent.model_provider_id != null ? "model_provider" : kimiInitialMode(config)
   )
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(
     () => agent.model_provider_id ?? null
@@ -108,10 +132,7 @@ export function KimiCodeConfigPanel({
   const [saving, setSaving] = useState(false)
 
   // Filter model providers that serve kimi_code.
-  const kimiModelProviders = useMemo(
-    () => modelProviders,
-    [modelProviders]
-  )
+  const kimiModelProviders = useMemo(() => modelProviders, [modelProviders])
   const [showKey, setShowKey] = useState(false)
 
   // api-key mode (veryagent-managed config.toml provider + model)
@@ -203,7 +224,9 @@ export function KimiCodeConfigPanel({
       onSaveModelProvider(
         {
           // Kimi appends `/chat/completions` itself; bare host roots fail silently.
-          KIMI_MODEL_BASE_URL: normalizeOpenAiCompatibleBaseUrl(provider.api_url),
+          KIMI_MODEL_BASE_URL: normalizeOpenAiCompatibleBaseUrl(
+            provider.api_url
+          ),
           KIMI_MODEL_API_KEY: provider.api_key,
           KIMI_MODEL_NAME: selectedProviderModel.trim() || provider.model || "",
         },
@@ -398,9 +421,7 @@ export function KimiCodeConfigPanel({
             {kimiModelProviders.length > 0 ? (
               <Select
                 value={
-                  selectedProviderId != null
-                    ? String(selectedProviderId)
-                    : ""
+                  selectedProviderId != null ? String(selectedProviderId) : ""
                 }
                 onValueChange={(value) =>
                   setSelectedProviderId(value ? Number(value) : null)
@@ -436,9 +457,7 @@ export function KimiCodeConfigPanel({
                 size="sm"
                 className="h-7 px-2 text-[11px]"
                 disabled={
-                  saving ||
-                  providerModelsLoading ||
-                  selectedProviderId == null
+                  saving || providerModelsLoading || selectedProviderId == null
                 }
                 onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
               >

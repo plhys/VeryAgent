@@ -632,8 +632,7 @@ class WorkspaceStateStore {
 
   private patchState = (
     updater:
-      | WorkspaceStateView
-      | ((prev: WorkspaceStateView) => WorkspaceStateView)
+      WorkspaceStateView | ((prev: WorkspaceStateView) => WorkspaceStateView)
   ) => {
     this.state =
       typeof updater === "function"

@@ -1,17 +1,11 @@
-import {
-  getTransport,
-} from "../transport"
-import type {
-  AgentType,
-} from "../types"
-
+import { getTransport } from "../transport"
+import type { AgentType } from "../types"
 
 export interface BackupManifestEntry {
   path: string
   size: number
   sha256: string
 }
-
 
 export interface BackupManifest {
   formatVersion: number
@@ -25,7 +19,6 @@ export interface BackupManifest {
   entries: BackupManifestEntry[]
 }
 
-
 export type BackupPhase =
   | "snapshotting"
   | "archiving"
@@ -38,7 +31,6 @@ export type BackupPhase =
   | "cancelled"
   | "error"
 
-
 export interface BackupProgress {
   opId: string
   phase: BackupPhase
@@ -48,7 +40,6 @@ export interface BackupProgress {
   error?: string | null
 }
 
-
 export interface BackupPreview {
   encrypted: boolean
   needsPassphrase: boolean
@@ -56,7 +47,6 @@ export interface BackupPreview {
   compatible: boolean
   rejectReason?: string | null
 }
-
 
 export interface StagedRestore {
   stagingDir: string
@@ -71,7 +61,6 @@ export type ExternalRestoreMode =
   | { mode: "skip" }
   | { mode: "side_location" }
   | { mode: "original_locations"; on_conflict: "overwrite" | "skip_existing" }
-
 
 export interface BackupExportOptions {
   includeExternalTranscripts: boolean
@@ -88,7 +77,6 @@ export async function listenBackupProgress(
 ): Promise<() => void> {
   return getTransport().subscribe<BackupProgress>("backup://progress", handler)
 }
-
 
 export async function cancelBackup(opId: string): Promise<boolean> {
   return getTransport().call<boolean>("backup_cancel", { opId })
@@ -187,7 +175,6 @@ export async function stageRestoreDesktop(args: {
   })
 }
 
-
 export interface StageRestoreWebResult {
   needsRestart: boolean
   restartDelayMs: number
@@ -212,7 +199,6 @@ export async function stageRestoreWeb(args: {
   )
 }
 
-
 export interface ExternalConflict {
   agent: string
   archivePath: string
@@ -232,7 +218,6 @@ export async function scanExternalConflictsDesktop(
   )
 }
 
-
 export async function scanExternalConflictsWeb(
   uploadId: string,
   passphrase?: string | null
@@ -246,22 +231,18 @@ export async function scanExternalConflictsWeb(
 
 // ── Conversation Summary ─────────────────────────────────────────────────────
 
-
 export async function getPinnedSummaryEnabled(): Promise<boolean> {
   return getTransport().call("get_pinned_summary_enabled")
 }
-
 
 export async function setPinnedSummaryEnabled(enabled: boolean): Promise<void> {
   return getTransport().call("set_pinned_summary_enabled", { enabled })
 }
 
-
 export interface SummaryResult {
   summary: string
   model: string
 }
-
 
 export async function generateConversationSummary(
   conversationId: number,
@@ -273,4 +254,3 @@ export async function generateConversationSummary(
   }
   return getTransport().call("generate_conversation_summary", params)
 }
-

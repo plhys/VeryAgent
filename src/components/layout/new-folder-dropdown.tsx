@@ -60,11 +60,17 @@ export function NewFolderDropdown() {
             <FolderOpenDot className="h-3 w-3 shrink-0" />
             {t("openFolder")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setCloneOpen(true)} className="py-1.5">
+          <DropdownMenuItem
+            onSelect={() => setCloneOpen(true)}
+            className="py-1.5"
+          >
             <FolderGit2 className="h-3 w-3 shrink-0" />
             {t("cloneRepository")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openProjectBootWindow()} className="py-1.5">
+          <DropdownMenuItem
+            onSelect={() => openProjectBootWindow()}
+            className="py-1.5"
+          >
             <Rocket className="h-3 w-3 shrink-0" />
             {t("projectBoot")}
           </DropdownMenuItem>

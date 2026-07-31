@@ -79,7 +79,7 @@ export function PetFloating() {
     }
   }, [])
 
-// Entrance animation: scale up from 0 with easing. Re-plays each time the pet
+  // Entrance animation: scale up from 0 with easing. Re-plays each time the pet
   // becomes visible (e.g. entering a conversation window from the welcome state),
   // so it "grows" in every time you open a chat.
   useEffect(() => {

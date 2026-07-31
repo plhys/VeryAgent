@@ -249,7 +249,9 @@ export function PetBubble() {
                 name: tool.name || tool.actionText || "tool",
                 phase: tool.phase || "start",
                 actionText:
-                  tool.actionText !== undefined ? tool.actionText : (tool.name || "tool"),
+                  tool.actionText !== undefined
+                    ? tool.actionText
+                    : tool.name || "tool",
               },
             ]
           })
@@ -454,12 +456,12 @@ export function PetBubble() {
       `}</style>
       <div className="bubble-root">
         {errorMsg && (
-            <div className="bubble bubble--error" ref={setBubbleEl}>
-              <div className="bubble-content">
-                <span className="bubble-error-text">{escapeHtml(errorMsg)}</span>
-              </div>
-              <div className="bubble-tail" />
+          <div className="bubble bubble--error" ref={setBubbleEl}>
+            <div className="bubble-content">
+              <span className="bubble-error-text">{escapeHtml(errorMsg)}</span>
             </div>
+            <div className="bubble-tail" />
+          </div>
         )}
         {!errorMsg && visible && cardData ? (
           <div ref={setBubbleEl}>
@@ -484,9 +486,13 @@ export function PetBubble() {
                         chip.phase === "end" ||
                         !!chip.result
                       // Truncate chip text to keep chips uniform size
-                      const label = (chip.actionText || chip.name || "tool").length > 10
-                        ? (chip.actionText || chip.name || "tool").slice(0, 9) + "…"
-                        : (chip.actionText || chip.name || "tool")
+                      const label =
+                        (chip.actionText || chip.name || "tool").length > 10
+                          ? (chip.actionText || chip.name || "tool").slice(
+                              0,
+                              9
+                            ) + "…"
+                          : chip.actionText || chip.name || "tool"
                       return (
                         <span
                           key={chip.id}

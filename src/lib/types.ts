@@ -372,10 +372,12 @@ export const FEEDBACK_SETTINGS_CHANGED_EVENT = "feedback-settings://changed"
 /** Global side-channel announcing a vision-bridge config save (payload is
  *  `VisionBridgeConfig`). Same cross-window rationale as
  *  [`FEEDBACK_SETTINGS_CHANGED_EVENT`]. */
-export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT = "vision-bridge-settings://changed"
+export const VISION_BRIDGE_SETTINGS_CHANGED_EVENT =
+  "vision-bridge-settings://changed"
 
 /** Payload: `ImageGenerationConfig`. */
-export const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT = "image-generation-settings://changed"
+export const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT =
+  "image-generation-settings://changed"
 
 /** Payload for the global `tabs://changed` side-channel that keeps every
  *  client's open-tab set in sync across desktop + browsers. Mirrors the Rust
@@ -438,10 +440,7 @@ export interface DbConversationDetail {
 }
 
 export type ConversationStatus =
-  | "in_progress"
-  | "pending_review"
-  | "completed"
-  | "cancelled"
+  "in_progress" | "pending_review" | "completed" | "cancelled"
 
 /** Mirrors Rust `ConversationKind` (src-tauri/src/db/entities/conversation.rs).
  *  `loop` rows belong to the Loop Engineering workbench and never appear in
@@ -857,11 +856,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
 
 // ACP connection status (matches Rust ConnectionStatus)
 export type ConnectionStatus =
-  | "connecting"
-  | "connected"
-  | "prompting"
-  | "disconnected"
-  | "error"
+  "connecting" | "connected" | "prompting" | "disconnected" | "error"
 
 export interface PromptCapabilitiesInfo {
   image: boolean
@@ -1002,11 +997,7 @@ export interface AgentDelegationDefaults {
 export type AutomationTriggerKind = "schedule" | "manual"
 export type AutomationIsolation = "worktree_per_run" | "shared_in_root"
 export type AutomationRunStatus =
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "skipped"
+  "running" | "succeeded" | "failed" | "cancelled" | "skipped"
 
 /** Display-only cache so the editor can render a value the live agent no longer
  *  offers (marked unavailable) instead of silently dropping it. */
@@ -1353,9 +1344,7 @@ export type AcpEvent =
 /** Which settings surface drifted (mirror of Rust `ConfigStaleKind`), used to
  *  word the "restart to apply" banner. */
 export type ConfigStaleKind =
-  | "agent_config"
-  | "model_provider"
-  | "image_generation"
+  "agent_config" | "model_provider" | "image_generation"
 
 /** A block of a broadcast user prompt (mirror of Rust `UserMessageBlock`).
  *  Narrower than the persisted `ContentBlock`: only what a viewer needs to
@@ -1757,9 +1746,7 @@ export interface AppUpdateSourceSettings {
   manifestUrl: string
 }
 
-export type AppLocale =
-  | "en"
-  | "zh_cn"
+export type AppLocale = "en" | "zh_cn"
 export type LanguageMode = "system" | "manual"
 
 export interface SystemLanguageSettings {
@@ -2323,10 +2310,7 @@ export interface AgentInstallEvent {
 }
 
 export type OfficecliInstallEventKind =
-  | "started"
-  | "log"
-  | "completed"
-  | "failed"
+  "started" | "log" | "completed" | "failed"
 
 export interface OfficecliInstallEvent {
   task_id: string
@@ -2335,11 +2319,7 @@ export interface OfficecliInstallEvent {
 }
 
 export type OpenWikiInstallEventKind =
-  | "started"
-  | "progress"
-  | "log"
-  | "completed"
-  | "failed"
+  "started" | "progress" | "log" | "completed" | "failed"
 
 export interface OpenWikiInstallEvent {
   task_id: string
@@ -2359,10 +2339,7 @@ export interface WebhookConfig {
 }
 
 export type ChannelConnectionStatus =
-  | "connected"
-  | "connecting"
-  | "disconnected"
-  | "error"
+  "connected" | "connecting" | "disconnected" | "error"
 
 export interface ChatChannelInfo {
   id: number

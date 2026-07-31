@@ -245,8 +245,7 @@ export function buildAgentReadiness(params: {
           badge: t("readiness.badge.notReady"),
           title: t("readiness.title.configNeeded", { name: agent.name }),
           detail: t("readiness.detail.openClawNeedGateway", {
-            path:
-              openClawDiscovery?.configPath ?? "~/.openclaw/openclaw.json",
+            path: openClawDiscovery?.configPath ?? "~/.openclaw/openclaw.json",
           }),
           blockingCheckIds: [],
         }

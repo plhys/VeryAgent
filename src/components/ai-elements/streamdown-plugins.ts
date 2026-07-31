@@ -110,7 +110,9 @@ function ensure(kind: HeavyKind): void {
   } else if (kind === "math") {
     import("@streamdown/math")
       .then((mod) => {
-        loaded.math = mod.createMathPlugin({ singleDollarTextMath: true }) as MathPlugin
+        loaded.math = mod.createMathPlugin({
+          singleDollarTextMath: true,
+        }) as MathPlugin
       })
       .catch(() => {})
       .finally(settle)
@@ -164,7 +166,9 @@ export function detectHeavyPlugins(text: string): HeavyPluginNeeds {
   }
 }
 
-const CJK_ONLY: PluginConfig = { cjk: cjk as unknown as NonNullable<PluginConfig["cjk"]> }
+const CJK_ONLY: PluginConfig = {
+  cjk: cjk as unknown as NonNullable<PluginConfig["cjk"]>,
+}
 
 /**
  * Returns the Streamdown `plugins` config for `text`, loading the heavy engines
@@ -197,7 +201,9 @@ export function useStreamdownPlugins(
 
   return useMemo(() => {
     if (!needCode && !needMath && !needMermaid) return CJK_ONLY
-    const plugins: PluginConfig = { cjk: cjk as unknown as NonNullable<PluginConfig["cjk"]> }
+    const plugins: PluginConfig = {
+      cjk: cjk as unknown as NonNullable<PluginConfig["cjk"]>,
+    }
     if (needCode && loaded.code) plugins.code = loaded.code
     if (needMath && loaded.math) plugins.math = loaded.math
     if (needMermaid && loaded.mermaid) plugins.mermaid = loaded.mermaid

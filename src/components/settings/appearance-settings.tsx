@@ -12,10 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import {
-  useZoomLevel,
-  useWelcomeQuickActions,
-} from "@/hooks/use-appearance"
+import { useZoomLevel, useWelcomeQuickActions } from "@/hooks/use-appearance"
 import {
   DEFAULT_ZOOM_LEVEL,
   ZOOM_LEVELS,
@@ -39,7 +36,9 @@ export function AppearanceSettings() {
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
     if (typeof document === "undefined") return "light"
-    return document.documentElement.classList.contains("dark") ? "dark" : "light"
+    return document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light"
   })
 
   const applyTheme = (mode: ThemeMode) => {
@@ -59,10 +58,7 @@ export function AppearanceSettings() {
   useEffect(() => {
     applyTheme(theme)
     localStorage.setItem("theme", theme)
-    if (
-      typeof window !== "undefined" &&
-      "__TAURI_INTERNALS__" in window
-    ) {
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
       import("@/lib/tauri").then((t) =>
         t.updateAppearanceMode(theme).catch(() => {})
       )

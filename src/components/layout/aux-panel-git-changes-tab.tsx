@@ -84,10 +84,7 @@ interface GitActionTarget {
 }
 
 type DirectoryGitAction =
-  | "add"
-  | "rollback"
-  | "delete-tracked"
-  | "delete-untracked"
+  "add" | "rollback" | "delete-tracked" | "delete-untracked"
 
 interface DirectoryGitCandidateEntry {
   path: string
@@ -123,12 +120,7 @@ const UNTRACKED_ROOT_PATH = "__working_tree_untracked_root__"
 const UNTRACKED_STATUS = "??"
 
 type GitFileState =
-  | "untracked"
-  | "modified"
-  | "staged"
-  | "conflicted"
-  | "deleted"
-  | "renamed"
+  "untracked" | "modified" | "staged" | "conflicted" | "deleted" | "renamed"
 
 function classifyGitFileState(status: string): GitFileState | null {
   const code = status.trim().toUpperCase()

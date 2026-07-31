@@ -40,9 +40,13 @@ describe("rehypePluginsAllowingVeryAgent", () => {
 
   it("clones rather than mutating the shipped sanitize schema", () => {
     // The shipped default must not already contain veryagent, else the fix is moot.
-    expect(hrefProtocols(defaultRehypePlugins.sanitize)).not.toContain("veryagent")
+    expect(hrefProtocols(defaultRehypePlugins.sanitize)).not.toContain(
+      "veryagent"
+    )
     rehypePluginsAllowingVeryAgent(defaultRehypePlugins)
     // Still absent on the original after deriving — we built a new schema.
-    expect(hrefProtocols(defaultRehypePlugins.sanitize)).not.toContain("veryagent")
+    expect(hrefProtocols(defaultRehypePlugins.sanitize)).not.toContain(
+      "veryagent"
+    )
   })
 })

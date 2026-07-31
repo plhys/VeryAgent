@@ -506,7 +506,9 @@ export function extractRevisedPrompt(content: string | null): string | null {
 }
 
 export function extractAspectToken(text: string): string | null {
-  const ratio = text.match(/(?:^|[^0-9])(\d{1,2}\s*[:：/]\s*\d{1,2})(?:[^0-9]|$)/)
+  const ratio = text.match(
+    /(?:^|[^0-9])(\d{1,2}\s*[:：/]\s*\d{1,2})(?:[^0-9]|$)/
+  )
   if (ratio?.[1]) return ratio[1].trim()
   const size = text.match(/(?:^|[^0-9])(\d{3,4}\s*[x×]\s*\d{3,4})(?:[^0-9]|$)/)
   if (size?.[1]) return size[1].trim()
@@ -515,13 +517,21 @@ export function extractAspectToken(text: string): string | null {
   return null
 }
 
-export function extractRequestedImageAspect(rawInput: string | null): string | null {
+export function extractRequestedImageAspect(
+  rawInput: string | null
+): string | null {
   if (!rawInput) return null
   try {
     const parsed = JSON.parse(rawInput)
     if (!parsed || typeof parsed !== "object") return null
     const obj = parsed as Record<string, unknown>
-    for (const key of ["aspect_ratio", "aspectRatio", "image_size", "imageSize", "size"]) {
+    for (const key of [
+      "aspect_ratio",
+      "aspectRatio",
+      "image_size",
+      "imageSize",
+      "size",
+    ]) {
       const value = obj[key]
       if (typeof value === "string" && value.trim()) return value.trim()
     }
@@ -532,9 +542,13 @@ export function extractRequestedImageAspect(rawInput: string | null): string | n
     }
   } catch {
     // Some agents surface raw_input as pretty text rather than JSON.
-    const ratio = rawInput.match(/(?:aspect[_ ]?ratio|比例)["'\s:=]+(\d{1,2}\s*[:：/]\s*\d{1,2})/i)
+    const ratio = rawInput.match(
+      /(?:aspect[_ ]?ratio|比例)["'\s:=]+(\d{1,2}\s*[:：/]\s*\d{1,2})/i
+    )
     if (ratio?.[1]) return ratio[1].trim()
-    const size = rawInput.match(/(?:image[_ ]?size|size|尺寸)["'\s:=]+(\d{3,4}\s*[x×]\s*\d{3,4})/i)
+    const size = rawInput.match(
+      /(?:image[_ ]?size|size|尺寸)["'\s:=]+(\d{3,4}\s*[x×]\s*\d{3,4})/i
+    )
     if (size?.[1]) return size[1].trim()
     const inferred = extractAspectToken(rawInput)
     if (inferred) return inferred
@@ -802,7 +816,11 @@ export function buildStreamingTurnsFromLiveMessage(
             []
           if (fromWire.length === 0) {
             fromOutput = recoverFromText(rawJoined)
-            if (fromOutput.length === 0 && contentText && contentText !== rawJoined) {
+            if (
+              fromOutput.length === 0 &&
+              contentText &&
+              contentText !== rawJoined
+            ) {
               fromOutput = recoverFromText(contentText)
             }
           }

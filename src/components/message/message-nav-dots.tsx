@@ -78,7 +78,10 @@ export const MessageNavDots = memo(function MessageNavDots({
           const isHovered = idx === hoveredIdx
           const baseWidth = scaleWidth(dot.textLength)
           // Hover/active only slightly wider — not a dramatic jump
-          const width = isActive || isHovered ? Math.min(baseWidth + 4, BAR_MAX_WIDTH + 2) : baseWidth
+          const width =
+            isActive || isHovered
+              ? Math.min(baseWidth + 4, BAR_MAX_WIDTH + 2)
+              : baseWidth
           return (
             <button
               key={dot.threadIndex}
@@ -106,9 +109,7 @@ export const MessageNavDots = memo(function MessageNavDots({
             >
               {/* Tooltip on hover */}
               {isHovered && (
-                <span
-                  className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
-                >
+                <span className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md">
                   <span className="font-medium text-muted-foreground">
                     #{dot.ordinal}
                   </span>{" "}

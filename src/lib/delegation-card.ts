@@ -25,11 +25,7 @@ import type { ToolCallState } from "@/lib/adapters/ai-elements-adapter"
  * decision).
  */
 export type DelegationCardStatus =
-  | "starting"
-  | "running"
-  | "waiting"
-  | "ok"
-  | "err"
+  "starting" | "running" | "waiting" | "ok" | "err"
 
 export type ParsedInput = {
   agentType: AgentType | null
@@ -553,4 +549,3 @@ export function resolveDelegationStatus({
   // terminal output arrives.
   return "starting"
 }
-

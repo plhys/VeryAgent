@@ -24,7 +24,8 @@ describe("cleanAgentOutput", () => {
   })
 
   it("unwraps JSON array of content blocks", () => {
-    const input = '[{"type":"text","text":"Hello"},{"type":"text","text":"World"}]'
+    const input =
+      '[{"type":"text","text":"Hello"},{"type":"text","text":"World"}]'
     expect(cleanAgentOutput(input)).toBe("Hello\nWorld")
   })
 
@@ -43,7 +44,9 @@ describe("cleanAgentOutput", () => {
   })
 
   it("strips task_id prefix before actual content", () => {
-    expect(cleanAgentOutput("task_id: ses_1\nactual result")).toBe("actual result")
+    expect(cleanAgentOutput("task_id: ses_1\nactual result")).toBe(
+      "actual result"
+    )
   })
 
   it("extracts from <task_result> XML wrapper", () => {
@@ -77,9 +80,9 @@ describe("narrowToolCallStatus", () => {
 
 describe("extractRevisedPrompt", () => {
   it("extracts text after 'Revised prompt: '", () => {
-    expect(extractRevisedPrompt("Revised prompt: Generate an image of a cat")).toBe(
-      "Generate an image of a cat"
-    )
+    expect(
+      extractRevisedPrompt("Revised prompt: Generate an image of a cat")
+    ).toBe("Generate an image of a cat")
   })
 
   it("falls back to raw content when prefix is absent (fail-open)", () => {

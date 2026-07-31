@@ -35,12 +35,7 @@ import type {
  * spinning once the agent has moved past it.
  */
 export type BadgeStatus =
-  | "starting"
-  | "running"
-  | "waiting"
-  | "ok"
-  | "err"
-  | "checked"
+  "starting" | "running" | "waiting" | "ok" | "err" | "checked"
 
 const TASK_STATUSES = [
   "running",

@@ -22,12 +22,13 @@ const reference = new Set(collectKeys(en as MessageNode))
 // `en.json` is the source of truth. Any missing key in another locale fails
 // the test with the exact dotted path, making translation gaps grep-able.
 describe("i18n locale key parity vs en.json", () => {
-  it.each([
-    ["zh-CN", zhCN],
-  ] as const)("%s has the same key set as en", (_locale, messages) => {
-    const localeKeys = new Set(collectKeys(messages as MessageNode))
-    const missing = [...reference].filter((k) => !localeKeys.has(k))
-    const extra = [...localeKeys].filter((k) => !reference.has(k))
-    expect({ missing, extra }).toEqual({ missing: [], extra: [] })
-  })
+  it.each([["zh-CN", zhCN]] as const)(
+    "%s has the same key set as en",
+    (_locale, messages) => {
+      const localeKeys = new Set(collectKeys(messages as MessageNode))
+      const missing = [...reference].filter((k) => !localeKeys.has(k))
+      const extra = [...localeKeys].filter((k) => !reference.has(k))
+      expect({ missing, extra }).toEqual({ missing: [], extra: [] })
+    }
+  )
 })

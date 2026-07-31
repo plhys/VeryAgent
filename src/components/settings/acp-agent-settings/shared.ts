@@ -1,19 +1,35 @@
-import type { AgentType, CheckStatus, HermesLocalConfig, AcpAgentInfo } from "@/lib/types"
+import type {
+  AgentType,
+  CheckStatus,
+  HermesLocalConfig,
+  AcpAgentInfo,
+} from "@/lib/types"
 import { toErrorMessage } from "@/lib/app-error"
 import type { AgentReadiness, AgentReadinessKind } from "@/lib/agent-readiness"
 
 import type { OpenCodeModelOptionGroup } from "@/lib/opencode-connect"
 
 import type {
-  AcpTranslator, UiCheckItem, AgentDraft,
-  ImportantEnvKeys, ClaudeEffortLevel, 
-  GeminiImportantValues, ClineImportantValues, OpenClawImportantValues,
+  AcpTranslator,
+  UiCheckItem,
+  AgentDraft,
+  ImportantEnvKeys,
+  ClaudeEffortLevel,
+  GeminiImportantValues,
+  ClineImportantValues,
+  OpenClawImportantValues,
   HermesDraftValues,
-  OpenCodeConfigView, OpenCodeProviderView, OpenCodeModelView,
-  HermesAuthMode, OpenClawAuthMode, ClineAuthMode, OpenCodeAuthMode, PiAuthMode, CodeBuddyAuthMode,
+  OpenCodeConfigView,
+  OpenCodeProviderView,
+  OpenCodeModelView,
+  HermesAuthMode,
+  OpenClawAuthMode,
+  ClineAuthMode,
+  OpenCodeAuthMode,
+  PiAuthMode,
+  CodeBuddyAuthMode,
 } from "./types"
 import { CLAUDE_MODEL_ENV_KEYS, CLAUDE_EFFORT_LEVEL_CONFIG_KEY } from "./types"
-
 
 let acpTranslator: AcpTranslator | null = null
 
@@ -36,7 +52,9 @@ export function statusTone(status: CheckStatus): string {
   return "text-red-500"
 }
 
-export function summarizeChecks(checks: UiCheckItem[]): CheckStatus | "unchecked" {
+export function summarizeChecks(
+  checks: UiCheckItem[]
+): CheckStatus | "unchecked" {
   if (checks.length === 0) return "unchecked"
   if (checks.some((check) => check.status === "fail")) return "fail"
   if (checks.some((check) => check.status === "warn")) return "warn"
@@ -155,7 +173,9 @@ interface ConfigParseResult {
   error: string | null
 }
 
-export function importantEnvKeysByAgent(agentType: AgentType): ImportantEnvKeys {
+export function importantEnvKeysByAgent(
+  agentType: AgentType
+): ImportantEnvKeys {
   if (agentType === "claude_code") {
     return {
       apiBaseUrl: ["ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "API_BASE_URL"],
@@ -300,7 +320,10 @@ export function pickFirstString(
   return null
 }
 
-export function findEnvValue(env: Record<string, string>, keys: string[]): string {
+export function findEnvValue(
+  env: Record<string, string>,
+  keys: string[]
+): string {
   for (const key of keys) {
     const value = env[key]
     if (!value) continue
@@ -399,7 +422,6 @@ export function extractImportantConfigValues(
   }
 }
 
-
 export function inferGeminiAuthMode(values: {
   apiBaseUrl: string
   geminiApiKey: string
@@ -469,8 +491,9 @@ export function extractGeminiImportantValues(
   }
 }
 
-
-export function extractClineImportantValues(configText: string): ClineImportantValues {
+export function extractClineImportantValues(
+  configText: string
+): ClineImportantValues {
   const parseResult = parseConfigJsonText(configText)
   const config = parseResult.config
   return {
@@ -1374,7 +1397,10 @@ export function findTomlRootEndIndex(lines: string[]): number {
   return lines.length
 }
 
-export function findTomlRootAssignmentIndex(lines: string[], key: string): number {
+export function findTomlRootAssignmentIndex(
+  lines: string[],
+  key: string
+): number {
   const rootEnd = findTomlRootEndIndex(lines)
   for (let i = 0; i < rootEnd; i += 1) {
     const assignmentKey = parseTomlAssignmentKey(lines[i])
@@ -1383,7 +1409,10 @@ export function findTomlRootAssignmentIndex(lines: string[], key: string): numbe
   return -1
 }
 
-export function preferredTomlRootInsertionIndex(lines: string[], key: string): number {
+export function preferredTomlRootInsertionIndex(
+  lines: string[],
+  key: string
+): number {
   if (key === "model") {
     const providerIndex = findTomlRootAssignmentIndex(lines, "model_provider")
     return providerIndex >= 0 ? providerIndex : 0
@@ -2176,7 +2205,9 @@ export function applyImportantFieldToDraft(
   return { ...draft, claudeCustomModelOptionDescription: value }
 }
 
-export function buildImportantPatchFromDraft(draft: AgentDraft): ImportantDraftPatch {
+export function buildImportantPatchFromDraft(
+  draft: AgentDraft
+): ImportantDraftPatch {
   return {
     apiBaseUrl: draft.apiBaseUrl,
     apiKey: draft.apiKey,

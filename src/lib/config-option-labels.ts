@@ -49,13 +49,13 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "reasoning stream": "reasoningStream",
   "usage detail": "usageDetail",
   "elevated actions": "elevatedActions",
-  "bypass": "bypass",
+  bypass: "bypass",
   "reasoning effort": "reasoningEffort",
 
   // ── Mode / preset names ──
-  "default": "modeDefault",
+  default: "modeDefault",
   "accept edits": "modeAcceptEdits",
-  "auto": "switchAuto",
+  auto: "switchAuto",
   "plan mode": "modePlanMode",
   "bypass permissions": "modeBypassPermissions",
 
@@ -63,15 +63,15 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   // Do NOT map on/off/enabled/disabled/true/false here — OpenClaw reuses those
   // for session switches and they must read as 开/关, not 允许/拒绝.
   "allow once": "allowOnce",
-  "allow": "allowOnce",
-  "yes": "allowOnce",
+  allow: "allowOnce",
+  yes: "allowOnce",
   "always allow": "allowAlways",
   "allow always": "allowAlways",
-  "deny": "deny",
-  "reject": "deny",
+  deny: "deny",
+  reject: "deny",
   "reject once": "deny",
   "deny once": "deny",
-  "no": "deny",
+  no: "deny",
   "don't ask": "dontAsk",
   "dont ask": "dontAsk",
   "do not ask": "dontAsk",
@@ -80,30 +80,30 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "deny always": "dontAsk",
 
   // ── Switch / level values (OpenClaw + shared) ──
-  "off": "switchOff",
-  "on": "switchOn",
-  "enabled": "switchOn",
-  "disabled": "switchOff",
-  "true": "switchOn",
-  "false": "switchOff",
-  "full": "switchFull",
-  "stream": "switchStream",
-  "tokens": "usageTokens",
-  "ask": "elevatedAsk",
-  "adaptive": "thinkingAdaptive",
+  off: "switchOff",
+  on: "switchOn",
+  enabled: "switchOn",
+  disabled: "switchOff",
+  true: "switchOn",
+  false: "switchOff",
+  full: "switchFull",
+  stream: "switchStream",
+  tokens: "usageTokens",
+  ask: "elevatedAsk",
+  adaptive: "thinkingAdaptive",
 
   // ── Mode / preset option values ──
   "read only": "readOnly",
-  "readonly": "readOnly",
-  "agent": "agentMode",
+  readonly: "readOnly",
+  agent: "agentMode",
   "agent (full access)": "agentFullAccess",
 
   // ── Thinking level values ──
-  "low": "thinkingLow",
-  "medium": "thinkingMedium",
-  "high": "thinkingHigh",
+  low: "thinkingLow",
+  medium: "thinkingMedium",
+  high: "thinkingHigh",
   "extra high": "thinkingExtraHigh",
-  "xhigh": "thinkingExtraHigh",
+  xhigh: "thinkingExtraHigh",
 
   // ── Mode / preset descriptions ──
   "ask before edits.": "modeDefaultDesc",
@@ -142,10 +142,10 @@ const CONFIG_NAME_MAP: Record<string, string> = {
  * receive `opt.kind` instead of `opt.name`.
  */
 const PERMISSION_KIND_MAP: Record<string, string> = {
-  "allowonce": "allowOnce",
-  "allowalways": "allowAlways",
-  "rejectonce": "deny",
-  "rejectalways": "dontAsk",
+  allowonce: "allowOnce",
+  allowalways: "allowAlways",
+  rejectonce: "deny",
+  rejectalways: "dontAsk",
 }
 
 // ── Pure utility (no React dependency) ──────────────────────────────────

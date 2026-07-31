@@ -1,6 +1,13 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react"
 import Image from "next/image"
 import { invoke } from "@tauri-apps/api/core"
 import {
@@ -32,8 +39,7 @@ import { cn } from "@/lib/utils"
 const GENERATED_IMAGE_MAX_BYTES = 20_000_000
 
 /** Shared frame for pending / failed / success image so the card does not jump size. */
-const IMAGE_FRAME_CLASS =
-  "max-w-full overflow-hidden rounded-lg"
+const IMAGE_FRAME_CLASS = "max-w-full overflow-hidden rounded-lg"
 
 function inferRequestedAspectRatio(
   prompt: string,
@@ -41,7 +47,9 @@ function inferRequestedAspectRatio(
 ): { ratio: string; width: string } {
   const hint = requestedAspectRatio?.trim()
   const text = `${hint ?? ""} ${prompt}`.toLowerCase()
-  const explicit = text.match(/(?:^|[^0-9])(\d{1,2})\s*[:：/]\s*(\d{1,2})(?:[^0-9]|$)/)
+  const explicit = text.match(
+    /(?:^|[^0-9])(\d{1,2})\s*[:：/]\s*(\d{1,2})(?:[^0-9]|$)/
+  )
   if (explicit) {
     const w = Number(explicit[1])
     const h = Number(explicit[2])
@@ -53,7 +61,9 @@ function inferRequestedAspectRatio(
     }
   }
 
-  const size = text.match(/(?:^|[^0-9])(\d{3,4})\s*[x×]\s*(\d{3,4})(?:[^0-9]|$)/)
+  const size = text.match(
+    /(?:^|[^0-9])(\d{3,4})\s*[x×]\s*(\d{3,4})(?:[^0-9]|$)/
+  )
   if (size) {
     const w = Number(size[1])
     const h = Number(size[2])
@@ -65,8 +75,10 @@ function inferRequestedAspectRatio(
     }
   }
 
-  if (/横版|横屏|landscape|宽屏/.test(text)) return { ratio: "16 / 9", width: "24rem" }
-  if (/竖版|竖屏|portrait|海报/.test(text)) return { ratio: "9 / 16", width: "16rem" }
+  if (/横版|横屏|landscape|宽屏/.test(text))
+    return { ratio: "16 / 9", width: "24rem" }
+  if (/竖版|竖屏|portrait|海报/.test(text))
+    return { ratio: "9 / 16", width: "16rem" }
   return { ratio: "1 / 1", width: "20rem" }
 }
 
@@ -108,7 +120,10 @@ function referenceUrlForImage(img: UserImageDisplay): string {
     }
     return normalized
   }
-  if (img.uri && (img.uri.startsWith("http://") || img.uri.startsWith("https://"))) {
+  if (
+    img.uri &&
+    (img.uri.startsWith("http://") || img.uri.startsWith("https://"))
+  ) {
     return img.uri
   }
   // Last resort: data URL (works for clipboard-style re-attach; large but rare).
@@ -295,23 +310,23 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
   return (
     <>
       <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setPreviewOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
-              setPreviewOpen(true)
-            }
-          }}
-          className={cn(
-            "group inline-block cursor-pointer overflow-hidden rounded-lg shadow-sm transition-opacity hover:opacity-80",
-            IMAGE_FRAME_CLASS
-          )}
-          style={frameStyle}
-        >
+        <ContextMenuTrigger asChild>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setPreviewOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                setPreviewOpen(true)
+              }
+            }}
+            className={cn(
+              "group inline-block cursor-pointer overflow-hidden rounded-lg shadow-sm transition-opacity hover:opacity-80",
+              IMAGE_FRAME_CLASS
+            )}
+            style={frameStyle}
+          >
             {displayImage ? (
               <Image
                 src={dataSrc}
@@ -376,12 +391,16 @@ export const GeneratedImagesBlock = memo(function GeneratedImagesBlock({
                 <ImageIcon className="size-4" />
                 {copyingImage ? tImg("copyingImage") : tImg("copyImage")}
               </ContextMenuItem>
-              <ContextMenuItem onSelect={() => void handleDownload(displayImage)}>
+              <ContextMenuItem
+                onSelect={() => void handleDownload(displayImage)}
+              >
                 <Download className="size-4" />
                 {tImg("downloadImage")}
               </ContextMenuItem>
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => handleReferenceToChat(displayImage)}>
+              <ContextMenuItem
+                onSelect={() => handleReferenceToChat(displayImage)}
+              >
                 <SparklesIcon className="size-4" />
                 {tImg("referenceToChat")}
               </ContextMenuItem>

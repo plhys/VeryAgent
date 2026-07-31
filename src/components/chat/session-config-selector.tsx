@@ -132,7 +132,11 @@ export function InlineSessionConfigSelector({
                     >
                       <DropdownRadioItemContent
                         label={localizer.localize(item.name)}
-                        description={item.description ? localizer.localize(item.description) : item.description}
+                        description={
+                          item.description
+                            ? localizer.localize(item.description)
+                            : item.description
+                        }
                       />
                     </DropdownMenuRadioItem>
                   ))}

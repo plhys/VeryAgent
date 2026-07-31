@@ -1,6 +1,4 @@
-import {
-  getTransport,
-} from "../transport"
+import { getTransport } from "../transport"
 import { TurnBusyError, isTurnInProgressRejection } from "../turn-busy"
 import type {
   AgentType,
@@ -10,7 +8,6 @@ import type {
   QuestionAnswer,
   PromptInputBlock,
 } from "../types"
-
 
 export async function acpConnect(
   agentType: AgentType,
@@ -27,7 +24,6 @@ export async function acpConnect(
     preferredConfigValues: preferredConfigValues ?? null,
   })
 }
-
 
 export async function acpPrompt(
   connectionId: string,
@@ -50,14 +46,12 @@ export async function acpPrompt(
   }
 }
 
-
 export async function acpSetMode(
   connectionId: string,
   modeId: string
 ): Promise<void> {
   return getTransport().call("acp_set_mode", { connectionId, modeId })
 }
-
 
 export async function acpSetConfigOption(
   connectionId: string,
@@ -71,18 +65,15 @@ export async function acpSetConfigOption(
   })
 }
 
-
 export async function acpCancel(connectionId: string): Promise<void> {
   return getTransport().call("acp_cancel", { connectionId })
 }
-
 
 export interface ForkResult {
   forkedSessionId: string
   originalSessionId: string
   siblingConversationId: number
 }
-
 
 export async function acpFork(connectionId: string): Promise<ForkResult> {
   try {
@@ -95,7 +86,6 @@ export async function acpFork(connectionId: string): Promise<ForkResult> {
     throw e
   }
 }
-
 
 export async function acpRespondPermission(
   connectionId: string,
@@ -128,11 +118,9 @@ export async function acpAnswerQuestion(
   })
 }
 
-
 export async function acpDisconnect(connectionId: string): Promise<void> {
   return getTransport().call("acp_disconnect", { connectionId })
 }
-
 
 export async function acpTouchConnection(
   connectionId: string
@@ -140,18 +128,15 @@ export async function acpTouchConnection(
   return getTransport().call("acp_touch_connection", { connectionId })
 }
 
-
 export async function acpListConnections(): Promise<ConnectionInfo[]> {
   return getTransport().call("acp_list_connections")
 }
-
 
 export async function acpGetSessionSnapshot(
   connectionId: string
 ): Promise<LiveSessionSnapshot | null> {
   return getTransport().call("acp_get_session_snapshot", { connectionId })
 }
-
 
 export async function acpGetSessionSnapshotByConversation(
   conversationId: number
@@ -160,7 +145,6 @@ export async function acpGetSessionSnapshotByConversation(
     conversationId,
   })
 }
-
 
 export async function acpFindConnectionForConversation(
   conversationId: number,
@@ -173,5 +157,3 @@ export async function acpFindConnectionForConversation(
     agentType,
   })
 }
-
-

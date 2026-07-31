@@ -208,7 +208,8 @@ export function useConnection(contextKey: string): UseConnectionReturn {
   const configStaleKind = connection?.configStaleKind ?? null
   const configStaleDismissed = connection?.configStaleDismissed ?? false
   const backgroundOutstanding = connection?.backgroundOutstanding ?? 0
-  const backgroundSettleSyncingSince = connection?.backgroundSettleSyncingSince ?? null
+  const backgroundSettleSyncingSince =
+    connection?.backgroundSettleSyncingSince ?? null
   const isDelegationChild = connection?.isDelegationChild ?? false
 
   const connect = useCallback(

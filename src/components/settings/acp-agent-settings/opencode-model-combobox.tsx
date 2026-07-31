@@ -1,7 +1,19 @@
 import { useCallback, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxLabel, ComboboxList } from "@/components/ui/combobox"
-import { formatContextWindow, type OpenCodeModelOptionGroup } from "@/lib/opencode-connect"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+} from "@/components/ui/combobox"
+import {
+  formatContextWindow,
+  type OpenCodeModelOptionGroup,
+} from "@/lib/opencode-connect"
 import { acpText } from "./shared"
 
 export function OpenCodeModelCombobox({

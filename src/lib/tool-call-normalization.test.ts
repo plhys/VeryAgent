@@ -114,7 +114,9 @@ describe("inferLiveToolName meta.claudeCode.toolName override", () => {
         kind: "other",
         rawInput: JSON.stringify({ task_id: "t1" }),
         meta: {
-          claudeCode: { toolName: "mcp__veryagent-delegate__cancel_delegation" },
+          claudeCode: {
+            toolName: "mcp__veryagent-delegate__cancel_delegation",
+          },
         },
       })
     ).toBe("cancel_delegation")
@@ -125,7 +127,9 @@ describe("inferLiveToolName meta.claudeCode.toolName override", () => {
         kind: "other",
         rawInput: JSON.stringify({ agent_type: "codex", task: "do it" }),
         meta: {
-          claudeCode: { toolName: "mcp__veryagent-delegate__delegate_to_agent" },
+          claudeCode: {
+            toolName: "mcp__veryagent-delegate__delegate_to_agent",
+          },
         },
       })
     ).toBe("delegate_to_agent")

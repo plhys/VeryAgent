@@ -209,15 +209,15 @@ export function SettingsShell({ children }: SettingsShellProps) {
   // Track open state per group. When the current route lives in a group that
   // starts collapsed (advanced), force that group open so the active item is
   // visible without an extra click.
-  const [openGroups, setOpenGroups] = useState<Record<SettingsNavGroupId, boolean>>(
-    () => {
-      const initial = {} as Record<SettingsNavGroupId, boolean>
-      for (const group of SETTINGS_NAV_GROUPS) {
-        initial[group.id] = group.defaultOpen
-      }
-      return initial
+  const [openGroups, setOpenGroups] = useState<
+    Record<SettingsNavGroupId, boolean>
+  >(() => {
+    const initial = {} as Record<SettingsNavGroupId, boolean>
+    for (const group of SETTINGS_NAV_GROUPS) {
+      initial[group.id] = group.defaultOpen
     }
-  )
+    return initial
+  })
 
   useEffect(() => {
     document.title = `${t("title")} - veryAgent`
@@ -228,7 +228,10 @@ export function SettingsShell({ children }: SettingsShellProps) {
       let changed = false
       const next = { ...prev }
       for (const group of SETTINGS_NAV_GROUPS) {
-        if (groupContainsPath(group.items, normalizedPathname) && !next[group.id]) {
+        if (
+          groupContainsPath(group.items, normalizedPathname) &&
+          !next[group.id]
+        ) {
           next[group.id] = true
           changed = true
         }

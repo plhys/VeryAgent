@@ -19,13 +19,7 @@ import { WINDOW_CONTROLS_WIDTH } from "./window-controls"
  */
 
 type ResizeDir =
-  | "North"
-  | "South"
-  | "East"
-  | "West"
-  | "NorthWest"
-  | "SouthWest"
-  | "SouthEast"
+  "North" | "South" | "East" | "West" | "NorthWest" | "SouthWest" | "SouthEast"
 
 /** Edge strip thickness — matches the feel of native invisible resize borders. */
 const EDGE = 4

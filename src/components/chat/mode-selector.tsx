@@ -28,7 +28,9 @@ export function InlineModeSelector({
 }: ModeSelectorProps) {
   const localizer = useConfigOptionLocalizer()
   const selected = modes.find((mode) => mode.id === selectedModeId)
-  const currentLabel = localizer.localize(selected?.name ?? selectedModeId ?? "")
+  const currentLabel = localizer.localize(
+    selected?.name ?? selectedModeId ?? ""
+  )
   const triggerLabel = currentLabel ? `${label} · ${currentLabel}` : label
   return (
     <DropdownMenu>
@@ -60,7 +62,11 @@ export function InlineModeSelector({
             <DropdownMenuRadioItem key={mode.id} value={mode.id}>
               <DropdownRadioItemContent
                 label={localizer.localize(mode.name)}
-                description={mode.description ? localizer.localize(mode.description) : mode.description}
+                description={
+                  mode.description
+                    ? localizer.localize(mode.description)
+                    : mode.description
+                }
               />
             </DropdownMenuRadioItem>
           ))}

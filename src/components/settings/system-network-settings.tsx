@@ -46,7 +46,11 @@ import {
   updateSystemProxySettings,
 } from "@/lib/api"
 import { openUrl } from "@/lib/platform"
-import type { AppLocale, AppUpdateSource, AppUpdateSourceSettings } from "@/lib/types"
+import type {
+  AppLocale,
+  AppUpdateSource,
+  AppUpdateSourceSettings,
+} from "@/lib/types"
 import {
   checkAppUpdate,
   closeAppUpdate,

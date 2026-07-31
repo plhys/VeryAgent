@@ -174,7 +174,7 @@ export function PetManagerSection() {
     }
   }, [t])
 
-  const summonDisabled = !isDesktop() || !activeId && pets.length === 0
+  const summonDisabled = !isDesktop() || (!activeId && pets.length === 0)
 
   return (
     <Collapsible
@@ -267,8 +267,9 @@ export function PetManagerSection() {
                 const active = pet.id === activeId
                 const isBuiltIn = pet.builtIn
                 const isWebm = pet.renderMode === "webm"
-                const sheetUrl = isWebm ? "" : sheetUrls[pet.id] ?? ""
-                const previewOpen = !isWebm && previewPetId === pet.id && Boolean(sheetUrl)
+                const sheetUrl = isWebm ? "" : (sheetUrls[pet.id] ?? "")
+                const previewOpen =
+                  !isWebm && previewPetId === pet.id && Boolean(sheetUrl)
                 return (
                   <Popover
                     key={pet.id}
@@ -304,19 +305,22 @@ export function PetManagerSection() {
                             {isWebm ? (
                               <Film className="h-6 w-6 text-muted-foreground" />
                             ) : (
-                            <div
-                              className="h-full"
-                              style={{
-                                aspectRatio: "192 / 208",
-                                backgroundImage: sheetUrl
-                                  ? `url("${sheetUrl}")`
-                                  : undefined,
-                                backgroundSize: SPRITE_BACKGROUND_SIZE,
-                                backgroundPosition: backgroundPositionFor(0, 0),
-                                backgroundRepeat: "no-repeat",
-                                imageRendering: "pixelated",
-                              }}
-                            />
+                              <div
+                                className="h-full"
+                                style={{
+                                  aspectRatio: "192 / 208",
+                                  backgroundImage: sheetUrl
+                                    ? `url("${sheetUrl}")`
+                                    : undefined,
+                                  backgroundSize: SPRITE_BACKGROUND_SIZE,
+                                  backgroundPosition: backgroundPositionFor(
+                                    0,
+                                    0
+                                  ),
+                                  backgroundRepeat: "no-repeat",
+                                  imageRendering: "pixelated",
+                                }}
+                              />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -360,30 +364,30 @@ export function PetManagerSection() {
                             </span>
                           </Button>
                           {!isBuiltIn ? (
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            type="button"
-                            onClick={() => openEditor(pet)}
-                            title={t("edit")}
-                            aria-label={t("edit")}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              type="button"
+                              onClick={() => openEditor(pet)}
+                              title={t("edit")}
+                              aria-label={t("edit")}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
                           ) : null}
                           {!isBuiltIn ? (
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            type="button"
-                            className="text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeleteTarget(pet)}
-                            disabled={active}
-                            title={t("delete")}
-                            aria-label={t("delete")}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              type="button"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(pet)}
+                              disabled={active}
+                              title={t("delete")}
+                              aria-label={t("delete")}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           ) : null}
                         </div>
                       </div>

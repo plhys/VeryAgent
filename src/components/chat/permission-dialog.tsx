@@ -32,7 +32,12 @@ function formatKindLabel(kind: string, fallbackLabel: string): string {
 
 function isRejectKind(kind: string): boolean {
   const k = kind.toLowerCase()
-  return k.includes("reject") || k.includes("deny") || k.includes("dont") || k.includes("don't")
+  return (
+    k.includes("reject") ||
+    k.includes("deny") ||
+    k.includes("dont") ||
+    k.includes("don't")
+  )
 }
 
 export function PermissionDialog({
@@ -76,9 +81,14 @@ export function PermissionDialog({
             <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="truncate">{parsed.title}</span>
           </div>
-          <p className="text-[11px] leading-tight text-amber-700/80 dark:text-amber-300/80">{t("subtitle")}</p>
+          <p className="text-[11px] leading-tight text-amber-700/80 dark:text-amber-300/80">
+            {t("subtitle")}
+          </p>
         </div>
-        <Badge variant="outline" className="shrink-0 border-amber-500 text-amber-700 dark:text-amber-300 text-[10px] bg-amber-100 dark:bg-amber-900/40">
+        <Badge
+          variant="outline"
+          className="shrink-0 border-amber-500 text-amber-700 dark:text-amber-300 text-[10px] bg-amber-100 dark:bg-amber-900/40"
+        >
           {formatKindLabel(parsed.normalizedKind, t("kindFallbackTool"))}
         </Badge>
       </div>

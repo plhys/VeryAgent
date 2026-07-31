@@ -1,7 +1,13 @@
 "use client"
 
 import type { PointerEvent, ReactNode } from "react"
-import type { AgentType, AcpAgentInfo, CheckStatus, FixAction, PreflightResult } from "@/lib/types"
+import type {
+  AgentType,
+  AcpAgentInfo,
+  CheckStatus,
+  FixAction,
+  PreflightResult,
+} from "@/lib/types"
 import type { AgentReadiness, AgentReadinessKind } from "@/lib/agent-readiness"
 
 export type { AgentReadiness, AgentReadinessKind }
@@ -15,7 +21,11 @@ export interface AgentCheckState {
 
 // ── Claude Auth ────────────────────────────────────────────────────
 
-export const CLAUDE_AUTH_MODES = ["official_subscription", "custom", "model_provider"] as const
+export const CLAUDE_AUTH_MODES = [
+  "official_subscription",
+  "custom",
+  "model_provider",
+] as const
 export type ClaudeAuthMode = (typeof CLAUDE_AUTH_MODES)[number]
 
 export const CLAUDE_MODEL_ENV_KEYS = {
@@ -26,25 +36,32 @@ export const CLAUDE_MODEL_ENV_KEYS = {
   claudeDefaultOpusModel: "ANTHROPIC_DEFAULT_OPUS_MODEL",
   claudeCustomModelOption: "ANTHROPIC_CUSTOM_MODEL_OPTION",
   claudeCustomModelOptionName: "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
-  claudeCustomModelOptionDescription: "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
+  claudeCustomModelOptionDescription:
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION",
 } as const
 
 export const CLAUDE_EFFORT_LEVEL_CONFIG_KEY = "effortLevel"
 
 export type ClaudeEffortLevel = "" | "low" | "medium" | "high" | "xhigh"
 
-export const CLAUDE_EFFORT_LEVEL_VALUES: ReadonlyArray<Exclude<ClaudeEffortLevel, "">> = [
-  "low", "medium", "high", "xhigh",
-]
+export const CLAUDE_EFFORT_LEVEL_VALUES: ReadonlyArray<
+  Exclude<ClaudeEffortLevel, "">
+> = ["low", "medium", "high", "xhigh"]
 
 export type ClaudeModelKey = keyof typeof CLAUDE_MODEL_ENV_KEYS
-export type ImportantConfigKey = "apiBaseUrl" | "apiKey" | "model" | ClaudeModelKey
+export type ImportantConfigKey =
+  "apiBaseUrl" | "apiKey" | "model" | ClaudeModelKey
 
 // ── Gemini Auth ────────────────────────────────────────────────────
 
 export const GEMINI_AUTH_MODES = [
-  "custom", "login_google", "gemini_api_key", "vertex_adc",
-  "vertex_service_account", "vertex_api_key", "model_provider",
+  "custom",
+  "login_google",
+  "gemini_api_key",
+  "vertex_adc",
+  "vertex_service_account",
+  "vertex_api_key",
+  "model_provider",
 ] as const
 export type GeminiAuthMode = (typeof GEMINI_AUTH_MODES)[number]
 
@@ -88,7 +105,11 @@ export type ClineProvider = (typeof CLINE_PROVIDERS)[number]["value"]
 
 export const CODEX_DEFAULT_MODEL_PROVIDER = "veryagent"
 
-export const CODEX_AUTH_MODES = ["api_key", "chatgpt_subscription", "model_provider"] as const
+export const CODEX_AUTH_MODES = [
+  "api_key",
+  "chatgpt_subscription",
+  "model_provider",
+] as const
 export type CodexAuthMode = (typeof CODEX_AUTH_MODES)[number]
 
 export type CodexReasoningEffort = "low" | "medium" | "high" | "xhigh"
@@ -98,10 +119,26 @@ export const CODEX_REASONING_EFFORT_OPTIONS: ReadonlyArray<{
   label: string
   description: string
 }> = [
-  { value: "low", label: "Low", description: "Fast responses with lighter reasoning" },
-  { value: "medium", label: "Medium", description: "Balances speed and reasoning depth for everyday tasks" },
-  { value: "high", label: "High", description: "Greater reasoning depth for complex problems" },
-  { value: "xhigh", label: "Extra High", description: "Extra high reasoning depth for complex problems" },
+  {
+    value: "low",
+    label: "Low",
+    description: "Fast responses with lighter reasoning",
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    description: "Balances speed and reasoning depth for everyday tasks",
+  },
+  {
+    value: "high",
+    label: "High",
+    description: "Greater reasoning depth for complex problems",
+  },
+  {
+    value: "xhigh",
+    label: "Extra High",
+    description: "Extra high reasoning depth for complex problems",
+  },
 ]
 
 export const CODEX_DEFAULT_REASONING_EFFORT: CodexReasoningEffort = "high"
@@ -135,7 +172,12 @@ export type PiAuthMode = "native" | "model_provider"
 export type CodeBuddyAuthMode = "native" | "model_provider"
 
 export type KimiInterfaceType =
-  | "kimi" | "openai" | "openai_responses" | "anthropic" | "google-genai" | "vertexai"
+  | "kimi"
+  | "openai"
+  | "openai_responses"
+  | "anthropic"
+  | "google-genai"
+  | "vertexai"
 export type KimiNativeAuthType = "api_key" | "env"
 export type KimiEndpointRegion = "international" | "china" | "custom"
 
@@ -147,12 +189,42 @@ export interface KimiInterfaceTypeMeta {
 }
 
 export const KIMI_INTERFACE_TYPES: KimiInterfaceTypeMeta[] = [
-  { value: "kimi", label: "Kimi / Moonshot", defaultBaseUrl: KIMI_BASE_URL_INTERNATIONAL, usesApiKey: true },
-  { value: "openai", label: "OpenAI (Chat Completions)", defaultBaseUrl: "https://api.openai.com/v1", usesApiKey: true },
-  { value: "openai_responses", label: "OpenAI (Responses)", defaultBaseUrl: "https://api.openai.com/v1", usesApiKey: true },
-  { value: "anthropic", label: "Anthropic", defaultBaseUrl: "", usesApiKey: true },
-  { value: "google-genai", label: "Google Gemini", defaultBaseUrl: "", usesApiKey: true },
-  { value: "vertexai", label: "Google Vertex AI", defaultBaseUrl: "", usesApiKey: false },
+  {
+    value: "kimi",
+    label: "Kimi / Moonshot",
+    defaultBaseUrl: KIMI_BASE_URL_INTERNATIONAL,
+    usesApiKey: true,
+  },
+  {
+    value: "openai",
+    label: "OpenAI (Chat Completions)",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    usesApiKey: true,
+  },
+  {
+    value: "openai_responses",
+    label: "OpenAI (Responses)",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    usesApiKey: true,
+  },
+  {
+    value: "anthropic",
+    label: "Anthropic",
+    defaultBaseUrl: "",
+    usesApiKey: true,
+  },
+  {
+    value: "google-genai",
+    label: "Google Gemini",
+    defaultBaseUrl: "",
+    usesApiKey: true,
+  },
+  {
+    value: "vertexai",
+    label: "Google Vertex AI",
+    defaultBaseUrl: "",
+    usesApiKey: false,
+  },
 ]
 
 export interface KimiManagedConfig {
@@ -231,17 +303,28 @@ export type ImportantDraftPatch = Partial<Pick<AgentDraft, ImportantConfigKey>>
 // ── Running Action / UI Fix / Check ────────────────────────────────
 
 export type RunningActionKind =
-  | "download_binary" | "upgrade_binary" | "install_npx" | "upgrade_npx"
-  | "uninstall_binary" | "uninstall_npx" | "redownload_binary"
-  | "custom_install" | "install_uv"
+  | "download_binary"
+  | "upgrade_binary"
+  | "install_npx"
+  | "upgrade_npx"
+  | "uninstall_binary"
+  | "uninstall_npx"
+  | "redownload_binary"
+  | "custom_install"
+  | "install_uv"
 
 export type UiFixAction =
   | FixAction
   | {
       label: string
       kind:
-        | "download_binary" | "upgrade_binary" | "install_npx" | "upgrade_npx"
-        | "uninstall_binary" | "uninstall_npx" | "install_opencode_plugins"
+        | "download_binary"
+        | "upgrade_binary"
+        | "install_npx"
+        | "upgrade_npx"
+        | "uninstall_binary"
+        | "uninstall_npx"
+        | "install_opencode_plugins"
         | "custom_install"
       payload: string
       disabled?: boolean
@@ -255,7 +338,10 @@ export interface UiCheckItem {
   fixes: UiFixAction[]
 }
 
-export type AcpTranslator = (key: string, values?: Record<string, string | number>) => string
+export type AcpTranslator = (
+  key: string,
+  values?: Record<string, string | number>
+) => string
 
 // ── Config Parse ───────────────────────────────────────────────────
 
@@ -374,5 +460,7 @@ export interface AgentReorderItemProps {
   onDragStart: (agentType: AgentType) => void
   onDragEnd: () => void
   onSelect: (agentType: AgentType) => void
-  children: (startDrag: (event: PointerEvent<HTMLButtonElement>) => void) => ReactNode
+  children: (
+    startDrag: (event: PointerEvent<HTMLButtonElement>) => void
+  ) => ReactNode
 }

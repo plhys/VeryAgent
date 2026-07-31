@@ -1,6 +1,4 @@
-import {
-  getTransport,
-} from "../transport"
+import { getTransport } from "../transport"
 import type {
   AgentType,
   AgentDelegationDefaults,
@@ -28,11 +26,9 @@ import type {
   McpMarketplaceServerDetail,
 } from "../types"
 
-
 export async function getSystemProxySettings(): Promise<SystemProxySettings> {
   return getTransport().call("get_system_proxy_settings")
 }
-
 
 export async function updateSystemProxySettings(
   settings: SystemProxySettings
@@ -40,11 +36,9 @@ export async function updateSystemProxySettings(
   return getTransport().call("update_system_proxy_settings", { settings })
 }
 
-
 export async function getAppUpdateSourceSettings(): Promise<AppUpdateSourceSettings> {
   return getTransport().call("get_app_update_source_settings")
 }
-
 
 export async function updateAppUpdateSourceSettings(
   source: AppUpdateSource
@@ -52,11 +46,9 @@ export async function updateAppUpdateSourceSettings(
   return getTransport().call("update_app_update_source_settings", { source })
 }
 
-
 export async function getSystemLanguageSettings(): Promise<SystemLanguageSettings> {
   return getTransport().call("get_system_language_settings")
 }
-
 
 export async function updateSystemLanguageSettings(
   settings: SystemLanguageSettings
@@ -64,11 +56,9 @@ export async function updateSystemLanguageSettings(
   return getTransport().call("update_system_language_settings", { settings })
 }
 
-
 export async function getSystemTerminalSettings(): Promise<SystemTerminalSettings> {
   return getTransport().call("get_system_terminal_settings")
 }
-
 
 export async function updateSystemTerminalSettings(
   settings: SystemTerminalSettings
@@ -76,31 +66,27 @@ export async function updateSystemTerminalSettings(
   return getTransport().call("update_system_terminal_settings", { settings })
 }
 
-
 export async function getAvailableTerminalShells(): Promise<AvailableTerminalShells> {
   return getTransport().call("get_available_terminal_shells")
 }
-
 
 export async function probeTerminalShellPath(path: string): Promise<boolean> {
   return getTransport().call("probe_terminal_shell_path", { path })
 }
 
-
 export async function getAppAutostartEnabled(): Promise<boolean> {
   return getTransport().call("get_app_autostart_enabled")
 }
 
-
-export async function setAppAutostartEnabled(enabled: boolean): Promise<boolean> {
+export async function setAppAutostartEnabled(
+  enabled: boolean
+): Promise<boolean> {
   return getTransport().call("set_app_autostart_enabled", { enabled })
 }
-
 
 export async function getSystemRenderingSettings(): Promise<SystemRenderingSettings> {
   return getTransport().call("get_system_rendering_settings")
 }
-
 
 export async function updateSystemRenderingSettings(
   settings: SystemRenderingSettings
@@ -115,18 +101,15 @@ export const LOG_APPENDED_EVENT = "logs://appended"
 /** Cross-window broadcast announcing a log-level change. */
 export const LOG_SETTINGS_CHANGED_EVENT = "log-settings://changed"
 
-
 export async function getLogSettings(): Promise<LogSettingsView> {
   return getTransport().call("get_log_settings")
 }
-
 
 export async function setLogSettings(
   settings: LogSettings
 ): Promise<LogSettings> {
   return getTransport().call("set_log_settings", { settings })
 }
-
 
 export async function getRecentLogs(params: {
   limit: number
@@ -139,7 +122,6 @@ export async function getRecentLogs(params: {
     search: params.search,
   })
 }
-
 
 export async function listLogFiles(): Promise<LogFileInfo[]> {
   return getTransport().call("list_log_files")
@@ -161,13 +143,11 @@ export async function readLogFile(
   return getTransport().call("read_log_file", { name, maxBytes })
 }
 
-
 export async function subscribeLogAppended(
   handler: (record: LogRecord) => void
 ): Promise<() => void> {
   return getTransport().subscribe<LogRecord>(LOG_APPENDED_EVENT, handler)
 }
-
 
 export async function subscribeLogSettingsChanged(
   handler: (settings: LogSettings) => void
@@ -180,21 +160,17 @@ export async function subscribeLogSettingsChanged(
 
 // --- Version Control ---
 
-
 export async function detectGit(): Promise<GitDetectResult> {
   return getTransport().call("detect_git")
 }
-
 
 export async function testGitPath(path: string): Promise<GitDetectResult> {
   return getTransport().call("test_git_path", { path })
 }
 
-
 export async function getGitSettings(): Promise<GitSettings> {
   return getTransport().call("get_git_settings")
 }
-
 
 export async function updateGitSettings(
   settings: GitSettings
@@ -202,11 +178,9 @@ export async function updateGitSettings(
   return getTransport().call("update_git_settings", { settings })
 }
 
-
 export async function getGitHubAccounts(): Promise<GitHubAccountsSettings> {
   return getTransport().call("get_github_accounts")
 }
-
 
 export async function validateGitHubToken(
   serverUrl: string,
@@ -215,13 +189,11 @@ export async function validateGitHubToken(
   return getTransport().call("validate_github_token", { serverUrl, token })
 }
 
-
 export async function updateGitHubAccounts(
   settings: GitHubAccountsSettings
 ): Promise<GitHubAccountsSettings> {
   return getTransport().call("update_github_accounts", { settings })
 }
-
 
 export async function saveAccountToken(
   accountId: string,
@@ -230,28 +202,23 @@ export async function saveAccountToken(
   return getTransport().call("save_account_token", { accountId, token })
 }
 
-
 export async function getAccountToken(
   accountId: string
 ): Promise<string | null> {
   return getTransport().call("get_account_token", { accountId })
 }
 
-
 export async function deleteAccountToken(accountId: string): Promise<void> {
   return getTransport().call("delete_account_token", { accountId })
 }
-
 
 export async function mcpScanLocal(): Promise<LocalMcpServer[]> {
   return getTransport().call("mcp_scan_local")
 }
 
-
 export async function mcpListMarketplaces(): Promise<McpMarketplaceProvider[]> {
   return getTransport().call("mcp_list_marketplaces")
 }
-
 
 export async function mcpSearchMarketplace(params: {
   providerId: string
@@ -265,7 +232,6 @@ export async function mcpSearchMarketplace(params: {
   })
 }
 
-
 export async function mcpGetMarketplaceServerDetail(params: {
   providerId: string
   serverId: string
@@ -275,7 +241,6 @@ export async function mcpGetMarketplaceServerDetail(params: {
     serverId: params.serverId,
   })
 }
-
 
 export async function mcpInstallFromMarketplace(params: {
   providerId: string
@@ -297,7 +262,6 @@ export async function mcpInstallFromMarketplace(params: {
   })
 }
 
-
 export async function mcpUpsertLocalServer(params: {
   serverId: string
   spec: Record<string, unknown>
@@ -310,14 +274,12 @@ export async function mcpUpsertLocalServer(params: {
   })
 }
 
-
 export async function mcpSetServerApps(
   serverId: string,
   apps: McpAppType[]
 ): Promise<LocalMcpServer | null> {
   return getTransport().call("mcp_set_server_apps", { serverId, apps })
 }
-
 
 export async function mcpRemoveServer(
   serverId: string,
@@ -330,7 +292,6 @@ export async function mcpRemoveServer(
 }
 
 // Folder history commands
-
 
 export async function terminalSpawn(
   workingDir: string,
@@ -346,14 +307,12 @@ export async function terminalSpawn(
   })
 }
 
-
 export async function terminalWrite(
   terminalId: string,
   data: string
 ): Promise<void> {
   return getTransport().call("terminal_write", { terminalId, data })
 }
-
 
 export async function terminalResize(
   terminalId: string,
@@ -363,11 +322,9 @@ export async function terminalResize(
   return getTransport().call("terminal_resize", { terminalId, cols, rows })
 }
 
-
 export async function terminalKill(terminalId: string): Promise<void> {
   return getTransport().call("terminal_kill", { terminalId })
 }
-
 
 export async function terminalList(): Promise<TerminalInfo[]> {
   return getTransport().call("terminal_list")
@@ -375,15 +332,12 @@ export async function terminalList(): Promise<TerminalInfo[]> {
 
 // ── Web Server Management ──
 
-
 export type WebServicePortState = "free" | "occupied" | "unknown"
-
 
 export interface WebServicePortProbe {
   port: number
   state: WebServicePortState
 }
-
 
 export async function probeWebServicePort(
   port?: number
@@ -394,7 +348,6 @@ export async function probeWebServicePort(
 }
 
 // ─── Chat Channels ───
-
 
 export interface DelegationSettings {
   enabled: boolean
@@ -407,11 +360,9 @@ export interface DelegationSettings {
   agent_defaults?: Partial<Record<AgentType, AgentDelegationDefaults>>
 }
 
-
 export async function getDelegationSettings(): Promise<DelegationSettings> {
   return getTransport().call("get_delegation_settings")
 }
-
 
 export async function setDelegationSettings(
   settings: DelegationSettings
@@ -427,11 +378,9 @@ export interface FeedbackSettings {
   enabled: boolean
 }
 
-
 export async function getFeedbackSettings(): Promise<FeedbackSettings> {
   return getTransport().call("get_feedback_settings")
 }
-
 
 export async function setFeedbackSettings(
   settings: FeedbackSettings
@@ -464,11 +413,9 @@ export interface QuestionSettings {
   enabled: boolean
 }
 
-
 export async function getQuestionSettings(): Promise<QuestionSettings> {
   return getTransport().call("get_question_settings")
 }
-
 
 export async function setQuestionSettings(
   settings: QuestionSettings
@@ -484,11 +431,9 @@ export interface SessionInfoSettings {
   enabled: boolean
 }
 
-
 export async function getSessionInfoSettings(): Promise<SessionInfoSettings> {
   return getTransport().call("get_session_info_settings")
 }
-
 
 export async function setSessionInfoSettings(
   settings: SessionInfoSettings
@@ -497,4 +442,3 @@ export async function setSessionInfoSettings(
 }
 
 /** Mirror of Rust `VisionBridgeConfigUpdate`. */
-

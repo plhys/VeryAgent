@@ -19,8 +19,7 @@ export function SlashCommandMenu({
 
   useEffect(() => {
     const el = listRef.current?.children[selectedIndex] as
-      | HTMLElement
-      | undefined
+      HTMLElement | undefined
     el?.scrollIntoView({ block: "nearest" })
   }, [selectedIndex])
 

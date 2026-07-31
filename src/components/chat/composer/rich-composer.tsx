@@ -274,7 +274,7 @@ export const RichComposer = forwardRef<RichComposerHandle, RichComposerProps>(
       // but only dereferences them inside event-time callbacks, never during
       // render — the React Compiler lint can't prove that. Mirrors Tiptap's own
       // React suggestion pattern (render() → component.ref.onKeyDown).
-      // eslint-disable-next-line react-hooks/refs
+
       extensions: buildComposerExtensions({ placeholder, mentionController }),
       editable: !disabled,
       autofocus: autoFocus ? "end" : false,

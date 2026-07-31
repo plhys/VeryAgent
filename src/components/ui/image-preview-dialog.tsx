@@ -124,11 +124,16 @@ function ImagePreviewDialog({
               onWheel={handleWheel}
               style={{
                 transform: `scale(${zoom})`,
-                transition: zoom === 1 ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "transform 0.1s ease-out",
+                transition:
+                  zoom === 1
+                    ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)"
+                    : "transform 0.1s ease-out",
               }}
               className={cn(
                 "max-h-[90vh] max-w-[90vw] cursor-zoom-in rounded-lg object-contain",
-                open && !animating && "animate-in zoom-in-95 fade-in duration-200"
+                open &&
+                  !animating &&
+                  "animate-in zoom-in-95 fade-in duration-200"
               )}
               onAnimationEnd={() => setAnimating(false)}
             />

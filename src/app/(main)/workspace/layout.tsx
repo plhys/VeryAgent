@@ -77,7 +77,9 @@ function WorkspaceDocumentTitle() {
   const { activeFolder } = useActiveFolder()
 
   useEffect(() => {
-    document.title = activeFolder ? `${activeFolder.name} - veryAgent` : "veryagent"
+    document.title = activeFolder
+      ? `${activeFolder.name} - veryAgent`
+      : "veryagent"
   }, [activeFolder])
 
   return null
@@ -827,9 +829,11 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
-      style={{
-        "--sidebar-width-px": sidebarOpen ? `${sidebarWidth}px` : "0px",
-      } as React.CSSProperties}
+      style={
+        {
+          "--sidebar-width-px": sidebarOpen ? `${sidebarWidth}px` : "0px",
+        } as React.CSSProperties
+      }
     >
       <ChatModeAuxAutoHide />
       <FolderTitleBar />

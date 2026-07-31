@@ -76,15 +76,13 @@ export function AgentSelector({
       : mode === "general"
         ? activated.filter((a) => isGeneralModeAgent(a.agent_type))
         : activated.filter((a) => !isGeneralModeAgent(a.agent_type))
-    return filtered
-      .slice()
-      .sort((a, b) => {
-        // Usable first, then resident butlers, keep relative order otherwise.
-        const usableA = Number(a.available)
-        const usableB = Number(b.available)
-        if (usableA !== usableB) return usableB - usableA
-        return Number(!!b.resident) - Number(!!a.resident)
-      })
+    return filtered.slice().sort((a, b) => {
+      // Usable first, then resident butlers, keep relative order otherwise.
+      const usableA = Number(a.available)
+      const usableB = Number(b.available)
+      if (usableA !== usableB) return usableB - usableA
+      return Number(!!b.resident) - Number(!!a.resident)
+    })
   }, [rawAgents, showModeSwitch, mode])
   const onSelectRef = useRef(onSelect)
   const onFallbackRef = useRef(onFallback)
@@ -340,15 +338,11 @@ export function AgentSelector({
           const usable = isUsable(agent)
           const label = AGENT_LABELS[agent.agent_type]
           // Activated-but-unavailable only — disabled agents are filtered out.
-          const inactiveReason = !agent.available
-            ? t("agentUnavailable")
-            : null
+          const inactiveReason = !agent.available ? t("agentUnavailable") : null
           const title = (() => {
             if (inactiveReason) return `${label} · ${inactiveReason}`
             if (!isSelected) {
-              return agent.resident
-                ? `${label} · ${t("residentBadge")}`
-                : label
+              return agent.resident ? `${label} · ${t("residentBadge")}` : label
             }
             return agent.resident ? t("residentBadge") : undefined
           })()

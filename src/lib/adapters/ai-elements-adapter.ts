@@ -29,10 +29,7 @@ import {
  * Adapted content part types for AI SDK Elements components
  */
 export type ToolCallState =
-  | "input-streaming"
-  | "input-available"
-  | "output-available"
-  | "output-error"
+  "input-streaming" | "input-available" | "output-available" | "output-error"
 
 export type AdaptedToolCallPart = {
   type: "tool-call"

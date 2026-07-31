@@ -97,14 +97,17 @@ describe("parseVeryAgentReferenceUri", () => {
   })
 
   it("falls back to #id for an empty session label", () => {
-    expect(parseVeryAgentReferenceUri("veryagent://session/123", "")?.label).toBe(
-      "#123"
-    )
+    expect(
+      parseVeryAgentReferenceUri("veryagent://session/123", "")?.label
+    ).toBe("#123")
   })
 
   it("parses a commit uri, deriving the short hash", () => {
     expect(
-      parseVeryAgentReferenceUri("veryagent://commit/%2Frepo@abc1234def5678", "abc1234")
+      parseVeryAgentReferenceUri(
+        "veryagent://commit/%2Frepo@abc1234def5678",
+        "abc1234"
+      )
     ).toMatchObject({
       refType: "commit",
       id: "abc1234def5678",
@@ -127,9 +130,9 @@ describe("parseVeryAgentReferenceUri", () => {
   })
 
   it("falls back to a /-prefixed id for an empty skill label", () => {
-    expect(parseVeryAgentReferenceUri("veryagent://skill/deploy", "")?.label).toBe(
-      "/deploy"
-    )
+    expect(
+      parseVeryAgentReferenceUri("veryagent://skill/deploy", "")?.label
+    ).toBe("/deploy")
   })
 
   it("parses an embedded-attachment uri as an inert file badge", () => {
@@ -152,7 +155,9 @@ describe("parseVeryAgentReferenceUri", () => {
   it("recognizes a freshly minted embedded reference uri", () => {
     const uri = buildEmbeddedReferenceUri()
     expect(isEmbeddedReferenceUri(uri)).toBe(true)
-    expect(isEmbeddedReferenceUri("file:///veryagent-embedded/real.ts")).toBe(false)
+    expect(isEmbeddedReferenceUri("file:///veryagent-embedded/real.ts")).toBe(
+      false
+    )
     expect(isEmbeddedReferenceUri("veryagent://session/abc")).toBe(false)
   })
 })

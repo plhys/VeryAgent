@@ -133,12 +133,7 @@ interface FileActionTarget {
 }
 
 type GitFileState =
-  | "untracked"
-  | "modified"
-  | "staged"
-  | "conflicted"
-  | "deleted"
-  | "renamed"
+  "untracked" | "modified" | "staged" | "conflicted" | "deleted" | "renamed"
 
 function normalizeGitStatusPath(path: string): string {
   const normalized = path.trim()

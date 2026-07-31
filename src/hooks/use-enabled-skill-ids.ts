@@ -9,7 +9,11 @@ import {
 } from "@/lib/api"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
 import { piUsesCustomAgentDir } from "@/lib/pi-config"
-import type { AgentType, ExpertInstallStatus, ExpertLinkState } from "@/lib/types"
+import type {
+  AgentType,
+  ExpertInstallStatus,
+  ExpertLinkState,
+} from "@/lib/types"
 
 // Module-level cache shared across QuickActions mounts. The snapshots are
 // agent-agnostic (one entry per (skill, agent) pair), so switching the selected
@@ -129,7 +133,9 @@ function refreshSnapshotOnFocus(): void {
  * Explicit refresh after link/unlink in the same window (skills page). Prefer
  * this over faking a window `focus` event — same cache path, no side effects.
  */
-export function refreshEnabledSkillIds(): Promise<ExpertInstallStatus[] | null> {
+export function refreshEnabledSkillIds(): Promise<
+  ExpertInstallStatus[] | null
+> {
   generation += 1
   inflight = null
   return loadSnapshot()
@@ -163,7 +169,10 @@ function releaseFocusRefresh(): void {
  * `supported` is false for a pi pointed at a custom `PI_CODING_AGENT_DIR`
  * (veryagent's default-dir store never touches that dir).
  */
-export function useEnabledSkillIds(agentType: AgentType | null, strict = false): {
+export function useEnabledSkillIds(
+  agentType: AgentType | null,
+  strict = false
+): {
   enabledIds: Set<string>
   ready: boolean
   supported: boolean

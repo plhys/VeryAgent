@@ -236,7 +236,9 @@ describe("buildReferenceGroups", () => {
     )
     const commits = itemsOf(groups, "commit")
     expect(commits).toHaveLength(1)
-    expect(commits[0].reference.uri).toBe("veryagent://commit/%2Frepo@abc12340000")
+    expect(commits[0].reference.uri).toBe(
+      "veryagent://commit/%2Frepo@abc12340000"
+    )
   })
 
   it("caps each group at 50 items and flags the overflow as truncated", () => {

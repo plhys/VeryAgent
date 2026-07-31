@@ -45,8 +45,7 @@ const viewportState = vi.hoisted(() => {
     SCROLL_HEIGHT,
     CLIENT_HEIGHT,
     current: null as
-      | (HTMLElement & { __scrollTopSet: ReturnType<typeof vi.fn> })
-      | null,
+      (HTMLElement & { __scrollTopSet: ReturnType<typeof vi.fn> }) | null,
     onScroll: undefined as ((e: Event) => void) | undefined,
     make() {
       const el = document.createElement("div")

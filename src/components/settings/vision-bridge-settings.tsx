@@ -29,11 +29,7 @@ import {
   visionBridgeSaveConfig,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
-import {
-  ALL_AGENT_TYPES,
-  AGENT_LABELS,
-  type AgentType,
-} from "@/lib/types"
+import { ALL_AGENT_TYPES, AGENT_LABELS, type AgentType } from "@/lib/types"
 import { primeVisionBridgeConfig } from "@/hooks/use-vision-bridge-enabled"
 
 // OpenClaw doesn't support MCP, so exclude it from the vision bridge grid.

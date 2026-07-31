@@ -1,6 +1,4 @@
-import {
-  getTransport,
-} from "../transport"
+import { getTransport } from "../transport"
 import type {
   AgentType,
   AcpAgentInfo,
@@ -24,11 +22,9 @@ import type {
   SkillSyncReport,
 } from "../types"
 
-
 export async function acpListAgents(): Promise<AcpAgentInfo[]> {
   return getTransport().call("acp_list_agents")
 }
-
 
 export async function acpGetAgentStatus(
   agentType: AgentType
@@ -36,11 +32,9 @@ export async function acpGetAgentStatus(
   return getTransport().call("acp_get_agent_status", { agentType })
 }
 
-
 export async function acpClearBinaryCache(agentType: AgentType): Promise<void> {
   return getTransport().call("acp_clear_binary_cache", { agentType })
 }
-
 
 export async function acpDownloadAgentBinary(
   agentType: AgentType,
@@ -54,7 +48,6 @@ export async function acpDownloadAgentBinary(
   })
 }
 
-
 export async function acpInstallUvTool(taskId: string): Promise<void> {
   // uv install downloads + extracts the toolchain from GitHub; allow well
   // beyond the default 60s web-call timeout so slow networks don't surface a
@@ -66,13 +59,11 @@ export async function acpInstallUvTool(taskId: string): Promise<void> {
   )
 }
 
-
 export async function acpDetectAgentLocalVersion(
   agentType: AgentType
 ): Promise<string | null> {
   return getTransport().call("acp_detect_agent_local_version", { agentType })
 }
-
 
 export async function acpPrepareNpxAgent(
   agentType: AgentType,
@@ -90,14 +81,12 @@ export async function acpPrepareNpxAgent(
   })
 }
 
-
 export async function acpUninstallAgent(
   agentType: AgentType,
   taskId: string
 ): Promise<void> {
   return getTransport().call("acp_uninstall_agent", { agentType, taskId })
 }
-
 
 export async function acpUpdateAgentPreferences(
   agentType: AgentType,
@@ -156,11 +145,9 @@ export async function acpRevealHermesHome(): Promise<void> {
   return getTransport().call("acp_reveal_hermes_home", {})
 }
 
-
 export async function acpReorderAgents(agentTypes: AgentType[]): Promise<void> {
   return getTransport().call("acp_reorder_agents", { agentTypes })
 }
-
 
 export async function codexRequestDeviceCode(): Promise<{
   userCode: string
@@ -170,7 +157,6 @@ export async function codexRequestDeviceCode(): Promise<{
 }> {
   return getTransport().call("codex_request_device_code", {})
 }
-
 
 export async function codexPollDeviceCode(params: {
   deviceAuthId: string
@@ -189,7 +175,6 @@ export async function codexPollDeviceCode(params: {
   })
 }
 
-
 export async function acpPreflight(
   agentType: AgentType,
   forceRefresh?: boolean
@@ -200,11 +185,9 @@ export async function acpPreflight(
   })
 }
 
-
 export async function opencodeListPlugins(): Promise<PluginCheckSummary> {
   return getTransport().call("opencode_list_plugins", {})
 }
-
 
 export async function opencodeProviderCatalog(
   forceRefresh?: boolean
@@ -213,7 +196,6 @@ export async function opencodeProviderCatalog(
     forceRefresh: forceRefresh ?? null,
   })
 }
-
 
 export async function opencodeInstallPlugins(
   taskId: string,
@@ -225,13 +207,11 @@ export async function opencodeInstallPlugins(
   })
 }
 
-
 export async function opencodeUninstallPlugin(
   name: string
 ): Promise<PluginCheckSummary> {
   return getTransport().call("opencode_uninstall_plugin", { name })
 }
-
 
 export async function acpListAgentSkills(params: {
   agentType: AgentType
@@ -242,7 +222,6 @@ export async function acpListAgentSkills(params: {
     workspacePath: params.workspacePath ?? null,
   })
 }
-
 
 export async function acpReadAgentSkill(params: {
   agentType: AgentType
@@ -257,7 +236,6 @@ export async function acpReadAgentSkill(params: {
     workspacePath: params.workspacePath ?? null,
   })
 }
-
 
 export async function acpSaveAgentSkill(params: {
   agentType: AgentType
@@ -277,7 +255,6 @@ export async function acpSaveAgentSkill(params: {
   })
 }
 
-
 export async function acpDeleteAgentSkill(params: {
   agentType: AgentType
   scope: AgentSkillScope
@@ -294,11 +271,9 @@ export async function acpDeleteAgentSkill(params: {
 
 // ─── Experts (built-in expert skills) ───────────────────────────────────
 
-
 export async function expertsList(): Promise<ExpertListItem[]> {
   return getTransport().call("experts_list")
 }
-
 
 export async function expertsGetInstallStatus(
   expertId: string
@@ -335,7 +310,6 @@ export async function expertsApplyLinks(
   return getTransport().call("experts_apply_links", { ops })
 }
 
-
 export async function expertsLinkToAgent(params: {
   expertId: string
   agentType: AgentType
@@ -345,7 +319,6 @@ export async function expertsLinkToAgent(params: {
     agentType: params.agentType,
   })
 }
-
 
 export async function expertsUnlinkFromAgent(params: {
   expertId: string
@@ -357,11 +330,9 @@ export async function expertsUnlinkFromAgent(params: {
   })
 }
 
-
 export async function expertsReadContent(expertId: string): Promise<string> {
   return getTransport().call("experts_read_content", { expertId })
 }
-
 
 export async function expertsOpenCentralDir(): Promise<string> {
   return getTransport().call("experts_open_central_dir")
@@ -371,11 +342,9 @@ export async function expertsOpenCentralDir(): Promise<string> {
 // Link statuses reuse the Expert* DTOs (like office tools do): the
 // `expertId` field carries the science skill id.
 
-
 export async function scienceList(): Promise<ScienceListItem[]> {
   return getTransport().call("science_list")
 }
-
 
 export async function scienceGetInstallStatus(
   skillId: string
@@ -411,7 +380,6 @@ export async function scienceApplyLinks(
   return getTransport().call("science_apply_links", { ops })
 }
 
-
 export async function scienceLinkToAgent(params: {
   skillId: string
   agentType: AgentType
@@ -421,7 +389,6 @@ export async function scienceLinkToAgent(params: {
     agentType: params.agentType,
   })
 }
-
 
 export async function scienceUnlinkFromAgent(params: {
   skillId: string
@@ -433,11 +400,9 @@ export async function scienceUnlinkFromAgent(params: {
   })
 }
 
-
 export async function scienceReadContent(skillId: string): Promise<string> {
   return getTransport().call("science_read_content", { skillId })
 }
-
 
 export async function scienceOpenCentralDir(): Promise<string> {
   return getTransport().call("science_open_central_dir")
@@ -445,11 +410,9 @@ export async function scienceOpenCentralDir(): Promise<string> {
 
 // ─── Office tools ───
 
-
 export async function officecliDetect(): Promise<OfficecliInfo> {
   return getTransport().call("officecli_detect")
 }
-
 
 export async function officecliInstall(taskId: string): Promise<OfficecliInfo> {
   // The vendor installer downloads + extracts a multi-MB binary; allow well
@@ -465,21 +428,17 @@ export async function officecliInstall(taskId: string): Promise<OfficecliInfo> {
   )
 }
 
-
 export async function officecliUninstall(): Promise<OfficecliInfo> {
   return getTransport().call("officecli_uninstall")
 }
-
 
 export async function officecliListSkills(): Promise<OfficecliSkill[]> {
   return getTransport().call("officecli_list_skills")
 }
 
-
 export async function officecliSyncSkills(): Promise<SkillSyncReport> {
   return getTransport().call("officecli_sync_skills")
 }
-
 
 export async function officecliSkillLinkToAgent(params: {
   skillId: string
@@ -488,14 +447,12 @@ export async function officecliSkillLinkToAgent(params: {
   return getTransport().call("officecli_skill_link_to_agent", params)
 }
 
-
 export async function officecliSkillUnlinkFromAgent(params: {
   skillId: string
   agentType: AgentType
 }): Promise<void> {
   return getTransport().call("officecli_skill_unlink_from_agent", params)
 }
-
 
 export async function officecliSkillGetInstallStatus(
   skillId: string
@@ -530,7 +487,6 @@ export async function officecliSkillApplyLinks(
 ): Promise<LinkOpResult[]> {
   return getTransport().call("officecli_skill_apply_links", { ops })
 }
-
 
 export async function officecliSkillReadContent(
   skillId: string
@@ -577,5 +533,3 @@ export async function stopOfficeWatch(
 ): Promise<void> {
   return getTransport().call("stop_office_watch", { rootPath, path })
 }
-
-

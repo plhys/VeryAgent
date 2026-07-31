@@ -274,9 +274,7 @@ describe("AgentSelector", () => {
     // onFallback(null), so the parent can keep draftAgentType across a
     // general → expert → general round-trip.
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /Codex/i })
-      ).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /Codex/i })).toBeInTheDocument()
     })
     expect(onSelect).not.toHaveBeenCalled()
     expect(onFallback).not.toHaveBeenCalled()

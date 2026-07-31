@@ -170,7 +170,8 @@ export function ImageGenerationSettingsBody({
         // Expand incomplete gateways so user can finish setup; collapse complete ones.
         const incomplete = list
           .filter(
-            (g) => !g.api_url.trim() || !g.api_key.trim() || !g.model_name.trim()
+            (g) =>
+              !g.api_url.trim() || !g.api_key.trim() || !g.model_name.trim()
           )
           .map((g) => g.id)
         setExpandedIds(new Set(incomplete))
@@ -266,8 +267,7 @@ export function ImageGenerationSettingsBody({
           return
         }
         const current = gw.model_name.trim()
-        const inList =
-          current && result.models.some((m) => m.id === current)
+        const inList = current && result.models.some((m) => m.id === current)
         if (!inList) {
           updateGateway(gw.id, { model_name: result.models[0].id })
         }
@@ -416,7 +416,9 @@ export function ImageGenerationSettingsBody({
               {t("addGateway")}
             </Button>
           </div>
-          <p className="text-[11px] text-muted-foreground">{t("gatewaysHint")}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {t("gatewaysHint")}
+          </p>
 
           {sortedGateways.length === 0 && (
             <p className="rounded-md border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
@@ -433,8 +435,7 @@ export function ImageGenerationSettingsBody({
                 : undefined
               const fetching = fetchingGwId === gw.id
               const open = expandedIds.has(gw.id)
-              const noteLabel =
-                gw.note.trim() || t("gatewayNotePlaceholder")
+              const noteLabel = gw.note.trim() || t("gatewayNotePlaceholder")
               const hasErr =
                 !!validationErrors[`${gw.id}.apiUrl`] ||
                 !!validationErrors[`${gw.id}.apiKey`] ||
@@ -460,7 +461,9 @@ export function ImageGenerationSettingsBody({
                         <button
                           type="button"
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                          aria-label={open ? t("collapseGateway") : t("expandGateway")}
+                          aria-label={
+                            open ? t("collapseGateway") : t("expandGateway")
+                          }
                         >
                           <ChevronDown
                             className={cn(

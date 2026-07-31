@@ -26,7 +26,11 @@ describe("referenceToMarkdown", () => {
   it("renders a session as a markdown link to its veryagent:// uri", () => {
     expect(
       referenceToMarkdown(
-        ref({ refType: "session", label: "Login", uri: "veryagent://session/123" })
+        ref({
+          refType: "session",
+          label: "Login",
+          uri: "veryagent://session/123",
+        })
       )
     ).toBe("[Login](veryagent://session/123)")
   })
@@ -136,7 +140,11 @@ describe("referenceToMarkdown", () => {
     it("escapes backticks in link text", () => {
       expect(
         referenceToMarkdown(
-          ref({ refType: "session", label: "a`b", uri: "veryagent://session/2" })
+          ref({
+            refType: "session",
+            label: "a`b",
+            uri: "veryagent://session/2",
+          })
         )
       ).toBe("[a\\`b](veryagent://session/2)")
     })

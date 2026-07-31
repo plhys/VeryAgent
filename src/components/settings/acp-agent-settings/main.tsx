@@ -1,12 +1,6 @@
 "use client"
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Reorder } from "motion/react"
 import { useLocale, useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
@@ -97,7 +91,7 @@ import {
   buildAgentReadiness,
   isReadinessPilotAgent,
   readinessToneClass,
-  } from "@/lib/agent-readiness"
+} from "@/lib/agent-readiness"
 import {
   OpenCodeConnectDialog,
   OpenCodeCustomProviderDialog,
@@ -109,7 +103,7 @@ import {
   modelReferencesProvider,
   setProviderApiKey,
   setProviderEnabled,
-  } from "@/lib/opencode-connect"
+} from "@/lib/opencode-connect"
 import { toErrorMessage } from "@/lib/app-error"
 import { getInstallErrorHintKey } from "@/lib/agent-install-error"
 import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
@@ -118,22 +112,83 @@ import { CodeBuddyConfigPanel } from "../codebuddy-config-panel"
 import { PiConfigPanel } from "../pi-config-panel"
 
 import type {
-  AgentCheckState, ClaudeAuthMode, ClaudeEffortLevel,
-  ImportantConfigKey, RunningActionKind, UiFixAction, UiCheckItem, AcpTranslator,
+  AgentCheckState,
+  ClaudeAuthMode,
+  ClaudeEffortLevel,
+  ImportantConfigKey,
+  RunningActionKind,
+  UiFixAction,
+  UiCheckItem,
+  AcpTranslator,
   AgentDraft,
   GeminiAuthMode,
   CodexAuthMode,
-  HermesAuthMode, OpenClawAuthMode, ClineAuthMode,
-  OpenCodeAuthMode, PiAuthMode, CodeBuddyAuthMode,
+  HermesAuthMode,
+  OpenClawAuthMode,
+  ClineAuthMode,
+  OpenCodeAuthMode,
+  PiAuthMode,
+  CodeBuddyAuthMode,
 } from "./types"
 import {
-  CLAUDE_AUTH_MODES, CLAUDE_EFFORT_LEVEL_CONFIG_KEY, CLAUDE_EFFORT_LEVEL_VALUES,
-  GEMINI_AUTH_MODES, OPENCLAW_ENV_KEYS, CLINE_PROVIDERS,
-  CODEX_DEFAULT_MODEL_PROVIDER, CODEX_AUTH_MODES, CODEX_REASONING_EFFORT_OPTIONS,
-  CODEX_DEFAULT_REASONING_EFFORT, OPENCODE_PROVIDER_NPM_OPTIONS,
+  CLAUDE_AUTH_MODES,
+  CLAUDE_EFFORT_LEVEL_CONFIG_KEY,
+  CLAUDE_EFFORT_LEVEL_VALUES,
+  GEMINI_AUTH_MODES,
+  OPENCLAW_ENV_KEYS,
+  CLINE_PROVIDERS,
+  CODEX_DEFAULT_MODEL_PROVIDER,
+  CODEX_AUTH_MODES,
+  CODEX_REASONING_EFFORT_OPTIONS,
+  CODEX_DEFAULT_REASONING_EFFORT,
+  OPENCODE_PROVIDER_NPM_OPTIONS,
 } from "./types"
-import { setAcpTranslator, statusTone, summarizeChecks, envMapToText, parseEnvText, patchEnvText, importantEnvKeysByAgent, parseConfigJsonText, asObjectRecord, patchOpenCodeAuthJsonText, extractImportantConfigValues, extractGeminiImportantValues, extractClineImportantValues, patchGeminiConfigText, patchGeminiEnvText, patchGeminiAuthMode, geminiAuthModeLabel, geminiAuthModeHint, markRemovedKeysNull, normalizeConfigText, buildOpenCodeModelOptions, extractOpenCodeConfigValues, patchOpenCodeConfigText, ensureOpenCodeProviderNpm, buildOpenCodeNpmOptions, parseCodexAuthJsonText, hasCodexChatgptTokens, extractCodexImportantValues, updateTomlRootStringKey, removeTomlSection, patchCodexAuthJsonText, patchCodexConfigTomlText, normalizeCodexReasoningEffort, parseHermesConfig, buildAgentDraft, isValidCustomVersion, patchEnvByImportantKey, applyImportantFieldToDraft, buildImportantPatchFromDraft } from "./shared"
-import { patchImportantConfigText, configTextForClaudeSave, getAgentChecks } from "./checks"
+import {
+  setAcpTranslator,
+  statusTone,
+  summarizeChecks,
+  envMapToText,
+  parseEnvText,
+  patchEnvText,
+  importantEnvKeysByAgent,
+  parseConfigJsonText,
+  asObjectRecord,
+  patchOpenCodeAuthJsonText,
+  extractImportantConfigValues,
+  extractGeminiImportantValues,
+  extractClineImportantValues,
+  patchGeminiConfigText,
+  patchGeminiEnvText,
+  patchGeminiAuthMode,
+  geminiAuthModeLabel,
+  geminiAuthModeHint,
+  markRemovedKeysNull,
+  normalizeConfigText,
+  buildOpenCodeModelOptions,
+  extractOpenCodeConfigValues,
+  patchOpenCodeConfigText,
+  ensureOpenCodeProviderNpm,
+  buildOpenCodeNpmOptions,
+  parseCodexAuthJsonText,
+  hasCodexChatgptTokens,
+  extractCodexImportantValues,
+  updateTomlRootStringKey,
+  removeTomlSection,
+  patchCodexAuthJsonText,
+  patchCodexConfigTomlText,
+  normalizeCodexReasoningEffort,
+  parseHermesConfig,
+  buildAgentDraft,
+  isValidCustomVersion,
+  patchEnvByImportantKey,
+  applyImportantFieldToDraft,
+  buildImportantPatchFromDraft,
+} from "./shared"
+import {
+  patchImportantConfigText,
+  configTextForClaudeSave,
+  getAgentChecks,
+} from "./checks"
 import { OpenCodeModelCombobox } from "./opencode-model-combobox"
 import { AgentReorderItem } from "./agent-reorder-item"
 import { KimiCodeConfigPanel } from "./kimi-code-config"
@@ -1288,21 +1343,18 @@ export function AcpAgentSettings() {
     // needs to know (e.g. to hide the generic env-editor), check the agent's
     // persisted model_provider_id or the panel-internal mode — for now, just
     // check the agent's model_provider_id.
-    if (at === "kimi_code")
-      return selectedAgent.model_provider_id != null
+    if (at === "kimi_code") return selectedAgent.model_provider_id != null
     if (at === "hermes")
       return selectedDraft.hermesAuthMode === "model_provider"
     if (at === "open_claw")
       return selectedDraft.openClawAuthMode === "model_provider"
-    if (at === "cline")
-      return selectedDraft.clineAuthMode === "model_provider"
+    if (at === "cline") return selectedDraft.clineAuthMode === "model_provider"
     if (at === "open_code")
       return selectedDraft.openCodeAuthMode === "model_provider"
     if (at === "pi") return selectedDraft.piAuthMode === "model_provider"
     if (at === "code_buddy")
       return selectedDraft.codeBuddyAuthMode === "model_provider"
-    if (at === "mimo_code")
-      return selectedAgent.model_provider_id != null
+    if (at === "mimo_code") return selectedAgent.model_provider_id != null
     return false
   }, [selectedAgent, selectedDraft])
 
@@ -1944,9 +1996,7 @@ export function AcpAgentSettings() {
         // OpenCode models are `provider/model`. When binding the managed
         // veryagent provider, keep a bare model id and let the cascade write
         // `veryagent/<model>` into opencode.json.
-        const keepModel = selectedDraft.model
-          .replace(/^veryagent\//, "")
-          .trim()
+        const keepModel = selectedDraft.model.replace(/^veryagent\//, "").trim()
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
@@ -2157,7 +2207,12 @@ export function AcpAgentSettings() {
 
       handleImportantConfigChange("model", modelId)
     },
-    [selectedAgent, selectedDraft, handleImportantConfigChange, updateSelectedDraft]
+    [
+      selectedAgent,
+      selectedDraft,
+      handleImportantConfigChange,
+      updateSelectedDraft,
+    ]
   )
 
   const renderProviderModelPicker = (opts?: {
@@ -2178,7 +2233,11 @@ export function AcpAgentSettings() {
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-[11px]"
-            disabled={disabled || providerModelsLoading || selectedDraft?.modelProviderId == null}
+            disabled={
+              disabled ||
+              providerModelsLoading ||
+              selectedDraft?.modelProviderId == null
+            }
             onClick={() => setProviderModelsRefreshKey((n) => n + 1)}
           >
             {providerModelsLoading ? (
@@ -2539,7 +2598,7 @@ export function AcpAgentSettings() {
         !selectedDraft ||
         selectedAgent.agent_type !== "hermes"
       )
-      return
+        return
       const agentType = selectedAgent.agent_type
       const draft = selectedDraft
       const providerOption = HERMES_PROVIDERS.find(
@@ -3762,13 +3821,11 @@ export function AcpAgentSettings() {
           </p>
         </div>
       </div>
-
       {loadingError && (
         <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
           {loadingError}
         </div>
       )}
-
       <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[minmax(240px,320px)_1fr]">
         <div className="min-h-0 min-w-0 rounded-lg border bg-card flex flex-col overflow-hidden">
           <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -3952,9 +4009,7 @@ export function AcpAgentSettings() {
                   >
                     <AgentIcon
                       agentType={selectedAgent.agent_type}
-                      muted={
-                        !selectedDraft.enabled || !selectedAgent.available
-                      }
+                      muted={!selectedDraft.enabled || !selectedAgent.available}
                       className="h-5 w-5"
                     />
                     <h3 className="text-sm font-semibold truncate">
@@ -4077,14 +4132,15 @@ export function AcpAgentSettings() {
                               name: selectedAgent.name,
                             })}
                             onClick={() => {
-                              runPreflight(selectedAgent.agent_type, true).catch(
-                                (err) => {
-                                  console.error(
-                                    "[Settings] readiness recheck failed:",
-                                    err
-                                  )
-                                }
-                              )
+                              runPreflight(
+                                selectedAgent.agent_type,
+                                true
+                              ).catch((err) => {
+                                console.error(
+                                  "[Settings] readiness recheck failed:",
+                                  err
+                                )
+                              })
                               if (selectedAgent.agent_type === "open_claw") {
                                 openClawDiscoveryAppliedRef.current = false
                                 acpDiscoverOpenClawGateway()
@@ -4290,7 +4346,9 @@ export function AcpAgentSettings() {
                       {selectedDraft.codexAuthMode === "model_provider" && (
                         <div className="mt-1.5 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-300">
                           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                          <span>{t("codex.modelProviderResponsesWarning")}</span>
+                          <span>
+                            {t("codex.modelProviderResponsesWarning")}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -4787,12 +4845,12 @@ supports_websockets = true`}
                       </div>
                     )}
 
-                    {selectedDraft.geminiAuthMode === "model_provider"
-                      ? renderProviderModelPicker({
-                          value: selectedDraft.model,
-                          placeholder: "gemini-3-pro-preview",
-                        })
-                      : (
+                    {selectedDraft.geminiAuthMode === "model_provider" ? (
+                      renderProviderModelPicker({
+                        value: selectedDraft.model,
+                        placeholder: "gemini-3-pro-preview",
+                      })
+                    ) : (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
                           Model
@@ -4808,7 +4866,7 @@ supports_websockets = true`}
                           {t("modelHintDefault")}
                         </p>
                       </div>
-                      )}
+                    )}
 
                     {(selectedDraft.geminiAuthMode === "custom" ||
                       selectedDraft.geminiAuthMode === "model_provider") && (
@@ -5148,761 +5206,789 @@ supports_websockets = true`}
                     )}
 
                     {selectedDraft.openCodeAuthMode === "native" && (
-                    <>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-muted-foreground">
-                          {t("openCode.mainModel")}
-                        </label>
-                        <OpenCodeModelCombobox
-                          value={selectedOpenCodeConfig?.model ?? ""}
-                          onValueChange={(v) =>
-                            handleOpenCodeFieldChange("model", v)
-                          }
-                          groups={openCodeModelOptions}
-                          placeholder="provider/model-id"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-muted-foreground">
-                          {t("openCode.smallModel")}
-                        </label>
-                        <OpenCodeModelCombobox
-                          value={selectedOpenCodeConfig?.smallModel ?? ""}
-                          onValueChange={(v) =>
-                            handleOpenCodeFieldChange("small_model", v)
-                          }
-                          groups={openCodeModelOptions}
-                          placeholder="provider/model-id"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 rounded-md border bg-background/60 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-[11px] font-medium">
-                          {t("openCode.providerManagement")}
-                        </label>
-                        <div className="text-[11px] text-muted-foreground">
-                          {t("openCode.providerCount", {
-                            count:
-                              selectedOpenCodeConfig?.providerIds.length ?? 0,
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            setOpenCodeEditProviderId(null)
-                            setOpenCodeConnectOpen(true)
-                          }}
-                        >
-                          <Plug className="h-3.5 w-3.5" />
-                          {t("openCode.connectProvider")}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            void handleOpenCodeRefreshCatalog()
-                          }}
-                          disabled={openCodeCatalogLoading}
-                          title={t("openCode.refreshCatalog")}
-                        >
-                          <RefreshCw
-                            className={cn(
-                              "h-3.5 w-3.5",
-                              openCodeCatalogLoading && "animate-spin"
-                            )}
-                          />
-                          {t("openCode.refreshCatalog")}
-                        </Button>
-                        {openCodeCatalogLoading &&
-                          openCodeCatalog.length === 0 && (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              {t("openCode.connect.loading")}
-                            </span>
-                          )}
-                      </div>
-
-                      {openCodeWellKnownConnected.length === 0 ? (
-                        <div className="text-[11px] text-muted-foreground">
-                          {t("openCode.noConnectedProviders")}
-                        </div>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-medium">
-                            {t("openCode.connectedProviders")}
-                          </label>
+                      <>
+                        <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-1.5">
-                            {openCodeWellKnownConnected.map((provider) => (
-                              <div
-                                key={provider.id}
-                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5"
-                              >
-                                <div className="flex min-w-0 flex-1 items-center gap-2">
-                                  <span className="truncate text-xs font-medium">
-                                    {provider.name}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground">
-                                    {provider.id}
-                                  </span>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px]"
-                                  >
-                                    {provider.authKind === "oauth"
-                                      ? t("openCode.authKindOauth")
-                                      : provider.authKind === "api"
-                                        ? t("openCode.authKindApi")
-                                        : t("openCode.authKindNone")}
-                                  </Badge>
-                                  {!provider.inCatalog && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[10px]"
-                                    >
-                                      {t("openCode.customBadge")}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2.5">
-                                  <Switch
-                                    checked={provider.enabled}
-                                    onCheckedChange={(checked) => {
-                                      void handleOpenCodeToggleEnabled(
-                                        provider.id,
-                                        checked
-                                      )
-                                    }}
-                                    aria-label={t(
-                                      "openCode.providerEnabledState",
-                                      { providerId: provider.id }
-                                    )}
-                                  />
-                                  {provider.authKind !== "oauth" && (
-                                    <Button
-                                      type="button"
-                                      size="xs"
-                                      variant="ghost"
-                                      onClick={() => {
-                                        // Top list is well-known only → the
-                                        // guided dialog edits the key/base URL.
-                                        setOpenCodeEditProviderId(provider.id)
-                                        setOpenCodeConnectOpen(true)
-                                      }}
-                                    >
-                                      {t("openCode.editConfig")}
-                                    </Button>
-                                  )}
-                                  <Button
-                                    type="button"
-                                    size="xs"
-                                    variant="outline"
-                                    onClick={() => {
-                                      void handleOpenCodeDisconnect(
-                                        provider.id,
-                                        provider.hasConfigBlock
-                                      )
-                                    }}
-                                  >
-                                    {t("openCode.disconnect")}
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                            <label className="text-[11px] text-muted-foreground">
+                              {t("openCode.mainModel")}
+                            </label>
+                            <OpenCodeModelCombobox
+                              value={selectedOpenCodeConfig?.model ?? ""}
+                              onValueChange={(v) =>
+                                handleOpenCodeFieldChange("model", v)
+                              }
+                              groups={openCodeModelOptions}
+                              placeholder="provider/model-id"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] text-muted-foreground">
+                              {t("openCode.smallModel")}
+                            </label>
+                            <OpenCodeModelCombobox
+                              value={selectedOpenCodeConfig?.smallModel ?? ""}
+                              onValueChange={(v) =>
+                                handleOpenCodeFieldChange("small_model", v)
+                              }
+                              groups={openCodeModelOptions}
+                              placeholder="provider/model-id"
+                            />
                           </div>
                         </div>
-                      )}
 
-                      <OpenCodeConnectDialog
-                        open={openCodeConnectOpen}
-                        onOpenChange={(o) => {
-                          setOpenCodeConnectOpen(o)
-                          if (!o) setOpenCodeEditProviderId(null)
-                        }}
-                        catalog={openCodeCatalog}
-                        catalogLoading={openCodeCatalogLoading}
-                        configText={selectedDraft.configText}
-                        authJsonText={selectedDraft.openCodeAuthJsonText}
-                        editProviderId={openCodeEditProviderId}
-                        onConnect={applyOpenCodeConnect}
-                      />
-
-                      <OpenCodeCustomProviderDialog
-                        open={openCodeCustomOpen}
-                        onOpenChange={setOpenCodeCustomOpen}
-                        existingProviderIds={
-                          selectedOpenCodeConfig?.providerIds ?? []
-                        }
-                        catalogIds={openCodeCatalog.map((p) => p.id)}
-                        configText={selectedDraft.configText}
-                        authJsonText={selectedDraft.openCodeAuthJsonText}
-                        onConnect={applyOpenCodeConnect}
-                      />
-
-                      <div className="space-y-1 border-t pt-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-[11px] font-medium text-muted-foreground">
-                            {t("openCode.advancedProviderConfig")}
+                        <div className="space-y-2 rounded-md border bg-background/60 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-[11px] font-medium">
+                              {t("openCode.providerManagement")}
+                            </label>
+                            <div className="text-[11px] text-muted-foreground">
+                              {t("openCode.providerCount", {
+                                count:
+                                  selectedOpenCodeConfig?.providerIds.length ??
+                                  0,
+                              })}
+                            </div>
                           </div>
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            onClick={() => setOpenCodeCustomOpen(true)}
-                            disabled={
-                              openCodeCatalogLoading || !openCodeCatalogReady
-                            }
-                            title={
-                              openCodeCatalogLoading || !openCodeCatalogReady
-                                ? t("openCode.connect.loading")
-                                : undefined
-                            }
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            {t("openCode.addCustomProvider")}
-                          </Button>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">
-                          {t("openCode.customProviderConfigHint")}
-                        </p>
-                      </div>
 
-                      {openCodeCustomProviderIds.length === 0 ? (
-                        <div className="text-[11px] text-muted-foreground">
-                          {t("openCode.emptyProvider")}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {openCodeCustomProviderIds.map((providerId) => {
-                            if (!selectedOpenCodeConfig) return null
-                            const provider =
-                              selectedOpenCodeConfig.providers[providerId]
-                            if (!provider) return null
-                            const expanded = openCodeProviderId === providerId
-                            const isDisabled =
-                              selectedOpenCodeConfig.disabledProviders.includes(
-                                providerId
-                              ) ||
-                              (selectedOpenCodeConfig.enabledProviders.length >
-                                0 &&
-                                !selectedOpenCodeConfig.enabledProviders.includes(
-                                  providerId
-                                ))
-                            return (
-                              <Collapsible
-                                key={providerId}
-                                open={expanded}
-                                onOpenChange={(open) => {
-                                  setOpenCodeProviderId(open ? providerId : "")
-                                }}
-                              >
-                                <div className="rounded-md border bg-muted/20">
-                                  <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-                                    <button
-                                      type="button"
-                                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                                      onClick={() => {
-                                        setOpenCodeProviderId((current) =>
-                                          current === providerId
-                                            ? ""
-                                            : providerId
-                                        )
-                                      }}
-                                    >
-                                      <ChevronDown
-                                        className={cn(
-                                          "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                                          expanded && "rotate-180"
-                                        )}
-                                      />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                setOpenCodeEditProviderId(null)
+                                setOpenCodeConnectOpen(true)
+                              }}
+                            >
+                              <Plug className="h-3.5 w-3.5" />
+                              {t("openCode.connectProvider")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                void handleOpenCodeRefreshCatalog()
+                              }}
+                              disabled={openCodeCatalogLoading}
+                              title={t("openCode.refreshCatalog")}
+                            >
+                              <RefreshCw
+                                className={cn(
+                                  "h-3.5 w-3.5",
+                                  openCodeCatalogLoading && "animate-spin"
+                                )}
+                              />
+                              {t("openCode.refreshCatalog")}
+                            </Button>
+                            {openCodeCatalogLoading &&
+                              openCodeCatalog.length === 0 && (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  {t("openCode.connect.loading")}
+                                </span>
+                              )}
+                          </div>
+
+                          {openCodeWellKnownConnected.length === 0 ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {t("openCode.noConnectedProviders")}
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-medium">
+                                {t("openCode.connectedProviders")}
+                              </label>
+                              <div className="space-y-1.5">
+                                {openCodeWellKnownConnected.map((provider) => (
+                                  <div
+                                    key={provider.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-2.5 py-1.5"
+                                  >
+                                    <div className="flex min-w-0 flex-1 items-center gap-2">
                                       <span className="truncate text-xs font-medium">
-                                        {providerId}
+                                        {provider.name}
                                       </span>
-                                      <span className="text-[11px] text-muted-foreground">
-                                        models: {provider.modelCount}
+                                      <span className="text-[10px] text-muted-foreground">
+                                        {provider.id}
                                       </span>
-                                    </button>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-[11px] text-muted-foreground">
-                                        {isDisabled
-                                          ? t("status.disabled")
-                                          : t("status.enabled")}
-                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px]"
+                                      >
+                                        {provider.authKind === "oauth"
+                                          ? t("openCode.authKindOauth")
+                                          : provider.authKind === "api"
+                                            ? t("openCode.authKindApi")
+                                            : t("openCode.authKindNone")}
+                                      </Badge>
+                                      {!provider.inCatalog && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[10px]"
+                                        >
+                                          {t("openCode.customBadge")}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
                                       <Switch
-                                        checked={!isDisabled}
+                                        checked={provider.enabled}
                                         onCheckedChange={(checked) => {
-                                          handleOpenCodeProviderStatusChange(
-                                            providerId,
+                                          void handleOpenCodeToggleEnabled(
+                                            provider.id,
                                             checked
                                           )
                                         }}
                                         aria-label={t(
                                           "openCode.providerEnabledState",
-                                          { providerId }
+                                          { providerId: provider.id }
                                         )}
-                                        title={
-                                          isDisabled
-                                            ? t("actions.clickEnable", {
-                                                name: providerId,
-                                              })
-                                            : t("actions.clickDisable", {
-                                                name: providerId,
-                                              })
-                                        }
                                       />
+                                      {provider.authKind !== "oauth" && (
+                                        <Button
+                                          type="button"
+                                          size="xs"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            // Top list is well-known only → the
+                                            // guided dialog edits the key/base URL.
+                                            setOpenCodeEditProviderId(
+                                              provider.id
+                                            )
+                                            setOpenCodeConnectOpen(true)
+                                          }}
+                                        >
+                                          {t("openCode.editConfig")}
+                                        </Button>
+                                      )}
                                       <Button
                                         type="button"
                                         size="xs"
                                         variant="outline"
                                         onClick={() => {
-                                          setOpenCodeDeleteProviderId(
-                                            providerId
+                                          void handleOpenCodeDisconnect(
+                                            provider.id,
+                                            provider.hasConfigBlock
                                           )
                                         }}
                                       >
-                                        {t("actions.delete")}
+                                        {t("openCode.disconnect")}
                                       </Button>
                                     </div>
                                   </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-                                  <CollapsibleContent className="px-2.5 pb-2.5">
-                                    <div className="grid gap-3 border-t pt-2.5 md:grid-cols-2">
-                                      <div className="space-y-1.5">
-                                        <label className="text-[11px] text-muted-foreground">
-                                          provider.name
-                                        </label>
-                                        <Input
-                                          value={provider.name}
-                                          onChange={(event) => {
-                                            handleOpenCodeProviderFieldChange(
-                                              providerId,
-                                              "name",
-                                              event.target.value
-                                            )
-                                          }}
-                                          placeholder="My Provider"
-                                        />
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        <label className="text-[11px] text-muted-foreground">
-                                          provider.npm
-                                        </label>
-                                        <Select
-                                          value={
-                                            provider.npm.trim()
-                                              ? provider.npm
-                                              : OPENCODE_PROVIDER_NPM_OPTIONS[0]
-                                                  .value
-                                          }
-                                          onValueChange={(value) => {
-                                            handleOpenCodeProviderFieldChange(
-                                              providerId,
-                                              "npm",
-                                              value
+                          <OpenCodeConnectDialog
+                            open={openCodeConnectOpen}
+                            onOpenChange={(o) => {
+                              setOpenCodeConnectOpen(o)
+                              if (!o) setOpenCodeEditProviderId(null)
+                            }}
+                            catalog={openCodeCatalog}
+                            catalogLoading={openCodeCatalogLoading}
+                            configText={selectedDraft.configText}
+                            authJsonText={selectedDraft.openCodeAuthJsonText}
+                            editProviderId={openCodeEditProviderId}
+                            onConnect={applyOpenCodeConnect}
+                          />
+
+                          <OpenCodeCustomProviderDialog
+                            open={openCodeCustomOpen}
+                            onOpenChange={setOpenCodeCustomOpen}
+                            existingProviderIds={
+                              selectedOpenCodeConfig?.providerIds ?? []
+                            }
+                            catalogIds={openCodeCatalog.map((p) => p.id)}
+                            configText={selectedDraft.configText}
+                            authJsonText={selectedDraft.openCodeAuthJsonText}
+                            onConnect={applyOpenCodeConnect}
+                          />
+
+                          <div className="space-y-1 border-t pt-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[11px] font-medium text-muted-foreground">
+                                {t("openCode.advancedProviderConfig")}
+                              </div>
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="outline"
+                                onClick={() => setOpenCodeCustomOpen(true)}
+                                disabled={
+                                  openCodeCatalogLoading ||
+                                  !openCodeCatalogReady
+                                }
+                                title={
+                                  openCodeCatalogLoading ||
+                                  !openCodeCatalogReady
+                                    ? t("openCode.connect.loading")
+                                    : undefined
+                                }
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                {t("openCode.addCustomProvider")}
+                              </Button>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              {t("openCode.customProviderConfigHint")}
+                            </p>
+                          </div>
+
+                          {openCodeCustomProviderIds.length === 0 ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {t("openCode.emptyProvider")}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {openCodeCustomProviderIds.map((providerId) => {
+                                if (!selectedOpenCodeConfig) return null
+                                const provider =
+                                  selectedOpenCodeConfig.providers[providerId]
+                                if (!provider) return null
+                                const expanded =
+                                  openCodeProviderId === providerId
+                                const isDisabled =
+                                  selectedOpenCodeConfig.disabledProviders.includes(
+                                    providerId
+                                  ) ||
+                                  (selectedOpenCodeConfig.enabledProviders
+                                    .length > 0 &&
+                                    !selectedOpenCodeConfig.enabledProviders.includes(
+                                      providerId
+                                    ))
+                                return (
+                                  <Collapsible
+                                    key={providerId}
+                                    open={expanded}
+                                    onOpenChange={(open) => {
+                                      setOpenCodeProviderId(
+                                        open ? providerId : ""
+                                      )
+                                    }}
+                                  >
+                                    <div className="rounded-md border bg-muted/20">
+                                      <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+                                        <button
+                                          type="button"
+                                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                          onClick={() => {
+                                            setOpenCodeProviderId((current) =>
+                                              current === providerId
+                                                ? ""
+                                                : providerId
                                             )
                                           }}
                                         >
-                                          <SelectTrigger className="w-full">
-                                            <SelectValue
-                                              placeholder={t(
-                                                "openCode.selectProviderNpm"
-                                              )}
-                                            />
-                                          </SelectTrigger>
-                                          <SelectContent align="start">
-                                            {buildOpenCodeNpmOptions(
-                                              provider.npm
-                                            ).map((npmOption) => (
-                                              <SelectItem
-                                                key={npmOption}
-                                                value={npmOption}
-                                              >
-                                                {npmOption}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        <label className="text-[11px] text-muted-foreground">
-                                          provider.api
-                                        </label>
-                                        <Input
-                                          value={provider.api}
-                                          onChange={(event) => {
-                                            handleOpenCodeProviderFieldChange(
-                                              providerId,
-                                              "api",
-                                              event.target.value
-                                            )
-                                          }}
-                                          placeholder="openai.responses"
-                                        />
-                                      </div>
-                                      <div className="space-y-1.5">
-                                        <label className="text-[11px] text-muted-foreground">
-                                          provider.options.baseURL
-                                        </label>
-                                        <Input
-                                          value={provider.baseUrl}
-                                          onChange={(event) => {
-                                            handleOpenCodeProviderFieldChange(
-                                              providerId,
-                                              "baseURL",
-                                              event.target.value
-                                            )
-                                          }}
-                                          placeholder="https://api.example.com/v1"
-                                        />
-                                      </div>
-                                      <div className="space-y-1.5 md:col-span-2">
-                                        <label className="text-[11px] text-muted-foreground">
-                                          provider.options.apiKey
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                          <Input
-                                            type={
-                                              showApiKeys[
-                                                selectedAgent.agent_type
-                                              ]
-                                                ? "text"
-                                                : "password"
-                                            }
-                                            value={provider.apiKey}
-                                            onChange={(event) => {
-                                              handleOpenCodeProviderFieldChange(
+                                          <ChevronDown
+                                            className={cn(
+                                              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                                              expanded && "rotate-180"
+                                            )}
+                                          />
+                                          <span className="truncate text-xs font-medium">
+                                            {providerId}
+                                          </span>
+                                          <span className="text-[11px] text-muted-foreground">
+                                            models: {provider.modelCount}
+                                          </span>
+                                        </button>
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-[11px] text-muted-foreground">
+                                            {isDisabled
+                                              ? t("status.disabled")
+                                              : t("status.enabled")}
+                                          </span>
+                                          <Switch
+                                            checked={!isDisabled}
+                                            onCheckedChange={(checked) => {
+                                              handleOpenCodeProviderStatusChange(
                                                 providerId,
-                                                "apiKey",
-                                                event.target.value
+                                                checked
                                               )
                                             }}
-                                            placeholder="sk-..."
+                                            aria-label={t(
+                                              "openCode.providerEnabledState",
+                                              { providerId }
+                                            )}
+                                            title={
+                                              isDisabled
+                                                ? t("actions.clickEnable", {
+                                                    name: providerId,
+                                                  })
+                                                : t("actions.clickDisable", {
+                                                    name: providerId,
+                                                  })
+                                            }
                                           />
                                           <Button
                                             type="button"
+                                            size="xs"
                                             variant="outline"
-                                            size="sm"
                                             onClick={() => {
-                                              setShowApiKeys((prev) => ({
-                                                ...prev,
-                                                [selectedAgent.agent_type]:
-                                                  !prev[
-                                                    selectedAgent.agent_type
-                                                  ],
-                                              }))
+                                              setOpenCodeDeleteProviderId(
+                                                providerId
+                                              )
                                             }}
-                                            title={
-                                              showApiKeys[
-                                                selectedAgent.agent_type
-                                              ]
-                                                ? t("actions.hideKey")
-                                                : t("actions.showKey")
-                                            }
                                           >
-                                            {showApiKeys[
-                                              selectedAgent.agent_type
-                                            ] ? (
-                                              <EyeOff className="h-3.5 w-3.5" />
-                                            ) : (
-                                              <Eye className="h-3.5 w-3.5" />
-                                            )}
+                                            {t("actions.delete")}
                                           </Button>
                                         </div>
                                       </div>
-                                    </div>
-                                    <Collapsible
-                                      open={Boolean(
-                                        openCodeModelConfigExpanded[providerId]
-                                      )}
-                                      onOpenChange={(open) => {
-                                        setOpenCodeModelConfigExpanded(
-                                          (prev) => ({
-                                            ...prev,
-                                            [providerId]: open,
-                                          })
-                                        )
-                                      }}
-                                    >
-                                      <div className="mt-3 rounded-md border bg-background/50 p-2.5">
-                                        <button
-                                          type="button"
-                                          className="flex w-full items-center justify-between gap-2 text-left"
-                                          onClick={() => {
+
+                                      <CollapsibleContent className="px-2.5 pb-2.5">
+                                        <div className="grid gap-3 border-t pt-2.5 md:grid-cols-2">
+                                          <div className="space-y-1.5">
+                                            <label className="text-[11px] text-muted-foreground">
+                                              provider.name
+                                            </label>
+                                            <Input
+                                              value={provider.name}
+                                              onChange={(event) => {
+                                                handleOpenCodeProviderFieldChange(
+                                                  providerId,
+                                                  "name",
+                                                  event.target.value
+                                                )
+                                              }}
+                                              placeholder="My Provider"
+                                            />
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            <label className="text-[11px] text-muted-foreground">
+                                              provider.npm
+                                            </label>
+                                            <Select
+                                              value={
+                                                provider.npm.trim()
+                                                  ? provider.npm
+                                                  : OPENCODE_PROVIDER_NPM_OPTIONS[0]
+                                                      .value
+                                              }
+                                              onValueChange={(value) => {
+                                                handleOpenCodeProviderFieldChange(
+                                                  providerId,
+                                                  "npm",
+                                                  value
+                                                )
+                                              }}
+                                            >
+                                              <SelectTrigger className="w-full">
+                                                <SelectValue
+                                                  placeholder={t(
+                                                    "openCode.selectProviderNpm"
+                                                  )}
+                                                />
+                                              </SelectTrigger>
+                                              <SelectContent align="start">
+                                                {buildOpenCodeNpmOptions(
+                                                  provider.npm
+                                                ).map((npmOption) => (
+                                                  <SelectItem
+                                                    key={npmOption}
+                                                    value={npmOption}
+                                                  >
+                                                    {npmOption}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            <label className="text-[11px] text-muted-foreground">
+                                              provider.api
+                                            </label>
+                                            <Input
+                                              value={provider.api}
+                                              onChange={(event) => {
+                                                handleOpenCodeProviderFieldChange(
+                                                  providerId,
+                                                  "api",
+                                                  event.target.value
+                                                )
+                                              }}
+                                              placeholder="openai.responses"
+                                            />
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            <label className="text-[11px] text-muted-foreground">
+                                              provider.options.baseURL
+                                            </label>
+                                            <Input
+                                              value={provider.baseUrl}
+                                              onChange={(event) => {
+                                                handleOpenCodeProviderFieldChange(
+                                                  providerId,
+                                                  "baseURL",
+                                                  event.target.value
+                                                )
+                                              }}
+                                              placeholder="https://api.example.com/v1"
+                                            />
+                                          </div>
+                                          <div className="space-y-1.5 md:col-span-2">
+                                            <label className="text-[11px] text-muted-foreground">
+                                              provider.options.apiKey
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                              <Input
+                                                type={
+                                                  showApiKeys[
+                                                    selectedAgent.agent_type
+                                                  ]
+                                                    ? "text"
+                                                    : "password"
+                                                }
+                                                value={provider.apiKey}
+                                                onChange={(event) => {
+                                                  handleOpenCodeProviderFieldChange(
+                                                    providerId,
+                                                    "apiKey",
+                                                    event.target.value
+                                                  )
+                                                }}
+                                                placeholder="sk-..."
+                                              />
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setShowApiKeys((prev) => ({
+                                                    ...prev,
+                                                    [selectedAgent.agent_type]:
+                                                      !prev[
+                                                        selectedAgent.agent_type
+                                                      ],
+                                                  }))
+                                                }}
+                                                title={
+                                                  showApiKeys[
+                                                    selectedAgent.agent_type
+                                                  ]
+                                                    ? t("actions.hideKey")
+                                                    : t("actions.showKey")
+                                                }
+                                              >
+                                                {showApiKeys[
+                                                  selectedAgent.agent_type
+                                                ] ? (
+                                                  <EyeOff className="h-3.5 w-3.5" />
+                                                ) : (
+                                                  <Eye className="h-3.5 w-3.5" />
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <Collapsible
+                                          open={Boolean(
+                                            openCodeModelConfigExpanded[
+                                              providerId
+                                            ]
+                                          )}
+                                          onOpenChange={(open) => {
                                             setOpenCodeModelConfigExpanded(
                                               (prev) => ({
                                                 ...prev,
-                                                [providerId]: !prev[providerId],
+                                                [providerId]: open,
                                               })
                                             )
                                           }}
                                         >
-                                          <div className="flex items-center gap-2">
-                                            <ChevronDown
-                                              className={cn(
-                                                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                                                openCodeModelConfigExpanded[
-                                                  providerId
-                                                ] && "rotate-180"
-                                              )}
-                                            />
-                                            <span className="text-[11px] font-medium">
-                                              {t("openCode.modelManagement")}
-                                            </span>
-                                          </div>
-                                          <span className="text-[11px] text-muted-foreground">
-                                            {t("openCode.modelCount", {
-                                              count: provider.modelCount,
-                                            })}
-                                          </span>
-                                        </button>
-                                        <CollapsibleContent className="pt-2">
-                                          <p className="text-[11px] text-muted-foreground">
-                                            {t("openCode.modelDescription")}
-                                          </p>
-
-                                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                                            <Input
-                                              value={
-                                                openCodeNewModelIds[
-                                                  providerId
-                                                ] ?? ""
-                                              }
-                                              onChange={(event) => {
-                                                handleOpenCodeModelDraftChange(
-                                                  providerId,
-                                                  event.target.value
-                                                )
-                                              }}
-                                              className="w-[240px]"
-                                              placeholder="new-model-id"
-                                            />
-                                            <Button
+                                          <div className="mt-3 rounded-md border bg-background/50 p-2.5">
+                                            <button
                                               type="button"
-                                              size="sm"
-                                              variant="outline"
+                                              className="flex w-full items-center justify-between gap-2 text-left"
                                               onClick={() => {
-                                                handleOpenCodeAddModel(
-                                                  providerId
+                                                setOpenCodeModelConfigExpanded(
+                                                  (prev) => ({
+                                                    ...prev,
+                                                    [providerId]:
+                                                      !prev[providerId],
+                                                  })
                                                 )
                                               }}
                                             >
-                                              {t("openCode.addModel")}
-                                            </Button>
-                                          </div>
-
-                                          {provider.modelIds.length === 0 ? (
-                                            <div className="mt-2 text-[11px] text-muted-foreground">
-                                              {t("openCode.emptyModel")}
-                                            </div>
-                                          ) : (
-                                            <div className="mt-2 space-y-1">
-                                              <div className="flex items-center gap-2 px-1 text-[10px] text-muted-foreground">
-                                                <div className="min-w-0 flex-1">
-                                                  {t("openCode.modelId")}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                  {t("openCode.modelName")}
-                                                </div>
-                                                <div className="size-8 shrink-0" />
+                                              <div className="flex items-center gap-2">
+                                                <ChevronDown
+                                                  className={cn(
+                                                    "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                                                    openCodeModelConfigExpanded[
+                                                      providerId
+                                                    ] && "rotate-180"
+                                                  )}
+                                                />
+                                                <span className="text-[11px] font-medium">
+                                                  {t(
+                                                    "openCode.modelManagement"
+                                                  )}
+                                                </span>
                                               </div>
-                                              {provider.modelIds.map(
-                                                (modelId) => {
-                                                  const model =
-                                                    provider.models[modelId]
-                                                  if (!model) return null
-                                                  const modelDraftKey = `${providerId}:${modelId}`
-                                                  return (
-                                                    <div
-                                                      key={`${providerId}:${modelId}`}
-                                                      className="flex items-center gap-2"
-                                                    >
-                                                      <Input
-                                                        value={
-                                                          openCodeModelIdDrafts[
-                                                            modelDraftKey
-                                                          ] ?? model.id
-                                                        }
-                                                        onChange={(event) => {
-                                                          handleOpenCodeModelIdDraftChange(
-                                                            providerId,
-                                                            modelId,
-                                                            event.target.value
-                                                          )
-                                                        }}
-                                                        onBlur={() => {
-                                                          handleOpenCodeModelIdCommit(
-                                                            providerId,
-                                                            modelId
-                                                          )
-                                                        }}
-                                                        onKeyDown={(event) => {
-                                                          if (
-                                                            event.key ===
-                                                            "Enter"
-                                                          ) {
-                                                            event.preventDefault()
-                                                            handleOpenCodeModelIdCommit(
-                                                              providerId,
-                                                              modelId
-                                                            )
-                                                            event.currentTarget.blur()
-                                                            return
-                                                          }
-                                                          if (
-                                                            event.key ===
-                                                            "Escape"
-                                                          ) {
-                                                            setOpenCodeModelIdDrafts(
-                                                              (prev) => {
-                                                                if (
-                                                                  typeof prev[
-                                                                    modelDraftKey
-                                                                  ] ===
-                                                                  "undefined"
-                                                                ) {
-                                                                  return prev
-                                                                }
-                                                                const next = {
-                                                                  ...prev,
-                                                                }
-                                                                delete next[
-                                                                  modelDraftKey
-                                                                ]
-                                                                return next
-                                                              }
-                                                            )
-                                                            event.currentTarget.blur()
-                                                          }
-                                                        }}
-                                                        className="h-8 min-w-0 flex-1"
-                                                        placeholder="model.id"
-                                                      />
-                                                      <Input
-                                                        value={model.name}
-                                                        onChange={(event) => {
-                                                          handleOpenCodeModelFieldChange(
-                                                            providerId,
-                                                            modelId,
-                                                            event.target.value
-                                                          )
-                                                        }}
-                                                        className="h-8 min-w-0 flex-1"
-                                                        placeholder="model.name"
-                                                      />
-                                                      <Button
-                                                        type="button"
-                                                        size="icon-sm"
-                                                        variant="ghost"
-                                                        className="shrink-0 text-muted-foreground hover:text-destructive"
-                                                        aria-label={t(
-                                                          "openCode.deleteModel",
-                                                          { modelId }
-                                                        )}
-                                                        title={t(
-                                                          "openCode.deleteModel",
-                                                          { modelId }
-                                                        )}
-                                                        onClick={() => {
-                                                          handleOpenCodeRemoveModel(
-                                                            providerId,
-                                                            modelId
-                                                          )
-                                                        }}
-                                                      >
-                                                        <Minus className="h-3.5 w-3.5" />
-                                                      </Button>
-                                                    </div>
-                                                  )
-                                                }
-                                              )}
-                                            </div>
-                                          )}
-                                        </CollapsibleContent>
-                                      </div>
-                                    </Collapsible>
-                                    <div className="mt-3 flex justify-end">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={() => {
-                                          persistConfig(
-                                            selectedAgent.agent_type,
-                                            selectedDraft.configText,
-                                            {
-                                              openCodeAuthJsonText:
-                                                selectedDraft.openCodeAuthJsonText,
-                                            }
-                                          )
-                                            .then(() => {
-                                              toast.success(
-                                                t("toasts.providerSaved", {
-                                                  providerId,
-                                                }),
-                                                {
-                                                  description: `${t("toasts.openCodeConfigSynced")} ${t("toasts.configSavedHint")}`,
-                                                }
-                                              )
-                                            })
-                                            .catch((err) => {
-                                              console.error(
-                                                "[Settings] save opencode provider failed:",
-                                                err
-                                              )
-                                              const message =
-                                                err instanceof Error
-                                                  ? err.message
-                                                  : String(err)
-                                              toast.error(
-                                                t("toasts.saveProviderFailed", {
-                                                  providerId,
-                                                }),
-                                                {
-                                                  description: message,
-                                                }
-                                              )
-                                            })
-                                        }}
-                                        disabled={selectedIsSavingConfig}
-                                      >
-                                        {selectedIsSavingConfig ? (
-                                          <>
-                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            {t("actions.saving")}
-                                          </>
-                                        ) : (
-                                          <>
-                                            <Save className="h-3.5 w-3.5" />
-                                            {t("actions.saveCurrentProvider")}
-                                          </>
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </CollapsibleContent>
-                                </div>
-                              </Collapsible>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
+                                              <span className="text-[11px] text-muted-foreground">
+                                                {t("openCode.modelCount", {
+                                                  count: provider.modelCount,
+                                                })}
+                                              </span>
+                                            </button>
+                                            <CollapsibleContent className="pt-2">
+                                              <p className="text-[11px] text-muted-foreground">
+                                                {t("openCode.modelDescription")}
+                                              </p>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("openCode.nativeJsonConfig")}
-                      </label>
-                      <Textarea
-                        value={selectedDraft.configText}
-                        onChange={(event) => {
-                          handleConfigTextChange(event.target.value)
-                        }}
-                        placeholder={`{
+                                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                <Input
+                                                  value={
+                                                    openCodeNewModelIds[
+                                                      providerId
+                                                    ] ?? ""
+                                                  }
+                                                  onChange={(event) => {
+                                                    handleOpenCodeModelDraftChange(
+                                                      providerId,
+                                                      event.target.value
+                                                    )
+                                                  }}
+                                                  className="w-[240px]"
+                                                  placeholder="new-model-id"
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => {
+                                                    handleOpenCodeAddModel(
+                                                      providerId
+                                                    )
+                                                  }}
+                                                >
+                                                  {t("openCode.addModel")}
+                                                </Button>
+                                              </div>
+
+                                              {provider.modelIds.length ===
+                                              0 ? (
+                                                <div className="mt-2 text-[11px] text-muted-foreground">
+                                                  {t("openCode.emptyModel")}
+                                                </div>
+                                              ) : (
+                                                <div className="mt-2 space-y-1">
+                                                  <div className="flex items-center gap-2 px-1 text-[10px] text-muted-foreground">
+                                                    <div className="min-w-0 flex-1">
+                                                      {t("openCode.modelId")}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                      {t("openCode.modelName")}
+                                                    </div>
+                                                    <div className="size-8 shrink-0" />
+                                                  </div>
+                                                  {provider.modelIds.map(
+                                                    (modelId) => {
+                                                      const model =
+                                                        provider.models[modelId]
+                                                      if (!model) return null
+                                                      const modelDraftKey = `${providerId}:${modelId}`
+                                                      return (
+                                                        <div
+                                                          key={`${providerId}:${modelId}`}
+                                                          className="flex items-center gap-2"
+                                                        >
+                                                          <Input
+                                                            value={
+                                                              openCodeModelIdDrafts[
+                                                                modelDraftKey
+                                                              ] ?? model.id
+                                                            }
+                                                            onChange={(
+                                                              event
+                                                            ) => {
+                                                              handleOpenCodeModelIdDraftChange(
+                                                                providerId,
+                                                                modelId,
+                                                                event.target
+                                                                  .value
+                                                              )
+                                                            }}
+                                                            onBlur={() => {
+                                                              handleOpenCodeModelIdCommit(
+                                                                providerId,
+                                                                modelId
+                                                              )
+                                                            }}
+                                                            onKeyDown={(
+                                                              event
+                                                            ) => {
+                                                              if (
+                                                                event.key ===
+                                                                "Enter"
+                                                              ) {
+                                                                event.preventDefault()
+                                                                handleOpenCodeModelIdCommit(
+                                                                  providerId,
+                                                                  modelId
+                                                                )
+                                                                event.currentTarget.blur()
+                                                                return
+                                                              }
+                                                              if (
+                                                                event.key ===
+                                                                "Escape"
+                                                              ) {
+                                                                setOpenCodeModelIdDrafts(
+                                                                  (prev) => {
+                                                                    if (
+                                                                      typeof prev[
+                                                                        modelDraftKey
+                                                                      ] ===
+                                                                      "undefined"
+                                                                    ) {
+                                                                      return prev
+                                                                    }
+                                                                    const next =
+                                                                      {
+                                                                        ...prev,
+                                                                      }
+                                                                    delete next[
+                                                                      modelDraftKey
+                                                                    ]
+                                                                    return next
+                                                                  }
+                                                                )
+                                                                event.currentTarget.blur()
+                                                              }
+                                                            }}
+                                                            className="h-8 min-w-0 flex-1"
+                                                            placeholder="model.id"
+                                                          />
+                                                          <Input
+                                                            value={model.name}
+                                                            onChange={(
+                                                              event
+                                                            ) => {
+                                                              handleOpenCodeModelFieldChange(
+                                                                providerId,
+                                                                modelId,
+                                                                event.target
+                                                                  .value
+                                                              )
+                                                            }}
+                                                            className="h-8 min-w-0 flex-1"
+                                                            placeholder="model.name"
+                                                          />
+                                                          <Button
+                                                            type="button"
+                                                            size="icon-sm"
+                                                            variant="ghost"
+                                                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                                                            aria-label={t(
+                                                              "openCode.deleteModel",
+                                                              { modelId }
+                                                            )}
+                                                            title={t(
+                                                              "openCode.deleteModel",
+                                                              { modelId }
+                                                            )}
+                                                            onClick={() => {
+                                                              handleOpenCodeRemoveModel(
+                                                                providerId,
+                                                                modelId
+                                                              )
+                                                            }}
+                                                          >
+                                                            <Minus className="h-3.5 w-3.5" />
+                                                          </Button>
+                                                        </div>
+                                                      )
+                                                    }
+                                                  )}
+                                                </div>
+                                              )}
+                                            </CollapsibleContent>
+                                          </div>
+                                        </Collapsible>
+                                        <div className="mt-3 flex justify-end">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => {
+                                              persistConfig(
+                                                selectedAgent.agent_type,
+                                                selectedDraft.configText,
+                                                {
+                                                  openCodeAuthJsonText:
+                                                    selectedDraft.openCodeAuthJsonText,
+                                                }
+                                              )
+                                                .then(() => {
+                                                  toast.success(
+                                                    t("toasts.providerSaved", {
+                                                      providerId,
+                                                    }),
+                                                    {
+                                                      description: `${t("toasts.openCodeConfigSynced")} ${t("toasts.configSavedHint")}`,
+                                                    }
+                                                  )
+                                                })
+                                                .catch((err) => {
+                                                  console.error(
+                                                    "[Settings] save opencode provider failed:",
+                                                    err
+                                                  )
+                                                  const message =
+                                                    err instanceof Error
+                                                      ? err.message
+                                                      : String(err)
+                                                  toast.error(
+                                                    t(
+                                                      "toasts.saveProviderFailed",
+                                                      {
+                                                        providerId,
+                                                      }
+                                                    ),
+                                                    {
+                                                      description: message,
+                                                    }
+                                                  )
+                                                })
+                                            }}
+                                            disabled={selectedIsSavingConfig}
+                                          >
+                                            {selectedIsSavingConfig ? (
+                                              <>
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                {t("actions.saving")}
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Save className="h-3.5 w-3.5" />
+                                                {t(
+                                                  "actions.saveCurrentProvider"
+                                                )}
+                                              </>
+                                            )}
+                                          </Button>
+                                        </div>
+                                      </CollapsibleContent>
+                                    </div>
+                                  </Collapsible>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("openCode.nativeJsonConfig")}
+                          </label>
+                          <Textarea
+                            value={selectedDraft.configText}
+                            onChange={(event) => {
+                              handleConfigTextChange(event.target.value)
+                            }}
+                            placeholder={`{
   "$schema": "https://opencode.ai/config.json",
   "model": "google/gemini-3-pro-preview",
   "provider": {
@@ -5913,68 +5999,68 @@ supports_websockets = true`}
     }
   }
 }`}
-                        className="min-h-44 max-h-96 overflow-y-auto font-mono text-xs"
-                      />
-                      {selectedConfigError && (
-                        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
-                          {selectedConfigError}
+                            className="min-h-44 max-h-96 overflow-y-auto font-mono text-xs"
+                          />
+                          {selectedConfigError && (
+                            <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
+                              {selectedConfigError}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          persistConfig(
-                            selectedAgent.agent_type,
-                            selectedDraft.configText,
-                            {
-                              openCodeAuthJsonText:
-                                selectedDraft.openCodeAuthJsonText,
-                            }
-                          )
-                            .then(async () => {
-                              // Native multi-provider save clears the shared
-                              // model_provider binding so refresh stays in
-                              // native mode (same as Hermes/Cline).
-                              await persistEnv(
-                                "open_code",
-                                selectedAgent.enabled,
-                                selectedDraft.envText,
-                                null
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              persistConfig(
+                                selectedAgent.agent_type,
+                                selectedDraft.configText,
+                                {
+                                  openCodeAuthJsonText:
+                                    selectedDraft.openCodeAuthJsonText,
+                                }
                               )
-                              toast.success(t("toasts.openCodeSaved"), {
-                                description: t("toasts.configSavedHint"),
-                              })
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "[Settings] save opencode config failed:",
-                                err
-                              )
-                              const message = toErrorMessage(err)
-                              toast.error(t("toasts.saveOpenCodeFailed"), {
-                                description: message,
-                              })
-                            })
-                        }}
-                        disabled={selectedIsSavingConfig}
-                      >
-                        {selectedIsSavingConfig ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {t("actions.saving")}
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-3.5 w-3.5" />
-                            {t("actions.saveOpenCodeConfig")}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    </>
+                                .then(async () => {
+                                  // Native multi-provider save clears the shared
+                                  // model_provider binding so refresh stays in
+                                  // native mode (same as Hermes/Cline).
+                                  await persistEnv(
+                                    "open_code",
+                                    selectedAgent.enabled,
+                                    selectedDraft.envText,
+                                    null
+                                  )
+                                  toast.success(t("toasts.openCodeSaved"), {
+                                    description: t("toasts.configSavedHint"),
+                                  })
+                                })
+                                .catch((err) => {
+                                  console.error(
+                                    "[Settings] save opencode config failed:",
+                                    err
+                                  )
+                                  const message = toErrorMessage(err)
+                                  toast.error(t("toasts.saveOpenCodeFailed"), {
+                                    description: message,
+                                  })
+                                })
+                            }}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            {selectedIsSavingConfig ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveOpenCodeConfig")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "cline" ? (
@@ -6032,11 +6118,16 @@ supports_websockets = true`}
                             disabled={selectedIsSavingConfig}
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder={t("selectModelProvider")} />
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
                             </SelectTrigger>
                             <SelectContent align="start">
                               {selectedModelProviders.map((provider) => (
-                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
                                   {provider.name}
                                 </SelectItem>
                               ))}
@@ -6068,7 +6159,9 @@ supports_websockets = true`}
                               selectedDraft.modelProviderId
                             )
                           }
-                          disabled={selectedIsSavingEnv || selectedMissingModelProvider}
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
                         >
                           {selectedIsSavingEnv ? (
                             <>
@@ -6086,182 +6179,182 @@ supports_websockets = true`}
                     )}
 
                     {selectedDraft.clineAuthMode === "native" && (
-                    <>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Provider
-                      </label>
-                      <Select
-                        value={selectedDraft.clineProvider}
-                        onValueChange={(value) => {
-                          handleClineFieldChange("clineProvider", value)
-                        }}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CLINE_PROVIDERS.map((p) => (
-                            <SelectItem key={p.value} value={p.value}>
-                              {p.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            Provider
+                          </label>
+                          <Select
+                            value={selectedDraft.clineProvider}
+                            onValueChange={(value) => {
+                              handleClineFieldChange("clineProvider", value)
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CLINE_PROVIDERS.map((p) => (
+                                <SelectItem key={p.value} value={p.value}>
+                                  {p.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API Key
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? "text"
-                              : "password"
-                          }
-                          value={selectedDraft.clineApiKey}
-                          onChange={(event) => {
-                            handleClineFieldChange(
-                              "clineApiKey",
-                              event.target.value
-                            )
-                          }}
-                          placeholder="sk-..."
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowApiKeys((prev) => ({
-                              ...prev,
-                              [selectedAgent.agent_type]:
-                                !prev[selectedAgent.agent_type],
-                            }))
-                          }}
-                          title={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? t("actions.hideApiKey")
-                              : t("actions.showApiKey")
-                          }
-                        >
-                          {showApiKeys[selectedAgent.agent_type] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            API Key
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? "text"
+                                  : "password"
+                              }
+                              value={selectedDraft.clineApiKey}
+                              onChange={(event) => {
+                                handleClineFieldChange(
+                                  "clineApiKey",
+                                  event.target.value
+                                )
+                              }}
+                              placeholder="sk-..."
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowApiKeys((prev) => ({
+                                  ...prev,
+                                  [selectedAgent.agent_type]:
+                                    !prev[selectedAgent.agent_type],
+                                }))
+                              }}
+                              title={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? t("actions.hideApiKey")
+                                  : t("actions.showApiKey")
+                              }
+                            >
+                              {showApiKeys[selectedAgent.agent_type] ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Model
-                      </label>
-                      <Input
-                        value={selectedDraft.clineModel}
-                        onChange={(event) => {
-                          handleClineFieldChange(
-                            "clineModel",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="claude-sonnet-5"
-                      />
-                    </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            Model
+                          </label>
+                          <Input
+                            value={selectedDraft.clineModel}
+                            onChange={(event) => {
+                              handleClineFieldChange(
+                                "clineModel",
+                                event.target.value
+                              )
+                            }}
+                            placeholder="claude-sonnet-5"
+                          />
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        API URL
-                      </label>
-                      <Input
-                        value={selectedDraft.clineBaseUrl}
-                        onChange={(event) => {
-                          handleClineFieldChange(
-                            "clineBaseUrl",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="https://api.openai.com"
-                      />
-                    </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            API URL
+                          </label>
+                          <Input
+                            value={selectedDraft.clineBaseUrl}
+                            onChange={(event) => {
+                              handleClineFieldChange(
+                                "clineBaseUrl",
+                                event.target.value
+                              )
+                            }}
+                            placeholder="https://api.openai.com"
+                          />
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("nativeJsonConfig")} (config)
-                      </label>
-                      <Textarea
-                        value={selectedDraft.configText}
-                        onChange={(event) => {
-                          handleConfigTextChange(event.target.value)
-                        }}
-                        className="min-h-24 font-mono text-xs"
-                        placeholder={`{
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("nativeJsonConfig")} (config)
+                          </label>
+                          <Textarea
+                            value={selectedDraft.configText}
+                            onChange={(event) => {
+                              handleConfigTextChange(event.target.value)
+                            }}
+                            className="min-h-24 font-mono text-xs"
+                            placeholder={`{
   "apiProvider": "anthropic",
   "apiKey": "sk-...",
   "model": "claude-sonnet-5"
 }`}
-                      />
-                      {selectedConfigError && (
-                        <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
-                          {selectedConfigError}
+                          />
+                          {selectedConfigError && (
+                            <div className="rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-400">
+                              {selectedConfigError}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          Promise.all([
-                            persistConfig(
-                              selectedAgent.agent_type,
-                              selectedDraft.configText
-                            ),
-                            // When saving native config, clear model_provider_id
-                            // from DB so the UI doesn't revert on refresh.
-                            selectedDraft.clineAuthMode === "native"
-                              ? acpUpdateAgentEnv("cline", {
-                                  enabled: selectedAgent.enabled,
-                                  env: parseEnvText(selectedDraft.envText),
-                                  modelProviderId: null,
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              Promise.all([
+                                persistConfig(
+                                  selectedAgent.agent_type,
+                                  selectedDraft.configText
+                                ),
+                                // When saving native config, clear model_provider_id
+                                // from DB so the UI doesn't revert on refresh.
+                                selectedDraft.clineAuthMode === "native"
+                                  ? acpUpdateAgentEnv("cline", {
+                                      enabled: selectedAgent.enabled,
+                                      env: parseEnvText(selectedDraft.envText),
+                                      modelProviderId: null,
+                                    })
+                                  : Promise.resolve(),
+                              ])
+                                .then(() => {
+                                  toast.success(t("toasts.clineSaved"), {
+                                    description: t("toasts.configSavedHint"),
+                                  })
                                 })
-                              : Promise.resolve(),
-                          ])
-                            .then(() => {
-                              toast.success(t("toasts.clineSaved"), {
-                                description: t("toasts.configSavedHint"),
-                              })
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "[Settings] save cline config failed:",
-                                err
-                              )
-                              const message = toErrorMessage(err)
-                              toast.error(t("toasts.saveClineFailed"), {
-                                description: message,
-                              })
-                            })
-                        }}
-                        disabled={selectedIsSavingConfig}
-                      >
-                        {selectedIsSavingConfig ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {t("actions.saving")}
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-3.5 w-3.5" />
-                            {t("actions.saveClineConfig")}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    </>
+                                .catch((err) => {
+                                  console.error(
+                                    "[Settings] save cline config failed:",
+                                    err
+                                  )
+                                  const message = toErrorMessage(err)
+                                  toast.error(t("toasts.saveClineFailed"), {
+                                    description: message,
+                                  })
+                                })
+                            }}
+                            disabled={selectedIsSavingConfig}
+                          >
+                            {selectedIsSavingConfig ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveClineConfig")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "open_claw" ? (
@@ -6287,7 +6380,9 @@ supports_websockets = true`}
                             ...current,
                             openClawAuthMode: next,
                             modelProviderId:
-                              next === "model_provider" ? current.modelProviderId : null,
+                              next === "model_provider"
+                                ? current.modelProviderId
+                                : null,
                           }))
                         }}
                         disabled={selectedIsSavingEnv || selectedIsSavingConfig}
@@ -6324,14 +6419,21 @@ supports_websockets = true`}
                                 : ""
                             }
                             onValueChange={handleModelProviderSelect}
-                            disabled={selectedIsSavingEnv || selectedIsSavingConfig}
+                            disabled={
+                              selectedIsSavingEnv || selectedIsSavingConfig
+                            }
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder={t("selectModelProvider")} />
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
                             </SelectTrigger>
                             <SelectContent align="start">
                               {selectedModelProviders.map((provider) => (
-                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
                                   {provider.name}
                                 </SelectItem>
                               ))}
@@ -6363,7 +6465,9 @@ supports_websockets = true`}
                               selectedDraft.modelProviderId
                             )
                           }
-                          disabled={selectedIsSavingEnv || selectedMissingModelProvider}
+                          disabled={
+                            selectedIsSavingEnv || selectedMissingModelProvider
+                          }
                         >
                           {selectedIsSavingEnv ? (
                             <>
@@ -6381,204 +6485,208 @@ supports_websockets = true`}
                     )}
 
                     {selectedDraft.openClawAuthMode === "gateway" && (
-                    <>
-                    {openClawDiscovery && (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-muted-foreground">
-                          {openClawDiscovery.gatewayUrl
-                            ? openClawDiscovery.gatewayReachable
-                              ? t("openClaw.discoveryReachable", {
-                                  url: openClawDiscovery.gatewayUrl,
-                                })
-                              : t("openClaw.discoveryUnreachable", {
-                                  url: openClawDiscovery.gatewayUrl,
-                                })
-                            : openClawDiscovery.configExists
-                              ? t("openClaw.discoveryConfigNoGateway", {
-                                  path: openClawDiscovery.configPath,
-                                })
-                              : t("openClaw.discoveryNotFound", {
-                                  path: openClawDiscovery.configPath,
-                                })}
-                        </p>
-                        {openClawDiscovery.gatewayUrl &&
-                          openClawDiscovery.gatewayUrlSource && (
+                      <>
+                        {openClawDiscovery && (
+                          <div className="space-y-1">
                             <p className="text-[11px] text-muted-foreground">
-                              {t("openClaw.discoveryFound", {
-                                source:
-                                  openClawDiscovery.gatewayUrlSource ??
-                                  "config",
-                                path: openClawDiscovery.configPath,
-                              })}
+                              {openClawDiscovery.gatewayUrl
+                                ? openClawDiscovery.gatewayReachable
+                                  ? t("openClaw.discoveryReachable", {
+                                      url: openClawDiscovery.gatewayUrl,
+                                    })
+                                  : t("openClaw.discoveryUnreachable", {
+                                      url: openClawDiscovery.gatewayUrl,
+                                    })
+                                : openClawDiscovery.configExists
+                                  ? t("openClaw.discoveryConfigNoGateway", {
+                                      path: openClawDiscovery.configPath,
+                                    })
+                                  : t("openClaw.discoveryNotFound", {
+                                      path: openClawDiscovery.configPath,
+                                    })}
                             </p>
-                          )}
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={
-                          openClawDiscovery?.gatewayReachable
-                            ? "outline"
-                            : "default"
-                        }
-                        disabled={ensuringOpenClawGateway}
-                        onClick={() => {
-                          handleEnsureOpenClawGateway().catch(() => {})
-                        }}
-                      >
-                        {ensuringOpenClawGateway ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {t("openClaw.ensureGatewayRunning")}
-                          </>
-                        ) : (
-                          t("openClaw.ensureGateway")
+                            {openClawDiscovery.gatewayUrl &&
+                              openClawDiscovery.gatewayUrlSource && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  {t("openClaw.discoveryFound", {
+                                    source:
+                                      openClawDiscovery.gatewayUrlSource ??
+                                      "config",
+                                    path: openClawDiscovery.configPath,
+                                  })}
+                                </p>
+                              )}
+                          </div>
                         )}
-                      </Button>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("readiness.hint.openClawStartGateway")}
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Gateway URL
-                      </label>
-                      <Input
-                        value={selectedDraft.openClawGatewayUrl}
-                        onChange={(event) => {
-                          handleOpenClawFieldChange(
-                            "openClawGatewayUrl",
-                            event.target.value
-                          )
-                        }}
-                        placeholder={
-                          openClawDiscovery?.gatewayUrl ??
-                          t("openClaw.gatewayUrlPlaceholder")
-                        }
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("openClaw.gatewayUrlHint")}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Gateway Token
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? "text"
-                              : "password"
-                          }
-                          value={selectedDraft.openClawGatewayToken}
-                          onChange={(event) => {
-                            handleOpenClawFieldChange(
-                              "openClawGatewayToken",
-                              event.target.value
-                            )
-                          }}
-                          placeholder={t("openClaw.gatewayTokenPlaceholder")}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setShowApiKeys((prev) => ({
-                              ...prev,
-                              [selectedAgent.agent_type]:
-                                !prev[selectedAgent.agent_type],
-                            }))
-                          }}
-                          title={
-                            showApiKeys[selectedAgent.agent_type]
-                              ? t("actions.hideToken")
-                              : t("actions.showToken")
-                          }
-                        >
-                          {showApiKeys[selectedAgent.agent_type] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("openClaw.gatewayTokenHint")}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        Session Key
-                      </label>
-                      <Input
-                        value={selectedDraft.openClawSessionKey}
-                        onChange={(event) => {
-                          handleOpenClawFieldChange(
-                            "openClawSessionKey",
-                            event.target.value
-                          )
-                        }}
-                        placeholder="agent:main:main"
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("openClaw.sessionKeyHint")}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          Promise.all([
-                            persistEnv(
-                              selectedAgent.agent_type,
-                              selectedDraft.enabled,
-                              selectedDraft.envText,
-                              selectedDraft.modelProviderId
-                            ),
-                            persistConfig(
-                              selectedAgent.agent_type,
-                              selectedDraft.configText
-                            ),
-                          ])
-                            .then(() => {
-                              toast.success(t("toasts.openClawSaved"), {
-                                description: t("toasts.configSavedHint"),
-                              })
-                            })
-                            .catch((err) => {
-                              console.error(
-                                "[Settings] save openclaw config failed:",
-                                err
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={
+                              openClawDiscovery?.gatewayReachable
+                                ? "outline"
+                                : "default"
+                            }
+                            disabled={ensuringOpenClawGateway}
+                            onClick={() => {
+                              handleEnsureOpenClawGateway().catch(() => {})
+                            }}
+                          >
+                            {ensuringOpenClawGateway ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("openClaw.ensureGatewayRunning")}
+                              </>
+                            ) : (
+                              t("openClaw.ensureGateway")
+                            )}
+                          </Button>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("readiness.hint.openClawStartGateway")}
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            Gateway URL
+                          </label>
+                          <Input
+                            value={selectedDraft.openClawGatewayUrl}
+                            onChange={(event) => {
+                              handleOpenClawFieldChange(
+                                "openClawGatewayUrl",
+                                event.target.value
                               )
-                              const message = toErrorMessage(err)
-                              toast.error(t("toasts.saveOpenClawFailed"), {
-                                description: message,
-                              })
-                            })
-                        }}
-                        disabled={selectedIsSavingEnv || selectedIsSavingConfig}
-                      >
-                        {selectedIsSavingEnv || selectedIsSavingConfig ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {t("actions.saving")}
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-3.5 w-3.5" />
-                            {t("actions.saveOpenClawConfig")}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    </>
+                            }}
+                            placeholder={
+                              openClawDiscovery?.gatewayUrl ??
+                              t("openClaw.gatewayUrlPlaceholder")
+                            }
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("openClaw.gatewayUrlHint")}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            Gateway Token
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? "text"
+                                  : "password"
+                              }
+                              value={selectedDraft.openClawGatewayToken}
+                              onChange={(event) => {
+                                handleOpenClawFieldChange(
+                                  "openClawGatewayToken",
+                                  event.target.value
+                                )
+                              }}
+                              placeholder={t(
+                                "openClaw.gatewayTokenPlaceholder"
+                              )}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowApiKeys((prev) => ({
+                                  ...prev,
+                                  [selectedAgent.agent_type]:
+                                    !prev[selectedAgent.agent_type],
+                                }))
+                              }}
+                              title={
+                                showApiKeys[selectedAgent.agent_type]
+                                  ? t("actions.hideToken")
+                                  : t("actions.showToken")
+                              }
+                            >
+                              {showApiKeys[selectedAgent.agent_type] ? (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("openClaw.gatewayTokenHint")}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            Session Key
+                          </label>
+                          <Input
+                            value={selectedDraft.openClawSessionKey}
+                            onChange={(event) => {
+                              handleOpenClawFieldChange(
+                                "openClawSessionKey",
+                                event.target.value
+                              )
+                            }}
+                            placeholder="agent:main:main"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("openClaw.sessionKeyHint")}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              Promise.all([
+                                persistEnv(
+                                  selectedAgent.agent_type,
+                                  selectedDraft.enabled,
+                                  selectedDraft.envText,
+                                  selectedDraft.modelProviderId
+                                ),
+                                persistConfig(
+                                  selectedAgent.agent_type,
+                                  selectedDraft.configText
+                                ),
+                              ])
+                                .then(() => {
+                                  toast.success(t("toasts.openClawSaved"), {
+                                    description: t("toasts.configSavedHint"),
+                                  })
+                                })
+                                .catch((err) => {
+                                  console.error(
+                                    "[Settings] save openclaw config failed:",
+                                    err
+                                  )
+                                  const message = toErrorMessage(err)
+                                  toast.error(t("toasts.saveOpenClawFailed"), {
+                                    description: message,
+                                  })
+                                })
+                            }}
+                            disabled={
+                              selectedIsSavingEnv || selectedIsSavingConfig
+                            }
+                          >
+                            {selectedIsSavingEnv || selectedIsSavingConfig ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveOpenClawConfig")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "hermes" ? (
@@ -6638,11 +6746,16 @@ supports_websockets = true`}
                             disabled={selectedIsSavingConfig}
                           >
                             <SelectTrigger className="w-full">
-                              <SelectValue placeholder={t("selectModelProvider")} />
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
                             </SelectTrigger>
                             <SelectContent align="start">
                               {selectedModelProviders.map((provider) => (
-                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
                                   {provider.name}
                                 </SelectItem>
                               ))}
@@ -6675,8 +6788,7 @@ supports_websockets = true`}
                             )
                           }
                           disabled={
-                            selectedIsSavingEnv ||
-                            selectedMissingModelProvider
+                            selectedIsSavingEnv || selectedMissingModelProvider
                           }
                         >
                           {selectedIsSavingEnv ? (
@@ -6695,287 +6807,181 @@ supports_websockets = true`}
                     )}
 
                     {selectedDraft.hermesAuthMode === "native" && (
-                    <>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("hermes.providerLabel")}
-                      </label>
-                      <Select
-                        value={selectedDraft.hermesProvider}
-                        onValueChange={(value) =>
-                          handleHermesFieldChange("hermesProvider", value)
-                        }
-                        disabled={selectedIsSavingConfig}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          {/* Preserve an existing config's provider in the list
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("hermes.providerLabel")}
+                          </label>
+                          <Select
+                            value={selectedDraft.hermesProvider}
+                            onValueChange={(value) =>
+                              handleHermesFieldChange("hermesProvider", value)
+                            }
+                            disabled={selectedIsSavingConfig}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {/* Preserve an existing config's provider in the list
                               even when it's outside the curated table, so the
                               dropdown shows the real value instead of going blank. */}
-                          {selectedDraft.hermesProvider &&
-                            !HERMES_PROVIDERS.some(
-                              (p) => p.id === selectedDraft.hermesProvider
-                            ) && (
-                              <SelectItem value={selectedDraft.hermesProvider}>
-                                {selectedDraft.hermesProvider}
-                              </SelectItem>
-                            )}
-                          {(
-                            [
-                              ["apiKey", t("hermes.groupApiKey")],
-                              ["oauth", t("hermes.groupOauth")],
-                              ["aws", t("hermes.groupAws")],
-                            ] as const
-                          ).map(([kind, groupLabel]) => {
-                            const items = HERMES_PROVIDERS.filter(
-                              (p) => p.kind === kind
-                            )
-                            if (items.length === 0) return null
-                            return (
-                              <SelectGroup key={kind}>
-                                <SelectLabel>{groupLabel}</SelectLabel>
-                                {items.map((provider) => (
+                              {selectedDraft.hermesProvider &&
+                                !HERMES_PROVIDERS.some(
+                                  (p) => p.id === selectedDraft.hermesProvider
+                                ) && (
                                   <SelectItem
-                                    key={provider.id}
-                                    value={provider.id}
+                                    value={selectedDraft.hermesProvider}
                                   >
-                                    {provider.label}
+                                    {selectedDraft.hermesProvider}
                                   </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("hermes.providerHint")}
-                      </p>
-                    </div>
+                                )}
+                              {(
+                                [
+                                  ["apiKey", t("hermes.groupApiKey")],
+                                  ["oauth", t("hermes.groupOauth")],
+                                  ["aws", t("hermes.groupAws")],
+                                ] as const
+                              ).map(([kind, groupLabel]) => {
+                                const items = HERMES_PROVIDERS.filter(
+                                  (p) => p.kind === kind
+                                )
+                                if (items.length === 0) return null
+                                return (
+                                  <SelectGroup key={kind}>
+                                    <SelectLabel>{groupLabel}</SelectLabel>
+                                    {items.map((provider) => (
+                                      <SelectItem
+                                        key={provider.id}
+                                        value={provider.id}
+                                      >
+                                        {provider.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                )
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("hermes.providerHint")}
+                          </p>
+                        </div>
 
-                    {selectedHermesProviderOption?.kind === "apiKey" && (
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-muted-foreground">
-                          API Key
-                        </label>
-                        <div className="flex items-center gap-2">
+                        {selectedHermesProviderOption?.kind === "apiKey" && (
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] text-muted-foreground">
+                              API Key
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type={
+                                  showApiKeys[selectedAgent.agent_type]
+                                    ? "text"
+                                    : "password"
+                                }
+                                value={selectedDraft.apiKey}
+                                onChange={(event) =>
+                                  handleHermesFieldChange(
+                                    "apiKey",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="sk-..."
+                                disabled={selectedIsSavingConfig}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setShowApiKeys((prev) => ({
+                                    ...prev,
+                                    [selectedAgent.agent_type]:
+                                      !prev[selectedAgent.agent_type],
+                                  }))
+                                }}
+                                title={
+                                  showApiKeys[selectedAgent.agent_type]
+                                    ? t("actions.hideApiKey")
+                                    : t("actions.showApiKey")
+                                }
+                              >
+                                {showApiKeys[selectedAgent.agent_type] ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("hermes.apiKeyHint")}
+                            </p>
+                          </div>
+                        )}
+
+                        {selectedHermesProviderOption?.needsBaseUrl && (
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] text-muted-foreground">
+                              API URL
+                            </label>
+                            <Input
+                              value={selectedDraft.apiBaseUrl}
+                              onChange={(event) =>
+                                handleHermesFieldChange(
+                                  "apiBaseUrl",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="https://api.example.com/v1"
+                              disabled={selectedIsSavingConfig}
+                            />
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground">
+                            {t("hermes.modelName")}
+                          </label>
                           <Input
-                            type={
-                              showApiKeys[selectedAgent.agent_type]
-                                ? "text"
-                                : "password"
-                            }
-                            value={selectedDraft.apiKey}
+                            value={selectedDraft.model}
                             onChange={(event) =>
                               handleHermesFieldChange(
-                                "apiKey",
+                                "model",
                                 event.target.value
                               )
                             }
-                            placeholder="sk-..."
+                            placeholder="moonshotai/kimi-k2"
                             disabled={selectedIsSavingConfig}
                           />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setShowApiKeys((prev) => ({
-                                ...prev,
-                                [selectedAgent.agent_type]:
-                                  !prev[selectedAgent.agent_type],
-                              }))
-                            }}
-                            title={
-                              showApiKeys[selectedAgent.agent_type]
-                                ? t("actions.hideApiKey")
-                                : t("actions.showApiKey")
-                            }
-                          >
-                            {showApiKeys[selectedAgent.agent_type] ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          {t("hermes.apiKeyHint")}
-                        </p>
-                      </div>
-                    )}
 
-                    {selectedHermesProviderOption?.needsBaseUrl && (
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-muted-foreground">
-                          API URL
-                        </label>
-                        <Input
-                          value={selectedDraft.apiBaseUrl}
-                          onChange={(event) =>
-                            handleHermesFieldChange(
-                              "apiBaseUrl",
-                              event.target.value
-                            )
-                          }
-                          placeholder="https://api.example.com/v1"
-                          disabled={selectedIsSavingConfig}
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] text-muted-foreground">
-                        {t("hermes.modelName")}
-                      </label>
-                      <Input
-                        value={selectedDraft.model}
-                        onChange={(event) =>
-                          handleHermesFieldChange("model", event.target.value)
-                        }
-                        placeholder="moonshotai/kimi-k2"
-                        disabled={selectedIsSavingConfig}
-                      />
-                    </div>
-
-                    {selectedHermesProviderOption?.kind === "oauth" && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("hermes.oauthHint")}
-                      </p>
-                    )}
-
-                    {selectedHermesProviderOption?.kind === "aws" && (
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("hermes.awsHint")}
-                      </p>
-                    )}
-
-                    {!selectedHermesProviderOption && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                        {t("hermes.unsupportedProvider")}
-                      </p>
-                    )}
-
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveHermesConfig("structured")}
-                        disabled={
-                          selectedIsSavingConfig ||
-                          !selectedHermesProviderOption
-                        }
-                      >
-                        {selectedIsSavingConfig ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {t("actions.saving")}
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-3.5 w-3.5" />
-                            {t("actions.saveHermesConfig")}
-                          </>
+                        {selectedHermesProviderOption?.kind === "oauth" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("hermes.oauthHint")}
+                          </p>
                         )}
-                      </Button>
-                    </div>
 
-                    <div className="space-y-2 rounded-md border p-3">
-                      <div>
-                        <label className="text-[11px] font-medium">
-                          {t("hermes.setupTitle")}
-                        </label>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {t("hermes.setupHint")}
-                        </p>
-                      </div>
-                      {hermesCanUseNativeSetup && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              runHermesSetupCommand(
-                                "setup",
-                                selectedDraft.hermesSetupCommand
-                              )
-                            }
-                          >
-                            <Wrench className="h-3.5 w-3.5" />
-                            {t("hermes.runSetup")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              runHermesSetupCommand(
-                                "model",
-                                selectedDraft.hermesModelCommand
-                              )
-                            }
-                          >
-                            {t("hermes.configureModel")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleRevealHermesHome}
-                          >
-                            {t("hermes.openConfigFolder")}
-                          </Button>
-                        </div>
-                      )}
-                      {selectedDraft.hermesSetupCommand && (
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 overflow-x-auto rounded bg-muted px-2 py-1 text-[11px] font-mono whitespace-nowrap">
-                            {selectedDraft.hermesSetupCommand}
-                          </code>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 shrink-0 p-0"
-                            onClick={async () => {
-                              const ok = await copyTextToClipboard(
-                                selectedDraft.hermesSetupCommand
-                              )
-                              if (ok) {
-                                toast.success(t("hermes.commandCopied"))
-                              }
-                            }}
-                            title={t("hermes.copyCommand")}
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                        {selectedHermesProviderOption?.kind === "aws" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("hermes.awsHint")}
+                          </p>
+                        )}
 
-                    <details className="rounded-md border p-3">
-                      <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
-                        {t("hermes.advancedTitle")}
-                      </summary>
-                      <div className="mt-2 space-y-2">
-                        <p className="text-[11px] text-muted-foreground">
-                          {t("hermes.rawConfigHint")}
-                        </p>
-                        <Textarea
-                          value={selectedDraft.hermesConfigYaml}
-                          onChange={(event) =>
-                            handleHermesFieldChange(
-                              "hermesConfigYaml",
-                              event.target.value
-                            )
-                          }
-                          placeholder={`model:\n  provider: openrouter\n  default: moonshotai/kimi-k2`}
-                          className="min-h-40 max-h-80 font-mono text-xs"
-                          disabled={selectedIsSavingConfig}
-                        />
+                        {!selectedHermesProviderOption && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                            {t("hermes.unsupportedProvider")}
+                          </p>
+                        )}
+
                         <div className="flex justify-end">
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => handleSaveHermesConfig("raw")}
-                            disabled={selectedIsSavingConfig}
+                            onClick={() => handleSaveHermesConfig("structured")}
+                            disabled={
+                              selectedIsSavingConfig ||
+                              !selectedHermesProviderOption
+                            }
                           >
                             {selectedIsSavingConfig ? (
                               <>
@@ -6985,14 +6991,125 @@ supports_websockets = true`}
                             ) : (
                               <>
                                 <Save className="h-3.5 w-3.5" />
-                                {t("hermes.saveRawConfig")}
+                                {t("actions.saveHermesConfig")}
                               </>
                             )}
                           </Button>
                         </div>
-                      </div>
-                    </details>
-                    </>
+
+                        <div className="space-y-2 rounded-md border p-3">
+                          <div>
+                            <label className="text-[11px] font-medium">
+                              {t("hermes.setupTitle")}
+                            </label>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {t("hermes.setupHint")}
+                            </p>
+                          </div>
+                          {hermesCanUseNativeSetup && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  runHermesSetupCommand(
+                                    "setup",
+                                    selectedDraft.hermesSetupCommand
+                                  )
+                                }
+                              >
+                                <Wrench className="h-3.5 w-3.5" />
+                                {t("hermes.runSetup")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  runHermesSetupCommand(
+                                    "model",
+                                    selectedDraft.hermesModelCommand
+                                  )
+                                }
+                              >
+                                {t("hermes.configureModel")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleRevealHermesHome}
+                              >
+                                {t("hermes.openConfigFolder")}
+                              </Button>
+                            </div>
+                          )}
+                          {selectedDraft.hermesSetupCommand && (
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 overflow-x-auto rounded bg-muted px-2 py-1 text-[11px] font-mono whitespace-nowrap">
+                                {selectedDraft.hermesSetupCommand}
+                              </code>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 shrink-0 p-0"
+                                onClick={async () => {
+                                  const ok = await copyTextToClipboard(
+                                    selectedDraft.hermesSetupCommand
+                                  )
+                                  if (ok) {
+                                    toast.success(t("hermes.commandCopied"))
+                                  }
+                                }}
+                                title={t("hermes.copyCommand")}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        <details className="rounded-md border p-3">
+                          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+                            {t("hermes.advancedTitle")}
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("hermes.rawConfigHint")}
+                            </p>
+                            <Textarea
+                              value={selectedDraft.hermesConfigYaml}
+                              onChange={(event) =>
+                                handleHermesFieldChange(
+                                  "hermesConfigYaml",
+                                  event.target.value
+                                )
+                              }
+                              placeholder={`model:\n  provider: openrouter\n  default: moonshotai/kimi-k2`}
+                              className="min-h-40 max-h-80 font-mono text-xs"
+                              disabled={selectedIsSavingConfig}
+                            />
+                            <div className="flex justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSaveHermesConfig("raw")}
+                                disabled={selectedIsSavingConfig}
+                              >
+                                {selectedIsSavingConfig ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    {t("actions.saving")}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-3.5 w-3.5" />
+                                    {t("hermes.saveRawConfig")}
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </details>
+                      </>
                     )}
                   </div>
                 ) : selectedAgent.agent_type === "code_buddy" ? (
@@ -7520,47 +7637,53 @@ supports_websockets = true`}
                             placeholder: "claude-sonnet-5",
                           })
                         ) : (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              {t("claude.mainModel")}
-                            </label>
-                            <Input
-                              value={selectedDraft.claudeMainModel}
-                              onChange={(event) => {
-                                handleImportantConfigChange(
-                                  "claudeMainModel",
-                                  event.target.value
-                                )
-                              }}
-                              placeholder="claude-sonnet-5"
-                            />
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] text-muted-foreground">
+                                {t("claude.mainModel")}
+                              </label>
+                              <Input
+                                value={selectedDraft.claudeMainModel}
+                                onChange={(event) => {
+                                  handleImportantConfigChange(
+                                    "claudeMainModel",
+                                    event.target.value
+                                  )
+                                }}
+                                placeholder="claude-sonnet-5"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] text-muted-foreground">
+                                {t("claude.reasoningModel")}
+                              </label>
+                              <Input
+                                value={selectedDraft.claudeReasoningModel}
+                                onChange={(event) => {
+                                  handleImportantConfigChange(
+                                    "claudeReasoningModel",
+                                    event.target.value
+                                  )
+                                }}
+                                placeholder="claude-opus-4-8"
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              {t("claude.reasoningModel")}
-                            </label>
-                            <Input
-                              value={selectedDraft.claudeReasoningModel}
-                              onChange={(event) => {
-                                handleImportantConfigChange(
-                                  "claudeReasoningModel",
-                                  event.target.value
-                                )
-                              }}
-                              placeholder="claude-opus-4-8"
-                            />
-                          </div>
-                        </div>
                         )}
                         {selectedDraft.claudeAuthMode !== "model_provider" && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {t("modelHintDefault")}
-                        </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("modelHintDefault")}
+                          </p>
                         )}
                         <details className="group border-t border-border/60 pt-3">
                           <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors list-none">
-                            <svg className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                            <svg
+                              className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90"
+                              viewBox="0 0 12 12"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
                               <path d="M4 2l4 4-4 4" />
                             </svg>
                             {t("claude.advancedModelSettings")}
@@ -7620,7 +7743,9 @@ supports_websockets = true`}
                                     {t("claude.customModelOption")}
                                   </label>
                                   <Input
-                                    value={selectedDraft.claudeCustomModelOption}
+                                    value={
+                                      selectedDraft.claudeCustomModelOption
+                                    }
                                     onChange={(event) => {
                                       handleImportantConfigChange(
                                         "claudeCustomModelOption",
@@ -7847,7 +7972,6 @@ supports_websockets = true`}
           )}
         </div>
       </div>
-
       <AlertDialog
         open={Boolean(openCodeDeleteProviderId)}
         onOpenChange={(open) => {
@@ -7889,7 +8013,6 @@ supports_websockets = true`}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       <AlertDialog
         open={Boolean(uninstallConfirmAgent)}
         onOpenChange={(open) => {
@@ -7942,7 +8065,6 @@ supports_websockets = true`}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       <AlertDialog
         open={Boolean(customInstallAgent)}
         onOpenChange={(open) => {
@@ -8002,8 +8124,7 @@ supports_websockets = true`}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-// ── Extracted modules ────────────────────────────────────────────────
+      {/* ── Extracted modules ─────────────────────────────────────────────── */}
       <OpencodePluginsModal
         open={pluginModalOpen}
         onOpenChange={setPluginModalOpen}

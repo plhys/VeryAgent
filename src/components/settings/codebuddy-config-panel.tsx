@@ -20,10 +20,7 @@ const CODEBUDDY_API_KEY_ENV = "CODEBUDDY_API_KEY"
 const CODEBUDDY_ENVIRONMENT_ENV = "CODEBUDDY_INTERNET_ENVIRONMENT"
 const CODEBUDDY_BASE_URL_ENV = "CODEBUDDY_BASE_URL"
 export type CodeBuddyEnvironment =
-  | "overseas"
-  | "internal"
-  | "ioa"
-  | "self_hosted"
+  "overseas" | "internal" | "ioa" | "self_hosted"
 
 /**
  * True when `value` parses as an http(s) URL. Used to validate the private

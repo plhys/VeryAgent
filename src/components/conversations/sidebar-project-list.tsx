@@ -20,23 +20,25 @@ import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
  */
 export function SidebarProjectList() {
   const t = useTranslations("Folder.sidebar")
-  const { folders, conversations, removeFolderFromWorkspace, setActiveFolderId } =
-    useAppWorkspaceStore(
-      useShallow((s) => ({
-        folders: s.folders,
-        conversations: s.conversations,
-        removeFolderFromWorkspace: s.removeFolderFromWorkspace,
-        setActiveFolderId: s.setActiveFolderId,
-      }))
-    )
+  const {
+    folders,
+    conversations,
+    removeFolderFromWorkspace,
+    setActiveFolderId,
+  } = useAppWorkspaceStore(
+    useShallow((s) => ({
+      folders: s.folders,
+      conversations: s.conversations,
+      removeFolderFromWorkspace: s.removeFolderFromWorkspace,
+      setActiveFolderId: s.setActiveFolderId,
+    }))
+  )
   const { activeFolderId } = useActiveFolder()
   const { openConversations } = useWorkbenchRoute()
   const openTab = useTabStore((s) => s.openTab)
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
-  const openNewConversationTab = useTabStore(
-    (s) => s.openNewConversationTab
-  )
+  const openNewConversationTab = useTabStore((s) => s.openNewConversationTab)
 
   // 默认全部展开
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({})
@@ -137,90 +139,92 @@ export function SidebarProjectList() {
                   <p className="py-1 text-[0.75rem] text-muted-foreground/60">
                     {t("emptyFolderHint")}
                   </p>
-                ) : (() => {
-                  // Prefer the active tab's conversationId so selection survives
-                  // agent-type / tab-id edge cases and highlights with the folder.
-                  const activeTab =
-                    activeTabId != null
-                      ? tabs.find((tab) => tab.id === activeTabId)
-                      : undefined
-                  const activeIdx = folderConvs.findIndex(
-                    (c) =>
-                      activeTab != null &&
-                      activeTab.conversationId === c.id &&
-                      activeTab.folderId === c.folder_id
-                  )
-                  return (
-                    <div className="flex flex-col">
-                      {folderConvs.map((conv, idx) => {
-                        const isConvActive = idx === activeIdx
-                        const isLast = idx === folderConvs.length - 1
-                        // 竖线：选中项以上(含)主色，以下浅灰色
-                        const trunkActive = activeIdx >= 0 && idx <= activeIdx
-                        // 下方竖线：选中项以上主色，以下浅灰色
-                        const belowActive = activeIdx >= 0 && idx < activeIdx
-                        // 水平分支：仅选中项主色
-                        const branchActive = isConvActive
-                        const trunkColor = trunkActive
-                          ? "var(--color-primary, var(--primary))"
-                          : "var(--color-sidebar-border, #e5e5e5)"
-                        const branchColor = branchActive
-                          ? "var(--color-primary, var(--primary))"
-                          : "var(--color-sidebar-border, #e5e5e5)"
-                        const belowColor = belowActive
-                          ? "var(--color-primary, var(--primary))"
-                          : "var(--color-sidebar-border, #e5e5e5)"
-                        return (
-                          <div key={conv.id} className="relative mb-1.5">
-                            {/* 细连接线：回到更干净的小细线，统一 1px，降低存在感。 */}
-                            {/* 纯细线：不用 border、不用 scale、不要装饰，直接画 1px 背景线。 */}
-                            <div
-                              className="absolute"
-                              style={{
-                                left: "calc(-1rem - 0.5px)",
-                                top: 0,
-                                height: "50%",
-                                width: "1px",
-                                opacity: 0.8,
-                                backgroundColor: trunkColor,
-                              }}
-                            />
-                            <div
-                              className="absolute"
-                              style={{
-                                left: "-1rem",
-                                top: "calc(50% - 0.5px)",
-                                width: "1rem",
-                                height: "1px",
-                                opacity: 0.8,
-                                backgroundColor: branchColor,
-                              }}
-                            />
-                            {!isLast && (
+                ) : (
+                  (() => {
+                    // Prefer the active tab's conversationId so selection survives
+                    // agent-type / tab-id edge cases and highlights with the folder.
+                    const activeTab =
+                      activeTabId != null
+                        ? tabs.find((tab) => tab.id === activeTabId)
+                        : undefined
+                    const activeIdx = folderConvs.findIndex(
+                      (c) =>
+                        activeTab != null &&
+                        activeTab.conversationId === c.id &&
+                        activeTab.folderId === c.folder_id
+                    )
+                    return (
+                      <div className="flex flex-col">
+                        {folderConvs.map((conv, idx) => {
+                          const isConvActive = idx === activeIdx
+                          const isLast = idx === folderConvs.length - 1
+                          // 竖线：选中项以上(含)主色，以下浅灰色
+                          const trunkActive = activeIdx >= 0 && idx <= activeIdx
+                          // 下方竖线：选中项以上主色，以下浅灰色
+                          const belowActive = activeIdx >= 0 && idx < activeIdx
+                          // 水平分支：仅选中项主色
+                          const branchActive = isConvActive
+                          const trunkColor = trunkActive
+                            ? "var(--color-primary, var(--primary))"
+                            : "var(--color-sidebar-border, #e5e5e5)"
+                          const branchColor = branchActive
+                            ? "var(--color-primary, var(--primary))"
+                            : "var(--color-sidebar-border, #e5e5e5)"
+                          const belowColor = belowActive
+                            ? "var(--color-primary, var(--primary))"
+                            : "var(--color-sidebar-border, #e5e5e5)"
+                          return (
+                            <div key={conv.id} className="relative mb-1.5">
+                              {/* 细连接线：回到更干净的小细线，统一 1px，降低存在感。 */}
+                              {/* 纯细线：不用 border、不用 scale、不要装饰，直接画 1px 背景线。 */}
                               <div
                                 className="absolute"
                                 style={{
                                   left: "calc(-1rem - 0.5px)",
-                                  top: "50%",
-                                  bottom: "-0.375rem",
+                                  top: 0,
+                                  height: "50%",
                                   width: "1px",
                                   opacity: 0.8,
-                                  backgroundColor: belowColor,
+                                  backgroundColor: trunkColor,
                                 }}
                               />
-                            )}
-                            <ProjectConversationRow
-                              conv={conv}
-                              isActive={isConvActive}
-                              untitledLabel={t("untitledConversation")}
-                              onClick={() => handleConversationClick(conv)}
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
+                              <div
+                                className="absolute"
+                                style={{
+                                  left: "-1rem",
+                                  top: "calc(50% - 0.5px)",
+                                  width: "1rem",
+                                  height: "1px",
+                                  opacity: 0.8,
+                                  backgroundColor: branchColor,
+                                }}
+                              />
+                              {!isLast && (
+                                <div
+                                  className="absolute"
+                                  style={{
+                                    left: "calc(-1rem - 0.5px)",
+                                    top: "50%",
+                                    bottom: "-0.375rem",
+                                    width: "1px",
+                                    opacity: 0.8,
+                                    backgroundColor: belowColor,
+                                  }}
+                                />
+                              )}
+                              <ProjectConversationRow
+                                conv={conv}
+                                isActive={isConvActive}
+                                untitledLabel={t("untitledConversation")}
+                                onClick={() => handleConversationClick(conv)}
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()
+                )}
               </div>
             )}
           </div>

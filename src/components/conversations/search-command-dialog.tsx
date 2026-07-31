@@ -45,8 +45,7 @@ export function SearchCommandDialog({
 }: SearchCommandDialogProps) {
   const t = useTranslations("Folder.search")
   const locale = useLocale()
-  const dateFnsLocale =
-    locale === "zh-CN" ? zhCN : enUS
+  const dateFnsLocale = locale === "zh-CN" ? zhCN : enUS
   const { activeFolder: folder, activeFolderId } = useActiveFolder()
   const allConversations = useAppWorkspaceStore((s) => s.conversations)
   const folderId = activeFolderId ?? 0

@@ -1,6 +1,17 @@
 import type { AgentType, AcpAgentInfo, ModelProviderInfo } from "@/lib/types"
-import type { AgentCheckState, UiCheckItem, UiFixAction, ImportantDraftPatch, RunningActionKind } from "./types"
-import { parseConfigJsonText, acpText, hasComparableVersion, compareVersion } from "./shared"
+import type {
+  AgentCheckState,
+  UiCheckItem,
+  UiFixAction,
+  ImportantDraftPatch,
+  RunningActionKind,
+} from "./types"
+import {
+  parseConfigJsonText,
+  acpText,
+  hasComparableVersion,
+  compareVersion,
+} from "./shared"
 import { CLAUDE_MODEL_ENV_KEYS } from "./types"
 
 export function patchImportantConfigText(
@@ -103,7 +114,6 @@ export function applyClaudeProviderToConfigText(
   }).configText
 }
 export function configTextForClaudeSave(
-
   configText: string,
   agentType: AgentType,
   modelProviderId: number | null,

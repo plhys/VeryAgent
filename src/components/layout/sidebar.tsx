@@ -107,7 +107,9 @@ export function Sidebar() {
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const [showCompleted, setShowCompleted] = useState(false)
-  const [activeTab, setActiveTab] = useState<"conversations" | "projects">("conversations")
+  const [activeTab, setActiveTab] = useState<"conversations" | "projects">(
+    "conversations"
+  )
   const [sortMode, setSortMode] = useState<SidebarSortMode>("created")
   const [sectionOrder, setSectionOrder] =
     useState<SidebarSectionOrder>("folders-first")

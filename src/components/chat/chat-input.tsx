@@ -183,11 +183,11 @@ export const ChatInput = memo(function ChatInput({
         onForkSend={onForkSend}
         onAddFeedback={onAddFeedback}
         feedbackAddDisabled={feedbackAddDisabled}
-injectContent={injectContent}
-          onInjectConsumed={onInjectConsumed}
-          visionEnabled={visionEnabled}
-          onToggleVision={onToggleVision}
-          placeholder={
+        injectContent={injectContent}
+        onInjectConsumed={onInjectConsumed}
+        visionEnabled={visionEnabled}
+        onToggleVision={onToggleVision}
+        placeholder={
           isConnecting
             ? t("connecting")
             : isPrompting

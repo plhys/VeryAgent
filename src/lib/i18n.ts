@@ -1,16 +1,12 @@
 import type { AppLocale, SystemLanguageSettings } from "@/lib/types"
 
-export const APP_LOCALES: readonly AppLocale[] = [
-  "en",
-  "zh_cn",
-]
+export const APP_LOCALES: readonly AppLocale[] = ["en", "zh_cn"]
 const FALLBACK_APP_LOCALE: AppLocale = "en"
-export const LANGUAGE_SETTINGS_STORAGE_KEY = "veryagent.system_language_settings"
+export const LANGUAGE_SETTINGS_STORAGE_KEY =
+  "veryagent.system_language_settings"
 export const LANGUAGE_MODE_COOKIE_KEY = "veryagent.language_mode"
 export const LANGUAGE_COOKIE_KEY = "veryagent.locale"
-export type IntlLocale =
-  | "en"
-  | "zh-CN"
+export type IntlLocale = "en" | "zh-CN"
 
 export const DEFAULT_LANGUAGE_SETTINGS: SystemLanguageSettings = {
   mode: "system",

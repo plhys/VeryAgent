@@ -410,41 +410,43 @@ const FolderPicker = memo(function FolderPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" side="top" className="p-0 w-72 overflow-hidden">
+      <PopoverContent
+        align="start"
+        side="top"
+        className="p-0 w-72 overflow-hidden"
+      >
         <Command className="rounded-2xl [&_[cmdk-item]]:text-[0.6875rem] [&_[cmdk-item]]:py-0.5 [&_[cmdk-input]]:text-[0.6875rem] [&_[cmdk-input]]:h-6 [&_[cmdk-input-wrapper]]:text-[0.6875rem]">
-	          {folders.length > 0 && (
-	            <CommandInput placeholder={labelSearch} />
-	          )}
-            <CommandList>
-              {folders.length > 0 ? (
-                <>
-                  <CommandEmpty>{labelEmpty}</CommandEmpty>
-                  <CommandGroup>
-                    {folders.map((f) => (
-                      <CommandItem
-                        key={f.id}
-                        value={`${f.name} ${f.path}`}
-                        onSelect={() => {
-                          setOpen(false)
-                          void onSelect(f.id)
-                        }}
-                      >
-                        <Folder className="h-3 w-3" />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="truncate font-medium">{f.name}</span>
-                          <span className="truncate text-[0.625rem] text-muted-foreground">
-                            {f.path}
-                          </span>
-                        </div>
-                        {f.id === currentFolderId && (
-                          <Check className="h-3 w-3 shrink-0" />
-                        )}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                  <CommandSeparator />
-                </>
-              ) : null}
+          {folders.length > 0 && <CommandInput placeholder={labelSearch} />}
+          <CommandList>
+            {folders.length > 0 ? (
+              <>
+                <CommandEmpty>{labelEmpty}</CommandEmpty>
+                <CommandGroup>
+                  {folders.map((f) => (
+                    <CommandItem
+                      key={f.id}
+                      value={`${f.name} ${f.path}`}
+                      onSelect={() => {
+                        setOpen(false)
+                        void onSelect(f.id)
+                      }}
+                    >
+                      <Folder className="h-3 w-3" />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="truncate font-medium">{f.name}</span>
+                        <span className="truncate text-[0.625rem] text-muted-foreground">
+                          {f.path}
+                        </span>
+                      </div>
+                      {f.id === currentFolderId && (
+                        <Check className="h-3 w-3 shrink-0" />
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandSeparator />
+              </>
+            ) : null}
             {/* Pinned: "Add Folder" entry. Stable value keeps it visible under
                 any search filter so the entry point is always reachable. */}
             <CommandGroup forceMount>

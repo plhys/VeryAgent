@@ -1,8 +1,4 @@
-export default function PetLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function PetLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{

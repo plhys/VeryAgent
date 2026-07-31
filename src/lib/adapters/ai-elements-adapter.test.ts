@@ -1355,7 +1355,11 @@ describe("extractUserResourcesFromText — veryagent references stay inline", ()
       "here [report.pdf](veryagent://embedded/abc-123) ok"
     )
     expect(resources).toEqual([
-      { name: "report.pdf", uri: "veryagent://embedded/abc-123", mime_type: null },
+      {
+        name: "report.pdf",
+        uri: "veryagent://embedded/abc-123",
+        mime_type: null,
+      },
     ])
     expect(text).toBe("here [report.pdf](veryagent://embedded/abc-123) ok")
   })
@@ -1413,7 +1417,10 @@ describe("adaptMessageTurn — user reference resources", () => {
         role: "user",
         timestamp: "2026-06-11T00:00:00.000Z",
         blocks: [
-          { type: "text", text: "ask [@Codex](veryagent://agent/codex) to review" },
+          {
+            type: "text",
+            text: "ask [@Codex](veryagent://agent/codex) to review",
+          },
         ],
       },
       msgText

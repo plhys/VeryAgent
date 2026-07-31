@@ -1,6 +1,13 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect, useRef, type CSSProperties } from "react"
+import {
+  memo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type CSSProperties,
+} from "react"
 import {
   Pencil,
   Trash2,
@@ -236,14 +243,14 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const [staggerReady, setStaggerReady] = useState(false)
   useEffect(() => {
     if (!isPinned) return
-    const delay = ((conversation.id * 137) % 500) + 50  // deterministic 50-550ms
+    const delay = ((conversation.id * 137) % 500) + 50 // deterministic 50-550ms
     const timer = setTimeout(() => setStaggerReady(true), delay)
     return () => clearTimeout(timer)
   }, [isPinned, conversation.id])
 
   useEffect(() => {
     if (!isPinned) return
-    if (!staggerReady) return  // wait for stagger delay
+    if (!staggerReady) return // wait for stagger delay
     let cancelled = false
 
     // If we already have a cached summary, combine with time range below
@@ -262,39 +269,71 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             const d = new Date(iso)
             if (Number.isNaN(d.getTime())) return ""
             return format(d, "MM/dd HH:mm")
-          } catch { return "" }
+          } catch {
+            return ""
+          }
         }
-        const firstTurn = turns.find((t) => t.role === "user" || t.role === "assistant")
-        const lastTurn = [...turns].reverse().find((t) => t.role === "user" || t.role === "assistant")
+        const firstTurn = turns.find(
+          (t) => t.role === "user" || t.role === "assistant"
+        )
+        const lastTurn = [...turns]
+          .reverse()
+          .find((t) => t.role === "user" || t.role === "assistant")
         const timeRange =
           firstTurn && lastTurn && firstTurn.timestamp && lastTurn.timestamp
-            ? "🕐 " + formatTS(firstTurn.timestamp) + " ~ " + formatTS(lastTurn.timestamp)
+            ? "🕐 " +
+              formatTS(firstTurn.timestamp) +
+              " ~ " +
+              formatTS(lastTurn.timestamp)
             : ""
 
         // If we already have a cached summary, combine with time range and skip API
         if (conversation.summary) {
-          setSummary(timeRange ? timeRange + "\n\n" + conversation.summary : conversation.summary)
+          setSummary(
+            timeRange
+              ? timeRange + "\n\n" + conversation.summary
+              : conversation.summary
+          )
           return
         }
 
         setSummary(timeRange || null)
 
         const agentForSummary = activeAgentType || conversation.agent_type
-        console.log("[Summary] agentForSummary:", agentForSummary, "activeAgentType:", activeAgentType, "conv.agent_type:", conversation.agent_type);
-          generateConversationSummary(conversation.id, agentForSummary)
+        console.log(
+          "[Summary] agentForSummary:",
+          agentForSummary,
+          "activeAgentType:",
+          activeAgentType,
+          "conv.agent_type:",
+          conversation.agent_type
+        )
+        generateConversationSummary(conversation.id, agentForSummary)
           .then((result) => {
             if (!cancelled) {
-              setSummary(timeRange
-                ? timeRange + "\n\n" + result.summary
-                : result.summary)
+              setSummary(
+                timeRange ? timeRange + "\n\n" + result.summary : result.summary
+              )
             }
           })
-          .catch((err) => { console.error('[Summary] AI summary failed:', err) })
+          .catch((err) => {
+            console.error("[Summary] AI summary failed:", err)
+          })
       })
-      .catch(() => { if (!cancelled) setSummary(null) })
+      .catch(() => {
+        if (!cancelled) setSummary(null)
+      })
 
-    return () => { cancelled = true }
-  }, [isPinned, conversation.id, conversation.summary, activeAgentType, staggerReady])
+    return () => {
+      cancelled = true
+    }
+  }, [
+    isPinned,
+    conversation.id,
+    conversation.summary,
+    activeAgentType,
+    staggerReady,
+  ])
 
   return (
     <>
@@ -302,7 +341,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
         <ContextMenuTrigger asChild>
           <div
             ref={cardRef}
-	            className="relative h-[2.125rem] bg-sidebar"
+            className="relative h-[2.125rem] bg-sidebar"
             data-conv-key={`${conversation.agent_type}:${conversation.id}`}
             // Per-level indent: shift the shared rail axis right by one step per
             // depth. Root rows (depth 0) leave the var untouched so they inherit
@@ -355,19 +394,19 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     (depth ≥ 1); root conversations omit the rail for a
                     cleaner flat list appearance. */}
                 {depth > 0 && (
-                <span
-                  aria-hidden
-                  className={cn(
-                    "pointer-events-none absolute z-0 bg-sidebar-border"
-                  )}
-                  style={{
-                    top: "-0.0625rem",
-                    bottom: "-0.0625rem",
-                    left: "var(--conv-rail-axis, 0.875rem)",
-                    width: "0.125rem",
-                    transform: "translateX(-50%)",
-                  }}
-                />
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute z-0 bg-sidebar-border"
+                    )}
+                    style={{
+                      top: "-0.0625rem",
+                      bottom: "-0.0625rem",
+                      left: "var(--conv-rail-axis, 0.875rem)",
+                      width: "0.125rem",
+                      transform: "translateX(-50%)",
+                    }}
+                  />
                 )}
                 {isPinned && (
                   <span
@@ -740,5 +779,3 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
     </>
   )
 })
-
-
