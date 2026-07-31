@@ -3,11 +3,21 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.8**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.9**）。
 
 ---
 
 ## [Unreleased]
+
+### 新增
+
+### 变更
+
+### 修复
+
+---
+
+## [0.9.9] — 2026-07-31
 
 ### 新增
 
