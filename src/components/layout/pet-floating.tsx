@@ -12,6 +12,7 @@ import { usePetState } from "@/app/pet/_hooks/usePetState"
 import type { PetState } from "@/lib/pet/animation"
 import { PetBadge } from "@/app/pet/_components/PetBadge"
 import { useTabStore } from "@/stores/tab-store"
+import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 
 export function PetFloating() {
   const [pet, setPet] = useState<PetDetail | null>(null)
@@ -21,14 +22,17 @@ export function PetFloating() {
   const [loaded, setLoaded] = useState(false)
   const [animate, setAnimate] = useState(false) // Entrance animation flag
   const agentState = usePetState()
+  const { isConversations } = useWorkbenchRoute()
 
   // Only surface the floating pet inside an active conversation window — not on
-  // the welcome/empty state. The welcome page is the draft tab before any
+  // the welcome/empty state, and not on non-conversation workbench routes
+  // (Skills, Automations). The welcome page is the draft tab before any
   // conversation exists (conversationId == null); once the user opens/enters a
-  // real conversation it becomes non-null, which is our "in a chat window" signal.
+  // real conversation it becomes non-null, which is our "in a chat window"
+  // signal.
   const petVisible = useTabStore((s) => {
     const tab = s.tabs.find((x) => x.id === s.activeTabId)
-    return tab != null && tab.conversationId != null
+    return tab != null && tab.conversationId != null && isConversations
   })
 
   const renderState: PetState = agentState

@@ -10,7 +10,6 @@ import {
 } from "react"
 import {
   Bot,
-  Boxes,
   ChevronDown,
   FileSpreadsheet,
   GitBranch,
@@ -24,7 +23,6 @@ import {
   Server,
   Settings,
   SlidersHorizontal,
-  Pencil,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { usePathname } from "next/navigation"
@@ -51,8 +49,6 @@ type SettingsNavLabelKey =
   | "image_generation"
   | "mcp"
   | "office_tools"
-  | "skill_packs"
-  | "skills"
   | "quick_messages"
   | "shortcuts"
   | "version_control"
@@ -114,16 +110,6 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
  * stay available under advanced so no existing route is dropped from the nav.
  */
 const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
-  {
-    href: "/settings/skill-packs",
-    labelKey: "skill_packs",
-    icon: Boxes,
-  },
-  {
-    href: "/settings/skills",
-    labelKey: "skills",
-    icon: Pencil,
-  },
   {
     href: "/settings/quick-messages",
     labelKey: "quick_messages",

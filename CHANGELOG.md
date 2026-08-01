@@ -3,17 +3,32 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.9**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.9.1**）。
 
 ---
 
-## [Unreleased]
+## [0.9.9.1] — 2026-08-01
 
 ### 新增
 
+- **技能仓库系统**：技能数据源从编译后端切换为远程仓库 URL，支持 GitHub/Gitee 双源 5 秒超时切换，仓库在线/离线信号图标指示。
+- **自制技能标签页**：独立的「自制」标签页，展示用户通过 VeryAgent 创建的自定义技能，支持编辑、删除、启用/禁用（localStorage 暂存内容）。
+- **技能仓库 + 自制技能 + 已添加三段式页面结构**：标签页重组为「技能仓库 | 连接器仓库 | 自制 | 已添加」。
+- **`index.json` 技能索引格式**：定义仓库标准格式，支持多语言名称/描述、分类、图标。
+
 ### 变更
 
+- **技能仓库入口统一**：删除设置侧栏的「Skills」和「Skill Packs」入口，技能管理全部集中到工作台 Skills & Tools 页面。
+- **预装技能按钮文字统一**：按钮从「添加/移除」改为「启用/禁用」，Toast 提示同步更新。
+- **当前智能体标签改为绿色激活态**：指示灯和标签背景色从 primary 改为 `emerald` 绿色。
+- **设置侧栏清理**：移除 `skill_packs` 和 `skills` 菜单项及相关页面文件。
+
 ### 修复
+
+- **预装技能重复显示**：`acpListAgentSkills` 返回的符号链接与 `enabledIds` 去重，避免同一技能在「已添加」中显示两次。
+- **TOML 解析器缺失 `zh-CN` 键名**：修复引号键名 `"zh-CN"` 的解析，确保 index.json 中包含中文技能名和描述。
+- **技能下载 URL 路径错误**：修复 `SKILL_RAW_URLS` 基础 URL 与 `path` 重复拼接 `skills/` 导致 404 的问题。
+- **`fetchSkillIndex` 返回值解构错误**：`handleToggle` 中未正确解构 `{ index, online }` 导致 `Cannot read properties of undefined`。
 
 ---
 
