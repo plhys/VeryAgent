@@ -208,6 +208,18 @@ impl NpxCommandResolver {
 /// already cached locally.
 pub(crate) async fn verify_agent_installed(agent_type: AgentType) -> Result<(), AcpError> {
     let meta = registry::get_agent_meta(agent_type);
+    // Command Code ships its ACP adapter inside the app itself, so there is
+    // never a binary to install; the only runtime prerequisite is a Node.js
+    // ≥ 22 interpreter to execute the adapter script.
+    if agent_type == AgentType::CommandCode {
+        if !is_cmd_available("node").await {
+            return Err(AcpError::SdkNotInstalled(format!(
+                "{} requires Node.js ≥ 22. Please install it and try again.",
+                meta.name
+            )));
+        }
+        return Ok(());
+    }
     match meta.distribution {
         registry::AgentDistribution::Npx { cmd, .. } => {
             if !is_cmd_available(cmd).await {
@@ -2076,6 +2088,9 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
         // convention. Return None for now — can be enabled when MiMo Code's
         // skill system is validated.
         AgentType::MimoCode => None,
+        // Command Code uses its own `.commandcode/skills` / `~/.commandcode/
+        // skills` layout, which is not compatible with the shared skill store.
+        AgentType::CommandCode => None,
     }
 }
 
@@ -2334,8 +2349,15 @@ pub(crate) async fn apply_model_provider_env(
     // ~/.codebuddy/models.json as additive custom models. Writing them into
     // CODEBUDDY_BASE_URL / CODEBUDDY_API_KEY hijacks the whole agent onto the
     // gateway and breaks native China/overseas Tencent models.
-    let inject_openai_compat_env =
-        !matches!(agent_type, AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode);
+    //
+    // Command Code (cmdc) authenticates against its own account (cmdc login)
+    // and resolves models from its built-in provider catalog; it ignores
+    // OPENAI_* process env entirely (verified empirically), so injecting them
+    // is a no-op that would falsely suggest the bound provider took effect.
+    let inject_openai_compat_env = !matches!(
+        agent_type,
+        AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode | AgentType::CommandCode
+    );
     if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
         // Agents that append `/chat/completions` themselves need a `/v1` base.
         // Shared provider rows are often bare host roots (`http://host:port`).
@@ -2924,6 +2946,7 @@ pub(crate) fn all_agent_types() -> &'static [AgentType] {
         AgentType::KimiCode,
         AgentType::Pi,
         AgentType::MimoCode,
+        AgentType::CommandCode,
     ]
 }
 
@@ -3382,10 +3405,15 @@ pub(crate) async fn acp_get_agent_status_core(
                 .and_then(|_| setting.as_ref().and_then(|m| m.installed_version.clone())),
         ),
         registry::AgentDistribution::Binary { platforms, cmd, .. } => {
-            let detected = binary_cache::detect_installed_version(agent_type, cmd)
-                .ok()
-                .flatten();
-            (platforms.iter().any(|p| p.platform == platform), detected)
+            // Command Code's adapter is embedded; always available.
+            if agent_type == AgentType::CommandCode {
+                (true, meta.registry_version().map(str::to_string))
+            } else {
+                let detected = binary_cache::detect_installed_version(agent_type, cmd)
+                    .ok()
+                    .flatten();
+                (platforms.iter().any(|p| p.platform == platform), detected)
+            }
         }
         registry::AgentDistribution::Uvx { system_cmd, .. } => (
             uvx_agent_launchable(*system_cmd),
@@ -3451,14 +3479,24 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
                 (true, "npx", cached)
             }
             registry::AgentDistribution::Binary { platforms, cmd, .. } => {
-                let detected = binary_cache::detect_installed_version(agent_type, cmd)
-                    .ok()
-                    .flatten();
-                (
-                    platforms.iter().any(|p| p.platform == platform),
-                    "binary",
-                    detected,
-                )
+                // Command Code's adapter is bundled inside the app; it is
+                // always available and its version tracks the embedded adapter.
+                if agent_type == AgentType::CommandCode {
+                    (
+                        true,
+                        "binary",
+                        meta.registry_version().map(str::to_string),
+                    )
+                } else {
+                    let detected = binary_cache::detect_installed_version(agent_type, cmd)
+                        .ok()
+                        .flatten();
+                    (
+                        platforms.iter().any(|p| p.platform == platform),
+                        "binary",
+                        detected,
+                    )
+                }
             }
             registry::AgentDistribution::Uvx { system_cmd, .. } => (
                 uvx_agent_launchable(*system_cmd),
@@ -4232,6 +4270,18 @@ pub(crate) async fn acp_download_agent_binary_core(
     emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
 
     let meta = registry::get_agent_meta(agent_type);
+    // Command Code's adapter is bundled inside the app; there is nothing to
+    // download — surface a completed install so the Settings page UX is a
+    // no-op success.
+    if agent_type == AgentType::CommandCode {
+        emit_agent_install_event(
+            emitter,
+            &task_id,
+            AgentInstallEventKind::Log,
+            format!("{} ships its adapter built-in; nothing to download", meta.name),
+        );
+        return Ok(());
+    }
     let result = match meta.distribution {
         registry::AgentDistribution::Binary {
             version,
@@ -4454,6 +4504,18 @@ pub(crate) async fn acp_prepare_npx_agent_core(
     emit_agent_install_event(emitter, &task_id, AgentInstallEventKind::Started, "");
 
     let meta = registry::get_agent_meta(agent_type);
+    // Command Code's adapter is built in — nothing to install; return the
+    // embedded version so the Settings page shows it as ready.
+    if agent_type == AgentType::CommandCode {
+        let version = meta.registry_version().map(str::to_string);
+        emit_agent_install_event(
+            emitter,
+            &task_id,
+            AgentInstallEventKind::Log,
+            format!("{} ships its adapter built-in; nothing to install", meta.name),
+        );
+        return Ok(version.unwrap_or_default());
+    }
     let result = match meta.distribution {
         registry::AgentDistribution::Npx { package, .. } => {
             // `version_override` of None/empty keeps the registry-pinned spec;
@@ -4655,15 +4717,21 @@ pub(crate) async fn acp_uninstall_agent_core(
     );
 
     let result: Result<(), AcpError> = async {
-        match meta.distribution {
-            registry::AgentDistribution::Binary { .. } => {
-                binary_cache::clear_agent_cache(agent_type)?;
-            }
-            registry::AgentDistribution::Npx { package, .. } => {
-                uninstall_npm_global_package(package).await?;
-            }
-            registry::AgentDistribution::Uvx { .. } => {
-                binary_cache::clear_uvx_agent_prepared(agent_type)?;
+        // Command Code's adapter is embedded in the app; there is nothing to
+        // uninstall (skipping clear_agent_cache also keeps the adapter script).
+        if agent_type == AgentType::CommandCode {
+            // fall through to DB version reset below
+        } else {
+            match meta.distribution {
+                registry::AgentDistribution::Binary { .. } => {
+                    binary_cache::clear_agent_cache(agent_type)?;
+                }
+                registry::AgentDistribution::Npx { package, .. } => {
+                    uninstall_npm_global_package(package).await?;
+                }
+                registry::AgentDistribution::Uvx { .. } => {
+                    binary_cache::clear_uvx_agent_prepared(agent_type)?;
+                }
             }
         }
 

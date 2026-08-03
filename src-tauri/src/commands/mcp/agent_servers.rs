@@ -842,6 +842,8 @@ pub(crate) fn upsert_server_for_app(app: McpAppType, id: &str, spec: &Value) -> 
         McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.upsert_server(id, spec),
         McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.upsert_server(id, spec),
         McpAppType::MimoCode => adapters::mimo_code::MimoCodeAdapter.upsert_server(id, spec),
+        // Command Code has no native MCP config file managed by VeryAgent.
+        McpAppType::CommandCode => Ok(()),
     }
 }
 
@@ -863,6 +865,8 @@ pub fn read_servers_for_agent_type(
         // pi-acp drops ACP-wire MCP and pi has no native MCP (it needs a
         // third-party extension), so veryagent manages no MCP servers for pi (v1).
         AgentType::Pi => Ok(BTreeMap::new()),
+        // Command Code has no native MCP config file managed by VeryAgent.
+        AgentType::CommandCode => Ok(BTreeMap::new()),
     }
 }
 
@@ -1224,6 +1228,7 @@ pub(crate) fn remove_server_for_app(app: McpAppType, id: &str) -> Result<bool, A
         McpAppType::CodeBuddy => adapters::codebuddy::CodeBuddyAdapter.remove_server(id),
         McpAppType::KimiCode => adapters::kimi_code::KimiCodeAdapter.remove_server(id),
         McpAppType::MimoCode => adapters::mimo_code::MimoCodeAdapter.remove_server(id),
+        McpAppType::CommandCode => Ok(false),
     }
 }
 

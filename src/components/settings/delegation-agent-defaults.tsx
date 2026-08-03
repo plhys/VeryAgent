@@ -66,6 +66,7 @@ const AGENT_TYPES: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
+  "command_code",
 ]
 
 interface CachedSnapshot {

@@ -29,6 +29,29 @@ pub(crate) fn uv_tool_dir() -> Result<PathBuf, AcpError> {
         .join(registry::current_platform()))
 }
 
+/// The bundled Command Code ACP adapter (`.mjs`), embedded at compile time so
+/// the built app needs no external resource file. Written to the binary cache
+/// on demand (idempotent) and executed with the system `node`:
+/// `<cache_dir>/command-code-acp/<version>/command-code-acp.mjs`.
+pub(crate) fn ensure_command_code_adapter() -> Result<PathBuf, AcpError> {
+    const ADAPTER_VERSION: &str = "0.1.0";
+    const ADAPTER_SOURCE: &str = include_str!("../../resources/command-code-acp.mjs");
+
+    let dir = cache_dir()?
+        .join("command-code-acp")
+        .join(ADAPTER_VERSION);
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        AcpError::DownloadFailed(format!("cannot create adapter dir {}: {e}", dir.display()))
+    })?;
+    let script = dir.join("command-code-acp.mjs");
+    if !script.is_file() {
+        std::fs::write(&script, ADAPTER_SOURCE).map_err(|e| {
+            AcpError::DownloadFailed(format!("cannot write adapter {}: {e}", script.display()))
+        })?;
+    }
+    Ok(script)
+}
+
 /// Locate a veryagent-managed uv tool binary (`uv` or `uvx`) if it has already
 /// been downloaded into the cache. Returns `None` when not present, so
 /// callers fall back to PATH / common install locations.

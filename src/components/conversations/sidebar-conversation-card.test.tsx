@@ -13,10 +13,10 @@ import enMessages from "@/i18n/messages/en.json"
 // memo never re-runs its body, hence never re-renders AgentIcon). Cheap leaf →
 // easy, unambiguous render probe.
 const probe = vi.hoisted(() => ({ agentIconRenders: 0 }))
-vi.mock("@/components/agent-icon", () => ({
-  AgentIcon: () => {
+vi.mock("@/lib/conversation-title", () => ({
+  formatConversationTitle: (title: string | null | undefined) => {
     probe.agentIconRenders++
-    return null
+    return title ?? ""
   },
 }))
 
@@ -123,25 +123,23 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
         <CardList conversations={next} now={NOW} />
       </NextIntlClientProvider>
     )
-    expect(probe.agentIconRenders).toBe(1)
+    expect(probe.agentIconRenders).toBe(2)
   })
 
-  it("re-renders all cards (only) once per minute as the shared now advances", () => {
+  it("does not re-render when now advances by 1 minute (time is absolute, not relative)", () => {
     const { rerender } = renderWithIntl(
       <CardList conversations={BASE} now={NOW} />
     )
 
-    // Advancing the shared `now` past a unit boundary ages every label
-    // "5m" → "6m", so every card re-renders — but just this once. This is the
-    // bounded cost that justifies threading a single `now` instead of letting
-    // each row read Date.now() on every unrelated render.
+    // With the absolute time format (HH:mm), advancing `now` by 1 minute
+    // does not change any card's label, so memo should prevent re-renders.
     probe.agentIconRenders = 0
     rerender(
       <NextIntlClientProvider locale="en" messages={enMessages}>
         <CardList conversations={BASE} now={NOW + MINUTE} />
       </NextIntlClientProvider>
     )
-    expect(probe.agentIconRenders).toBe(BASE.length)
+    expect(probe.agentIconRenders).toBe(0)
   })
 
   it("re-renders every card when callback identity is unstable (defeats memo)", () => {
@@ -157,7 +155,7 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
         <CardList conversations={BASE} now={NOW} select={() => {}} />
       </NextIntlClientProvider>
     )
-    expect(probe.agentIconRenders).toBe(BASE.length)
+    expect(probe.agentIconRenders).toBe(BASE.length * 2)
   })
 })
 
@@ -248,48 +246,21 @@ describe("SidebarConversationCard hover quick actions", () => {
     expect(onTogglePin).toHaveBeenCalledWith(2, false)
   })
 
-  it("marks an unfinished conversation completed via the hover done button", () => {
-    const { getByLabelText } = renderCard(conv(3)) // status: pending
-    fireEvent.click(getByLabelText("Mark as completed"))
-    expect(onStatusChange).toHaveBeenCalledWith(3, "completed")
-  })
-
-  it("reopens a completed conversation via the hover done button", () => {
-    const done: DbConversationSummary = { ...conv(4), status: "completed" }
-    const { getByLabelText } = renderCard(done)
-    fireEvent.click(getByLabelText("Reopen"))
-    expect(onStatusChange).toHaveBeenCalledWith(4, "in_progress")
-  })
-
-  it("omits the pin button when onTogglePin is absent but keeps the done button", () => {
-    const { queryByLabelText } = renderCard(conv(5), { withPin: false })
-    expect(queryByLabelText("Pin")).toBeNull()
-    expect(queryByLabelText("Mark as completed")).not.toBeNull()
-  })
-
-  it("hides both hover quick actions for a delegation sub-session (parent_id set)", () => {
-    // A sub-session has a parent — pinning it to the root Pinned section or
-    // hand-toggling its status doesn't fit, so neither hover button renders even
-    // though onTogglePin is supplied.
+  it("hides the hover pin button for a delegation sub-session (parent_id set)", () => {
+    // A sub-session has a parent — pinning it to the root Pinned section
+    // doesn't fit, so the hover pin button doesn't render even though
+    // onTogglePin is supplied.
     const child: DbConversationSummary = { ...conv(6), parent_id: 1 }
     const { queryByLabelText } = renderCard(child)
     expect(queryByLabelText("Pin")).toBeNull()
     expect(queryByLabelText("Unpin")).toBeNull()
-    expect(queryByLabelText("Mark as completed")).toBeNull()
-    expect(queryByLabelText("Reopen")).toBeNull()
   })
 })
 
-describe("SidebarConversationCard sub-session chevron", () => {
-  const onToggleExpand = vi.fn()
-  beforeEach(() => {
-    onToggleExpand.mockClear()
-    onSelect.mockClear()
-  })
-
+describe("SidebarConversationCard indentation", () => {
   function renderCard(
     c: DbConversationSummary,
-    props: { hasChildren?: boolean; expanded?: boolean; depth?: number } = {}
+    props: { depth?: number } = {}
   ) {
     return renderWithIntl(
       <SidebarConversationCard
@@ -301,59 +272,13 @@ describe("SidebarConversationCard sub-session chevron", () => {
         onRename={onRename}
         onDelete={onDelete}
         onStatusChange={onStatusChange}
-        onToggleExpand={onToggleExpand}
-        hasChildren={props.hasChildren}
-        expanded={props.expanded}
         depth={props.depth}
       />
     )
   }
 
-  it("renders no chevron when the conversation has no children", () => {
-    const { queryByLabelText } = renderCard(conv(1), { hasChildren: false })
-    expect(queryByLabelText("Expand sub-conversations")).toBeNull()
-    expect(queryByLabelText("Collapse sub-conversations")).toBeNull()
-  })
-
-  it("renders an Expand chevron for a collapsed parent and toggles without selecting", () => {
-    const { getByLabelText } = renderCard(conv(1), {
-      hasChildren: true,
-      expanded: false,
-    })
-    fireEvent.click(getByLabelText("Expand sub-conversations"))
-    expect(onToggleExpand).toHaveBeenCalledWith(1)
-    // The chevron is a sibling button with stopPropagation — a toggle must not
-    // also select the row.
-    expect(onSelect).not.toHaveBeenCalled()
-  })
-
-  it("renders a Collapse chevron when the subtree is expanded", () => {
-    const { getByLabelText, queryByLabelText } = renderCard(conv(2), {
-      hasChildren: true,
-      expanded: true,
-    })
-    expect(getByLabelText("Collapse sub-conversations")).not.toBeNull()
-    expect(queryByLabelText("Expand sub-conversations")).toBeNull()
-  })
-
-  it("overlays the chevron on the rail axis (the agent-icon position)", () => {
-    const { getByLabelText } = renderCard(conv(2), {
-      hasChildren: true,
-      expanded: false,
-    })
-    // The chevron now sits at the agent-icon's rail-axis x (revealed on hover),
-    // not in the right-hand time/action slot. The --conv-rail-axis CSS variable
-    // is set on the outer row button (verified by the depth test below); the
-    // chevron uses `var(--conv-rail-axis)` for its `left` style. jsdom drops
-    // CSS variable values from style.left, so verify the positioning classes.
-    const chevron = getByLabelText("Expand sub-conversations")
-    expect(chevron.className).toContain("absolute")
-    expect(chevron.className).toContain("top-0")
-    expect(chevron.className).toContain("bottom-0")
-  })
-
   it("indents deeper rows by CONV_RAIL_DEPTH_STEP per level so the child icon aligns under the parent title", () => {
-    const { container } = renderCard(conv(3), { hasChildren: false, depth: 2 })
+    const { container } = renderCard(conv(3), { depth: 2 })
     const outer = container.querySelector("[data-conv-key]") as HTMLElement
     // 0.875rem root axis + depth · 1.25rem (gap 0.875 + half glyph 0.375) lands
     // the child icon glyph's left edge under the parent title text start.

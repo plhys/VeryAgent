@@ -16,9 +16,9 @@ import {
 
 const STORAGE_KEY = "workspace:left-sidebar"
 
-const DEFAULT_WIDTH = 250
+const DEFAULT_WIDTH = 210
 const MIN_WIDTH = 200
-const MAX_WIDTH = 300
+const MAX_WIDTH = 400
 const DEFAULT_IS_OPEN = true
 
 interface SidebarContextValue {

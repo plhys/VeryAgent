@@ -248,6 +248,11 @@ pub(crate) async fn npm_list_version(
 
 pub(crate) async fn detect_local_version(agent_type: AgentType) -> Option<String> {
     let meta = registry::get_agent_meta(agent_type);
+    // Command Code's adapter is embedded in the app; its version is the
+    // registry version itself (no cache lookup possible).
+    if agent_type == AgentType::CommandCode {
+        return meta.registry_version().map(str::to_string);
+    }
     match meta.distribution {
         registry::AgentDistribution::Npx { cmd, package, .. } => {
             if !is_cmd_available(cmd).await {

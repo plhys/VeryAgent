@@ -311,6 +311,38 @@ async fn build_agent(
     let meta = registry::get_agent_meta(agent_type);
     debug_assert_eq!(meta.agent_type, agent_type);
 
+    // Command Code is launched through the bundled ACP adapter (a Node script
+    // embedded at compile time and materialized into the binary cache). It
+    // has no downloadable binary, so it bypasses the regular Binary branch's
+    // download/cache lookup entirely.
+    if agent_type == AgentType::CommandCode {
+        let script_path = crate::acp::binary_cache::ensure_command_code_adapter()?;
+        let node = crate::process::normalized_program("node");
+        let binary_str = node.to_string_lossy().to_string();
+        let mut server = McpServerStdio::new(meta.name, &binary_str);
+        server = server.args(vec![script_path.to_string_lossy().to_string()]);
+        // The registry distribution carries no env for Command Code; runtime
+        // env (user env_json + model-provider creds) flows in via runtime_env.
+        let merged_env = merge_agent_env(&[], runtime_env);
+        if !merged_env.is_empty() {
+            let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
+                .iter()
+                .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
+                .collect();
+            server = server.env(env_vars);
+        }
+        let agent_name = meta.name.to_string();
+        return Ok(
+            AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                move |line, dir| {
+                    if dir == sacp_tokio::LineDirection::Stderr {
+                        tracing::debug!("[ACP][{agent_name}][stderr] {line}");
+                    }
+                },
+            ),
+        );
+    }
+
     let agent = match meta.distribution {
         AgentDistribution::Npx { cmd, args, env, .. } => {
             // pi-acp spawns the real `pi` binary; fail fast with a clear,
@@ -1176,7 +1208,10 @@ async fn send_resume_session(
 /// `supports_mcp` stays `true` for pi (session/new tolerates the field), so this
 /// is a separate, narrower gate. Gate veryagent-mcp injection on it.
 fn agent_delivers_wire_mcp(agent_type: AgentType) -> bool {
-    !matches!(agent_type, AgentType::Pi)
+    // pi-acp drops the `mcpServers` field; the Command Code adapter also
+    // ignores it (it has no MCP client of its own) — neither delivers ACP-wire
+    // MCP, so skip veryagent-mcp injection for both.
+    !matches!(agent_type, AgentType::Pi | AgentType::CommandCode)
 }
 
 /// Load MCP servers configured for `agent_type` and convert them into the

@@ -66,6 +66,7 @@ pub enum McpAppType {
     CodeBuddy,
     KimiCode,
     MimoCode,
+    CommandCode,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct LocalMcpServer {
@@ -382,6 +383,7 @@ pub async fn mcp_upsert_local_server(
         McpAppType::CodeBuddy,
         McpAppType::KimiCode,
         McpAppType::MimoCode,
+        McpAppType::CommandCode,
     ];
 
     for app in all_apps {
@@ -440,6 +442,7 @@ pub async fn mcp_remove_server(
             McpAppType::CodeBuddy,
             McpAppType::KimiCode,
             McpAppType::MimoCode,
+            McpAppType::CommandCode,
         ],
     };
 

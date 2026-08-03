@@ -65,7 +65,6 @@ import {
   loadSectionCollapsed,
   saveSectionCollapsed,
   loadConversationExpanded,
-  saveConversationExpanded,
   type SidebarSectionCollapsed,
   type SidebarSortMode,
   type SidebarSectionOrder,
@@ -1210,27 +1209,6 @@ export function SidebarConversationList({
     }
   }, [])
 
-  // Toggle a conversation's sub-session subtree. Expanding kicks off a lazy
-  // fetch; the Set identity changes so `rows` rebuilds, but the per-card
-  // `expanded` boolean is computed per row at render (never the Set passed in),
-  // so only the toggled card's prop flips and every other card memo holds.
-  const toggleConversation = useCallback(
-    (id: number) => {
-      setConversationExpanded((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) {
-          next.delete(id)
-        } else {
-          next.add(id)
-          void ensureChildrenLoaded(id)
-        }
-        saveConversationExpanded([...next])
-        return next
-      })
-    },
-    [ensureChildrenLoaded]
-  )
-
   // Restore-time lazy load, driven by the RENDERED rows (not the raw persisted
   // set): fetch children for every expanded parent actually visible in `rows`
   // but not yet cached. Iterating `rows` keeps this to the reachable next level —
@@ -1985,9 +1963,6 @@ export function SidebarConversationList({
         onNewConversation={handleNewConversationForFolder}
         onTogglePin={handleTogglePin}
         depth={row.depth}
-        hasChildren={conv.child_count > 0}
-        expanded={conversationExpanded.has(conv.id)}
-        onToggleExpand={toggleConversation}
       />
     )
   }
@@ -2061,7 +2036,7 @@ export function SidebarConversationList({
               <ScrollArea
                 onViewportRef={handleViewportRef}
                 className={cn(
-                  "h-full min-h-0 px-1.5 pb-1.5",
+                  "h-full min-h-0 pl-0.5 pr-1.5 pb-1.5",
                   "[overflow-anchor:none]",
                   "[--conv-rail-axis:0.875rem]"
                 )}

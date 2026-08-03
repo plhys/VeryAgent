@@ -124,6 +124,7 @@ pub fn all_acp_agents() -> Vec<AgentType> {
         AgentType::KimiCode,
         AgentType::Pi,
         AgentType::MimoCode,
+        AgentType::CommandCode,
     ]
 }
 
@@ -140,6 +141,7 @@ pub fn registry_id_for(agent_type: AgentType) -> &'static str {
         AgentType::KimiCode => "kimi-code",
         AgentType::Pi => "pi-acp",
         AgentType::MimoCode => "mimo-code",
+        AgentType::CommandCode => "command-code",
     }
 }
 
@@ -156,6 +158,7 @@ pub fn from_registry_id(id: &str) -> Option<AgentType> {
         "kimi-code" => Some(AgentType::KimiCode),
         "pi-acp" => Some(AgentType::Pi),
         "mimo-code" => Some(AgentType::MimoCode),
+        "command-code" => Some(AgentType::CommandCode),
         _ => None,
     }
 }
@@ -394,6 +397,50 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
                 node_required: Some("22.0.0"),
             },
         },
+        AgentType::CommandCode => AcpAgentMeta {
+            agent_type,
+            supports_mcp: true,
+            name: "Command Code",
+            description: "Command Code CLI — the coding agent that learns your taste (ACP via built-in adapter)",
+            resident: false,
+            // The adapter is bundled inside the VeryAgent app (resources/).
+            // `cmd` is only a placeholder: `connection.rs::build_agent` has a
+            // CommandCode special-case that launches `node <resources>/
+            // command-code-acp.mjs` directly, so no binary is ever downloaded
+            // for this agent.
+            distribution: AgentDistribution::Binary {
+                version: "0.1.0",
+                cmd: "node",
+                args: &[],
+                env: &[],
+                platforms: &[
+                    PlatformBinary {
+                        platform: "darwin-aarch64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-darwin-aarch64.mjs",
+                    },
+                    PlatformBinary {
+                        platform: "darwin-x86_64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-darwin-x86_64.mjs",
+                    },
+                    PlatformBinary {
+                        platform: "linux-aarch64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-linux-aarch64.mjs",
+                    },
+                    PlatformBinary {
+                        platform: "linux-x86_64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-linux-x86_64.mjs",
+                    },
+                    PlatformBinary {
+                        platform: "windows-aarch64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-windows-aarch64.mjs",
+                    },
+                    PlatformBinary {
+                        platform: "windows-x86_64",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-windows-x86_64.mjs",
+                    },
+                ],
+            },
+        },
     }
 }
 
@@ -522,6 +569,9 @@ mod tests {
         );
         assert_npx_version(AgentType::Pi, "0.0.31", "pi-acp@0.0.31", Some("22.0.0"));
         assert_binary_version(AgentType::OpenCode, "1.17.13", "/releases/download/v1.17.13/");
+        // Command Code is a built-in adapter (no downloadable binary); its
+        // registry version mirrors the bundled adapter version.
+        assert_binary_version(AgentType::CommandCode, "0.1.0", "/command-code-acp-v0.1.0/");
         assert_uvx_version(
             AgentType::Hermes,
             "0.18.0",

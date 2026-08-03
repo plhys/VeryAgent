@@ -4,7 +4,7 @@
   "version": "0.9.9.1",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
     "tauri": "tauri",

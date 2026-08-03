@@ -10,6 +10,7 @@
   | "kimi_code"
   | "pi"
   | "mimo_code"
+  | "command_code"
 
 export type AppErrorCode =
   | "invalid_input"
@@ -483,6 +484,8 @@ export const AGENT_DISPLAY_ORDER: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
+  "mimo_code",
+  "command_code",
 ]
 
 const AGENT_DISPLAY_ORDER_INDEX = new Map(
@@ -506,6 +509,8 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   "code_buddy",
   "kimi_code",
   "pi",
+  "mimo_code",
+  "command_code",
 ]
 
 /** Process-level resident butlers (match backend registry.resident). */
@@ -833,11 +838,12 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   gemini: "Gemini CLI",
   open_claw: "OpenClaw",
   cline: "Cline",
-  hermes: "Hermes Agent",
+  hermes: "Hermes",
   code_buddy: "CodeBuddy",
   kimi_code: "Kimi Code",
   pi: "Pi",
   mimo_code: "Mimo Code",
+  command_code: "Command Code",
 }
 
 export const AGENT_COLORS: Record<AgentType, string> = {
@@ -852,6 +858,7 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   kimi_code: "bg-[#1783FF]",
   pi: "bg-[#0D9488]",
   mimo_code: "bg-[#FF6B35]",
+  command_code: "bg-[#6B46C1]",
 }
 
 // ACP connection status (matches Rust ConnectionStatus)

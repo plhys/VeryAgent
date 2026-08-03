@@ -11,6 +11,7 @@ use crate::parsers::claude::ClaudeParser;
 use crate::parsers::cline::ClineParser;
 use crate::parsers::codebuddy::CodeBuddyParser;
 use crate::parsers::codex::CodexParser;
+use crate::parsers::command_code::CommandCodeParser;
 use crate::parsers::gemini::GeminiParser;
 use crate::parsers::hermes::HermesParser;
 use crate::parsers::kimi_code::KimiCodeParser;
@@ -281,6 +282,7 @@ pub async fn get_conversation(
             AgentType::KimiCode => Box::new(KimiCodeParser::new()),
             AgentType::Pi => Box::new(PiParser::new()),
             AgentType::MimoCode => Box::new(MiMoCodeParser::new()),
+            AgentType::CommandCode => Box::new(CommandCodeParser::new()),
         };
 
         parser
@@ -524,6 +526,7 @@ pub async fn get_folder_conversation_core(
                 AgentType::KimiCode => Box::new(KimiCodeParser::new()),
                 AgentType::Pi => Box::new(PiParser::new()),
                 AgentType::MimoCode => Box::new(MiMoCodeParser::new()),
+                AgentType::CommandCode => Box::new(CommandCodeParser::new()),
             };
             match parser.get_conversation(&eid) {
                 Ok(d) => Ok((d.turns, d.session_stats, None, d.summary.title)),

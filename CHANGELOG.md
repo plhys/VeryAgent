@@ -7,6 +7,27 @@
 
 ---
 
+## [Unreleased]
+
+### 新增
+
+- **Command Code（cmdc）接入专家模式**：通过内置 ACP 适配器（`src-tauri/resources/command-code-acp.mjs`）将 Command Code CLI 托管为新的 agent 类型，支持开会话、发消息、流式输出、工具调用展示与权限审批（approve/deny）。
+  - 适配器驱动 `cmdc -p --output-format json` 的 NDJSON 事件流，映射为 ACP `session/update`（agent_message_chunk / agent_thought_chunk / tool_call / tool_call_update）与 `session/request_permission`；`--yolo` 放行内部执行、宿主审批决定结果回传（通知式权限模型）。
+  - Rust 侧：`AgentType::CommandCode` 注册、registry Binary 分发（内置脚本，无需下载）、MCP 注册表/parser/命令层分支、`build_agent` 特判启动、排除 OPENAI_* 环境注入（cmdc 使用自己的登录态，忽略这些变量）。
+  - 前端侧：`AgentType` 联合类型、`AGENT_LABELS`/`AGENT_COLORS`、`AGENT_DISPLAY_ORDER`/`ALL_AGENT_TYPES`、委托卡片与委托默认值白名单补齐 `command_code`。
+  - **前置条件**：目标机器需先 `cmdc login`（Command Code 账号登录态在 `~/.commandcode/auth.json`）；未登录时 headless 退出码 3，适配器会返回含 `run cmdc login` 提示的错误。
+
+### 变更
+
+- **边栏会话卡片重构**：移除 hover 时「标记完成/重新打开」和「展开/折叠子会话」快速操作按钮，简化卡片交互模型；移除 `AgentIcon` 依赖，时间显示从相对时间（"5m ago"）改为绝对时间（HH:mm），减少不必要的重渲染。
+- **`tsconfig.json` 格式化**：数组展开为多行格式，添加 `.next/dev/dev/types/**/*.ts` 到 include 列表。
+
+### 其他
+
+- **`.gitignore` 更新**：添加 `.commandcode/`（Command Code CLI 缓存）、`/docs/运维笔记/`、`/docs/运营项目必看.md`、`/计划内容/` 到忽略列表。
+
+---
+
 ## [0.9.9.1] — 2026-08-01
 
 ### 新增

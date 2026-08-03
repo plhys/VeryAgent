@@ -2,6 +2,7 @@ pub mod claude;
 pub mod cline;
 pub mod codebuddy;
 pub mod codex;
+pub mod command_code;
 pub mod gemini;
 pub mod hermes;
 pub mod kimi_code;

@@ -145,7 +145,7 @@ export function Sidebar() {
   if (!isOpen) return null
 
   return (
-    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none px-2.5">
+    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none px-1">
       {/* Fixed actions above the scrollable list. */}
       <div className="flex shrink-0 flex-col gap-0.5 px-1.5 pt-5">
         <SidebarNavButton

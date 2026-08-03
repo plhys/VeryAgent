@@ -719,6 +719,13 @@ pub(crate) async fn cascade_update_agent_config(
                 .map(String::as_str);
             write_mimo_managed_provider(api_url, api_key, model_name, &[])?;
         }
+        AgentType::CommandCode => {
+            // Command Code has no native provider config file; the bound
+            // model-provider credentials already flow into the runtime env
+            // (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL) via
+            // `apply_model_provider_env`, which the ACP adapter passes through
+            // to the headless `cmdc` process. Nothing to cascade on disk.
+        }
     }
     Ok(())
 }

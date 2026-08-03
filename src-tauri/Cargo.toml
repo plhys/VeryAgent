@@ -1,6 +1,6 @@
 [package]
 name = "veryagent"
-version = "0.9.9.1"
+version = "0.9.9"
 description = "veryAgent Desktop App"
 authors = ["feitao"]
 edition = "2021"

@@ -3,9 +3,12 @@
 import { useMemo, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import { format } from "date-fns"
+import { AgentIcon } from "@/components/agent-icon"
+import type { AgentType } from "@/lib/types"
+import { AGENT_LABELS } from "@/lib/types"
 
 /** Horizontal nudge (px) past the host's right edge into the main pane. */
-export const TIME_FLAG_RIGHT_OFFSET_PX = 25
+export const TIME_FLAG_RIGHT_OFFSET_PX = 4
 
 export function formatAbsoluteTimestamp(
   raw: string | null | undefined
@@ -27,17 +30,20 @@ interface SidebarHoverTimeFlagProps {
   isHovered: boolean
   /** ISO timestamp to show as absolute date. */
   rawTimestamp?: string | null
+  /** Agent type to show the brand icon. */
+  agentType?: AgentType | null
 }
 
 /**
- * Absolute date flag for sidebar rows. Portaled to `document.body` so sidebar
- * overflow clipping cannot hide it. Shared by conversation cards and the
- * project-tab list.
+ * Hover flag for sidebar rows. Portaled to `document.body` so sidebar overflow
+ * clipping cannot hide it. Shows the agent icon + name and absolute date in a
+ * single card that partially overlaps the sidebar edge for a layered look.
  */
 export function SidebarHoverTimeFlag({
   hostRef,
   isHovered,
   rawTimestamp,
+  agentType,
 }: SidebarHoverTimeFlagProps) {
   const formatted = useMemo(
     () => formatAbsoluteTimestamp(rawTimestamp),
@@ -47,6 +53,9 @@ export function SidebarHoverTimeFlag({
   if (!isHovered || !formatted || !hostRef.current) return null
 
   const rect = hostRef.current.getBoundingClientRect()
+  const agentLabel = agentType
+    ? AGENT_LABELS[agentType] || agentType
+    : null
 
   return createPortal(
     <div
@@ -57,16 +66,15 @@ export function SidebarHoverTimeFlag({
         transform: "translateY(-50%)",
       }}
     >
-      <div
-        className="h-0 w-0"
-        style={{
-          borderTop: "5px solid transparent",
-          borderBottom: "5px solid transparent",
-          borderRight: "6px solid hsl(var(--popover))",
-        }}
-      />
-      <span className="whitespace-nowrap rounded-[4px] border border-border bg-popover px-2 py-0.5 text-[11px] leading-[18px] text-popover-foreground shadow-md">
-        {formatted}
+      <span className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-sidebar px-2 py-0.5 text-[11px] leading-[18px] text-sidebar-foreground shadow-md">
+        {agentType && agentLabel && (
+          <AgentIcon
+            agentType={agentType}
+            className="h-[0.875rem] w-[0.875rem] shrink-0"
+          />
+        )}
+        {agentLabel && <span className="font-medium">{agentLabel}</span>}
+        <span className="text-muted-foreground/70">{formatted}</span>
       </span>
     </div>,
     document.body

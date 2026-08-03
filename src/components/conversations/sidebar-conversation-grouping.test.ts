@@ -51,24 +51,39 @@ function conv(
 describe("formatRelative", () => {
   const now = 1_700_000_000_000
 
+  // Helper: format a date using the same local-time logic as formatRelative,
+  // so the test works in any timezone.
+  function fmt(iso: string): string {
+    const d = new Date(iso)
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+    const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+    const nowMs = new Date(now).getTime()
+    const diff = Math.max(0, nowMs - d.getTime())
+    if (diff < 86400000) return hhmm
+    if (diff < 365 * 86400000) {
+      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hhmm}`
+    }
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hhmm}`
+  }
+
   it("returns an empty string for an unparseable timestamp", () => {
     expect(formatRelative("", now)).toBe("")
     expect(formatRelative("not-a-date", now)).toBe("")
   })
 
-  it("buckets the elapsed time into compact units", () => {
+  it("formats as absolute time: HH:mm within 1 day, MM-DD HH:mm within 1 year, YYYY-MM-DD HH:mm beyond", () => {
     expect(formatRelative(new Date(now - 30_000).toISOString(), now)).toBe(
-      "now"
+      fmt(new Date(now - 30_000).toISOString())
     )
     expect(formatRelative(new Date(now - 5 * MINUTE).toISOString(), now)).toBe(
-      "5m"
+      fmt(new Date(now - 5 * MINUTE).toISOString())
     )
     expect(
       formatRelative(new Date(now - 3 * 60 * MINUTE).toISOString(), now)
-    ).toBe("3h")
+    ).toBe(fmt(new Date(now - 3 * 60 * MINUTE).toISOString()))
     expect(
       formatRelative(new Date(now - 2 * 24 * 60 * MINUTE).toISOString(), now)
-    ).toBe("2d")
+    ).toBe(fmt(new Date(now - 2 * 24 * 60 * MINUTE).toISOString()))
   })
 
   it("is deterministic for a given `now` regardless of the wall clock", () => {
@@ -78,10 +93,12 @@ describe("formatRelative", () => {
     expect(formatRelative(iso, now)).toBe(formatRelative(iso, now))
   })
 
-  it("ages the label when `now` crosses a unit boundary", () => {
+  it("does not change when `now` advances (absolute time is stable)", () => {
     const iso = new Date(now - 59 * MINUTE).toISOString()
-    expect(formatRelative(iso, now)).toBe("59m")
-    expect(formatRelative(iso, now + MINUTE)).toBe("1h")
+    // Absolute time format: the creation time doesn't change when `now` moves.
+    const expected = fmt(iso)
+    expect(formatRelative(iso, now)).toBe(expected)
+    expect(formatRelative(iso, now + MINUTE)).toBe(expected)
   })
 })
 

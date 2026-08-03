@@ -80,17 +80,21 @@ export function formatRelative(iso: string, now: number): string {
   const ts = parseTimestamp(iso)
   if (!ts) return ""
   const diff = Math.max(0, now - ts)
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return "now"
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d`
-  const mo = Math.floor(d / 30)
-  if (mo < 12) return `${mo}mo`
-  const y = Math.floor(mo / 12)
-  return `${y}y`
+  const d = new Date(ts)
+
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
+  const hhmm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+  // Within 1 day: show time only (HH:mm)
+  if (diff < 86400000) return hhmm
+
+  // Within 1 year: show month-day + time (MM-DD HH:mm)
+  if (diff < 365 * 86400000) {
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hhmm}`
+  }
+
+  // Over 1 year: show full date + time (YYYY-MM-DD HH:mm)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hhmm}`
 }
 
 function arraysShallowEqual<T>(a: readonly T[], b: readonly T[]): boolean {
