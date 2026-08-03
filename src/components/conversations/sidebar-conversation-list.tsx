@@ -236,6 +236,7 @@ const FolderHeader = memo(function FolderHeader({
         <div
           inert={suppressed || undefined}
           aria-hidden={suppressed || undefined}
+          data-context-menu="true"
           className={cn("relative h-[2.125rem]", isDragging && "opacity-60")}
         >
           <div
@@ -284,7 +285,7 @@ const FolderHeader = memo(function FolderHeader({
               <div className="flex min-w-0 flex-1 items-center gap-[0.5rem]">
                 <span
                   className={cn(
-                    "min-w-0 flex-shrink truncate text-left text-[0.875rem] font-normal text-sidebar-foreground/75"
+                    "min-w-0 flex-shrink truncate text-left text-[0.9rem] font-normal text-sidebar-foreground/75"
                   )}
                 >
                   {folderName}
@@ -1896,7 +1897,7 @@ export function SidebarConversationList({
       return themeWrap(
         row.folderId,
         <div
-          className="py-[0.375rem] text-[0.75rem] text-muted-foreground/70"
+          className="py-[0.375rem] text-[0.8rem] text-muted-foreground/70"
           style={{ paddingLeft: "calc(var(--conv-rail-axis) + 0.875rem)" }}
         >
           {row.totalConversationCount === 0
@@ -1909,7 +1910,7 @@ export function SidebarConversationList({
       // Folderless flat hint — no themeWrap, no conversation rail; align with the
       // section header's text inset (px-[0.5rem]) rather than the folder rail.
       return (
-        <div className="px-[0.5rem] py-[0.375rem] text-[0.75rem] text-muted-foreground/70">
+        <div className="px-[0.5rem] py-[0.375rem] text-[0.8rem] text-muted-foreground/70">
           {t("noChats")}
         </div>
       )
@@ -1922,7 +1923,7 @@ export function SidebarConversationList({
       // this placeholder; the content is lifted (relative) above the z-0 rails.
       return (
         <div
-          className="relative py-[0.375rem] text-[0.75rem] text-muted-foreground/70"
+          className="relative py-[0.375rem] text-[0.8rem] text-muted-foreground/70"
           style={{
             paddingLeft: `calc(0.875rem + ${row.depth} * ${CONV_RAIL_DEPTH_STEP} + 0.875rem)`,
           }}
@@ -2032,7 +2033,7 @@ export function SidebarConversationList({
       ) : (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex-1 min-h-0 relative">
+            <div className="flex-1 min-h-0 relative" data-context-menu="true">
               <ScrollArea
                 onViewportRef={handleViewportRef}
                 className={cn(

@@ -20,6 +20,7 @@ import type {
   OfficecliInfo,
   OfficecliSkill,
   SkillSyncReport,
+  CommandCodeLoginStatus,
 } from "../types"
 
 export async function acpListAgents(): Promise<AcpAgentInfo[]> {
@@ -147,6 +148,34 @@ export async function acpRevealHermesHome(): Promise<void> {
 
 export async function acpReorderAgents(agentTypes: AgentType[]): Promise<void> {
   return getTransport().call("acp_reorder_agents", { agentTypes })
+}
+
+/**
+ * Report whether the Command Code CLI is logged in for the shared official
+ * account (`~/.commandcode/auth.json` or a `COMMAND_CODE_API_KEY` env entry).
+ */
+export async function acpGetCommandCodeLoginStatus(): Promise<CommandCodeLoginStatus> {
+  return getTransport().call("acp_get_command_code_login_status", {})
+}
+
+/**
+ * Launch `cmdc login` (official browser-OAuth flow) in the background. Command
+ * Code opens the browser itself and completes the callback against its local
+ * server, then writes auth.json — no terminal window needed. Poll
+ * acpGetCommandCodeLoginStatus until logged_in flips.
+ */
+export async function acpStartCommandCodeLogin(): Promise<void> {
+  return getTransport().call("acp_start_command_code_login", {})
+}
+
+/** Cancel a pending background `cmdc login`, if any. */
+export async function acpCancelCommandCodeLogin(): Promise<void> {
+  return getTransport().call("acp_cancel_command_code_login", {})
+}
+
+/** Log out of Command Code by deleting the local auth.json credential. */
+export async function acpLogoutCommandCode(): Promise<void> {
+  return getTransport().call("acp_logout_command_code", {})
 }
 
 export async function codexRequestDeviceCode(): Promise<{

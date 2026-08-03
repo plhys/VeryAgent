@@ -18,6 +18,8 @@ pub mod hermes_config;
 pub(crate) use hermes_config::*;
 pub mod codebuddy_config;
 pub(crate) use codebuddy_config::*;
+pub mod command_code_config;
+pub(crate) use command_code_config::*;
 pub mod skills;
 pub(crate) use skills::*;
 use std::collections::{BTreeMap, HashMap};
@@ -3563,6 +3565,11 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
         } else {
             None
         };
+        let command_code_auth_json = if agent_type == AgentType::CommandCode {
+            load_command_code_auth_json_raw()
+        } else {
+            None
+        };
         // Hermes is self-managed: project its own ~/.hermes/.env + config.yaml
         // into config_json (read-only) and attach the raw config.yaml for the
         // advanced editor. The env-merge block above is skipped because
@@ -3597,6 +3604,7 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
             codex_config_toml,
             cline_secrets_json,
             hermes_config_yaml,
+            command_code_auth_json,
             model_provider_id: setting.and_then(|m| m.model_provider_id),
             resident: meta.resident,
         });
@@ -4246,6 +4254,68 @@ pub async fn acp_open_hermes_setup_terminal(kind: String) -> Result<(), AcpError
     ensure_hermes_home_secure(&home)?;
     let home_str = home.to_string_lossy();
     open_external_terminal_impl(&command, Some(home_str.as_ref()))
+}
+
+/// Report whether the Command Code CLI is logged in for the shared official
+/// account: `~/.commandcode/auth.json` from `cmdc login` exists with a
+/// credential, or the agent env carries `COMMAND_CODE_API_KEY`. Purely a file
+/// probe — no subprocess, safe to call on every settings-page render.
+pub(crate) async fn acp_get_command_code_login_status_core(
+    db: &AppDatabase,
+) -> Result<CommandCodeLoginStatus, AcpError> {
+    let setting = agent_setting_service::get_by_agent_type(&db.conn, AgentType::CommandCode)
+        .await
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    let env_has_api_key = setting
+        .and_then(|m| m.env_json)
+        .and_then(|raw| serde_json::from_str::<BTreeMap<String, String>>(&raw).ok())
+        .map(|env| {
+            env.get("COMMAND_CODE_API_KEY")
+                .is_some_and(|v| !v.trim().is_empty())
+        })
+        .unwrap_or(false);
+    Ok(command_code_login_status(env_has_api_key))
+}
+
+/// Tauri wrapper for [`acp_get_command_code_login_status_core`].
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_get_command_code_login_status(
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<CommandCodeLoginStatus, AcpError> {
+    acp_get_command_code_login_status_core(&db).await
+}
+
+/// Launch `cmdc login` (the official browser-OAuth flow) in the background.
+/// Command Code opens the browser itself and completes the OAuth callback
+/// against its temporary localhost server, then writes `~/.commandcode/auth.json`
+/// and exits — no terminal window needed. The settings page polls
+/// [`acp_get_command_code_login_status`] until `logged_in` flips.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_start_command_code_login() -> Result<(), AcpError> {
+    start_command_code_login()
+}
+
+/// Cancel a pending background `cmdc login`, if any.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_cancel_command_code_login() -> Result<(), AcpError> {
+    cancel_command_code_login();
+    Ok(())
+}
+
+/// Log out of Command Code by deleting the local auth.json credential.
+/// Returns Ok(true) if the file was deleted, Ok(false) if it didn't exist.
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_logout_command_code() -> Result<(), AcpError> {
+    logout_command_code()
+}
+
+/// Web-mode wrapper for logout.
+pub(crate) async fn acp_logout_command_code_core() -> Result<(), AcpError> {
+    logout_command_code()
 }
 
 /// Ensure `~/.hermes` exists and reveal it in the system file manager.

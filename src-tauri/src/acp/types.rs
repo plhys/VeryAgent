@@ -556,6 +556,10 @@ pub struct AcpAgentInfo {
     /// Raw `~/.hermes/config.yaml` text, attached for the Hermes settings panel's
     /// advanced editor. Only populated for `AgentType::Hermes`.
     pub hermes_config_yaml: Option<String>,
+    /// Raw `~/.commandcode/auth.json` text (from `cmdc login`), attached so the
+    /// settings panel can show Command Code login state. Only populated for
+    /// `AgentType::CommandCode`.
+    pub command_code_auth_json: Option<String>,
     pub model_provider_id: Option<i32>,
     /// Butler-class agent: process kept for the life of VeryAgent; durable
     /// memory remains in the agent's own home.

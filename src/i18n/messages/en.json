@@ -825,6 +825,28 @@
       "authModeModelProviderHint": "Use API URL, API Key, and model from a configured model provider.",
       "authModeNativeHint": "Use the native hermes authentication flow."
     },
+    "commandCode": {
+      "loginStatusTitle": "Command Code login",
+      "loginStatusLoggedIn": "Account logged in",
+      "loginStatusNotLoggedIn": "Not logged in",
+      "loggedInAs": "Logged in as {name}",
+      "refresh": "Refresh",
+      "loginMethod1Title": "Official account login (recommended)",
+      "loginMethod1Hint": "Click the button — the browser opens for authorization, then the app updates automatically.",
+      "loginButton": "Log in",
+      "logoutButton": "Log out",
+      "loginInProgress": "Waiting for browser authorization...",
+      "loginCancel": "Cancel",
+      "loginSuccess": "Logged in successfully",
+      "alreadyLoggedInAs": "Already logged in as {name}",
+      "copyCommand": "Copy command",
+      "commandCopied": "Command copied to clipboard",
+      "loginMethod2Title": "API Key",
+      "loginMethod2Hint": "Generate an API key at commandcode.ai/studio and paste it below. Stored as COMMAND_CODE_API_KEY.",
+      "apiKeyPlaceholder": "Paste Command Code API Key",
+      "saveApiKey": "Save",
+      "apiKeySaved": "API Key saved"
+    },
     "codebuddy": {
       "configManagement": "CodeBuddy Configuration",
       "configDescription": "CodeBuddy authenticates with an API key. Mainland China builds also require the environment set to “China (internal)”; iOA builds use “iOA”. The overseas build leaves it unset.",

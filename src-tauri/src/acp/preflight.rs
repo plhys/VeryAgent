@@ -64,6 +64,18 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
             cmd,
             platforms,
             ..
+        } if agent_type == AgentType::CommandCode => {
+            // Command Code ships its ACP adapter built into the app — there is
+            // no downloadable binary and no binary cache entry to check. The
+            // only runtime prerequisite is Node.js (the adapter is executed
+            // with `node <resources>/command-code-acp.mjs`).
+            check_command_code_environment().await
+        }
+        AgentDistribution::Binary {
+            version,
+            cmd,
+            platforms,
+            ..
         } => check_binary_environment(agent_type, version, cmd, platforms).await,
         AgentDistribution::Uvx {
             uv_required,
@@ -400,6 +412,64 @@ fn build_uv_version_check(current: Option<&str>, required: &str) -> CheckItem {
             fixes: vec![],
         },
     }
+}
+
+/// Preflight for the built-in Command Code ACP adapter. There is no binary to
+/// download or cache — the adapter ships inside the app and is executed with
+/// `node <resources>/command-code-acp.mjs` — so the only real prerequisite is
+/// a Node.js runtime on PATH. The adapter resolves `node` through the same
+/// `crate::process::normalized_program` path the connect path uses.
+async fn check_command_code_environment() -> Vec<CheckItem> {
+    let mut checks = Vec::new();
+
+    let adapter_check = CheckItem {
+        check_id: "adapter_bundled".into(),
+        label: "Adapter".into(),
+        status: CheckStatus::Pass,
+        message: "Command Code ACP adapter is built into the app".into(),
+        fixes: vec![],
+    };
+    checks.push(adapter_check);
+
+    // Node.js availability — the adapter's only runtime dependency.
+    let node_path = which::which("node").ok();
+    let node_check = match node_path {
+        Some(path) => {
+            let output = crate::process::tokio_command(&path)
+                .arg("--version")
+                .output()
+                .await;
+            match output {
+                Ok(out) if out.status.success() => CheckItem {
+                    check_id: "node_available".into(),
+                    label: "Node.js".into(),
+                    status: CheckStatus::Pass,
+                    message: format!(
+                        "Node.js {} available",
+                        String::from_utf8_lossy(&out.stdout).trim()
+                    ),
+                    fixes: vec![],
+                },
+                _ => CheckItem {
+                    check_id: "node_available".into(),
+                    label: "Node.js".into(),
+                    status: CheckStatus::Fail,
+                    message: "Node.js is not installed or not in PATH".into(),
+                    fixes: vec![],
+                },
+            }
+        }
+        None => CheckItem {
+            check_id: "node_available".into(),
+            label: "Node.js".into(),
+            status: CheckStatus::Fail,
+            message: "Node.js is not installed or not in PATH".into(),
+            fixes: vec![],
+        },
+    };
+    checks.push(node_check);
+
+    checks
 }
 
 async fn check_binary_environment(

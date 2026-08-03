@@ -11,11 +11,27 @@
 
 ### 新增
 
-- **Command Code（cmdc）接入专家模式**：通过内置 ACP 适配器（`src-tauri/resources/command-code-acp.mjs`）将 Command Code CLI 托管为新的 agent 类型，支持开会话、发消息、流式输出、工具调用展示与权限审批（approve/deny）。
-  - 适配器驱动 `cmdc -p --output-format json` 的 NDJSON 事件流，映射为 ACP `session/update`（agent_message_chunk / agent_thought_chunk / tool_call / tool_call_update）与 `session/request_permission`；`--yolo` 放行内部执行、宿主审批决定结果回传（通知式权限模型）。
-  - Rust 侧：`AgentType::CommandCode` 注册、registry Binary 分发（内置脚本，无需下载）、MCP 注册表/parser/命令层分支、`build_agent` 特判启动、排除 OPENAI_* 环境注入（cmdc 使用自己的登录态，忽略这些变量）。
-  - 前端侧：`AgentType` 联合类型、`AGENT_LABELS`/`AGENT_COLORS`、`AGENT_DISPLAY_ORDER`/`ALL_AGENT_TYPES`、委托卡片与委托默认值白名单补齐 `command_code`。
-  - **前置条件**：目标机器需先 `cmdc login`（Command Code 账号登录态在 `~/.commandcode/auth.json`）；未登录时 headless 退出码 3，适配器会返回含 `run cmdc login` 提示的错误。
+- **Command Code 退出登录**：设置页 Command Code 卡片新增"退出登录"按钮，删除本地 `~/.commandcode/auth.json` 凭证文件；已登录时按钮显示"退出登录"，未登录时显示"登录"。
+  - 后端：`command_code_config.rs` 新增 `logout_command_code()` 函数，删除 auth.json；注册 Tauri 命令 `acp_logout_command_code` 及 Web 路由。
+  - 前端：`main.tsx` 新增 `handleLogoutCommandCode` 回调 + `LogOut` 图标 + 按钮三态逻辑（登录/退出登录/取消）；`agents.ts` 新增 `acpLogoutCommandCode()` API。
+  - i18n：中/英文新增 `logoutButton` 文案。
+
+### 变更
+
+- **侧边栏对话卡片右键菜单**：移除"新建会话"；置顶/取消置顶移到第一位；新增"复制任务路径"；菜单样式更紧凑（`rounded-md`、`px-2 py-1.5`、`gap-2`）。
+- **对话详情面板右键菜单**：移除"新建会话"、"重载会话"、"对话详情"、"关闭会话"；新增"复制图片"、"下载图片"（有生成图片时显示）；新增"切换辅助面板"；菜单样式与侧边栏一致（`rounded-md p-1`）。
+- **右键菜单全局样式**：`ring-foreground/5 ring-1` → `border border-border/60`（可见灰色边框）；`rounded-2xl` → `rounded-md`（小圆角）。
+- **右键菜单全局修复**：`GlobalContextMenuGuard` 拦截机制导致正文区域右键被阻止，已为 `conversation-detail-panel.tsx`、`sidebar-conversation-list.tsx` 添加 `data-context-menu="true"`。
+- **侧边栏字体与间距**：对话标题 0.9rem→0.95rem；文件夹/节标题 0.875rem→0.9rem；辅助文字 0.75rem→0.8rem；卡片上下 padding 0.125rem→0.25rem。
+- **选中状态背景**：选中行背景改用与悬停一致的缩进圆角样式（`color-mix` 混合色 + `rounded-md`），替代原通栏 `bg-sidebar-border`。
+  - 一键登录：点击「登录」后台 spawn `cmdc login`（`CREATE_NO_WINDOW` 隐藏窗口），Command Code 自动打开浏览器授权、本地回调写 auth.json 后退出；前端轮询 `running` 状态，登录完成自动刷新为「已登录：{name}」，可随时取消。
+  - 通道二「API Key」：粘贴 `commandcode.ai/studio` 生成的 API Key，以 `COMMAND_CODE_API_KEY` 存入 agent env（官方变量优先于 auth.json，不碰官方文件）。
+  - 新增命令 `acp_get_command_code_login_status` / `acp_start_command_code_login` / `acp_cancel_command_code_login`（Tauri + Web 双注册）；`agent_env_keys` 的 CommandCode 分支修正为 `COMMAND_CODE_*` 键族。
+
+### 修复
+
+- **Command Code 预检误报「Binary is not installed」**：`run_preflight` 对 Command Code 走了通用 Binary 缓存检查，但适配器内置、无缓存二进制，导致设置页恒显示警告。新增 `check_command_code_environment` 特判（内置适配器 Pass + Node.js 可用性检查）。
+- **已登录时点「登录」卡「等待授权」**：`cmdc login` 在已登录时秒退（"Already logged in"），不会弹浏览器。后端 `start_command_code_login` 增加已登录保护（no-op），前端点登录先查状态，已登录直接提示账号，不再进入假等待；轮询成功 toast 去重。
 
 ### 变更
 

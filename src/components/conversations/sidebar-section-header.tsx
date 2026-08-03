@@ -130,7 +130,7 @@ export const SidebarSectionHeader = memo(function SidebarSectionHeader({
             "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           )}
         >
-          <span className="text-[0.875rem] font-normal">{label}</span>
+          <span className="text-[0.9rem] font-normal">{label}</span>
           <ChevronRight
             aria-hidden
             className={cn(

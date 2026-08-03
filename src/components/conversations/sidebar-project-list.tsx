@@ -101,7 +101,7 @@ export function SidebarProjectList() {
           <p className="text-[0.8125rem] text-muted-foreground">
             {t("noFolders")}
           </p>
-          <p className="text-[0.75rem] text-muted-foreground/70">
+          <p className="text-[0.8rem] text-muted-foreground/70">
             {t("noFoldersHint")}
           </p>
         </div>
@@ -302,7 +302,7 @@ function ProjectFolderHeader({
         <span className="flex min-w-0 flex-1 flex-col">
           <span
             className={cn(
-              "truncate text-[0.875rem] leading-tight",
+              "truncate text-[0.9rem] leading-tight",
               isActive
                 ? "font-medium text-foreground"
                 : "text-sidebar-foreground"

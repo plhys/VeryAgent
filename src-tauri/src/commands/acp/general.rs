@@ -403,6 +403,16 @@ pub(crate) fn agent_env_keys(agent_type: AgentType) -> (&'static str, &'static s
             "CODEBUDDY_API_KEY",
             "CODEBUDDY_MODEL",
         ),
+        // Command Code authenticates via its own account (`cmdc login`) or a
+        // `COMMAND_CODE_API_KEY` env credential; it does not read the generic
+        // OPENAI_* family. Mapping the api-key slot to COMMAND_CODE_API_KEY lets
+        // the shared model-provider cascade and settings env round-trip write
+        // the credential the CLI actually consumes.
+        AgentType::CommandCode => (
+            "COMMAND_CODE_BASE_URL",
+            "COMMAND_CODE_API_KEY",
+            "COMMAND_CODE_MODEL",
+        ),
         _ => ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"),
     }
 }

@@ -1011,3 +1011,29 @@ pub async fn codex_poll_device_code(
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(result))
 }
+
+pub async fn acp_get_command_code_login_status(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<acp_commands::CommandCodeLoginStatus>, AppCommandError> {
+    let result = acp_commands::acp_get_command_code_login_status_core(&state.db)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
+pub async fn acp_start_command_code_login() -> Result<Json<()>, AppCommandError> {
+    acp_commands::start_command_code_login()
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_cancel_command_code_login() -> Result<Json<()>, AppCommandError> {
+    acp_commands::cancel_command_code_login();
+    Ok(Json(()))
+}
+
+pub async fn acp_logout_command_code() -> Result<Json<()>, AppCommandError> {
+    acp_commands::logout_command_code()
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}

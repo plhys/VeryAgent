@@ -798,6 +798,22 @@ pub fn build_router(
             "/codex_poll_device_code",
             post(handlers::acp::codex_poll_device_code),
         )
+        .route(
+            "/acp_get_command_code_login_status",
+            post(handlers::acp::acp_get_command_code_login_status),
+        )
+        .route(
+            "/acp_start_command_code_login",
+            post(handlers::acp::acp_start_command_code_login),
+        )
+        .route(
+            "/acp_cancel_command_code_login",
+            post(handlers::acp::acp_cancel_command_code_login),
+        )
+        .route(
+            "/acp_logout_command_code",
+            post(handlers::acp::acp_logout_command_code),
+        )
         // ─── Experts ───
         .route("/experts_list", post(handlers::experts::experts_list))
         .route(

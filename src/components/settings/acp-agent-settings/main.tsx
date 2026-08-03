@@ -15,6 +15,7 @@ import {
   EyeOff,
   GripVertical,
   Loader2,
+  LogOut,
   Minus,
   PackagePlus,
   Plug,
@@ -69,6 +70,10 @@ import {
   acpUpdateHermesConfig,
   acpRevealHermesHome,
   acpOpenHermesSetupTerminal,
+  acpGetCommandCodeLoginStatus,
+  acpStartCommandCodeLogin,
+  acpCancelCommandCodeLogin,
+  acpLogoutCommandCode,
   acpDiscoverOpenClawGateway,
   acpEnsureOpenClawGateway,
   codexPollDeviceCode,
@@ -81,6 +86,7 @@ import type {
   AcpAgentInfo,
   AgentType,
   CheckStatus,
+  CommandCodeLoginStatus,
   ModelProviderInfo,
   OpenClawGatewayDiscovery,
   OpenCodeCatalogProvider,
@@ -306,6 +312,10 @@ export function AcpAgentSettings() {
   >("idle")
   const [codexLoginError, setCodexLoginError] = useState<string | null>(null)
   const codexPollCancelledRef = useRef(false)
+  const [commandCodeLogin, setCommandCodeLogin] =
+    useState<CommandCodeLoginStatus | null>(null)
+  const [commandCodeApiKey, setCommandCodeApiKey] = useState("")
+  const [commandCodeSavingKey, setCommandCodeSavingKey] = useState(false)
 
   const sortedAgents = useMemo(
     () =>
@@ -2688,6 +2698,137 @@ export function AcpAgentSettings() {
     }
   }, [])
 
+  // Command Code login state: probe `~/.commandcode/auth.json` + env API key.
+  // Pure file read on the backend, safe to call on selection change and on
+  // demand via the refresh button.
+  const refreshCommandCodeLogin = useCallback(async () => {
+    try {
+      const status = await acpGetCommandCodeLoginStatus()
+      setCommandCodeLogin(status)
+    } catch (err) {
+      console.error("[Settings] command code login status failed:", err)
+      setCommandCodeLogin(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedAgent?.agent_type === "command_code") {
+      refreshCommandCodeLogin()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAgent?.agent_type])
+
+  // `cmdc login` runs in the background: Command Code opens the browser itself
+  // and completes the OAuth callback against its localhost server, then writes
+  // auth.json. If already logged in, `cmdc login` exits immediately with
+  // "Already logged in" — surface that instead of pretending to start a flow.
+  const runCommandCodeLogin = useCallback(async () => {
+    try {
+      const status = await acpGetCommandCodeLoginStatus()
+      if (status.loggedIn) {
+        toast.info(
+          status.accountName
+            ? t("commandCode.alreadyLoggedInAs", {
+                name: status.accountName,
+              })
+            : t("commandCode.loginStatusLoggedIn")
+        )
+        setCommandCodeLogin(status)
+        return
+      }
+      await acpStartCommandCodeLogin()
+      await refreshCommandCodeLogin()
+    } catch (err) {
+      console.error("[Settings] start cmdc login failed:", err)
+      toast.error(toErrorMessage(err))
+    }
+  }, [refreshCommandCodeLogin, t])
+
+  const cancelCommandCodeLogin = useCallback(async () => {
+    try {
+      await acpCancelCommandCodeLogin()
+    } catch (err) {
+      console.error("[Settings] cancel cmdc login failed:", err)
+    }
+    await refreshCommandCodeLogin()
+  }, [refreshCommandCodeLogin])
+
+  // Log out: delete the local auth.json credential.
+  const handleLogoutCommandCode = useCallback(async () => {
+    try {
+      await acpLogoutCommandCode()
+      setCommandCodeLogin(null)
+      toast.success("已退出登录")
+    } catch (err) {
+      console.error("[Settings] logout command code failed:", err)
+      toast.error("退出登录失败")
+    }
+  }, [])
+
+  // While a background login is in flight, poll until it completes (or the
+  // user cancels / navigates away).
+  const commandCodeLoginNotifiedRef = useRef(false)
+  useEffect(() => {
+    if (
+      selectedAgent?.agent_type !== "command_code" ||
+      !commandCodeLogin?.running
+    ) {
+      return
+    }
+    commandCodeLoginNotifiedRef.current = false
+    const timer = setInterval(async () => {
+      try {
+        const status = await acpGetCommandCodeLoginStatus()
+        setCommandCodeLogin(status)
+        if (status.loggedIn && !commandCodeLoginNotifiedRef.current) {
+          commandCodeLoginNotifiedRef.current = true
+          toast.success(t("commandCode.loginSuccess"))
+        }
+      } catch (err) {
+        console.error("[Settings] poll cmdc login status failed:", err)
+      }
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [selectedAgent?.agent_type, commandCodeLogin?.running, t])
+
+  // Save an API key into the agent env as COMMAND_CODE_API_KEY (the CLI's
+  // non-interactive credential, which takes precedence over auth.json).
+  const saveCommandCodeApiKey = useCallback(async () => {
+    const key = commandCodeApiKey.trim()
+    if (!key) return
+    if (!selectedAgent || !selectedDraft) return
+    setCommandCodeSavingKey(true)
+    try {
+      const nextEnvText = patchEnvText(selectedDraft.envText, {
+        COMMAND_CODE_API_KEY: key,
+      })
+      await persistEnv(
+        "command_code",
+        selectedDraft.enabled,
+        nextEnvText,
+        selectedDraft.modelProviderId
+      )
+      // Keep the env textarea in sync with what was persisted.
+      updateSelectedDraft((current) => ({ ...current, envText: nextEnvText }))
+      setCommandCodeApiKey("")
+      await refreshCommandCodeLogin()
+      toast.success(t("commandCode.apiKeySaved"))
+    } catch (err) {
+      console.error("[Settings] save command code api key failed:", err)
+      toast.error(toErrorMessage(err))
+    } finally {
+      setCommandCodeSavingKey(false)
+    }
+  }, [
+    commandCodeApiKey,
+    selectedAgent,
+    selectedDraft,
+    persistEnv,
+    refreshCommandCodeLogin,
+    updateSelectedDraft,
+    t,
+  ])
+
   const handleClineFieldChange = useCallback(
     (
       key: "clineProvider" | "clineApiKey" | "clineModel" | "clineBaseUrl",
@@ -4293,6 +4434,144 @@ export function AcpAgentSettings() {
                     </Button>
                   </div>
                 </div>
+
+                {selectedAgent.agent_type === "command_code" && (
+                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium">
+                        {t("commandCode.loginStatusTitle")}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={refreshCommandCodeLogin}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        {t("commandCode.refresh")}
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {commandCodeLogin?.running ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                          <span className="text-muted-foreground">
+                            {t("commandCode.loginInProgress")}
+                          </span>
+                        </>
+                      ) : commandCodeLogin?.loggedIn ? (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                          <span className="text-green-600">
+                            {commandCodeLogin.accountName
+                              ? t("commandCode.loggedInAs", {
+                                  name: commandCodeLogin.accountName,
+                                })
+                              : t("commandCode.loginStatusLoggedIn")}
+                          </span>
+                          {commandCodeLogin.source === "env_key" && (
+                            <span className="text-muted-foreground">
+                              (API Key)
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                          <span className="text-amber-600 dark:text-amber-400">
+                            {t("commandCode.loginStatusNotLoggedIn")}
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-foreground">
+                        {t("commandCode.loginMethod1Title")}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("commandCode.loginMethod1Hint")}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={commandCodeLogin?.loggedIn ? "secondary" : "outline"}
+                          onClick={
+                            commandCodeLogin?.running
+                              ? cancelCommandCodeLogin
+                              : commandCodeLogin?.loggedIn
+                                ? handleLogoutCommandCode
+                                : runCommandCodeLogin
+                          }
+                        >
+                          {commandCodeLogin?.running ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {t("commandCode.loginCancel")}
+                            </>
+                          ) : commandCodeLogin?.loggedIn ? (
+                            <>
+                              <LogOut className="h-3.5 w-3.5" />
+                              {t("commandCode.logoutButton")}
+                            </>
+                          ) : (
+                            <>
+                              <Wrench className="h-3.5 w-3.5" />
+                              {t("commandCode.loginButton")}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2"
+                          onClick={async () => {
+                            const ok = await copyTextToClipboard("cmdc login")
+                            if (ok) toast.success(t("commandCode.commandCopied"))
+                          }}
+                          title={t("commandCode.copyCommand")}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-foreground">
+                        {t("commandCode.loginMethod2Title")}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("commandCode.loginMethod2Hint")}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="password"
+                          value={commandCodeApiKey}
+                          onChange={(event) =>
+                            setCommandCodeApiKey(event.target.value)
+                          }
+                          placeholder={t("commandCode.apiKeyPlaceholder")}
+                          className="h-8 flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={saveCommandCodeApiKey}
+                          disabled={
+                            commandCodeSavingKey || !commandCodeApiKey.trim()
+                          }
+                        >
+                          {commandCodeSavingKey ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Save className="h-3.5 w-3.5" />
+                          )}
+                          {t("commandCode.saveApiKey")}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {selectedAgent.agent_type === "codex" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">

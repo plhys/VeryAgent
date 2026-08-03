@@ -1578,6 +1578,8 @@ export interface AcpAgentInfo {
   cline_secrets_json: string | null
   /** Raw ~/.hermes/config.yaml text, for the Hermes panel's advanced editor. */
   hermes_config_yaml: string | null
+  /** Raw ~/.commandcode/auth.json text, for the Command Code login panel. */
+  command_code_auth_json?: string | null
   model_provider_id: number | null
   /** Butler-class agent kept for the life of VeryAgent. */
   resident: boolean
@@ -1590,6 +1592,15 @@ export interface AcpAgentStatus {
   enabled: boolean
   installed_version: string | null
   resident: boolean
+}
+
+/** Command Code login state returned by acp_get_command_code_login_status. */
+export interface CommandCodeLoginStatus {
+  loggedIn: boolean
+  accountName: string | null
+  source: "auth_json" | "env_key" | "none"
+  /** Whether a background `cmdc login` is in flight (browser OAuth pending). */
+  running: boolean
 }
 
 export type AgentSkillScope = "global" | "project"

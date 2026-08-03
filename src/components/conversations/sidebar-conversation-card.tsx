@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Link2,
   ArrowUp,
+  FolderOpen,
 } from "lucide-react"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { SidebarSummaryBubble } from "./sidebar-summary-bubble"
@@ -29,6 +30,7 @@ import { STATUS_ORDER } from "@/lib/types"
 import { cn, copyTextToClipboard } from "@/lib/utils"
 import { formatConversationTitle } from "@/lib/conversation-title"
 import { useTabStore } from "@/contexts/tab-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { toast } from "sonner"
 import { generateConversationSummary, getFolderConversation } from "@/lib/api"
 import { format } from "date-fns"
@@ -151,6 +153,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
   const tTabs = useTranslations("Folder.tabs")
   const isTileMode = useTabStore((s) => s.isTileMode)
   const toggleTileMode = useTabStore((s) => s.toggleTileMode)
+  const folder = useAppWorkspaceStore((s) => s.getFolder(conversation.folder_id))
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -353,20 +356,17 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             }
           >
 <div
-              className={cn(
-                "group relative flex w-full items-center py-[0.125rem] text-sidebar-foreground",
-                isSelected
-                  ? "bg-sidebar-border dark:bg-[#3D3D3D]"
-                  : ""
-              )}
+              className="group relative flex w-full items-center py-[0.25rem] text-sidebar-foreground"
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
             >
-              {/* Hover background, inset from both sides */}
+              {/* Selection / hover background, inset from both sides */}
               <div
                 className={cn(
-                  "pointer-events-none absolute inset-y-0 my-0 rounded-sm transition-colors duration-[120ms]",
-                  !isSelected && "group-hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
+                  "pointer-events-none absolute inset-y-0 my-0 rounded-md transition-colors duration-[120ms]",
+                  isSelected
+                    ? "bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
+                    : "group-hover:bg-[color-mix(in_oklab,var(--sidebar-accent),var(--sidebar-foreground)_8%)]"
                 )}
                 style={{ left: "0.5rem", right: "0.5rem" }}
               />
@@ -419,7 +419,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                 {/* Title */}
                 <span
                   className={cn(
-                    "min-w-0 truncate text-[0.9rem]",
+                    "min-w-0 truncate text-[0.95rem]",
                     isSelected
                       ? "font-medium text-sidebar-foreground"
                       : "font-normal",
@@ -485,7 +485,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                     centred icon in a transparent box would. */}
                 {!isSubsession && (
                   <div
-                    className="flex items-center gap-px opacity-0 group-hover:opacity-100"
+                    className={cn(
+                      "flex items-center gap-px opacity-0 transition-opacity duration-150",
+                      !isSubsession && "group-hover:opacity-100"
+                    )}
                   >
                     {onTogglePin && (
                       <button
@@ -498,15 +501,15 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
                         title={isPinned ? t("unpin") : t("pin")}
                         aria-label={isPinned ? t("unpin") : t("pin")}
                         className={cn(
-                          "flex h-6 w-6 shrink-0 items-center justify-end rounded-[0.375rem]",
-                          "cursor-pointer outline-none transition-colors duration-150",
-                          "text-muted-foreground/90 hover:text-sidebar-foreground"
+                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
+                          "cursor-pointer outline-none transition-all duration-150",
+                          "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
                         )}
                       >
                         {isPinned ? (
-                          <PinOff className="h-[0.875rem] w-[0.875rem]" />
+                          <PinOff className="h-4 w-4" />
                         ) : (
-                          <Pin className="h-[0.875rem] w-[0.875rem]" />
+                          <Pin className="h-4 w-4" />
                         )}
                       </button>
                     )}
@@ -516,22 +519,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             </div>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
-          {onNewConversation && (
-            <>
-              <ContextMenuItem
-                onSelect={() => onNewConversation(conversation.folder_id)}
-              >
-                <SquarePen className="h-4 w-4" />
-                {t("newConversation")}
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-            </>
-          )}
-          <ContextMenuItem onSelect={handleRenameOpen}>
-            <Pencil className="h-4 w-4" />
-            {t("rename")}
-          </ContextMenuItem>
+        <ContextMenuContent className="rounded-md p-1 min-w-40">
           {onTogglePin && (
             <ContextMenuItem
               onSelect={() => onTogglePin(conversation.id, !isPinned)}
@@ -544,6 +532,10 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               {isPinned ? t("unpin") : t("pin")}
             </ContextMenuItem>
           )}
+          <ContextMenuItem onSelect={handleRenameOpen}>
+            <Pencil className="h-4 w-4" />
+            {t("rename")}
+          </ContextMenuItem>
           <ContextMenuItem onSelect={() => setDetailsOpen(true)}>
             <Info className="h-4 w-4" />
             {tDetails("menuLabel")}
@@ -560,6 +552,19 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
             <Link2 className="h-4 w-4" />
             复制对话链接
           </ContextMenuItem>
+          {folder?.path && (
+            <ContextMenuItem
+              onSelect={async () => {
+                const ok = await copyTextToClipboard(folder.path)
+                if (ok) {
+                  toast.success("任务路径已复制")
+                }
+              }}
+            >
+              <FolderOpen className="h-4 w-4" />
+              复制任务路径
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onSelect={toggleTileMode}>
             <LayoutGrid className="h-4 w-4" />
             {isTileMode ? tTabs("untileDisplay") : tTabs("tileDisplay")}
@@ -570,7 +575,7 @@ export const SidebarConversationCard = memo(function SidebarConversationCard({
               <Circle className="h-4 w-4" />
               {t("status")}
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent>
+            <ContextMenuSubContent className="rounded-md p-1 min-w-32">
               {STATUS_ORDER.filter((s) => s !== conversation.status).map(
                 (s) => (
                   <ContextMenuItem

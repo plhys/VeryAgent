@@ -2001,6 +2001,7 @@ export function ConversationDetailPanel() {
         <ContextMenuTrigger asChild>
           <div
             className="relative h-full min-h-0 overflow-hidden outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0 chat-workspace-host"
+            data-context-menu="true"
             onPointerDown={handleContextMenuTriggerPointerDown}
           >
             {/* Stable wrapper across canTile flip — otherwise sibling tabs remount and a live streaming response is torn down. */}
@@ -2020,7 +2021,7 @@ export function ConversationDetailPanel() {
             </ScrollArea>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent className="rounded-md p-1">
           <ContextMenuItem
             disabled={!contextMenuSelectedText}
             onSelect={handleCopySelectedText}
@@ -2029,19 +2030,12 @@ export function ConversationDetailPanel() {
             {t("copyText")}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem
-            disabled={!folder?.path}
-            onSelect={handleNewConversation}
-          >
-            <SquarePen className="h-4 w-4" />
-            {t("newConversation")}
-          </ContextMenuItem>
           <ContextMenuSub>
             <ContextMenuSubTrigger disabled={!canExport}>
               <Download className="h-4 w-4" />
               {t("exportConversation")}
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent>
+            <ContextMenuSubContent className="rounded-md p-1">
               <ContextMenuItem onSelect={handleExportImage}>
                 <FileImage className="h-4 w-4" />
                 {t("exportImage")}
@@ -2056,28 +2050,6 @@ export function ConversationDetailPanel() {
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
-          <ContextMenuItem
-            disabled={!canReloadActiveConversation}
-            onSelect={handleReloadActiveConversation}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {t("reload")}
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={!activeSessionSummary}
-            onSelect={() => setDetailsOpen(true)}
-          >
-            <Info className="h-4 w-4" />
-            {tDetails("menuLabel")}
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            disabled={!activeTabId}
-            onSelect={handleCloseActiveTab}
-          >
-            <X className="h-4 w-4" />
-            {t("closeConversation")}
-          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       {activeSessionSummary && (

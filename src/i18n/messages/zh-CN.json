@@ -825,6 +825,28 @@
       "authModeModelProviderHint": "使用已配置的模型供应商的 API URL、API Key 和模型。",
       "authModeNativeHint": "使用 Hermes 原生认证流程。"
     },
+    "commandCode": {
+      "loginStatusTitle": "Command Code 登录",
+      "loginStatusLoggedIn": "已登录",
+      "loginStatusNotLoggedIn": "未登录",
+      "loggedInAs": "已登录：{name}",
+      "refresh": "刷新",
+      "loginMethod1Title": "官方账号登录（推荐）",
+      "loginMethod1Hint": "点击按钮，浏览器会自动打开授权页，授权完成后应用自动更新。",
+      "loginButton": "登录",
+      "logoutButton": "退出登录",
+      "loginInProgress": "等待浏览器授权...",
+      "loginCancel": "取消",
+      "loginSuccess": "登录成功",
+      "alreadyLoggedInAs": "已登录：{name}",
+      "copyCommand": "复制命令",
+      "commandCopied": "命令已复制到剪贴板",
+      "loginMethod2Title": "API Key",
+      "loginMethod2Hint": "在 commandcode.ai/studio 生成 API Key 并粘贴到下方。将以 COMMAND_CODE_API_KEY 保存。",
+      "apiKeyPlaceholder": "粘贴 Command Code API Key",
+      "saveApiKey": "保存",
+      "apiKeySaved": "API Key 已保存"
+    },
     "codebuddy": {
       "configManagement": "CodeBuddy 配置",
       "configDescription": "CodeBuddy 使用 API Key 进行认证。中国版还必须将环境设为“中国版（internal）”；iOA 版使用“iOA”；海外版则不设置。",
