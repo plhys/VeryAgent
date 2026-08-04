@@ -730,11 +730,31 @@ pub(crate) async fn cascade_update_agent_config(
             write_mimo_managed_provider(api_url, api_key, model_name, &[])?;
         }
         AgentType::CommandCode => {
-            // Command Code has no native provider config file; the bound
-            // model-provider credentials already flow into the runtime env
-            // (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL) via
-            // `apply_model_provider_env`, which the ACP adapter passes through
-            // to the headless `cmdc` process. Nothing to cascade on disk.
+            // Write provider credentials to `~/.commandcode/.env` so the
+            // headless `cmdc` process (spawned by the ACP adapter) inherits
+            // them. The adapter passes through ALL process env vars to the
+            // child cmdc, so COMMAND_CODE_BASE_URL / COMMAND_CODE_API_KEY /
+            // COMMAND_CODE_MODEL set here will be picked up.
+            let cmd_home = crate::commands::acp::command_code_home_dir();
+            std::fs::create_dir_all(&cmd_home)
+                .map_err(|e| AcpError::protocol(format!("create .commandcode dir: {e}")))?;
+            let env_path = cmd_home.join(".env");
+            let mut lines = Vec::new();
+            if !api_url.trim().is_empty() {
+                lines.push(format!("COMMAND_CODE_BASE_URL={}", api_url.trim()));
+            }
+            if !api_key.trim().is_empty() {
+                lines.push(format!("COMMAND_CODE_API_KEY={}", api_key.trim()));
+            }
+            // Extract model from model_env (the single key from agent_env_keys).
+            let (_, _, model_key) = agent_env_keys(agent_type);
+            if let Some(Some(model)) = model_env.get(&model_key[..]) {
+                if !model.trim().is_empty() {
+                    lines.push(format!("COMMAND_CODE_MODEL={}", model.trim()));
+                }
+            }
+            std::fs::write(&env_path, lines.join("\n"))
+                .map_err(|e| AcpError::protocol(format!("write .commandcode/.env: {e}")))?;
         }
     }
     Ok(())

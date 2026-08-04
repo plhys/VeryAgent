@@ -28,12 +28,22 @@ interface SessionConfigSelectorProps {
    * means "no grouping" — fall back to server groups, else the flat list.
    */
   derivedGroups?: ModelOptionGroup[] | null
+  /**
+   * Trigger label style for the standardized selector row:
+   *   - "name-value" (default): "Setting · Value" (e.g. 快速模式 · 关闭)
+   *   - "name": the localized option name only — permissions & reasoning
+   *     effort chips; the current value is visible inside the dropdown.
+   *   - "value": the current value only — short model lists, so the chip
+   *     reads as a bare model name instead of "模型 · gpt-4o".
+   */
+  variant?: "name-value" | "name" | "value"
 }
 
 export function InlineSessionConfigSelector({
   option,
   onSelect,
   derivedGroups,
+  variant = "name-value",
 }: SessionConfigSelectorProps) {
   const localizer = useConfigOptionLocalizer()
   const { contentRef, onPointerDownOutside, onFocusOutside } =
@@ -65,12 +75,21 @@ export function InlineSessionConfigSelector({
   )
   const rawLabel = selected?.name ?? option.kind.current_value
   const currentLabel = localizer.localize(rawLabel)
-  const optionName = localizer.localize(option.name)
+  // Some agents ship the bare protocol id as the option name (e.g.
+  // "effortLevel"); fall back to localizing the id when the name isn't mapped.
+  const localizedName = localizer.localize(option.name)
+  const optionName =
+    localizedName !== option.name ? localizedName : localizer.localize(option.id)
   // Always show "Setting · Value" on the chip so a row of bare "Off/On"
   // values doesn't look like anonymous permission denies.
-  const triggerLabel = currentLabel
-    ? `${optionName} · ${currentLabel}`
-    : optionName
+  const triggerLabel =
+    variant === "name"
+      ? optionName
+      : variant === "value"
+        ? currentLabel || optionName
+        : currentLabel
+          ? `${optionName} · ${currentLabel}`
+          : optionName
   const optionDescription = option.description
     ? localizer.localize(option.description)
     : null

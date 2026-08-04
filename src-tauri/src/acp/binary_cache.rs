@@ -34,7 +34,7 @@ pub(crate) fn uv_tool_dir() -> Result<PathBuf, AcpError> {
 /// on demand (idempotent) and executed with the system `node`:
 /// `<cache_dir>/command-code-acp/<version>/command-code-acp.mjs`.
 pub(crate) fn ensure_command_code_adapter() -> Result<PathBuf, AcpError> {
-    const ADAPTER_VERSION: &str = "0.1.0";
+    const ADAPTER_VERSION: &str = "0.1.1";
     const ADAPTER_SOURCE: &str = include_str!("../../resources/command-code-acp.mjs");
 
     let dir = cache_dir()?
@@ -44,7 +44,13 @@ pub(crate) fn ensure_command_code_adapter() -> Result<PathBuf, AcpError> {
         AcpError::DownloadFailed(format!("cannot create adapter dir {}: {e}", dir.display()))
     })?;
     let script = dir.join("command-code-acp.mjs");
-    if !script.is_file() {
+    // Skip write when the on-disk content matches the embedded source,
+    // avoiding unnecessary disk I/O on every connection. The versioned
+    // cache directory ensures a stale file from a previous build is never
+    // mistaken for the current one, so a content check is sufficient.
+    let should_write = !script.is_file()
+        || std::fs::read_to_string(&script).ok().as_deref() != Some(ADAPTER_SOURCE);
+    if should_write {
         std::fs::write(&script, ADAPTER_SOURCE).map_err(|e| {
             AcpError::DownloadFailed(format!("cannot write adapter {}: {e}", script.display()))
         })?;

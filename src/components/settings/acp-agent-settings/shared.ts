@@ -2046,10 +2046,7 @@ export function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     claudeAuthMode:
       agent.agent_type === "claude_code" && agent.model_provider_id != null
         ? "model_provider"
-        : agent.agent_type === "claude_code" &&
-            (important.apiBaseUrl || important.apiKey)
-          ? "custom"
-          : "official_subscription",
+        : "official_subscription",
     modelProviderId: agent.model_provider_id ?? null,
     geminiAuthMode:
       agent.agent_type === "gemini" && agent.model_provider_id != null

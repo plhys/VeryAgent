@@ -21,6 +21,26 @@ export function isModelConfigOption(option: SessionConfigOptionInfo): boolean {
   return option.id === "model" || option.category === "model"
 }
 
+// Reasoning-effort ("model strength") config options — e.g. Claude Code's
+// `effortLevel`, Codex's `reasoningEffort`, or an ACP `model_reasoning_effort`.
+// They get a dedicated slot in the composer's selector row, rendered right
+// after the model chip. Every other non-model option is treated as a
+// permission. Ids are matched after stripping `_`/`-` so `model_reasoning_effort`
+// and `reasoningEffort` normalize the same way.
+const STRENGTH_ID_PATTERNS = [
+  /effort/i,
+  /reasoning/i,
+  /^thinkinglevel$/i,
+  /^thoughtlevel$/i,
+]
+
+export function isReasoningConfigOption(
+  option: SessionConfigOptionInfo
+): boolean {
+  const id = option.id.replace(/[_-]/g, "")
+  return STRENGTH_ID_PATTERNS.some((re) => re.test(id))
+}
+
 // The namespace before the FIRST "/", or `null` when there is no usable prefix
 // (no slash, a leading slash, or a trailing slash with an empty suffix). Values
 // like `openrouter/anthropic/claude` group under their first segment.

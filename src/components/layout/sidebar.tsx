@@ -79,7 +79,7 @@ function SidebarNavButton({
       title={label}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group flex h-8 w-full items-center gap-[0.4375rem] rounded-full pl-[0.4375rem] pr-1.5",
+        "group flex h-8 w-full items-center gap-[0.4375rem] rounded-md pl-[0.4375rem] pr-1.5",
         "text-[0.875rem] text-sidebar-foreground outline-none",
         "transition-colors duration-150 hover:bg-sidebar-border dark:hover:bg-[#3D3D3D]",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
@@ -107,7 +107,7 @@ export function Sidebar() {
   const listRef = useRef<SidebarConversationListHandle>(null)
 
   const [showCompleted, setShowCompleted] = useState(false)
-  const [activeTab, setActiveTab] = useState<"conversations" | "projects">(
+  const [activeTab, setActiveTab] = useState<"conversations" | "workspaces">(
     "conversations"
   )
   const [sortMode, setSortMode] = useState<SidebarSortMode>("created")
@@ -145,7 +145,7 @@ export function Sidebar() {
   if (!isOpen) return null
 
   return (
-    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none px-1">
+    <aside className="@container/sidebar flex h-full min-h-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground select-none px-0.5">
       {/* Fixed actions above the scrollable list. */}
       <div className="flex shrink-0 flex-col gap-0.5 px-1.5 pt-5">
         <SidebarNavButton
@@ -193,12 +193,12 @@ export function Sidebar() {
 
       {/* Tab 切换：聊天 / 文件夹 + 右侧打开文件夹按钮 */}
       <div className="flex shrink-0 items-center pl-1.5 pr-0 pt-3.5 pb-0.5">
-        <div className="flex items-center rounded-full border border-sidebar-border dark:border-[#4A4A4A] p-0 gap-px bg-sidebar">
+        <div className="flex items-center rounded-md border border-sidebar-border dark:border-[#4A4A4A] p-0 gap-px bg-sidebar">
           <button
             type="button"
             onClick={() => setActiveTab("conversations")}
             className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
+              "flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
               activeTab === "conversations"
                 ? "bg-[#F8F8F8] dark:bg-[#4A4A4A] text-sidebar-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.15)]"
                 : "text-muted-foreground hover:text-sidebar-foreground"
@@ -209,16 +209,16 @@ export function Sidebar() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("projects")}
+            onClick={() => setActiveTab("workspaces")}
             className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
-              activeTab === "projects"
+              "flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[0.75rem] font-medium transition-all duration-150",
+              activeTab === "workspaces"
                 ? "bg-[#F8F8F8] dark:bg-[#4A4A4A] text-sidebar-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.15)]"
                 : "text-muted-foreground hover:text-sidebar-foreground"
             )}
           >
             <FolderIcon className="h-3 w-3" />
-            {t("projects")}
+            {t("workspaces")}
           </button>
         </div>
         <div className="ml-auto pr-1.5 flex items-center gap-1">

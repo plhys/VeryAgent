@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use crate::app_error::AppCommandError;
 use crate::db::entities::conversation;
 use crate::db::entities::folder::FolderKind;
-use crate::db::service::{conversation_service, folder_service, import_service, tab_service};
+use crate::db::service::{
+    conversation_service, conversation_turn_service, folder_service, import_service, tab_service,
+};
 #[cfg(feature = "tauri-runtime")]
 use crate::db::AppDatabase;
 use crate::models::*;
@@ -500,8 +502,16 @@ pub async fn get_folder_conversation_core(
         .await
         .map_err(AppCommandError::from)?;
 
-    let (mut turns, session_stats, resolved_ext_id, parsed_title) = if let Some(ref ext_id) =
-        summary.external_id
+    let (mut turns, session_stats, resolved_ext_id, parsed_title) = if summary.agent_type == AgentType::CommandCode {
+        (
+            conversation_turn_service::list(conn, conversation_id)
+                .await
+                .map_err(AppCommandError::from)?,
+            None,
+            None,
+            None,
+        )
+    } else if let Some(ref ext_id) = summary.external_id
     {
         let at = summary.agent_type;
         let eid = ext_id.clone();

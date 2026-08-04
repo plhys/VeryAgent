@@ -120,6 +120,22 @@ async fn create_inner(
     Ok(model.insert(conn).await?)
 }
 
+pub async fn update_message_count(
+    conn: &DatabaseConnection,
+    conversation_id: i32,
+    message_count: i32,
+) -> Result<(), DbError> {
+    let result = conversation::Entity::update_many()
+        .col_expr(conversation::Column::MessageCount, Expr::value(message_count))
+        .filter(conversation::Column::Id.eq(conversation_id))
+        .exec(conn)
+        .await?;
+    if result.rows_affected == 0 {
+        return Err(DbError::Migration(format!("Conversation not found: {conversation_id}")));
+    }
+    Ok(())
+}
+
 pub async fn update_status(
     conn: &DatabaseConnection,
     conversation_id: i32,

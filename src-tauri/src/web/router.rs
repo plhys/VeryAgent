@@ -244,6 +244,10 @@ pub fn build_router(
         )
         .route("/reorder_folders", post(handlers::folders::reorder_folders))
         .route(
+            "/update_folder_name",
+            post(handlers::folders::update_folder_name),
+        )
+        .route(
             "/update_folder_color",
             post(handlers::folders::update_folder_color),
         )

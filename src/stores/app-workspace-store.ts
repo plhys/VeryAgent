@@ -10,6 +10,7 @@ import {
   openWorktreeFolder as apiOpenWorktreeFolder,
   removeFolderFromWorkspace as apiRemoveFolderFromWorkspace,
   reorderFolders as apiReorderFolders,
+  updateFolderName as apiUpdateFolderName,
 } from "@/lib/api"
 import { toErrorMessage } from "@/lib/app-error"
 import type {
@@ -64,6 +65,13 @@ export interface AppWorkspaceStoreState {
    */
   activeFolderId: number | null
 
+  /**
+   * Active agent filter for the sidebar conversation list.
+   * When set, only conversations from this agent type are shown.
+   * `null` means show all conversations (no filter).
+   */
+  agentFilter: AgentType | null
+
   fetchFolders: () => Promise<void>
   refreshConversations: () => Promise<void>
   /**
@@ -98,9 +106,11 @@ export interface AppWorkspaceStoreState {
   ) => Promise<FolderDetail>
   addFolderToWorkspaceById: (folderId: number) => Promise<FolderDetail>
   removeFolderFromWorkspace: (folderId: number) => Promise<void>
+  renameFolder: (folderId: number, name: string) => Promise<FolderDetail>
   reorderFolders: (ids: number[]) => Promise<void>
   refreshFolder: (id: number) => Promise<void>
   setActiveFolderId: (id: number | null) => void
+  setAgentFilter: (agentType: AgentType | null) => void
 }
 
 function computeStats(conversations: DbConversationSummary[]): AgentStats {
@@ -157,6 +167,7 @@ export const useAppWorkspaceStore = create<AppWorkspaceStoreState>()(
     gitHeads: new Map(),
     stats: null,
     activeFolderId: null,
+    agentFilter: null,
 
     fetchFolders: async () => {
       set({ foldersLoading: true })
@@ -344,6 +355,13 @@ export const useAppWorkspaceStore = create<AppWorkspaceStoreState>()(
       void refreshConversations()
     },
 
+    renameFolder: async (folderId, name) => {
+      const detail = await apiUpdateFolderName(folderId, name)
+      const { upsertFolder } = get()
+      upsertFolder(detail)
+      return detail
+    },
+
     reorderFolders: async (ids) => {
       const { folders: prevFolders, allFolders: prevAllFolders } = get()
 
@@ -403,6 +421,10 @@ export const useAppWorkspaceStore = create<AppWorkspaceStoreState>()(
     setActiveFolderId: (id) => {
       if (get().activeFolderId === id) return
       set({ activeFolderId: id })
+    },
+
+    setAgentFilter: (agentType) => {
+      set({ agentFilter: agentType })
     },
   })
 )

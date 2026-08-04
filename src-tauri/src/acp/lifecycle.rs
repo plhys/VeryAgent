@@ -62,6 +62,7 @@ fn is_lifecycle_relevant(event: &AcpEvent) -> bool {
     matches!(
         event,
         AcpEvent::SessionStarted { .. }
+            | AcpEvent::TranscriptTurns { .. }
             | AcpEvent::TurnComplete { .. }
             | AcpEvent::ConversationLinked { .. }
             | AcpEvent::StatusChanged {
@@ -205,6 +206,24 @@ pub(crate) async fn handle_event(
                     crate::commands::conversations::emit_conversation_upsert(&emitter, db_conn, cid)
                         .await;
                 }
+            }
+            Ok(())
+        }
+        AcpEvent::TranscriptTurns { turns } => {
+            let Some((state_arc, _emitter)) = manager.get_state_and_emitter(&envelope.connection_id).await else {
+                return Ok(());
+            };
+            let conversation_id = state_arc.read().await.conversation_id;
+            if let Some(cid) = conversation_id {
+                for turn in turns {
+                    crate::db::service::conversation_turn_service::insert_if_absent(
+                        db_conn, cid, turn,
+                    )
+                    .await?;
+                }
+                let count = crate::db::service::conversation_turn_service::count(db_conn, cid)
+                    .await?;
+                conversation_service::update_message_count(db_conn, cid, count as i32).await?;
             }
             Ok(())
         }

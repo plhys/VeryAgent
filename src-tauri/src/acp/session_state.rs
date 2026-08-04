@@ -16,7 +16,7 @@ use crate::acp::types::{
     PromptCapabilitiesInfo, SessionConfigOptionInfo, SessionModeStateInfo, ToolCallImageInfo,
 };
 use crate::models::agent::AgentType;
-use crate::models::message::MessageRole;
+use crate::models::message::{ContentBlock, MessageRole, MessageTurn, TurnRole};
 
 /// 当前 streaming 中的 turn 的累积内容。turn 完成后清空。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -439,6 +439,98 @@ impl SessionState {
         }
     }
 
+    /// Build the completed transcript turns currently represented by the live
+    /// state. This is intentionally limited to the current turn and is used by
+    /// ACP agents without a parseable native transcript (Command Code).
+    pub fn completed_transcript_turns(&self) -> Vec<MessageTurn> {
+        let mut turns = Vec::new();
+        if let Some(pending) = &self.pending_user_message {
+            let blocks = pending
+                .blocks
+                .iter()
+                .map(|block| match block {
+                    crate::acp::types::UserMessageBlock::Text { text } => {
+                        ContentBlock::Text { text: text.clone() }
+                    }
+                    crate::acp::types::UserMessageBlock::Image { data, mime_type } => {
+                        ContentBlock::Image {
+                            data: data.clone(),
+                            mime_type: mime_type.clone(),
+                            uri: None,
+                        }
+                    }
+                })
+                .collect();
+            turns.push(MessageTurn {
+                id: pending.message_id.clone(),
+                role: TurnRole::User,
+                blocks,
+                timestamp: Utc::now(),
+                usage: None,
+                duration_ms: None,
+                model: None,
+                completed_at: None,
+            });
+        }
+
+        let Some(live) = &self.live_message else {
+            return turns;
+        };
+        let mut blocks = Vec::new();
+        for block in &live.content {
+            match block {
+                LiveContentBlock::Text { text } => blocks.push(ContentBlock::Text { text: text.clone() }),
+                LiveContentBlock::Thinking { text } => {
+                    blocks.push(ContentBlock::Thinking { text: text.clone() })
+                }
+                LiveContentBlock::ToolCallRef { tool_call_id } => {
+                    if let Some(tool) = self.active_tool_calls.get(tool_call_id) {
+                        blocks.push(ContentBlock::ToolUse {
+                            tool_use_id: Some(tool.id.clone()),
+                            tool_name: tool.label.clone(),
+                            input_preview: tool.input.as_ref().map(|v| v.to_string()),
+                            meta: tool.meta.clone(),
+                        });
+                        if let Some(output) = &tool.output {
+                            let (output_preview, is_error) = match output {
+                                ToolCallOutput::Text { content } => (Some(content.clone()), false),
+                                ToolCallOutput::Error { message } => (Some(message.clone()), true),
+                                ToolCallOutput::Json { value } => (Some(value.to_string()), false),
+                            };
+                            blocks.push(ContentBlock::ToolResult {
+                                tool_use_id: Some(tool.id.clone()),
+                                output_preview,
+                                is_error,
+                                agent_stats: None,
+                                images: tool.images.clone().into_iter().map(|image| crate::models::message::ImageData {
+                                    data: image.data,
+                                    mime_type: image.mime_type,
+                                    uri: image.uri,
+                                }).collect(),
+                            });
+                        }
+                    }
+                }
+                LiveContentBlock::Plan { entries } => {
+                    blocks.push(ContentBlock::Text { text: entries.to_string() });
+                }
+            }
+        }
+        if !blocks.is_empty() {
+            turns.push(MessageTurn {
+                id: live.id.clone(),
+                role: TurnRole::Assistant,
+                blocks,
+                timestamp: live.started_at,
+                usage: None,
+                duration_ms: None,
+                model: None,
+                completed_at: Some(Utc::now()),
+            });
+        }
+        turns
+    }
+
     /// Clone the broadcaster handle so attach handlers and subscriber tasks
     /// can hold an independent reference. Cheap (Arc clone).
     pub fn event_stream(&self) -> Arc<ConnectionEventStream> {
@@ -663,6 +755,10 @@ impl SessionState {
                 ) {
                     self.pending_question = None;
                 }
+            }
+            AcpEvent::TranscriptTurns { .. } => {
+                // TranscriptTurns is consumed by the lifecycle subscriber and
+                // does not represent live session state.
             }
             AcpEvent::TurnComplete { .. } => {
                 // Snapshot the just-finished turn's FINAL assistant text — what

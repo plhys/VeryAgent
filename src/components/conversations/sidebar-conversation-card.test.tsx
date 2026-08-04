@@ -4,7 +4,6 @@ import { NextIntlClientProvider } from "next-intl"
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
 import { SidebarConversationCard } from "./sidebar-conversation-card"
-import { formatRelative } from "./sidebar-conversation-grouping"
 import type { DbConversationSummary } from "@/lib/types"
 import enMessages from "@/i18n/messages/en.json"
 
@@ -56,11 +55,9 @@ function conv(id: number): DbConversationSummary {
 
 function CardList({
   conversations,
-  now,
   select = onSelect,
 }: {
   conversations: DbConversationSummary[]
-  now: number
   select?: (id: number, agentType: string, folderId: number) => void
 }) {
   return (
@@ -71,7 +68,7 @@ function CardList({
           conversation={c}
           isSelected={false}
           isOpenInTab={false}
-          timeLabel={formatRelative(c.created_at, now)}
+          rawTimestamp={c.created_at}
           onSelect={select}
           onDoubleClick={onDoubleClick}
           onRename={onRename}
@@ -99,15 +96,13 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
   })
 
   it("re-renders only the card whose summary object changed", () => {
-    const { rerender } = renderWithIntl(
-      <CardList conversations={BASE} now={NOW} />
-    )
+    const { rerender } = renderWithIntl(<CardList conversations={BASE} />)
 
     // Control: an identical re-render must bail out for every card.
     probe.agentIconRenders = 0
     rerender(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        <CardList conversations={BASE} now={NOW} />
+        <CardList conversations={BASE} />
       </NextIntlClientProvider>
     )
     expect(probe.agentIconRenders).toBe(0)
@@ -120,23 +115,20 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
     probe.agentIconRenders = 0
     rerender(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        <CardList conversations={next} now={NOW} />
+        <CardList conversations={next} />
       </NextIntlClientProvider>
     )
     expect(probe.agentIconRenders).toBe(2)
   })
 
-  it("does not re-render when now advances by 1 minute (time is absolute, not relative)", () => {
-    const { rerender } = renderWithIntl(
-      <CardList conversations={BASE} now={NOW} />
-    )
+  it("does not re-render when re-rendered with identical props (memo)", () => {
+    const { rerender } = renderWithIntl(<CardList conversations={BASE} />)
 
-    // With the absolute time format (HH:mm), advancing `now` by 1 minute
-    // does not change any card's label, so memo should prevent re-renders.
+    // Identical props → memo should prevent re-renders of every card.
     probe.agentIconRenders = 0
     rerender(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        <CardList conversations={BASE} now={NOW + MINUTE} />
+        <CardList conversations={BASE} />
       </NextIntlClientProvider>
     )
     expect(probe.agentIconRenders).toBe(0)
@@ -144,7 +136,7 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
 
   it("re-renders every card when callback identity is unstable (defeats memo)", () => {
     const { rerender } = renderWithIntl(
-      <CardList conversations={BASE} now={NOW} select={() => {}} />
+      <CardList conversations={BASE} select={() => {}} />
     )
 
     // A fresh onSelect each render is exactly the R1b regression: stable
@@ -152,7 +144,7 @@ describe("SidebarConversationCard memo (sidebar perf Phase 1 gate)", () => {
     probe.agentIconRenders = 0
     rerender(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        <CardList conversations={BASE} now={NOW} select={() => {}} />
+        <CardList conversations={BASE} select={() => {}} />
       </NextIntlClientProvider>
     )
     expect(probe.agentIconRenders).toBe(BASE.length * 2)
@@ -169,7 +161,6 @@ describe("SidebarConversationCard pin action", () => {
       <SidebarConversationCard
         conversation={c}
         isSelected={false}
-        timeLabel=""
         onSelect={onSelect}
         onDoubleClick={onDoubleClick}
         onRename={onRename}
@@ -219,7 +210,6 @@ describe("SidebarConversationCard hover quick actions", () => {
       <SidebarConversationCard
         conversation={c}
         isSelected={false}
-        timeLabel="5m"
         onSelect={onSelect}
         onDoubleClick={onDoubleClick}
         onRename={onRename}
@@ -266,7 +256,6 @@ describe("SidebarConversationCard indentation", () => {
       <SidebarConversationCard
         conversation={c}
         isSelected={false}
-        timeLabel="5m"
         onSelect={onSelect}
         onDoubleClick={onDoubleClick}
         onRename={onRename}

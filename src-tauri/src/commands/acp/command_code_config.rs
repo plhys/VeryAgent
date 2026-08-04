@@ -112,10 +112,12 @@ pub(crate) fn cancel_command_code_login() {
 }
 
 /// Log out of Command Code by deleting the local `~/.commandcode/auth.json`
-/// credential file. The user can log back in afterward via OAuth or API Key.
+/// credential file. Also cancels any pending background login and clears the
+/// stored PID so a subsequent login starts fresh.
 /// Returns Ok(true) if the file was deleted, Ok(false) if it didn't exist,
 /// Err if deletion failed.
 pub(crate) fn logout_command_code() -> Result<(), AcpError> {
+    cancel_command_code_login();
     let path = command_code_auth_json_path();
     if !path.exists() {
         return Ok(());

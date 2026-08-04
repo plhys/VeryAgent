@@ -2092,7 +2092,11 @@ pub(crate) fn skill_storage_spec(agent_type: AgentType) -> Option<SkillStorageSp
         AgentType::MimoCode => None,
         // Command Code uses its own `.commandcode/skills` / `~/.commandcode/
         // skills` layout, which is not compatible with the shared skill store.
-        AgentType::CommandCode => None,
+        AgentType::CommandCode => Some(SkillStorageSpec {
+            kind: SkillStorageKind::SkillDirectoryOnly,
+            global_dirs: vec![home_dir_or_default().join(".commandcode").join("skills")],
+            project_rel_dirs: vec![],
+        }),
     }
 }
 
@@ -2358,7 +2362,7 @@ pub(crate) async fn apply_model_provider_env(
     // is a no-op that would falsely suggest the bound provider took effect.
     let inject_openai_compat_env = !matches!(
         agent_type,
-        AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode | AgentType::CommandCode
+        AgentType::Pi | AgentType::CodeBuddy | AgentType::MimoCode
     );
     if inject_openai_compat_env && !provider.api_url.trim().is_empty() {
         // Agents that append `/chat/completions` themselves need a `/v1` base.
@@ -5093,7 +5097,12 @@ pub async fn acp_save_agent_skill(
     fs::write(&content_path, content)
         .map_err(|e| AcpError::protocol(format!("failed to write skill content: {e}")))?;
 
+    // Re-read the name, description, and category from the freshly written
+    // frontmatter so the returned item reflects the user's actual name and
+    // category grouping (not the id or none).
+    skill.name = read_skill_name(&content_path).unwrap_or_else(|| skill_name_from_id(&id));
     skill.description = read_skill_description(&content_path);
+    skill.category = read_skill_category(&content_path);
 
     Ok(skill)
 }

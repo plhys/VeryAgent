@@ -35,6 +35,32 @@ describe("config option labels", () => {
     expect(mapPermissionKindKey("reject_always")).toBe("dontAsk")
   })
 
+  it("maps reasoning-effort / strength variants (incl. bare protocol ids)", () => {
+    expect(localizeConfigOptionName("Reasoning effort")).toBe("reasoningEffort")
+    expect(localizeConfigOptionName("Effort level")).toBe("reasoningEffort")
+    expect(localizeConfigOptionName("effortLevel")).toBe("reasoningEffort")
+    expect(localizeConfigOptionName("reasoningEffort")).toBe("reasoningEffort")
+    expect(localizeConfigOptionName("model_reasoning_effort")).toBe(
+      "reasoningEffort"
+    )
+    expect(localizeConfigOptionName("Model strength")).toBe("reasoningEffort")
+    expect(localizeConfigOptionName("thinkingLevel")).toBe("thinkingLevel")
+  })
+
+  it("maps permission-mode variants (incl. bare protocol ids)", () => {
+    expect(localizeConfigOptionName("Approval mode")).toBe("approvalPreset")
+    expect(localizeConfigOptionName("approval")).toBe("approvalPreset")
+    expect(localizeConfigOptionName("Permission mode")).toBe("toolPermissions")
+    expect(localizeConfigOptionName("permissions")).toBe("toolPermissions")
+    expect(localizeConfigOptionName("auto_allow_tools")).toBe("autoAllowTools")
+    expect(localizeConfigOptionName("ask_before_tools")).toBe("askBeforeTools")
+  })
+
+  it("maps a bare mode option name to a label", () => {
+    expect(localizeConfigOptionName("mode")).toBe("modeLabel")
+    expect(localizeConfigOptionName("Mode")).toBe("modeLabel")
+  })
+
   it("localizes OpenClaw description strings", () => {
     expect(
       localizeConfigOptionName(

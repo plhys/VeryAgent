@@ -1758,12 +1758,10 @@ export function AcpAgentSettings() {
         return
       }
 
-      // "custom" or "model_provider" — keep existing values, just switch mode
+      // "model_provider" — keep existing values, just switch mode
       updateSelectedDraft((current) => ({
         ...current,
         claudeAuthMode: nextMode,
-        modelProviderId:
-          nextMode === "model_provider" ? current.modelProviderId : null,
       }))
     },
     [selectedAgent, selectedDraft, updateSelectedDraft]
@@ -2704,7 +2702,9 @@ export function AcpAgentSettings() {
   const refreshCommandCodeLogin = useCallback(async () => {
     try {
       const status = await acpGetCommandCodeLoginStatus()
-      setCommandCodeLogin(status)
+      // Normalize: if loggedIn, treat running as false so the UI
+      // never shows "waiting for authorization" when already logged in.
+      setCommandCodeLogin(status.loggedIn ? { ...status, running: false } : status)
     } catch (err) {
       console.error("[Settings] command code login status failed:", err)
       setCommandCodeLogin(null)
@@ -2779,7 +2779,14 @@ export function AcpAgentSettings() {
     const timer = setInterval(async () => {
       try {
         const status = await acpGetCommandCodeLoginStatus()
-        setCommandCodeLogin(status)
+        // If loggedIn is true, treat as not running so the UI
+        // immediately reflects the logged-in state. The backend may
+        // still report running=true if the cmdc login process hasn't
+        // fully exited yet, but the credential is already usable.
+        const displayStatus = status.loggedIn
+          ? { ...status, running: false }
+          : status
+        setCommandCodeLogin(displayStatus)
         if (status.loggedIn && !commandCodeLoginNotifiedRef.current) {
           commandCodeLoginNotifiedRef.current = true
           toast.success(t("commandCode.loginSuccess"))
@@ -7771,9 +7778,6 @@ supports_websockets = true`}
                             <SelectItem value="official_subscription">
                               {t("authModeOfficialSubscription")}
                             </SelectItem>
-                            <SelectItem value="custom">
-                              {t("authModeCustomEndpoint")}
-                            </SelectItem>
                             <SelectItem value="model_provider">
                               {t("authModeModelProvider")}
                             </SelectItem>
@@ -7783,9 +7787,7 @@ supports_websockets = true`}
                           {selectedDraft.claudeAuthMode ===
                           "official_subscription"
                             ? t("claude.officialSubscriptionHint")
-                            : selectedDraft.claudeAuthMode === "custom"
-                              ? t("authModeCustomEndpointHint")
-                              : t("modelProviderHint")}
+                            : t("modelProviderHint")}
                         </p>
                       </div>
                     )}
@@ -7830,7 +7832,6 @@ supports_websockets = true`}
                       )}
 
                     {(selectedAgent.agent_type !== "claude_code" ||
-                      selectedDraft.claudeAuthMode === "custom" ||
                       selectedDraft.claudeAuthMode === "model_provider") && (
                       <>
                         <div className="space-y-1.5">

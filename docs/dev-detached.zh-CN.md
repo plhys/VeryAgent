@@ -52,6 +52,14 @@ pnpm tauri:prepare-sidecars
 .\dev-detached.ps1
 ```
 
+如果 `.ps1` 文件双击后打开文件夹（文件关联问题），请改用同目录下的 **`.bat` 包装器**：
+
+```cmd
+.\dev-detached.bat
+```
+
+双击即可运行，也可在命令行执行。`.bat` 会自动调用 PowerShell 执行 `dev-detached.ps1`，参数完全兼容。**日常推荐直接双击 `dev-detached.bat`。**
+
 脚本会：
 
 1. 确保 `3000` 上有前端（没有就后台起 `pnpm dev`）
@@ -120,6 +128,7 @@ Start-Process -FilePath ".\src-tauri\target\debug\veryagent.exe"
 | 脚本 | 适合 | 不适合 |
 |---|---|---|
 | **`dev-detached.ps1`**（推荐日常） | 开发联调、进程独立、少冷启动 | 正式发包 |
+| **`dev-detached.bat`**（推荐日常，双击可用） | 同上，且避免 `.ps1` 文件关联问题 | 正式发包 |
 | `start.ps1` | 换机后快速拉起已有 debug exe | 不负责前端热更新 |
 | `quick.ps1` | 已有二进制时秒开壳 | 不编 Rust、不启前端 |
 | `dev.ps1` / `pnpm tauri dev` | 偶尔要完整 Tauri dev 管线 | 日常反复启动（慢、易被父进程带走） |

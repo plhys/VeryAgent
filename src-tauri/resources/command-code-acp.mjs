@@ -164,7 +164,112 @@ function teardown() {
 // ACP session state
 // ---------------------------------------------------------------------------
 
-let session = null; // { id, cwd }
+let session = null; // { id, cwd, model, permissionMode } // Command Code ACP session state
+
+// Cache for model list discovered from `cmdc --list-models`.
+let cachedModels = null; // [{value, name}, ...]
+
+function resolveModelEntry() {
+  const { command, args: entryArgs } = resolveCmdcLaunch();
+  return { command, args: entryArgs };
+}
+
+async function discoverModels() {
+  const { command, args } = resolveModelEntry();
+  const listArgs = [...args, "--list-models"];
+  return new Promise((resolve) => {
+    const child = spawn(command, listArgs, {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    let stdout = "";
+    child.stdout.on("data", (d) => { stdout += d.toString(); });
+    child.on("close", (code) => {
+      if (code !== 0) { resolve(null); return; }
+      const models = [];
+      for (const line of stdout.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        // Skip headers, separators, blank lines, section titles, and usage lines
+        if (trimmed.startsWith("Available") || trimmed.startsWith("---") || trimmed.startsWith("──") || trimmed.endsWith(":") || trimmed.startsWith("cmdc") || trimmed.startsWith("Docs:") || trimmed.startsWith("Pass the")) continue;
+        const match = trimmed.match(/^(\S+)\s+/);
+        if (match) {
+          const id = match[1];
+          // Skip non-model lines (section headers, usage hints, etc.)
+          if (id.includes("/") || id.includes("-") || (id === id.toLowerCase() && id.length > 2)) {
+            models.push({ value: id, name: id });
+          }
+        }
+      }
+      resolve(models.length > 0 ? models : null);
+    });
+    child.on("error", () => resolve(null));
+  });
+}
+
+// Shut down stdin processing until model discovery completes.
+// Hold incoming lines in a buffer, replay after initialization.
+const pendingLines = [];
+const origLineHandler = rl.listeners("line")[0];
+rl.removeAllListeners("line");
+rl.on("line", (line) => { pendingLines.push(line); });
+
+// Run model discovery synchronously at startup, then replay buffered lines.
+const initPromise = discoverModels().then((models) => {
+  cachedModels = models;
+  // Replay buffered lines (initialize, etc.)
+  rl.removeAllListeners("line");
+  rl.on("line", origLineHandler);
+  for (const line of pendingLines) {
+    origLineHandler(line);
+  }
+  pendingLines.length = 0;
+}).catch(() => {
+  rl.removeAllListeners("line");
+  rl.on("line", origLineHandler);
+  for (const line of pendingLines) {
+    origLineHandler(line);
+  }
+  pendingLines.length = 0;
+});
+
+function commandCodeConfigOptions() {
+  const configuredModel = process.env.COMMAND_CODE_MODEL || "deepseek/deepseek-v4-flash";
+  const models = cachedModels || [
+    { value: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
+    { value: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    { value: "moonshotai/kimi-k2.5", name: "Kimi K2.5" },
+    { value: "moonshotai/kimi-k3", name: "Kimi K3" },
+    { value: "qwen/qwen3.7-plus", name: "Qwen 3.7 Plus" },
+    { value: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash" },
+    { value: "claude-sonnet-5", name: "Claude Sonnet 5" },
+    { value: "gpt-5.5", name: "GPT-5.5" },
+  ];
+  return [
+    {
+      id: "model",
+      name: "Model",
+      description: "Choose the native Command Code model for the next prompt",
+      category: "model",
+      type: "select",
+      currentValue: session?.model || configuredModel,
+      options: models.map((m) => ({ value: m.value, name: m.name })),
+    },
+    {
+      id: "permission_mode",
+      name: "Permission",
+      description: "Tool call approval mode",
+      category: "permissions",
+      type: "select",
+      currentValue: session?.permissionMode || "auto",
+      options: [
+        { value: "auto", name: "Auto-allow" },
+        { value: "ask", name: "Ask" },
+        { value: "yolo", name: "YOLO" },
+      ],
+    },
+  ];
+}
 
 // Track tool ids whose permission was denied by the host. Their execution
 // events are suppressed.
@@ -183,7 +288,7 @@ function contentBlockText(text) {
 
 function sendSessionUpdate(update) {
   notify("session/update", {
-    session_id: session?.id ?? "",
+    sessionId: session?.id ?? "",
     update,
   });
 }
@@ -204,33 +309,34 @@ function emitThoughtChunk(text) {
 
 // Map a cmdc tool frame onto an ACP ToolCallUpdate payload
 // (`{toolCallId, title, kind, status, rawInput, rawOutput, ...}`).
+// SessionUpdate is a tagged enum (`#[serde(tag = "sessionUpdate")]`), so the
+// ToolCall / ToolCallUpdate fields MUST be flat (not nested under a key) and
+// use camelCase to match `#[serde(rename_all = "camelCase")]` on the structs.
 function toolCallUpdateFromFrame(event) {
   const id = event.toolCallId || event.id || `tool-${seq++}`;
   const name = event.toolName || event.name || "tool";
   const input = event.input ?? event.args ?? {};
   return {
-    tool_call_id: id,
+    toolCallId: id,
     title: name,
     kind: toolKindForName(name),
     status: "pending",
-    ...(input !== undefined ? { raw_input: input } : {}),
+    ...(input !== undefined ? { rawInput: input } : {}),
   };
 }
 
 function emitToolCall(frame) {
   sendSessionUpdate({
     sessionUpdate: "tool_call",
-    tool_call: toolCallUpdateFromFrame(frame),
+    ...toolCallUpdateFromFrame(frame),
   });
 }
 
 function emitToolCallUpdate(toolCallId, fields) {
   sendSessionUpdate({
     sessionUpdate: "tool_call_update",
-    tool_call_update: {
-      tool_call_id: toolCallId,
-      ...fields,
-    },
+    toolCallId,
+    ...fields,
   });
 }
 
@@ -281,14 +387,40 @@ async function handleRequest(msg) {
     case "session/new": {
       const cwd = params?.cwd || process.cwd();
       const sessionId = `command-code-${Date.now()}-${randomUUID().slice(0, 8)}`;
-      session = { id: sessionId, cwd };
-      reply(id, { sessionId });
+      const models = cachedModels || [];
+      const defaultModel = models.length > 0 ? models[0].value : "deepseek/deepseek-v4-flash";
+      session = { id: sessionId, cwd, model: defaultModel, permissionMode: "auto" };
+      reply(id, { sessionId, configOptions: commandCodeConfigOptions() });
+      return;
+    }
+    case "session/set_config_option": {
+      if (!session) {
+        replyError(id, -32002, "No active session; call session/new first");
+        return;
+      }
+      const configId = params?.configId;
+      const value = params?.value;
+      if (configId === "model") {
+        const models = cachedModels || [];
+        const isValid = models.length === 0 || models.some((m) => m.value === value);
+        if (isValid) {
+          session.model = value;
+        } else {
+          replyError(id, -32602, `Unsupported model: ${value}`);
+          return;
+        }
+      } else if (configId === "permission_mode" && (value === "auto" || value === "ask" || value === "yolo")) {
+        session.permissionMode = value;
+      } else {
+        replyError(id, -32602, `Unsupported Command Code config: ${configId}=${value}`);
+        return;
+      }
+      reply(id, { configOptions: commandCodeConfigOptions() });
       return;
     }
     case "session/load":
     case "session/resume":
     case "session/fork":
-    case "session/set_config_option":
       replyError(id, -32601, `Method not found: ${method}`);
       return;
     case "session/prompt": {
@@ -300,12 +432,12 @@ async function handleRequest(msg) {
       return;
     }
     case "session/cancel": {
-      // A notification (no id) — kill the in-flight cmdc run. Per ACP, the
-      // prompt response MUST then report stopReason "cancelled"; our child
-      // close handler replies with an error since the result frame never
-      // arrives, so explicitly resolve the pending prompt with cancelled.
+      // Kill the in-flight cmdc run. Per ACP, the prompt response MUST then
+      // report stopReason "cancelled". Acknowledge the request if it has an
+      // id (some hosts send it as a request, others as a notification).
       killChild();
       resolvePendingPromptCancelled();
+      if (id != null) reply(id, {});
       return;
     }
     default:
@@ -353,6 +485,7 @@ function resolveCmdcLaunch() {
 
 function cmdcArgs(message, cwd) {
   const args = ["-p", "--output-format", "json", "--yolo"];
+  if (session?.model) args.push("--model", session.model);
   // Run inside the session cwd so relative file paths resolve there.
   if (cwd) args.push("--add-dir", cwd);
   // The query argument must come last — commander treats everything after
@@ -398,21 +531,31 @@ function handleEventFrame(event) {
       // Request host approval via session/request_permission. The host
       // responds on the SAME JSON-RPC id (no separate response method).
       const reqParams = {
-        session_id: session?.id ?? "",
-        tool_call: {
-          tool_call_id: id,
+        sessionId: session?.id ?? "",
+        toolCall: {
+          toolCallId: id,
           title: event.toolName || event.name || "tool",
           kind: toolKindForName(event.toolName),
           status: "pending",
-          ...(event.input !== undefined ? { raw_input: event.input } : {}),
+          ...(event.input !== undefined ? { rawInput: event.input } : {}),
         },
         options: [
-          { option_id: "allow_once", name: "Allow once", kind: "allow_once" },
-          { option_id: "allow_always", name: "Allow always", kind: "allow_always" },
-          { option_id: "reject_once", name: "Reject once", kind: "reject_once" },
-          { option_id: "reject_always", name: "Reject always", kind: "reject_always" },
+          { optionId: "allow_once", name: "Allow once", kind: "allow_once" },
+          { optionId: "allow_always", name: "Allow always", kind: "allow_always" },
+          { optionId: "reject_once", name: "Reject once", kind: "reject_once" },
+          { optionId: "reject_always", name: "Reject always", kind: "reject_always" },
         ],
       };
+      if (session?.permissionMode === "yolo") {
+        // YOLO mode: bypass all permission checks, don't emit any tool call
+        // events. The cmdc child already runs with --yolo, so this just
+        // suppresses the ACP-level tool call cards entirely.
+        break;
+      }
+      if (session?.permissionMode === "auto") {
+        emitToolCallUpdate(id, { status: "in_progress" });
+        break;
+      }
       request("session/request_permission", reqParams)
         .then((result) => {
           // result = { outcome: { outcome: "selected", option_id } | "cancelled" }
@@ -426,7 +569,7 @@ function handleEventFrame(event) {
             deniedTools.add(id);
             emitToolCallUpdate(id, {
               status: "failed",
-              raw_output: { error: "Permission denied by host" },
+              rawOutput: { error: "Permission denied by host" },
             });
           }
         })
@@ -435,7 +578,7 @@ function handleEventFrame(event) {
           deniedTools.add(id);
           emitToolCallUpdate(id, {
             status: "failed",
-            raw_output: { error: "Permission request unanswered" },
+            rawOutput: { error: "Permission request unanswered" },
           });
         });
       break;
@@ -455,7 +598,7 @@ function handleEventFrame(event) {
           : event.result ?? event.output ?? "";
         emitToolCallUpdate(id, {
           status: "completed",
-          ...(out ? { raw_output: out } : {}),
+          ...(out ? { rawOutput: out } : {}),
         });
       }
       deniedTools.delete(id);
@@ -466,7 +609,7 @@ function handleEventFrame(event) {
       if (id && !deniedTools.has(id)) {
         emitToolCallUpdate(id, {
           status: "failed",
-          raw_output: { error: event.error?.message || event.error || "Tool error" },
+          rawOutput: { error: event.error?.message || event.error || "Tool error" },
         });
       }
       deniedTools.delete(id);

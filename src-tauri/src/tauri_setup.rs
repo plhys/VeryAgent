@@ -1011,6 +1011,7 @@ use crate::commands::git;
                 folders::open_folder_by_id,
                 folders::remove_folder_from_workspace,
                 folders::reorder_folders,
+                folders::update_folder_name,
                 folders::update_folder_color,
                 folders::update_folder_default_agent,
                 folders::add_folder_to_history,

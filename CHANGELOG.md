@@ -11,20 +11,32 @@
 
 ### 新增
 
+- **Command Code 聊天历史持久化**：重启后对话记录不再丢失。新增 `conversation_turn` 表（m20260804），在 ACP turn 完成时自动将用户消息、助手回复、工具调用存入数据库，侧栏 message_count 同步更新；详情页读取改为从数据库加载，不再依赖空的 CommandCodeParser。
+  - 后端：新增 migration/entity/service 层；`SessionState::completed_transcript_turns()` 投影方法；`TranscriptTurns` 事件 + lifecycle 持久化订阅；`get_folder_conversation_core` 对 Command Code 走 DB 分支。
+- **Command Code 原生模型选择器**：对话框上方显示 Command Code 原生模型下拉（`model` 开关），支持 10 个预置模型（DeepSeek、Kimi、GLM、MiniMax、Qwen、Gemini、Claude、GPT 等），选择后下一轮/重连生效。适配器通过 `session/new` 的 `configOptions` 广告，`session/set_config_option` 处理选择。
+- **Command Code 自动工具权限**：默认"自动允许工具"（`permission_mode: auto`），不再弹逐工具审批卡；保留"询问后再执行"模式可切换。适配器 `tool_queued` 时根据模式跳过 `session/request_permission`。
+- **Command Code ACP 适配器字段统一**：所有 ACP wire 字段改用 camelCase（`sessionId`、`sessionId`、`toolCall`、`toolCallId`、`optionId`、`rawInput`、`rawOutput`），`ToolCall`/`ToolCallUpdate` 字段平铺不嵌套，`session/set_config_option` 从 `-32601` 改为实现处理。
+
+### 修复
+
+- **Command Code 缓存的适配器版本过旧**：`ensure_command_code_adapter()` 只写不覆盖，导致旧缓存中 `protocolInfo` 返回 `{version:1}` 而非 `{protocolVersion:1}`；改为始终覆盖写入 + 版本号同步 `0.1.0` → `0.1.1`。
+- **Command Code ACP 会话通知未路由**：`sendSessionUpdate` 中 `session_id`（snake_case）不匹配 `SessionNotification` 的 `#[serde(rename_all = "camelCase")]`（期望 `sessionId`），导致通知无法进入会话更新流 → turn 完成后检测不到输出 → 报 `turn_failed_empty`。已全部改为 camelCase。
+- **Command Code 工具调用时 `optionId` 缺失**：`RequestPermissionRequest` 中的 `option_id`、`tool_call_id`、`raw_input`、`raw_output` 用 snake_case 不匹配 camelCase 结构体。已全部改为 camelCase。
+- **Command Code 工具调用时 `toolCall` 字段名错误**：`RequestPermissionRequest` 外层 `tool_call` 应为 `toolCall`。
+
+### 变更
+
 - **Command Code 退出登录**：设置页 Command Code 卡片新增"退出登录"按钮，删除本地 `~/.commandcode/auth.json` 凭证文件；已登录时按钮显示"退出登录"，未登录时显示"登录"。
   - 后端：`command_code_config.rs` 新增 `logout_command_code()` 函数，删除 auth.json；注册 Tauri 命令 `acp_logout_command_code` 及 Web 路由。
   - 前端：`main.tsx` 新增 `handleLogoutCommandCode` 回调 + `LogOut` 图标 + 按钮三态逻辑（登录/退出登录/取消）；`agents.ts` 新增 `acpLogoutCommandCode()` API。
   - i18n：中/英文新增 `logoutButton` 文案。
-
-### 变更
-
 - **侧边栏对话卡片右键菜单**：移除"新建会话"；置顶/取消置顶移到第一位；新增"复制任务路径"；菜单样式更紧凑（`rounded-md`、`px-2 py-1.5`、`gap-2`）。
 - **对话详情面板右键菜单**：移除"新建会话"、"重载会话"、"对话详情"、"关闭会话"；新增"复制图片"、"下载图片"（有生成图片时显示）；新增"切换辅助面板"；菜单样式与侧边栏一致（`rounded-md p-1`）。
 - **右键菜单全局样式**：`ring-foreground/5 ring-1` → `border border-border/60`（可见灰色边框）；`rounded-2xl` → `rounded-md`（小圆角）。
 - **右键菜单全局修复**：`GlobalContextMenuGuard` 拦截机制导致正文区域右键被阻止，已为 `conversation-detail-panel.tsx`、`sidebar-conversation-list.tsx` 添加 `data-context-menu="true"`。
 - **侧边栏字体与间距**：对话标题 0.9rem→0.95rem；文件夹/节标题 0.875rem→0.9rem；辅助文字 0.75rem→0.8rem；卡片上下 padding 0.125rem→0.25rem。
 - **选中状态背景**：选中行背景改用与悬停一致的缩进圆角样式（`color-mix` 混合色 + `rounded-md`），替代原通栏 `bg-sidebar-border`。
-  - 一键登录：点击「登录」后台 spawn `cmdc login`（`CREATE_NO_WINDOW` 隐藏窗口），Command Code 自动打开浏览器授权、本地回调写 auth.json 后退出；前端轮询 `running` 状态，登录完成自动刷新为「已登录：{name}」，可随时取消。
+- **Command Code 一键登录**：点击「登录」后台 spawn `cmdc login`（`CREATE_NO_WINDOW` 隐藏窗口），Command Code 自动打开浏览器授权、本地回调写 auth.json 后退出；前端轮询 `running` 状态，登录完成自动刷新为「已登录：{name}」，可随时取消。
   - 通道二「API Key」：粘贴 `commandcode.ai/studio` 生成的 API Key，以 `COMMAND_CODE_API_KEY` 存入 agent env（官方变量优先于 auth.json，不碰官方文件）。
   - 新增命令 `acp_get_command_code_login_status` / `acp_start_command_code_login` / `acp_cancel_command_code_login`（Tauri + Web 双注册）；`agent_env_keys` 的 CommandCode 分支修正为 `COMMAND_CODE_*` 键族。
 
@@ -41,6 +53,24 @@
 ### 其他
 
 - **`.gitignore` 更新**：添加 `.commandcode/`（Command Code CLI 缓存）、`/docs/运维笔记/`、`/docs/运营项目必看.md`、`/计划内容/` 到忽略列表。
+
+### 新增
+
+- **工作区文件夹右键菜单**：置顶 / 重命名 / 打开工作区 / 删除。重命名仅修改 VeryAgent 内显示名（`folder.name`），不触碰磁盘目录名与路径；重新打开已有工作区时保留自定义显示名（不再被目录 basename 覆盖）；「打开工作区」在桌面端用系统文件管理器打开目录（补 `opener:allow-reveal-item-in-dir` 权限）。
+- **智能体筛选**：底部状态栏统计弹窗内点击任一智能体即可筛选侧边栏会话列表（再次点击取消），顶部统计行右侧出现「清除筛选」；筛选状态下会话行前显示对应智能体图标。
+- **会话天数标签**：会话卡标题右侧显示「今天 / 昨天 / N天前」（右对齐），鼠标悬浮时原位切换为置顶 / 归档操作按钮（绝对定位不占位）。
+
+### 变更
+
+- **侧边栏「项目」→「工作区」**：标签与列表语义统一；工作区文件夹 hover 仅保留「新建会话」快捷按钮。
+- **输入框底部操作栏统一**：所有智能体固定为「加号 → 权限 → 模型 → 强度」三段式（权限/强度只显名、无强度配置则隐藏该格、模型显模型名）；移除模式 chip 与折叠「设置」齿轮，视觉开关保留并置于 chips 之后；模式功能仍随发送携带。
+- **配置名中文化**：`config-option-labels` 映射表扩展（effort / approval / permission / mode 等变体及裸协议 id），配置名未命中时回退本地化配置 id；修复既有 `ask` 重复 key 编译错误。
+- **侧边栏排版统一**：圆角统一为小圆角（`rounded-full` → `rounded-md`）；会话列表左右边距对称、行宽右扩；滚动条 4px、手柄 ≤55% 且过渡丝滑；会话浮标向左压住侧边栏边缘（偏移 `-8px`），两个标签页锚点统一为整行宽度。
+
+### 修复
+
+- **选中会话天数不可见**：右侧天数槽容器改为 `relative`，置于选中高亮背景之上，选中行仍显示「今天/昨天/N天前」。
+- **「打开工作区」无反应**：`openPath` 受 capabilities `$HOME/**` 限制，改用 `revealItemInDir` 并补充权限声明。
 
 ---
 

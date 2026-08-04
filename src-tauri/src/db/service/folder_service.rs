@@ -108,7 +108,8 @@ async fn add_folder_inner(
 
     let model = if let Some(row) = existing {
         let mut active = row.into_active_model();
-        active.name = Set(name);
+        // Keep the user-defined display name when reopening an existing folder.
+        // The filesystem basename is only used for first-time inserts.
         active.last_opened_at = Set(now);
         active.updated_at = Set(now);
         active.deleted_at = Set(None);
@@ -188,6 +189,27 @@ pub async fn add_chat_folder(
     };
     let model = active.insert(conn).await?;
     Ok(to_detail(model))
+}
+
+pub async fn update_folder_name(
+    conn: &DatabaseConnection,
+    folder_id: i32,
+    name: &str,
+) -> Result<Option<FolderDetail>, DbError> {
+    let row = folder::Entity::find_by_id(folder_id)
+        .filter(folder::Column::DeletedAt.is_null())
+        .one(conn)
+        .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let mut active = row.into_active_model();
+    active.name = Set(name.to_string());
+    active.updated_at = Set(Utc::now());
+    let updated = active.update(conn).await?;
+    Ok(Some(to_detail(updated)))
 }
 
 pub async fn update_folder_color(

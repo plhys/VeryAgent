@@ -1474,11 +1474,28 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             )
             return
           }
+          // Inject the locale-specific name and category into the SKILL.md frontmatter
+          // so skills display with Chinese names and category grouping in the + menu.
+          const localizedName = pickLocalizedText(warehouseSkill.name, locale, skillId)
+          let patchedContent = localizedName !== skillId
+            ? content.replace(/^name:.*$/m, `name: ${localizedName}`)
+            : content
+          // Also inject the category from the warehouse index (SKILL.md files
+          // in the repo only have name + description, not category).
+          if (warehouseSkill.category) {
+            const categoryLine = `category: ${warehouseSkill.category}`
+            if (/^category:.*$/m.test(patchedContent)) {
+              patchedContent = patchedContent.replace(/^category:.*$/m, categoryLine)
+            } else {
+              // Insert after the name line in the frontmatter block
+              patchedContent = patchedContent.replace(/^name:.*$/m, (m) => `${m}\n${categoryLine}`)
+            }
+          }
           await acpSaveAgentSkill({
             agentType: lockedAgentType,
             scope: "global",
             skillId,
-            content,
+            content: patchedContent,
           })
         }
         invalidateAgentSkillsCache(lockedAgentType)

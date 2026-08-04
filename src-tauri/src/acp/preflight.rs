@@ -469,6 +469,32 @@ async fn check_command_code_environment() -> Vec<CheckItem> {
     };
     checks.push(node_check);
 
+    // cmdc CLI availability — the ACP adapter spawns `cmdc` for every prompt.
+    let cmdc_available = which::which("cmdc").is_ok()
+        || std::env::var("COMMAND_CODE_ACP_CMD").is_ok();
+    let cmdc_check = if cmdc_available {
+        CheckItem {
+            check_id: "cmdc_available".into(),
+            label: "Command Code CLI".into(),
+            status: CheckStatus::Pass,
+            message: "cmdc is available on PATH".into(),
+            fixes: vec![],
+        }
+    } else {
+        CheckItem {
+            check_id: "cmdc_available".into(),
+            label: "Command Code CLI".into(),
+            status: CheckStatus::Fail,
+            message: "cmdc is not installed. Run `npm install -g command-code` to install it.".into(),
+            fixes: vec![FixAction {
+                label: "Install Command Code".into(),
+                kind: FixActionKind::OpenUrl,
+                payload: "https://www.npmjs.com/package/command-code".into(),
+            }],
+        }
+    };
+    checks.push(cmdc_check);
+
     checks
 }
 

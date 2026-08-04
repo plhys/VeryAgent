@@ -3537,6 +3537,27 @@ fn turn_failure_error_event(reason_str: &str, agent_type: AgentType) -> Option<A
     })
 }
 
+/// Emit transcript turns for agents that have no native transcript storage
+/// (currently Command Code). Called before TurnComplete so the live state
+/// is still available for projection.
+async fn emit_transcript_turns(
+    state: &Arc<RwLock<SessionState>>,
+    emitter: &EventEmitter,
+    agent_type: AgentType,
+) {
+    if agent_type == AgentType::CommandCode {
+        let turns = state.read().await.completed_transcript_turns();
+        if !turns.is_empty() {
+            emit_with_state(
+                state,
+                emitter,
+                AcpEvent::TranscriptTurns { turns },
+            )
+            .await;
+        }
+    }
+}
+
 /// Returns `Ok(None)` on normal exit (disconnect / channel closed) or
 /// `Ok(Some(ForkExitInfo))` when the loop should be restarted on a forked session.
 #[allow(clippy::too_many_arguments)]
@@ -3782,6 +3803,7 @@ async fn run_conversation_loop<'a>(
                                     {
                                         emit_with_state(state, emitter, err_event).await;
                                     }
+                                    emit_transcript_turns(state, emitter, agent_type).await;
                                     emit_with_state(
                                         state,
                                         emitter,
@@ -3853,6 +3875,7 @@ async fn run_conversation_loop<'a>(
                             {
                                 emit_with_state(state, emitter, err_event).await;
                             }
+                            emit_transcript_turns(state, emitter, agent_type).await;
                             emit_with_state(
                                 state,
                                 emitter,

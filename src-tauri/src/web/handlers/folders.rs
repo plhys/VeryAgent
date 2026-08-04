@@ -169,6 +169,23 @@ pub async fn reorder_folders(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UpdateFolderNameParams {
+    pub folder_id: i32,
+    pub name: String,
+}
+
+pub async fn update_folder_name(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<UpdateFolderNameParams>,
+) -> Result<Json<FolderDetail>, AppCommandError> {
+    Ok(Json(
+        folder_commands::update_folder_name_core(&state.db, params.folder_id, params.name)
+            .await?,
+    ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateFolderColorParams {
     pub folder_id: i32,
     pub color: String,

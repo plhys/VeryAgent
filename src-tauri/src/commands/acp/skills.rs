@@ -88,16 +88,58 @@ pub(crate) fn build_skill_item(
     layout: AgentSkillLayout,
     path: PathBuf,
 ) -> AgentSkillItem {
-    let description = read_skill_description(&skill_content_path(layout, &path));
+    let content_path = skill_content_path(layout, &path);
+    let description = read_skill_description(&content_path);
+    let name = read_skill_name(&content_path).unwrap_or_else(|| skill_name_from_id(&id));
+    let category = read_skill_category(&content_path);
     AgentSkillItem {
-        name: skill_name_from_id(&id),
+        name,
         id,
         scope,
         layout,
         path: path.to_string_lossy().to_string(),
         description,
+        category,
         read_only: false,
     }
+}
+
+/// Read the `name` field from a skill markdown file's YAML frontmatter.
+pub(crate) fn read_skill_name(content_path: &Path) -> Option<String> {
+    read_frontmatter_field(content_path, "name")
+}
+
+/// Read the `category` field from a skill markdown file's YAML frontmatter.
+pub(crate) fn read_skill_category(content_path: &Path) -> Option<String> {
+    read_frontmatter_field(content_path, "category")
+}
+
+/// Read the first matching scalar value for a given YAML frontmatter key.
+fn read_frontmatter_field(content_path: &Path, key: &str) -> Option<String> {
+    use std::io::Read;
+    let mut file = fs::File::open(content_path).ok()?;
+    let mut buf = [0u8; 4096];
+    let n = file.read(&mut buf).ok()?;
+    let head = std::str::from_utf8(&buf[..n]).ok()?;
+
+    let mut lines = head.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+
+    for line in lines {
+        let trimmed_end = line.trim_end();
+        if trimmed_end == "---" || trimmed_end == "..." {
+            break;
+        }
+        let stripped = line.trim();
+        if let Some(rest) = stripped.strip_prefix(&format!("{key}:")) {
+            if let Some(val) = parse_frontmatter_scalar(rest) {
+                return Some(val);
+            }
+        }
+    }
+    None
 }
 
 /// Codex ships a handful of built-in skills under `~/.codex/skills/.system/`

@@ -1339,9 +1339,15 @@
       "loadingSubsessions": "正在加载子会话…",
       "chats": "会话",
       "projects": "项目",
-      "noFolders": "暂无文件夹",
-      "noFoldersHint": "先添加工作文件夹，这里才会显示项目列表。",
-      "removeFromWorkspace": "从工作区移除",
+      "workspaces": "工作区",
+      "noFolders": "暂无工作区",
+      "noFoldersHint": "先添加工作文件夹，这里才会显示工作区列表。",
+      "newConversation": "新建会话",
+      "pinWorkspace": "置顶工作区",
+      "renameWorkspace": "重命名工作区",
+      "renameWorkspaceTitle": "重命名工作区",
+      "openWorkspace": "打开工作区",
+      "removeFromWorkspace": "删除工作区",
       "untitledConversation": "未命名会话"
     },
     "conversation": {
@@ -1434,7 +1440,8 @@
       "reopen": "重新打开",
       "expandSubsessions": "展开子会话",
       "collapseSubsessions": "折叠子会话",
-      "noMessagesSummary": "该对话没有消息内容可供总结"
+      "noMessagesSummary": "该对话没有消息内容可供总结",
+      "archive": "归档"
     },
     "search": {
       "dialogTitle": "搜索",
@@ -2213,6 +2220,7 @@
         "quickMessages": "快捷消息",
         "quickMessagesEmpty": "暂无快捷消息",
         "quickMessagesLoading": "加载中...",
+        "skills": "技能",
         "pasteAsPlainText": "粘贴为纯文本",
         "cut": "剪切",
         "copy": "复制",
@@ -2460,6 +2468,12 @@
         "elevatedActionsDesc": "是否允许更激进的执行。关=保守；开=允许；询问=每次确认；完整=最松。不是 Windows 权限。",
         "bypass": "绕过",
         "reasoningEffort": "推理力度",
+        "modelLabel": "模型",
+        "modeLabel": "模式",
+        "toolPermissions": "权限",
+        "autoAllowTools": "自动允许",
+        "askBeforeTools": "询问",
+        "yoloMode": "全部绕过",
         "allowOnce": "允许本次",
         "allowAlways": "始终允许",
         "deny": "拒绝",
@@ -3967,7 +3981,7 @@
     "sourceCreative": "艺术设计",
     "sourceScience": "科研",
     "sourceOffice": "办公",
-"noSkillsInFilter": "该分组下没有技能",
+    "noSkillsInFilter": "该分组下没有技能",
     "newCustomSkill": "新建自制技能",
     "editCustomSkill": "编辑",
     "deleteCustomSkill": "删除",
@@ -3983,7 +3997,7 @@
     "customSkillIdRequired": "技能名称不能为空",
     "customSkillsSection": "自制技能",
     "confirmDeleteCustomSkill": "确定删除此技能？此操作不可撤销。"
-	  },
+  },
   "VisionBridgeSettings": {
     "title": "多模态路由",
     "description": "让纯文本智能体通过视觉模型中转理解图片内容。",

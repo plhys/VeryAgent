@@ -10,7 +10,6 @@ import {
   Check,
   ChevronDown,
   ClipboardPaste,
-  Cog,
   Copy,
   FolderSearch,
   GitFork,
@@ -20,9 +19,7 @@ import {
   Plus,
   Puzzle,
   Scissors,
-  Search,
   Send,
-  Settings2,
   Command,
   Eye,
   FileSpreadsheet,
@@ -37,16 +34,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -58,7 +51,6 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
-import { AgentIcon } from "@/components/agent-icon"
 import { cn, copyTextFromMenu, randomUUID } from "@/lib/utils"
 import {
   buildFileUri,
@@ -120,23 +112,16 @@ import {
   ConversationFolderBranchPicker,
   useConversationFolderBranchPickerVisible,
 } from "@/components/chat/conversation-context-bar"
-import { InlineModeSelector } from "@/components/chat/mode-selector"
 import { InlineSessionConfigSelector } from "@/components/chat/session-config-selector"
 import { ModelOptionPicker } from "@/components/chat/model-option-picker"
 import {
-  SessionSelectorsPanel,
-  type SessionSelectorGroup,
-  type SessionSelectorSetting,
-} from "@/components/chat/session-selectors-panel"
-import {
   deriveModelGroups,
   isModelConfigOption,
+  isReasoningConfigOption,
   modelListGroups,
   MODEL_LIST_VIRTUALIZE_THRESHOLD,
   type ModelOptionGroup,
 } from "@/lib/model-config-groups"
-import { DropdownRadioItemContent } from "@/components/chat/dropdown-radio-item-content"
-import { useConfigOptionLocalizer } from "@/lib/config-option-labels"
 import { useAgentSkills } from "@/hooks/use-agent-skills"
 import { useBuiltInExperts } from "@/hooks/use-built-in-experts"
 import { useBuiltInScience } from "@/hooks/use-built-in-science"
@@ -462,15 +447,6 @@ function buildDataUri(base64Data: string, mimeType: string | null): string {
   return `data:${safeMime};base64,${base64Data}`
 }
 
-function SelectorLoadingChip({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-      <span>{label}</span>
-    </div>
-  )
-}
-
 // Groups for the searchable + virtualized model picker, or `null` when the
 // option should keep the lightweight selectors. Only the MODEL option, and only
 // when its list is long enough to jank, qualifies. Falls back to a single
@@ -498,8 +474,8 @@ export function MessageInput({
   onCancel,
   modes,
   configOptions,
-  modeLoading = false,
-  configOptionsLoading = false,
+  modeLoading: _modeLoading = false,
+  configOptionsLoading: _configOptionsLoading = false,
   selectedModeId,
   onModeChange,
   onConfigOptionChange,
@@ -526,7 +502,6 @@ export function MessageInput({
   onToggleVision,
 }: MessageInputProps) {
   const t = useTranslations("Folder.chat.messageInput")
-  const localizer = useConfigOptionLocalizer()
   const tQueue = useTranslations("Folder.chat.messageQueue")
   // Kept as a separate binding from `t` so its call sites — exclusively
   // upload / attachment toasts — read as a single coherent group when
@@ -548,7 +523,10 @@ export function MessageInput({
   // skills read from disk. Other agents already surface their full command
   // set through ACP `availableCommands`, so injecting skills there would
   // be duplicate/extra UI noise — skip the skills fetch for them entirely.
-  const skillAgentType = agentType === "codex" ? "codex" : null
+  // Command Code is an exception: it has no ACP availableCommands, so
+  // skills are the only way to add custom commands.
+  const skillAgentType =
+    agentType === "codex" || agentType === "command_code" ? agentType : null
   // Pass the working dir so we see both global skills and folder-scoped
   // project skills (e.g. `{folder}/.codex/skills`). Without this, users
   // only ever saw global skills in the `$` autocomplete.
@@ -635,6 +613,59 @@ export function MessageInput({
     },
     [t]
   )
+  /**
+   * Unified category label lookup for the "+" menu's skills submenu.
+   * Covers all known categories from the skill warehouse index.json
+   * (expert skills, science skills, and office skills).
+   */
+  const skillCategoryLabel = useCallback(
+    (cat: string) => {
+      switch (cat) {
+        // Expert skill categories
+        case "discovery":
+          return t("expertCatDiscovery")
+        case "planning":
+          return t("expertCatPlanning")
+        case "execution":
+          return t("expertCatExecution")
+        case "quality":
+          return t("expertCatQuality")
+        case "debugging":
+          return t("expertCatDebugging")
+        case "review":
+          return t("expertCatReview")
+        case "meta":
+          return t("expertCatMeta")
+        case "creative":
+          return t("expertCatCreative")
+        // Science skill categories
+        case "ideation":
+          return t("scienceCatIdeation")
+        case "design":
+          return t("scienceCatDesign")
+        case "analysis":
+          return t("scienceCatAnalysis")
+        case "visualization":
+          return t("scienceCatVisualization")
+        case "evaluation":
+          return t("scienceCatEvaluation")
+        case "literature":
+          return t("scienceCatLiterature")
+        // Office skill categories
+        case "general":
+          return t("officeCatGeneral")
+        case "presentations":
+          return t("officeCatPresentations")
+        case "documents":
+          return t("officeCatDocuments")
+        case "spreadsheets":
+          return t("officeCatSpreadsheets")
+        default:
+          return cat
+      }
+    },
+    [t]
+  )
   const editorRef = useRef<RichComposerHandle>(null)
   // The editor owns the content now; this mirror of its empty state drives the
   // send button and `hasSendableContent`.
@@ -649,15 +680,6 @@ export function MessageInput({
   const [attachments, setAttachments] = useState<InputAttachment[]>([])
   const embeddedPayloadsRef = useRef<Map<string, PromptInputBlock>>(new Map())
   const [isDragActive, setIsDragActive] = useState(false)
-  // Collapsed (narrow) selectors live in a controlled Popover holding a
-  // master–detail panel (`SessionSelectorsPanel`). It's controlled so a value
-  // pick closes it explicitly — matching the prior cog menu, which also closed
-  // on every selection.
-  const [collapsedSelectorsOpen, setCollapsedSelectorsOpen] = useState(false)
-  // When config options exceed this threshold, the wide-view inline chips
-  // collapse into a single "设置 (N)" chip that opens a popover — keeps
-  // OpenClaw's 7+ session switches from flooding the input bar.
-  const [overflowSelectorsOpen, setOverflowSelectorsOpen] = useState(false)
   const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([])
   const [quickMessagesLoading, setQuickMessagesLoading] = useState(false)
   // Whether the async Clipboard read API is usable here. It's absent in
@@ -1034,18 +1056,10 @@ export function MessageInput({
   }, [hasModes, selectedModeId, availableModes])
   const showModeSelector =
     hasModes && Boolean(effectiveModeId) && !hasConfigOptions
-  const showModeLoading = modeLoading && !hasConfigOptions && !showModeSelector
-  const showConfigLoading = configOptionsLoading && !hasConfigOptions
-  const hasAnySelector =
-    showConfigLoading || hasConfigOptions || showModeLoading || showModeSelector
-  // Keep every agent-advertised setting visible as a chip. Labels show
-  // "Setting · Value" (e.g. 快速模式 · 关闭), so OpenClaw session switches
-  // stay readable instead of a row of bare Off/On — and do not disappear.
-  const hasInlineSelectors = hasConfigOptions || showModeSelector
-  /** Collapse inline chips into a popover when the count exceeds this. */
-  const MAX_INLINE_OPTIONS = 3
-  const shouldCollapseOptions =
-    hasConfigOptions && availableConfigOptions.length > MAX_INLINE_OPTIONS
+  // Standardized selector row for every agent: permissions → model → reasoning
+  // effort. Mode selection stays functional (it rides along on send) but no
+  // longer gets its own chip in the composer bar.
+  const hasInlineSelectors = hasConfigOptions
   const hasFolderBranchPicker =
     useConversationFolderBranchPickerVisible(attachmentTabId)
   const folderBranchPickerAttached = hasFolderBranchPicker
@@ -1085,10 +1099,19 @@ export function MessageInput({
     null
   )
   const [slashFilter, setSlashFilter] = useState("")
-  const slashCommands = useMemo(
-    () => availableCommands ?? [],
-    [availableCommands]
-  )
+  const slashCommands = useMemo(() => {
+    const cmds = availableCommands ?? []
+    // When the agent has no ACP availableCommands but does have skills
+    // (e.g. Command Code), surface the skills as slash commands so they
+    // appear in both the inline `/` menu and the "+" menu's slash submenu.
+    if (cmds.length === 0 && availableSkills.length > 0) {
+      return availableSkills.map((s) => ({
+        name: s.id,
+        description: s.description ?? s.name,
+      }))
+    }
+    return cmds
+  }, [availableCommands, availableSkills])
   const [slashDropdownOpen, setSlashDropdownOpen] = useState(false)
   const [slashDropdownSearch, setSlashDropdownSearch] = useState("")
   const slashDropdownInputRef = useRef<HTMLInputElement>(null)
@@ -1851,13 +1874,6 @@ export function MessageInput({
       onModeChange(effectiveModeId)
     }
   }, [showModeSelector, effectiveModeId, selectedModeId, onModeChange])
-
-  const handleModeSelect = useCallback(
-    (modeId: string) => {
-      onModeChange?.(modeId)
-    },
-    [onModeChange]
-  )
 
   // Close the runtime-command menu and clear the trigger.
   const closeSlashMenu = useCallback(() => {
@@ -2869,187 +2885,67 @@ export function MessageInput({
   const hasContextBarContent = hasImageAttachments || hasComposerImageRefs
   const showDragActive = isDragActive && !disabled
 
-  // Normalized settings for the collapsed (narrow) master–detail panel. Config
-  // options and the mode picker are mutually exclusive in this UI (see
-  // `showModeSelector`), but both are mapped so the panel stays agnostic.
-  const collapsedSettings = useMemo<SessionSelectorSetting[]>(() => {
-    const result: SessionSelectorSetting[] = []
-    if (hasConfigOptions) {
-      for (const option of availableConfigOptions) {
-        if (option.kind.type !== "select") continue
-        const kind = option.kind
-        // Model values that carry a `provider/` prefix group by provider; every
-        // other option keeps its server groups or stays flat (`null` derived).
-        const derived = deriveModelGroups(option)
-        const groups: SessionSelectorGroup[] = derived
-          ? derived.map((group) => ({
-              key: group.key,
-              name: group.name,
-              options: group.options.map((item) => ({
-                value: item.value,
-                name: item.name,
-                description: item.description,
-              })),
-            }))
-          : kind.groups.length > 0
-            ? kind.groups.map((group) => ({
-                key: group.group,
-                name: group.name,
-                options: group.options.map((item) => ({
-                  value: item.value,
-                  name: item.name,
-                  description: item.description,
-                })),
-              }))
-            : [
-                {
-                  key: "__flat__",
-                  name: null,
-                  options: kind.options.map((item) => ({
-                    value: item.value,
-                    name: item.name,
-                    description: item.description,
-                  })),
-                },
-              ]
-        // Resolve the left-rail summary against the built groups so a grouped
-        // model shows its prefix-stripped name (the provider is implied) rather
-        // than repeating `provider/`.
-        const current = groups
-          .flatMap((group) => group.options)
-          .find((item) => item.value === kind.current_value)
-        // A long model list gets a searchable + virtualized detail pane (a plain
-        // list of hundreds of buttons janks); short lists keep plain buttons.
-        const searchable =
-          isModelConfigOption(option) &&
-          kind.options.length > MODEL_LIST_VIRTUALIZE_THRESHOLD
-        result.push({
-          key: `config:${option.id}`,
-          title: localizer.localize(option.name),
-          description: option.description ?? null,
-          currentValue: kind.current_value,
-          currentLabel: localizer.localize(current?.name ?? kind.current_value),
-          groups,
-          onSelect: (value) => onConfigOptionChange?.(option.id, value),
-          ...(searchable && {
-            search: {
-              placeholder: t("searchModel"),
-              inputLabel: t("searchModelAria"),
-              listLabel: t("modelListLabel"),
-              empty: t("noModels"),
-            },
-          }),
-        })
-      }
-    }
-    if (showModeSelector) {
-      const selected = availableModes.find(
-        (mode) => mode.id === effectiveModeId
-      )
-      result.push({
-        key: "mode",
-        title: t("modeLabel"),
-        currentValue: effectiveModeId ?? "",
-        currentLabel: localizer.localize(
-          selected?.name ?? effectiveModeId ?? ""
-        ),
-        groups: [
-          {
-            key: "__modes__",
-            name: null,
-            options: availableModes.map((mode) => ({
-              value: mode.id,
-              name: mode.name,
-              description: mode.description,
-            })),
-          },
-        ],
-        onSelect: (value) => handleModeSelect(value),
-      })
-    }
-    return result
-  }, [
-    hasConfigOptions,
-    availableConfigOptions,
-    showModeSelector,
-    availableModes,
-    effectiveModeId,
-    onConfigOptionChange,
-    handleModeSelect,
-    localizer,
-    t,
-  ])
+  // Standardized selector row for EVERY agent, in a fixed order:
+  //   permission chips (name only) → model chip (model name) → strength chip
+  //   (reasoning effort, name only — rendered only when the agent advertises
+  //   one). Anything an agent advertises that is neither the model nor a
+  //   reasoning-effort option is treated as a permission and renders first.
+  const permissionOptions = availableConfigOptions.filter(
+    (option) => !isModelConfigOption(option) && !isReasoningConfigOption(option)
+  )
+  const modelOptions = availableConfigOptions.filter(isModelConfigOption)
+  const reasoningOptions = availableConfigOptions.filter(
+    isReasoningConfigOption
+  )
 
   const inlineSelectorItems = (
     <>
-      {hasConfigOptions &&
-        (shouldCollapseOptions ? (
-          <Popover
-            open={overflowSelectorsOpen}
-            onOpenChange={setOverflowSelectorsOpen}
-          >
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="xs"
-                title={t("agentSettings")}
-                aria-label={t("agentSettings")}
-                className="min-w-0 gap-0.5 px-1.5 text-muted-foreground"
-              >
-                <Settings2 className="size-3" />
-                <span className="max-w-[9rem] truncate">
-                  {t("agentSettings")} ({availableConfigOptions.length})
-                </span>
-                <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align="start"
-              aria-label={t("agentSettings")}
-              className="w-[22rem] max-w-[calc(100vw-1rem)] p-1"
-            >
-              <SessionSelectorsPanel
-                settings={collapsedSettings}
-                settingsLabel={t("agentSettings")}
-              />
-            </PopoverContent>
-          </Popover>
-        ) : (
-          availableConfigOptions.map((option) => {
-            const listGroups = modelPickerGroups(option)
-            if (listGroups) {
-              return (
-                <ModelOptionPicker
-                  key={option.id}
-                  option={option}
-                  groups={listGroups}
-                  onSelect={(configId, valueId) =>
-                    onConfigOptionChange?.(configId, valueId)
-                  }
-                />
-              )
-            }
-            return (
-              <InlineSessionConfigSelector
-                key={option.id}
-                option={option}
-                derivedGroups={deriveModelGroups(option)}
-                onSelect={(configId, valueId) =>
-                  onConfigOptionChange?.(configId, valueId)
-                }
-              />
-            )
-          })
-        ))}
-      {showModeSelector && (
-        <InlineModeSelector
-          modes={availableModes}
-          selectedModeId={effectiveModeId!}
-          onSelect={handleModeSelect}
-          label={t("modeLabel")}
+      {permissionOptions.map((option) => (
+        <InlineSessionConfigSelector
+          key={option.id}
+          option={option}
+          onSelect={(configId, valueId) =>
+            onConfigOptionChange?.(configId, valueId)
+          }
+          variant="name"
         />
-      )}
+      ))}
+      {modelOptions.map((option) => {
+        const listGroups = modelPickerGroups(option)
+        if (listGroups) {
+          return (
+            <ModelOptionPicker
+              key={option.id}
+              option={option}
+              groups={listGroups}
+              onSelect={(configId, valueId) =>
+                onConfigOptionChange?.(configId, valueId)
+              }
+            />
+          )
+        }
+        return (
+          <InlineSessionConfigSelector
+            key={option.id}
+            option={option}
+            derivedGroups={deriveModelGroups(option)}
+            onSelect={(configId, valueId) =>
+              onConfigOptionChange?.(configId, valueId)
+            }
+            variant="value"
+          />
+        )
+      })}
+      {reasoningOptions.map((option) => (
+        <InlineSessionConfigSelector
+          key={option.id}
+          option={option}
+          onSelect={(configId, valueId) =>
+            onConfigOptionChange?.(configId, valueId)
+          }
+          variant="name"
+        />
+      ))}
     </>
   )
 
@@ -3351,10 +3247,11 @@ export function MessageInput({
                     <DropdownMenuContent
                       side="top"
                       align="start"
-                      className="min-w-48"
+                      className="min-w-40 p-0.5 rounded-md text-xs"
                     >
                       {showNativePaperclip ? (
                         <DropdownMenuItem
+                          className="text-xs gap-2 px-3 py-1.5 rounded-md"
                           onClick={() => {
                             handlePickFiles().catch((error) => {
                               console.error(
@@ -3364,12 +3261,13 @@ export function MessageInput({
                             })
                           }}
                         >
-                          <Paperclip className="size-4" />
+                          <Paperclip className="size-3.5" />
                           {t("attachFiles")}
                         </DropdownMenuItem>
                       ) : (
                         <>
                           <DropdownMenuItem
+                            className="text-xs gap-2 px-3 py-1.5 rounded-md"
                             onClick={() => {
                               handleUploadLocalFiles().catch((error) => {
                                 console.error(
@@ -3379,20 +3277,21 @@ export function MessageInput({
                               })
                             }}
                           >
-                            <Upload className="size-4" />
+                            <Upload className="size-3.5" />
                             {t("attachLocalUpload")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            className="text-xs gap-2 px-3 py-1.5 rounded-md"
                             onClick={() => setServerFilePickerOpen(true)}
                           >
-                            <FolderSearch className="size-4" />
+                            <FolderSearch className="size-3.5" />
                             {t("attachServerFile")}
                           </DropdownMenuItem>
                         </>
                       )}
                       <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <MessageSquareText className="size-4" />
+                        <DropdownMenuSubTrigger className="text-xs gap-2 px-3 py-1.5 rounded-md">
+                          <MessageSquareText className="size-3.5" />
                           {t("quickMessages")}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent
@@ -3434,6 +3333,7 @@ export function MessageInput({
                       </DropdownMenuSub>
                       {onAddFeedback && (
                         <DropdownMenuItem
+                          className="text-xs gap-2 px-3 py-1.5 rounded-md"
                           disabled={feedbackAddDisabled}
                           onClick={onAddFeedback}
                           title={
@@ -3442,104 +3342,102 @@ export function MessageInput({
                               : undefined
                           }
                         >
-                          <MessageSquarePlus className="size-4" />
+                          <MessageSquarePlus className="size-3.5" />
                           {t("liveFeedback")}
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuSub
-                        open={slashDropdownOpen}
-                        onOpenChange={handleSlashDropdownOpenChange}
-                      >
-                        <DropdownMenuSubTrigger
-                          disabled={slashCommands.length === 0}
-                        >
-                          <Command className="size-4" />
-                          {t("slashCommands")}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent
-                          className="flex min-w-72 flex-col overflow-hidden p-0"
-                          style={{
-                            maxWidth: "min(20rem, calc(100vw - 1rem))",
-                            maxHeight:
-                              "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                          }}
-                        >
-                          <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-                            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <input
-                              ref={slashDropdownInputRef}
-                              type="text"
-                              role="searchbox"
-                              aria-label={t("slashSearchPlaceholder")}
-                              value={slashDropdownSearch}
-                              onChange={(e) =>
-                                setSlashDropdownSearch(e.target.value)
+                      {availableSkills.length > 0 && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="text-xs gap-2 px-3 py-1.5 rounded-md">
+                            <Command className="size-3.5" />
+                            <span className="text-xs">{t("skills")}</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent
+                            className="min-w-36 p-0.5 rounded-md"
+                            style={{
+                              maxWidth: "min(18rem, calc(100vw - 1rem))",
+                              maxHeight:
+                                "min(24rem, var(--radix-dropdown-menu-content-available-height))",
+                            }}
+                          >
+                            {(() => {
+                              const grouped: Record<string, AgentSkillItem[]> =
+                                {}
+                              const uncategorized: AgentSkillItem[] = []
+                              for (const skill of availableSkills) {
+                                if (skill.category) {
+                                  if (!grouped[skill.category])
+                                    grouped[skill.category] = []
+                                  grouped[skill.category].push(skill)
+                                } else {
+                                  uncategorized.push(skill)
+                                }
                               }
-                              onKeyDown={(e) => {
-                                if (e.key === "ArrowDown") {
-                                  e.preventDefault()
-                                  const container = e.currentTarget.closest(
-                                    '[data-slot="dropdown-menu-sub-content"]'
-                                  )
-                                  const firstItem =
-                                    container?.querySelector<HTMLElement>(
-                                      '[role="menuitem"]'
-                                    )
-                                  firstItem?.focus()
-                                  return
-                                }
-                                if (e.key === "Enter") {
-                                  e.preventDefault()
-                                  const first = filteredSlashDropdownCommands[0]
-                                  if (first) {
-                                    handleSlashPopoverSelect(first)
-                                    setSlashDropdownOpen(false)
-                                  }
-                                  return
-                                }
-                                if (e.key === "Escape" || e.key === "Tab")
-                                  return
-                                // Prevent radix DropdownMenu's built-in typeahead
-                                // from hijacking letter keys while the user is
-                                // typing.
-                                e.stopPropagation()
-                              }}
-                              placeholder={t("slashSearchPlaceholder")}
-                              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                              autoComplete="off"
-                              spellCheck={false}
-                            />
-                          </div>
-                          <div className="flex-1 overflow-y-auto p-1">
-                            {filteredSlashDropdownCommands.length === 0 ? (
-                              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                                {t("slashSearchEmpty")}
-                              </div>
-                            ) : (
-                              filteredSlashDropdownCommands.map((cmd) => (
-                                <DropdownMenuItem
-                                  key={cmd.name}
-                                  onClick={() => handleSlashPopoverSelect(cmd)}
-                                  // Radix focuses the item on pointermove, which
-                                  // fires while scrolling (items slide under the
-                                  // cursor) and steals focus from the search input.
-                                  // Short-circuit that default with preventDefault
-                                  // so the search keeps focus until the user
-                                  // explicitly clicks.
-                                  onPointerMove={(e) => e.preventDefault()}
-                                  onPointerLeave={(e) => e.preventDefault()}
-                                  className="hover:bg-accent hover:text-accent-foreground"
-                                >
-                                  <DropdownRadioItemContent
-                                    label={`/${cmd.name}`}
-                                    description={cmd.description}
-                                  />
-                                </DropdownMenuItem>
-                              ))
-                            )}
-                          </div>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
+                              const categories = Object.entries(grouped)
+                              return (
+                                <>
+                                  {uncategorized.map((skill) => (
+                                    <DropdownMenuItem
+                                      key={skill.id}
+                                      className="text-xs gap-2 px-3 py-1.5 rounded-md"
+                                      onClick={() => {
+                                        const editor =
+                                          editorRef.current?.getEditor()
+                                        if (!editor) return
+                                        editor
+                                          .chain()
+                                          .focus()
+                                          .insertContent(`/@${skill.id} `)
+                                          .run()
+                                      }}
+                                    >
+                                      <Command className="size-3" />
+                                      <span className="text-xs truncate">
+                                        {skill.name || skill.id}
+                                      </span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {uncategorized.length > 0 &&
+                                    categories.length > 0 && (
+                                      <DropdownMenuSeparator className="my-0.5" />
+                                    )}
+                                  {categories.map(([cat, skills]) => (
+                                    <div key={cat}>
+                                      <div className="px-2 py-0.5 text-[10px] text-muted-foreground font-medium">
+                                        {skillCategoryLabel(cat)}
+                                      </div>
+                                      {skills.map((skill) => (
+                                        <DropdownMenuItem
+                                          key={skill.id}
+                                          className="text-xs gap-2 px-3 py-1.5 rounded-md"
+                                          onClick={() => {
+                                            const editor =
+                                              editorRef.current?.getEditor()
+                                            if (!editor) return
+                                            editor
+                                              .chain()
+                                              .focus()
+                                              .insertContent(`/@${skill.id} `)
+                                              .run()
+                                          }}
+                                        >
+                                          <Command className="size-3" />
+                                          <span className="text-xs truncate">
+                                            {skill.name || skill.id}
+                                          </span>
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </>
+                              )
+                            })()}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                      {availableSkills.length > 0 && (
+                        <DropdownMenuSeparator className="my-0.5" />
+                      )}
                       {/* A custom-dir pi can't have skills managed by veryagent's
                           default-dir store, so hide these shortcuts instead of
                           offering ones that lock with a Settings path the
@@ -3844,6 +3742,11 @@ export function MessageInput({
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  {hasInlineSelectors && (
+                    <div className="hidden min-w-0 flex-wrap items-end gap-x-1 gap-y-0.5 @[30rem]:flex">
+                      {inlineSelectorItems}
+                    </div>
+                  )}
                   {onToggleVision && (
                     <button
                       type="button"
@@ -3861,62 +3764,6 @@ export function MessageInput({
                         {t("vision")}
                       </span>
                     </button>
-                  )}
-                  {hasInlineSelectors && (
-                    <div className="hidden min-w-0 flex-wrap items-end gap-x-1 gap-y-0.5 @[30rem]:flex">
-                      {inlineSelectorItems}
-                    </div>
-                  )}
-                  {hasAnySelector && (
-                    <div
-                      className={cn(
-                        "flex",
-                        hasInlineSelectors && "@[30rem]:hidden"
-                      )}
-                    >
-                      <Popover
-                        open={collapsedSelectorsOpen}
-                        onOpenChange={setCollapsedSelectorsOpen}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="shrink-0"
-                            title={t("agentSettings")}
-                            aria-label={t("agentSettings")}
-                          >
-                            {agentType ? (
-                              <AgentIcon
-                                agentType={agentType}
-                                className="size-3"
-                              />
-                            ) : (
-                              <Cog className="size-3" />
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          side="top"
-                          align="start"
-                          aria-label={t("agentSettings")}
-                          className="w-[22rem] max-w-[calc(100vw-1rem)] p-1"
-                        >
-                          {showConfigLoading && (
-                            <SelectorLoadingChip label={t("loadingSettings")} />
-                          )}
-                          {showModeLoading && (
-                            <SelectorLoadingChip label={t("loadingMode")} />
-                          )}
-                          {collapsedSettings.length > 0 && (
-                            <SessionSelectorsPanel
-                              settings={collapsedSettings}
-                              settingsLabel={t("agentSettings")}
-                            />
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    </div>
                   )}
                 </div>
                 <div className="shrink-0">{actionButtons}</div>

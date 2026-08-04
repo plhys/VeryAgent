@@ -40,9 +40,12 @@ function normalizeKind(kind: string): string {
 const CONFIG_NAME_MAP: Record<string, string> = {
   // ── Option names (displayed as section labels) ──
   "approval preset": "approvalPreset",
+  "approval mode": "approvalPreset",
+  approval: "approvalPreset",
   "default thinking mode": "defaultThinkingMode",
   "thinking level": "thinkingLevel",
   "thought level": "thoughtLevel",
+  thought: "thoughtLevel",
   "fast mode": "fastMode",
   "tool verbosity": "toolVerbosity",
   "plugin trace": "pluginTrace",
@@ -51,6 +54,39 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "elevated actions": "elevatedActions",
   bypass: "bypass",
   "reasoning effort": "reasoningEffort",
+  "reasoning effort level": "reasoningEffort",
+  "effort level": "reasoningEffort",
+  effort: "reasoningEffort",
+  reasoning: "reasoningEffort",
+  "model strength": "reasoningEffort",
+  mode: "modeLabel",
+  // Protocol ids as option names (some agents ship the bare id):
+  effortlevel: "reasoningEffort",
+  reasoningeffort: "reasoningEffort",
+  modelreasoningeffort: "reasoningEffort",
+  "model reasoning effort": "reasoningEffort",
+  thinkinglevel: "thinkingLevel",
+  thoughtlevel: "thoughtLevel",
+
+  // ── Command Code config options ──
+  model: "modelLabel",
+  "tool permissions": "toolPermissions",
+  permission: "toolPermissions",
+  "permission mode": "toolPermissions",
+  permissions: "toolPermissions",
+  "tool permission": "toolPermissions",
+  "auto-allow": "autoAllowTools",
+  "auto-allow tools": "autoAllowTools",
+  "auto allow": "autoAllowTools",
+  "auto allow tools": "autoAllowTools",
+  "ask before tools": "askBeforeTools",
+  "ask before tool use": "askBeforeTools",
+  yolo: "yoloMode",
+  "bypass all (yolo)": "yoloMode",
+  // Protocol ids as option names:
+  toolpermissions: "toolPermissions",
+  autoallowtools: "autoAllowTools",
+  askbeforetools: "askBeforeTools",
 
   // ── Mode / preset names ──
   default: "modeDefault",

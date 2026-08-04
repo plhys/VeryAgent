@@ -5,6 +5,7 @@ import {
   filterModelGroups,
   flattenModelGroups,
   isModelConfigOption,
+  isReasoningConfigOption,
   modelListGroups,
   type ModelOptionGroup,
 } from "./model-config-groups"
@@ -62,6 +63,49 @@ describe("isModelConfigOption", () => {
     expect(isModelConfigOption(modelOption([opt("a")], { id: "effort" }))).toBe(
       false
     )
+  })
+})
+
+describe("isReasoningConfigOption", () => {
+  it("matches effort-style strength ids (Claude effortLevel, Codex reasoningEffort)", () => {
+    expect(
+      isReasoningConfigOption(modelOption([opt("high")], { id: "effortLevel" }))
+    ).toBe(true)
+    expect(
+      isReasoningConfigOption(
+        modelOption([opt("high")], { id: "reasoningEffort" })
+      )
+    ).toBe(true)
+    expect(
+      isReasoningConfigOption(
+        modelOption([opt("high")], { id: "model_reasoning_effort" })
+      )
+    ).toBe(true)
+  })
+
+  it("matches thinking/thought level ids", () => {
+    expect(
+      isReasoningConfigOption(
+        modelOption([opt("full")], { id: "thinkingLevel" })
+      )
+    ).toBe(true)
+    expect(
+      isReasoningConfigOption(
+        modelOption([opt("full")], { id: "thoughtLevel" })
+      )
+    ).toBe(true)
+  })
+
+  it("rejects the model option and plain permissions", () => {
+    expect(isReasoningConfigOption(modelOption([opt("a")]))).toBe(false)
+    expect(
+      isReasoningConfigOption(modelOption([opt("on")], { id: "fastMode" }))
+    ).toBe(false)
+    expect(
+      isReasoningConfigOption(
+        modelOption([opt("always")], { id: "permissions" })
+      )
+    ).toBe(false)
   })
 })
 

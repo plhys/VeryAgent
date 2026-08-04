@@ -89,7 +89,6 @@ import {
   computeStickyState,
   flatIndexOfConversation,
   folderHeaderFlatIndices,
-  formatRelative,
   groupByFolderWithReuse,
   headerIndexForFolder,
   mergeChildrenById,
@@ -243,7 +242,7 @@ const FolderHeader = memo(function FolderHeader({
             onPointerDown={(e) => onGripPointerDown?.(folderId, e)}
             className={cn(
               "group flex h-[2.0625rem] w-full items-center",
-              "rounded-full",
+              "rounded-md",
               "transition-colors duration-150",
               isDragging
                 ? "cursor-grabbing"
@@ -257,7 +256,7 @@ const FolderHeader = memo(function FolderHeader({
               aria-expanded={expanded}
               className={cn(
                 "relative flex h-full min-w-0 flex-1 items-center pr-[0.5rem] outline-none",
-                "rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 "text-sidebar-foreground",
                 isDragging ? "cursor-grabbing" : "cursor-grab"
               )}
@@ -576,6 +575,14 @@ export function SidebarConversationList({
   const folders = useAppWorkspaceStore((s) => s.folders)
   const allFolders = useAppWorkspaceStore((s) => s.allFolders)
   const conversations = useAppWorkspaceStore((s) => s.conversations)
+  const agentFilter = useAppWorkspaceStore((s) => s.agentFilter)
+  const filteredConversations = useMemo(
+    () =>
+      agentFilter
+        ? conversations.filter((c) => c.agent_type === agentFilter)
+        : conversations,
+    [conversations, agentFilter]
+  )
   const loading = useAppWorkspaceStore((s) => s.conversationsLoading)
   const error = useAppWorkspaceStore((s) => s.conversationsError)
   const refreshConversations = useAppWorkspaceStore(
@@ -831,26 +838,16 @@ export function SidebarConversationList({
   const scrollToActiveRef = useRef<() => void>(() => {})
   const pendingScrollRef = useRef(false)
 
-  // Single "now" shared by every relative time label, refreshed once a minute.
-  // Threading one value through all rows (instead of each row calling
-  // `Date.now()` during render) keeps `timeLabel` referentially stable within a
-  // render tick, so a single status event re-renders only the affected card.
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(interval)
-  }, [])
-
   // Folder grouping source: pinned conversations are surfaced in the dedicated
   // Pinned section, and folderless chat conversations in the dedicated Chat
   // section, so exclude both here; then apply the completed filter as before.
   const folderConversations = useMemo(() => {
-    const base = conversations.filter(
+    const base = filteredConversations.filter(
       (c) => c.pinned_at == null && c.kind !== "chat"
     )
     if (showCompleted) return base
     return base.filter((c) => c.status !== "completed")
-  }, [conversations, showCompleted])
+  }, [filteredConversations, showCompleted])
 
   // Flat "Chat" bucket: folderless chat-mode conversations, most-recently-updated
   // first, with reference reuse (so an unrelated status event doesn't rebuild it
@@ -858,23 +855,23 @@ export function SidebarConversationList({
   const chatConvsRef = useRef<DbConversationSummary[]>([])
   const chatConversations = useMemo(() => {
     const next = selectChatConversationsWithReuse(
-      conversations,
+      filteredConversations,
       showCompleted,
       chatConvsRef.current
     )
     chatConvsRef.current = next
     return next
-  }, [conversations, showCompleted])
+  }, [filteredConversations, showCompleted])
 
   // Pinned bucket: the FULL conversation list (ignores "Show completed" — a
   // pinned conversation stays visible regardless), sorted most-recently-pinned
   // first, with reference reuse so an unrelated status event doesn't rebuild it.
   const pinnedRef = useRef<DbConversationSummary[]>([])
   const pinned = useMemo(() => {
-    const next = selectPinnedWithReuse(conversations, pinnedRef.current)
+    const next = selectPinnedWithReuse(filteredConversations, pinnedRef.current)
     pinnedRef.current = next
     return next
-  }, [conversations])
+  }, [filteredConversations])
 
   // Maps each open worktree child folder → its (open) root folder. A child is
   // only redirected when its parent is also open, so a worktree whose root was
@@ -913,13 +910,13 @@ export function SidebarConversationList({
   // (they're not in this folder's bucket), matching `byFolder`.
   const folderTotalCounts = useMemo(() => {
     const map = new Map<number, number>()
-    for (const conv of conversations) {
+    for (const conv of filteredConversations) {
       if (conv.pinned_at != null) continue
       const groupId = childToParent.get(conv.folder_id) ?? conv.folder_id
       map.set(groupId, (map.get(groupId) ?? 0) + 1)
     }
     return map
-  }, [conversations, childToParent])
+  }, [filteredConversations, childToParent])
 
   const orderedFolderIds = useMemo(() => {
     const folderIdSet = new Set(folders.map((f) => f.id))
@@ -1051,7 +1048,7 @@ export function SidebarConversationList({
       if (!selectedConversation) return
       const targetId = selectedConversation.id
       const targetAgent = selectedConversation.agentType
-      const conv = conversations.find(
+      const conv = filteredConversations.find(
         (c) => c.id === targetId && c.agent_type === targetAgent
       )
       if (!conv) return
@@ -1784,7 +1781,7 @@ export function SidebarConversationList({
   }, [])
 
   const showEmptyWorkspaceActions =
-    folders.length === 0 && conversations.length === 0
+    folders.length === 0 && filteredConversations.length === 0
 
   const folderThemeColor = (folderId: number): FolderThemeColor =>
     normalizeFolderThemeColor(folderIndex.get(folderId)?.color)
@@ -1949,10 +1946,6 @@ export function SidebarConversationList({
           selectedConversation?.id === conv.id
         }
         isOpenInTab={openTabKeys.has(`${conv.agent_type}:${conv.id}`)}
-        timeLabel={formatRelative(
-          sortMode === "updated" ? conv.updated_at : conv.created_at,
-          now
-        )}
         rawTimestamp={
           sortMode === "updated" ? conv.updated_at : conv.created_at
         }
@@ -2037,12 +2030,12 @@ export function SidebarConversationList({
               <ScrollArea
                 onViewportRef={handleViewportRef}
                 className={cn(
-                  "h-full min-h-0 pl-0.5 pr-1.5 pb-1.5",
+                  "h-full min-h-0 pl-0.5 pr-0.5 pb-1.5",
                   "[overflow-anchor:none]",
                   "[--conv-rail-axis:0.875rem]"
                 )}
               >
-                <div className="pr-2.5">
+                <div>
                   {dragging !== null ? (
                     // Drag surface: every folder collapsed to its header so any
                     // folder (even one that was virtualized off-screen) is a valid

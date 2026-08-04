@@ -608,6 +608,22 @@ pub async fn reorder_folders_core(db: &AppDatabase, ids: Vec<i32>) -> Result<(),
         .map_err(AppCommandError::from)
 }
 
+pub async fn update_folder_name_core(
+    db: &AppDatabase,
+    folder_id: i32,
+    name: String,
+) -> Result<FolderDetail, AppCommandError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppCommandError::invalid_input("Folder name cannot be empty"));
+    }
+
+    folder_service::update_folder_name(&db.conn, folder_id, name)
+        .await
+        .map_err(AppCommandError::from)?
+        .ok_or_else(|| AppCommandError::not_found("Folder not found"))
+}
+
 pub async fn update_folder_color_core(
     db: &AppDatabase,
     folder_id: i32,
@@ -737,6 +753,16 @@ pub async fn reorder_folders(
     ids: Vec<i32>,
 ) -> Result<(), AppCommandError> {
     reorder_folders_core(&db, ids).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn update_folder_name(
+    db: tauri::State<'_, AppDatabase>,
+    folder_id: i32,
+    name: String,
+) -> Result<FolderDetail, AppCommandError> {
+    update_folder_name_core(&db, folder_id, name).await
 }
 
 #[cfg(feature = "tauri-runtime")]

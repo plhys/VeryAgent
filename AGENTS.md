@@ -14,5 +14,6 @@
 
 ## 日常开发启动
 
-优先 `.\dev-detached.ps1`，见 [`docs/dev-detached.zh-CN.md`](./docs/dev-detached.zh-CN.md)。  
+优先 `.\dev-detached.ps1` 或 `.\dev-detached.bat`，见 [`docs/dev-detached.zh-CN.md`](./docs/dev-detached.zh-CN.md)。  
+若 `.ps1` 双击打开文件夹，改用 `.bat` 即可。  
 不要默认每次 `pnpm tauri dev`（慢，且进程易随终端/agent 退出被带走）。

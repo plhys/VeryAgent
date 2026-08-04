@@ -142,6 +142,13 @@ export async function reorderFolders(ids: number[]): Promise<void> {
   return getTransport().call("reorder_folders", { ids })
 }
 
+export async function updateFolderName(
+  folderId: number,
+  name: string
+): Promise<FolderDetail> {
+  return getTransport().call("update_folder_name", { folderId, name })
+}
+
 export async function updateFolderColor(
   folderId: number,
   color: FolderThemeColor

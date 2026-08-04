@@ -23,7 +23,6 @@ export interface AgentCheckState {
 
 export const CLAUDE_AUTH_MODES = [
   "official_subscription",
-  "custom",
   "model_provider",
 ] as const
 export type ClaudeAuthMode = (typeof CLAUDE_AUTH_MODES)[number]

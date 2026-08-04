@@ -7,8 +7,8 @@ import { AgentIcon } from "@/components/agent-icon"
 import type { AgentType } from "@/lib/types"
 import { AGENT_LABELS } from "@/lib/types"
 
-/** Horizontal nudge (px) past the host's right edge into the main pane. */
-export const TIME_FLAG_RIGHT_OFFSET_PX = 4
+/** 浮标左边缘相对宿主右边缘的偏移：负数 = 向左压住侧边栏边缘一点 */
+export const TIME_FLAG_RIGHT_OFFSET_PX = -8
 
 export function formatAbsoluteTimestamp(
   raw: string | null | undefined
@@ -53,9 +53,7 @@ export function SidebarHoverTimeFlag({
   if (!isHovered || !formatted || !hostRef.current) return null
 
   const rect = hostRef.current.getBoundingClientRect()
-  const agentLabel = agentType
-    ? AGENT_LABELS[agentType] || agentType
-    : null
+  const agentLabel = agentType ? AGENT_LABELS[agentType] || agentType : null
 
   return createPortal(
     <div

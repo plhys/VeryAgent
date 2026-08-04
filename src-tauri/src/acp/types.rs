@@ -123,6 +123,13 @@ pub enum AcpEvent {
     /// implementation phase).
     PermissionResolved { request_id: String },
     /// Turn completed
+    /// Completed transcript turns projected by the ACP host for agents whose
+    /// native session store cannot be parsed by VeryAgent (currently Command Code).
+    /// This event is internal-only and is consumed by the lifecycle subscriber.
+    /// The frontend ignores unknown event types gracefully.
+    TranscriptTurns {
+        turns: Vec<crate::models::message::MessageTurn>,
+    },
     TurnComplete {
         session_id: String,
         stop_reason: String,
@@ -607,6 +614,10 @@ pub struct AgentSkillItem {
     /// Best-effort `description:` extracted from the SKILL.md YAML
     /// frontmatter. `None` when there is no frontmatter or no key.
     pub description: Option<String>,
+    /// Best-effort `category:` extracted from the SKILL.md YAML frontmatter.
+    /// `None` when there is no frontmatter or no category key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
     /// True for skills bundled by the agent CLI itself (e.g. Codex's
     /// `~/.codex/skills/.system/*`). Surfaced so the UI can show them but
     /// refuse to edit or delete; the backend also refuses such writes.

@@ -1036,9 +1036,10 @@
   scrollbar-color: var(--border) transparent;
 }
 
-/* OverlayScrollbars custom theme — 6px track, stays 6px on hover */
+/* OverlayScrollbars custom theme — 4px track, capped handle length */
 .os-scrollbar.os-theme-veryagent {
-  --os-size: 6px;
+  --os-size: 4px;
+  --os-handle-max-size: 55%;
   --os-handle-bg: oklch(0.65 0 0);
   --os-handle-bg-hover: oklch(0.45 0 0);
   --os-handle-bg-active: oklch(0.45 0 0);
@@ -1049,10 +1050,19 @@
   z-index: 40;
   cursor: pointer;
   right: 0 !important;
+  /* 丝滑过渡：显示/隐藏 + 颜色 + 尺寸变化都加动画 */
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.os-scrollbar.os-theme-veryagent .os-scrollbar-handle {
+  transition:
+    background-color 0.25s ease,
+    opacity 0.4s ease,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .os-scrollbar.os-theme-veryagent:hover {
-  --os-size: 6px;
+  --os-size: 4px;
   --os-handle-bg: oklch(0.45 0 0);
 }
 

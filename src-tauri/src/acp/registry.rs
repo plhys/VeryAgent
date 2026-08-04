@@ -399,7 +399,7 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
         },
         AgentType::CommandCode => AcpAgentMeta {
             agent_type,
-            supports_mcp: true,
+            supports_mcp: false,  // adapter initialize returns { supported: false }
             name: "Command Code",
             description: "Command Code CLI — the coding agent that learns your taste (ACP via built-in adapter)",
             resident: false,
@@ -408,35 +408,35 @@ pub fn get_agent_meta(agent_type: AgentType) -> AcpAgentMeta {
             // CommandCode special-case that launches `node <resources>/
             // command-code-acp.mjs` directly, so no binary is ever downloaded
             // for this agent.
-            distribution: AgentDistribution::Binary {
-                version: "0.1.0",
-                cmd: "node",
+distribution: AgentDistribution::Binary {
+	                version: "0.1.1",
+	                cmd: "node",
                 args: &[],
                 env: &[],
                 platforms: &[
                     PlatformBinary {
                         platform: "darwin-aarch64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-darwin-aarch64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-darwin-aarch64.mjs",
                     },
                     PlatformBinary {
                         platform: "darwin-x86_64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-darwin-x86_64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-darwin-x86_64.mjs",
                     },
                     PlatformBinary {
                         platform: "linux-aarch64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-linux-aarch64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-linux-aarch64.mjs",
                     },
                     PlatformBinary {
                         platform: "linux-x86_64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-linux-x86_64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-linux-x86_64.mjs",
                     },
                     PlatformBinary {
                         platform: "windows-aarch64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-windows-aarch64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-windows-aarch64.mjs",
                     },
                     PlatformBinary {
                         platform: "windows-x86_64",
-                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.0/command-code-acp-windows-x86_64.mjs",
+                        url: "https://github.com/VeryAgent/veryagent/releases/download/command-code-acp-v0.1.1/command-code-acp-windows-x86_64.mjs",
                     },
                 ],
             },
@@ -571,7 +571,7 @@ mod tests {
         assert_binary_version(AgentType::OpenCode, "1.17.13", "/releases/download/v1.17.13/");
         // Command Code is a built-in adapter (no downloadable binary); its
         // registry version mirrors the bundled adapter version.
-        assert_binary_version(AgentType::CommandCode, "0.1.0", "/command-code-acp-v0.1.0/");
+        assert_binary_version(AgentType::CommandCode, "0.1.1", "/command-code-acp-v0.1.1/");
         assert_uvx_version(
             AgentType::Hermes,
             "0.18.0",

@@ -1619,6 +1619,7 @@ export interface AgentSkillItem {
   layout: AgentSkillLayout
   path: string
   description: string | null
+  category?: string | null
   read_only: boolean
 }
 

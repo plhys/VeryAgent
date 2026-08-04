@@ -1,6 +1,28 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-08-01
+> 更新日期：2026-08-04
+
+---
+
+## 近期（2026-08-04，未发版）
+
+### 侧边栏 & 工作区
+
+- [x] 侧边栏「项目」→「工作区」改名
+- [x] 工作区文件夹右键菜单：置顶 / 重命名（仅改显示名 `folder.name`，不动磁盘路径）/ 打开工作区（`revealItemInDir`）/ 删除；重新打开保留自定义显示名
+- [x] 智能体筛选：状态栏统计弹窗点击智能体筛选会话列表，筛选时会话行显示 Agent 图标
+- [x] 会话天数标签「今天/昨天/N天前」+ 悬浮置顶/归档（不占位）
+- [x] 排版统一：小圆角、左右对称、滚动条 4px/55%、浮标压边 -8px
+
+### 输入框底部操作栏（ChatInput）
+
+- [x] 统一为「加号 → 权限 → 模型 → 强度」三段式，移除模式 chip 与折叠设置齿轮，视觉开关保留
+- [x] 配置名中文化：`config-option-labels` 映射扩展 + id 兜底 + `mode → 模式`
+
+### 待跟进
+
+- [ ] `message-input.tsx` slash 菜单遗留 3 个未使用变量（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect`），等 slash 菜单重构收尾时清理
+- [ ] 模型 chip 的模型名为模型 ID（如 gpt-4o），保持英文不翻译
 
 ---
 
