@@ -25,8 +25,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react"
-import { isDesktop, openUrl } from "@/lib/platform"
-import { getActiveRemoteConnectionId } from "@/lib/transport"
+import { openUrl } from "@/lib/platform"
 import { toast } from "sonner"
 import { AgentIcon } from "@/components/agent-icon"
 import {
@@ -45,9 +44,7 @@ import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -67,9 +64,6 @@ import {
   acpUninstallAgent,
   acpUpdateAgentConfig,
   acpUpdateAgentEnv,
-  acpUpdateHermesConfig,
-  acpRevealHermesHome,
-  acpOpenHermesSetupTerminal,
   acpGetCommandCodeLoginStatus,
   acpStartCommandCodeLogin,
   acpCancelCommandCodeLogin,
@@ -92,7 +86,6 @@ import type {
   OpenCodeCatalogProvider,
   ProviderModelItem,
 } from "@/lib/types"
-import { HERMES_PROVIDERS } from "@/lib/types"
 import {
   buildAgentReadiness,
   isReadinessPilotAgent,
@@ -116,10 +109,10 @@ import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
 import { OpencodePluginsModal } from "../opencode-plugins-modal"
 import { CodeBuddyConfigPanel } from "../codebuddy-config-panel"
 import { PiConfigPanel } from "../pi-config-panel"
+import { NativeLoginCard } from "./native-login-card"
 
 import type {
   AgentCheckState,
-  ClaudeAuthMode,
   ClaudeEffortLevel,
   ImportantConfigKey,
   RunningActionKind,
@@ -129,7 +122,6 @@ import type {
   AgentDraft,
   GeminiAuthMode,
   CodexAuthMode,
-  HermesAuthMode,
   OpenClawAuthMode,
   ClineAuthMode,
   OpenCodeAuthMode,
@@ -137,7 +129,6 @@ import type {
   CodeBuddyAuthMode,
 } from "./types"
 import {
-  CLAUDE_AUTH_MODES,
   CLAUDE_EFFORT_LEVEL_CONFIG_KEY,
   CLAUDE_EFFORT_LEVEL_VALUES,
   GEMINI_AUTH_MODES,
@@ -156,7 +147,6 @@ import {
   envMapToText,
   parseEnvText,
   patchEnvText,
-  importantEnvKeysByAgent,
   parseConfigJsonText,
   asObjectRecord,
   patchOpenCodeAuthJsonText,
@@ -183,7 +173,6 @@ import {
   patchCodexAuthJsonText,
   patchCodexConfigTomlText,
   normalizeCodexReasoningEffort,
-  parseHermesConfig,
   buildAgentDraft,
   isValidCustomVersion,
   patchEnvByImportantKey,
@@ -1376,13 +1365,6 @@ export function AcpAgentSettings() {
           (option) => option.value === selectedDraft.codexReasoningEffort
         ) ?? null)
       : null
-  const selectedHermesProviderOption =
-    selectedAgent?.agent_type === "hermes" && selectedDraft
-      ? (HERMES_PROVIDERS.find((p) => p.id === selectedDraft.hermesProvider) ??
-        null)
-      : null
-  const hermesCanUseNativeSetup =
-    isDesktop() && getActiveRemoteConnectionId() === null
   const selectedOpenCodeConfig = useMemo(() => {
     if (selectedAgentKind !== "open_code" || !locale) return null
     return extractOpenCodeConfigValues(
@@ -1706,65 +1688,6 @@ export function AcpAgentSettings() {
       }))
     },
     [selectedAgent, selectedDraft, t, updateSelectedDraft]
-  )
-
-  const handleClaudeAuthModeChange = useCallback(
-    (nextMode: ClaudeAuthMode) => {
-      if (
-        !selectedAgent ||
-        !selectedDraft ||
-        selectedAgent.agent_type !== "claude_code"
-      )
-        return
-
-      const keys = importantEnvKeysByAgent("claude_code")
-      const allEnvKeys = [...keys.apiBaseUrl, ...keys.apiKey]
-
-      if (nextMode === "official_subscription") {
-        // Clear API URL/API Key from env and config
-        const envPatch: Record<string, string> = {}
-        for (const k of allEnvKeys) envPatch[k] = ""
-        // Build clean display config (remove null keys)
-        const parsed = parseConfigJsonText(selectedDraft.configText)
-        const config: Record<string, unknown> = parsed.error
-          ? {}
-          : { ...parsed.config }
-        delete config.apiBaseUrl
-        delete config.apiKey
-        if (config.env && typeof config.env === "object") {
-          const cfgEnv = { ...(config.env as Record<string, unknown>) }
-          for (const k of allEnvKeys) delete cfgEnv[k]
-          if (Object.keys(cfgEnv).length > 0) {
-            config.env = cfgEnv
-          } else {
-            delete config.env
-          }
-        }
-        const nextConfigText =
-          Object.keys(config).length > 0 ? JSON.stringify(config, null, 2) : ""
-        setConfigErrors((prev) => ({
-          ...prev,
-          [selectedAgent.agent_type]: null,
-        }))
-        updateSelectedDraft((current) => ({
-          ...current,
-          claudeAuthMode: nextMode,
-          modelProviderId: null,
-          apiBaseUrl: "",
-          apiKey: "",
-          envText: patchEnvText(current.envText, envPatch),
-          configText: nextConfigText,
-        }))
-        return
-      }
-
-      // "model_provider" — keep existing values, just switch mode
-      updateSelectedDraft((current) => ({
-        ...current,
-        claudeAuthMode: nextMode,
-      }))
-    },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
   )
 
   const handleModelProviderSelect = useCallback(
@@ -2488,65 +2411,6 @@ export function AcpAgentSettings() {
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
 
-  const handleHermesFieldChange = useCallback(
-    (
-      key:
-        | "hermesProvider"
-        | "apiKey"
-        | "model"
-        | "apiBaseUrl"
-        | "hermesConfigYaml",
-      value: string
-    ) => {
-      if (
-        !selectedAgent ||
-        !selectedDraft ||
-        selectedAgent.agent_type !== "hermes"
-      )
-        return
-      updateSelectedDraft((current) => {
-        if (key !== "hermesProvider") {
-          return { ...current, [key]: value }
-        }
-        // Switching provider: the projection only carries the *configured*
-        // provider's key, so restore it when returning to that provider and
-        // clear otherwise — never carry one provider's secret into another's
-        // env var. An empty key field then means "leave the stored key as-is".
-        const projected = parseHermesConfig(
-          typeof selectedAgent.config_json === "string"
-            ? selectedAgent.config_json
-            : ""
-        )
-        const sameAsConfigured = value === projected.provider
-        return {
-          ...current,
-          hermesProvider: value,
-          apiKey: sameAsConfigured ? projected.apiKey : "",
-          apiBaseUrl: sameAsConfigured ? projected.baseUrl : "",
-        }
-      })
-    },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
-  )
-
-  const handleHermesAuthModeChange = useCallback(
-    (nextMode: HermesAuthMode) => {
-      if (
-        !selectedAgent ||
-        !selectedDraft ||
-        selectedAgent.agent_type !== "hermes"
-      )
-        return
-      updateSelectedDraft((current) => ({
-        ...current,
-        hermesAuthMode: nextMode,
-        modelProviderId:
-          nextMode === "model_provider" ? current.modelProviderId : null,
-      }))
-    },
-    [selectedAgent, selectedDraft, updateSelectedDraft]
-  )
-
   const handleOpenCodeAuthModeChange = useCallback(
     (nextMode: OpenCodeAuthMode) => {
       if (
@@ -2597,105 +2461,6 @@ export function AcpAgentSettings() {
     [selectedAgent, selectedDraft, updateSelectedDraft]
   )
 
-  const handleSaveHermesConfig = useCallback(
-    async (mode: "structured" | "raw") => {
-      if (
-        !selectedAgent ||
-        !selectedDraft ||
-        selectedAgent.agent_type !== "hermes"
-      )
-        return
-      const agentType = selectedAgent.agent_type
-      const draft = selectedDraft
-      const providerOption = HERMES_PROVIDERS.find(
-        (p) => p.id === draft.hermesProvider
-      )
-      setSavingConfig((prev) => ({ ...prev, [agentType]: true }))
-      try {
-        await acpUpdateHermesConfig(
-          mode === "raw"
-            ? {
-                provider: draft.hermesProvider,
-                rawConfigYaml: draft.hermesConfigYaml,
-              }
-            : {
-                provider: draft.hermesProvider,
-                // Blank key, or a provider with no key field (OAuth / AWS) →
-                // null → backend leaves the stored ~/.hermes/.env value
-                // untouched (so switching providers can't wipe it).
-                apiKey:
-                  providerOption?.kind !== "apiKey" || !draft.apiKey.trim()
-                    ? null
-                    : draft.apiKey,
-                model: draft.model,
-                baseUrl: providerOption?.needsBaseUrl ? draft.apiBaseUrl : null,
-              }
-        )
-        // When saving native config, also clear model_provider_id from the DB
-        // so the UI doesn't revert to model_provider mode on refresh.
-        if (draft.hermesAuthMode === "native") {
-          await acpUpdateAgentEnv(agentType, {
-            enabled: selectedAgent.enabled,
-            env: parseEnvText(draft.envText),
-            modelProviderId: null,
-          })
-        }
-        await refreshAgents()
-        // Drop the draft so it rebuilds from the freshly-persisted projection —
-        // otherwise the *other* mode (structured fields vs. raw config.yaml)
-        // keeps stale content and a later save could overwrite this one.
-        setDrafts((prev) => {
-          const next = { ...prev }
-          delete next[agentType]
-          return next
-        })
-        toast.success(t("toasts.hermesSaved"), {
-          description: t("toasts.configSavedHint"),
-        })
-      } catch (err) {
-        console.error("[Settings] save hermes config failed:", err)
-        toast.error(t("toasts.saveHermesFailed"), {
-          description: toErrorMessage(err),
-        })
-      } finally {
-        setSavingConfig((prev) => ({ ...prev, [agentType]: false }))
-      }
-    },
-    [selectedAgent, selectedDraft, refreshAgents, t]
-  )
-
-  // Hermes's interactive setup (`--setup` / `hermes model`) needs a real TTY +
-  // browser, so launch it in an external OS terminal on local desktop (the
-  // backend builds the exact command). Fall back to copying the displayed
-  // command (web / remote, or if the launch fails).
-  const runHermesSetupCommand = useCallback(
-    async (kind: "setup" | "model", displayCommand: string) => {
-      const native = isDesktop() && getActiveRemoteConnectionId() === null
-      if (native) {
-        try {
-          await acpOpenHermesSetupTerminal(kind)
-          return
-        } catch (err) {
-          console.error("[Settings] open hermes setup terminal failed:", err)
-        }
-      }
-      if (displayCommand) {
-        const ok = await copyTextToClipboard(displayCommand)
-        if (ok) toast.success(t("hermes.commandCopied"))
-      }
-    },
-    [t]
-  )
-
-  const handleRevealHermesHome = useCallback(async () => {
-    try {
-      await acpRevealHermesHome()
-    } catch (err) {
-      console.error("[Settings] reveal hermes home failed:", err)
-      toast.error(toErrorMessage(err))
-    }
-  }, [])
-
   // Command Code login state: probe `~/.commandcode/auth.json` + env API key.
   // Pure file read on the backend, safe to call on selection change and on
   // demand via the refresh button.
@@ -2704,7 +2469,9 @@ export function AcpAgentSettings() {
       const status = await acpGetCommandCodeLoginStatus()
       // Normalize: if loggedIn, treat running as false so the UI
       // never shows "waiting for authorization" when already logged in.
-      setCommandCodeLogin(status.loggedIn ? { ...status, running: false } : status)
+      setCommandCodeLogin(
+        status.loggedIn ? { ...status, running: false } : status
+      )
     } catch (err) {
       console.error("[Settings] command code login status failed:", err)
       setCommandCodeLogin(null)
@@ -4503,7 +4270,9 @@ export function AcpAgentSettings() {
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
-                          variant={commandCodeLogin?.loggedIn ? "secondary" : "outline"}
+                          variant={
+                            commandCodeLogin?.loggedIn ? "secondary" : "outline"
+                          }
                           onClick={
                             commandCodeLogin?.running
                               ? cancelCommandCodeLogin
@@ -4535,7 +4304,8 @@ export function AcpAgentSettings() {
                           className="h-7 px-2"
                           onClick={async () => {
                             const ok = await copyTextToClipboard("cmdc login")
-                            if (ok) toast.success(t("commandCode.commandCopied"))
+                            if (ok)
+                              toast.success(t("commandCode.commandCopied"))
                           }}
                           title={t("commandCode.copyCommand")}
                         >
@@ -5059,6 +4829,10 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    {selectedDraft.geminiAuthMode !== "model_provider" && (
+                      <NativeLoginCard agentType="gemini" />
+                    )}
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         {t("gemini.authMode")}
@@ -5398,8 +5172,8 @@ supports_websockets = true`}
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align="start">
-                          <SelectItem value="native">
-                            {t("openCode.authModeNative")}
+                          <SelectItem value="apikey">
+                            {t("openCode.authModeApiKey")}
                           </SelectItem>
                           <SelectItem value="model_provider">
                             {t("openCode.authModeModelProvider")}
@@ -5409,7 +5183,7 @@ supports_websockets = true`}
                       <p className="text-[11px] text-muted-foreground">
                         {selectedDraft.openCodeAuthMode === "model_provider"
                           ? t("openCode.authModeModelProviderHint")
-                          : t("openCode.authModeNativeHint")}
+                          : t("openCode.authModeApiKeyHint")}
                       </p>
                     </div>
 
@@ -5489,7 +5263,7 @@ supports_websockets = true`}
                       </div>
                     )}
 
-                    {selectedDraft.openCodeAuthMode === "native" && (
+                    {selectedDraft.openCodeAuthMode === "apikey" && (
                       <>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-1.5">
@@ -6464,6 +6238,7 @@ supports_websockets = true`}
 
                     {selectedDraft.clineAuthMode === "native" && (
                       <>
+                        <NativeLoginCard agentType="cline" />
                         <div className="space-y-1.5">
                           <label className="text-[11px] text-muted-foreground">
                             Provider
@@ -6986,418 +6761,80 @@ supports_websockets = true`}
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
-                        {t("hermes.authModeLabel")}
+                        {t("selectModelProvider")}
                       </label>
-                      <Select
-                        value={selectedDraft.hermesAuthMode}
-                        onValueChange={(value) =>
-                          handleHermesAuthModeChange(value as HermesAuthMode)
-                        }
-                        disabled={selectedIsSavingConfig}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent align="start">
-                          <SelectItem value="native">
-                            {t("hermes.authModeNative")}
-                          </SelectItem>
-                          <SelectItem value="model_provider">
-                            {t("hermes.authModeModelProvider")}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[11px] text-muted-foreground">
-                        {selectedDraft.hermesAuthMode === "model_provider"
-                          ? t("hermes.authModeModelProviderHint")
-                          : t("hermes.authModeNativeHint")}
-                      </p>
+                      {selectedModelProviders.length > 0 ? (
+                        <Select
+                          value={
+                            selectedDraft.modelProviderId != null
+                              ? String(selectedDraft.modelProviderId)
+                              : ""
+                          }
+                          onValueChange={handleModelProviderSelect}
+                          disabled={selectedIsSavingConfig}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue
+                              placeholder={t("selectModelProvider")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {selectedModelProviders.map((provider) => (
+                              <SelectItem
+                                key={provider.id}
+                                value={String(provider.id)}
+                              >
+                                {provider.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("noModelProviderAvailable")}
+                        </p>
+                      )}
                     </div>
 
-                    {selectedDraft.hermesAuthMode === "model_provider" && (
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] text-muted-foreground">
-                          {t("selectModelProvider")}
-                        </label>
-                        {selectedModelProviders.length > 0 ? (
-                          <Select
-                            value={
-                              selectedDraft.modelProviderId != null
-                                ? String(selectedDraft.modelProviderId)
-                                : ""
-                            }
-                            onValueChange={handleModelProviderSelect}
-                            disabled={selectedIsSavingConfig}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue
-                                placeholder={t("selectModelProvider")}
-                              />
-                            </SelectTrigger>
-                            <SelectContent align="start">
-                              {selectedModelProviders.map((provider) => (
-                                <SelectItem
-                                  key={provider.id}
-                                  value={String(provider.id)}
-                                >
-                                  {provider.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                    {renderProviderModelPicker({
+                      value: selectedDraft.model,
+                      placeholder: "gpt-5 / claude-sonnet-5",
+                    })}
+
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          persistEnv(
+                            "hermes",
+                            selectedAgent.enabled,
+                            selectedDraft.envText,
+                            selectedDraft.modelProviderId
+                          )
+                        }
+                        disabled={
+                          selectedIsSavingEnv || selectedMissingModelProvider
+                        }
+                      >
+                        {selectedIsSavingEnv ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            {t("actions.saving")}
+                          </>
                         ) : (
-                          <p className="text-[11px] text-muted-foreground">
-                            {t("noModelProviderAvailable")}
-                          </p>
+                          <>
+                            <Save className="h-3.5 w-3.5" />
+                            {t("actions.saveEnvVars")}
+                          </>
                         )}
-                      </div>
-                    )}
-
-                    {selectedDraft.hermesAuthMode === "model_provider" &&
-                      renderProviderModelPicker({
-                        value: selectedDraft.model,
-                        placeholder: "gpt-5 / claude-sonnet-5",
-                      })}
-
-                    {selectedDraft.hermesAuthMode === "model_provider" && (
-                      <div className="flex justify-end">
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            persistEnv(
-                              "hermes",
-                              selectedAgent.enabled,
-                              selectedDraft.envText,
-                              selectedDraft.modelProviderId
-                            )
-                          }
-                          disabled={
-                            selectedIsSavingEnv || selectedMissingModelProvider
-                          }
-                        >
-                          {selectedIsSavingEnv ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              {t("actions.saving")}
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-3.5 w-3.5" />
-                              {t("actions.saveEnvVars")}
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    )}
-
-                    {selectedDraft.hermesAuthMode === "native" && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] text-muted-foreground">
-                            {t("hermes.providerLabel")}
-                          </label>
-                          <Select
-                            value={selectedDraft.hermesProvider}
-                            onValueChange={(value) =>
-                              handleHermesFieldChange("hermesProvider", value)
-                            }
-                            disabled={selectedIsSavingConfig}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent align="start">
-                              {/* Preserve an existing config's provider in the list
-                              even when it's outside the curated table, so the
-                              dropdown shows the real value instead of going blank. */}
-                              {selectedDraft.hermesProvider &&
-                                !HERMES_PROVIDERS.some(
-                                  (p) => p.id === selectedDraft.hermesProvider
-                                ) && (
-                                  <SelectItem
-                                    value={selectedDraft.hermesProvider}
-                                  >
-                                    {selectedDraft.hermesProvider}
-                                  </SelectItem>
-                                )}
-                              {(
-                                [
-                                  ["apiKey", t("hermes.groupApiKey")],
-                                  ["oauth", t("hermes.groupOauth")],
-                                  ["aws", t("hermes.groupAws")],
-                                ] as const
-                              ).map(([kind, groupLabel]) => {
-                                const items = HERMES_PROVIDERS.filter(
-                                  (p) => p.kind === kind
-                                )
-                                if (items.length === 0) return null
-                                return (
-                                  <SelectGroup key={kind}>
-                                    <SelectLabel>{groupLabel}</SelectLabel>
-                                    {items.map((provider) => (
-                                      <SelectItem
-                                        key={provider.id}
-                                        value={provider.id}
-                                      >
-                                        {provider.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                )
-                              })}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-[11px] text-muted-foreground">
-                            {t("hermes.providerHint")}
-                          </p>
-                        </div>
-
-                        {selectedHermesProviderOption?.kind === "apiKey" && (
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              API Key
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type={
-                                  showApiKeys[selectedAgent.agent_type]
-                                    ? "text"
-                                    : "password"
-                                }
-                                value={selectedDraft.apiKey}
-                                onChange={(event) =>
-                                  handleHermesFieldChange(
-                                    "apiKey",
-                                    event.target.value
-                                  )
-                                }
-                                placeholder="sk-..."
-                                disabled={selectedIsSavingConfig}
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setShowApiKeys((prev) => ({
-                                    ...prev,
-                                    [selectedAgent.agent_type]:
-                                      !prev[selectedAgent.agent_type],
-                                  }))
-                                }}
-                                title={
-                                  showApiKeys[selectedAgent.agent_type]
-                                    ? t("actions.hideApiKey")
-                                    : t("actions.showApiKey")
-                                }
-                              >
-                                {showApiKeys[selectedAgent.agent_type] ? (
-                                  <EyeOff className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Eye className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              {t("hermes.apiKeyHint")}
-                            </p>
-                          </div>
-                        )}
-
-                        {selectedHermesProviderOption?.needsBaseUrl && (
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] text-muted-foreground">
-                              API URL
-                            </label>
-                            <Input
-                              value={selectedDraft.apiBaseUrl}
-                              onChange={(event) =>
-                                handleHermesFieldChange(
-                                  "apiBaseUrl",
-                                  event.target.value
-                                )
-                              }
-                              placeholder="https://api.example.com/v1"
-                              disabled={selectedIsSavingConfig}
-                            />
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] text-muted-foreground">
-                            {t("hermes.modelName")}
-                          </label>
-                          <Input
-                            value={selectedDraft.model}
-                            onChange={(event) =>
-                              handleHermesFieldChange(
-                                "model",
-                                event.target.value
-                              )
-                            }
-                            placeholder="moonshotai/kimi-k2"
-                            disabled={selectedIsSavingConfig}
-                          />
-                        </div>
-
-                        {selectedHermesProviderOption?.kind === "oauth" && (
-                          <p className="text-[11px] text-muted-foreground">
-                            {t("hermes.oauthHint")}
-                          </p>
-                        )}
-
-                        {selectedHermesProviderOption?.kind === "aws" && (
-                          <p className="text-[11px] text-muted-foreground">
-                            {t("hermes.awsHint")}
-                          </p>
-                        )}
-
-                        {!selectedHermesProviderOption && (
-                          <p className="text-[11px] text-amber-600 dark:text-amber-500">
-                            {t("hermes.unsupportedProvider")}
-                          </p>
-                        )}
-
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSaveHermesConfig("structured")}
-                            disabled={
-                              selectedIsSavingConfig ||
-                              !selectedHermesProviderOption
-                            }
-                          >
-                            {selectedIsSavingConfig ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                {t("actions.saving")}
-                              </>
-                            ) : (
-                              <>
-                                <Save className="h-3.5 w-3.5" />
-                                {t("actions.saveHermesConfig")}
-                              </>
-                            )}
-                          </Button>
-                        </div>
-
-                        <div className="space-y-2 rounded-md border p-3">
-                          <div>
-                            <label className="text-[11px] font-medium">
-                              {t("hermes.setupTitle")}
-                            </label>
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              {t("hermes.setupHint")}
-                            </p>
-                          </div>
-                          {hermesCanUseNativeSetup && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  runHermesSetupCommand(
-                                    "setup",
-                                    selectedDraft.hermesSetupCommand
-                                  )
-                                }
-                              >
-                                <Wrench className="h-3.5 w-3.5" />
-                                {t("hermes.runSetup")}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  runHermesSetupCommand(
-                                    "model",
-                                    selectedDraft.hermesModelCommand
-                                  )
-                                }
-                              >
-                                {t("hermes.configureModel")}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleRevealHermesHome}
-                              >
-                                {t("hermes.openConfigFolder")}
-                              </Button>
-                            </div>
-                          )}
-                          {selectedDraft.hermesSetupCommand && (
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 overflow-x-auto rounded bg-muted px-2 py-1 text-[11px] font-mono whitespace-nowrap">
-                                {selectedDraft.hermesSetupCommand}
-                              </code>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 shrink-0 p-0"
-                                onClick={async () => {
-                                  const ok = await copyTextToClipboard(
-                                    selectedDraft.hermesSetupCommand
-                                  )
-                                  if (ok) {
-                                    toast.success(t("hermes.commandCopied"))
-                                  }
-                                }}
-                                title={t("hermes.copyCommand")}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        <details className="rounded-md border p-3">
-                          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
-                            {t("hermes.advancedTitle")}
-                          </summary>
-                          <div className="mt-2 space-y-2">
-                            <p className="text-[11px] text-muted-foreground">
-                              {t("hermes.rawConfigHint")}
-                            </p>
-                            <Textarea
-                              value={selectedDraft.hermesConfigYaml}
-                              onChange={(event) =>
-                                handleHermesFieldChange(
-                                  "hermesConfigYaml",
-                                  event.target.value
-                                )
-                              }
-                              placeholder={`model:\n  provider: openrouter\n  default: moonshotai/kimi-k2`}
-                              className="min-h-40 max-h-80 font-mono text-xs"
-                              disabled={selectedIsSavingConfig}
-                            />
-                            <div className="flex justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSaveHermesConfig("raw")}
-                                disabled={selectedIsSavingConfig}
-                              >
-                                {selectedIsSavingConfig ? (
-                                  <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    {t("actions.saving")}
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-3.5 w-3.5" />
-                                    {t("hermes.saveRawConfig")}
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        </details>
-                      </>
-                    )}
+                      </Button>
+                    </div>
                   </div>
                 ) : selectedAgent.agent_type === "code_buddy" ? (
                   <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                    {selectedDraft.codeBuddyAuthMode !== "model_provider" && (
+                      <NativeLoginCard agentType="code_buddy" />
+                    )}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium">
                         {t("codebuddy.authModeLabel")}
@@ -7702,6 +7139,8 @@ supports_websockets = true`}
                       </p>
                     </div>
 
+                    <NativeLoginCard agentType="mimo_code" />
+
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">
                         {t("selectModelProvider")}
@@ -7755,81 +7194,40 @@ supports_websockets = true`}
                     {selectedAgent.agent_type === "claude_code" && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] text-muted-foreground">
-                          {t("claude.authMode")}
+                          {t("selectModelProvider")}
                         </label>
-                        <Select
-                          value={selectedDraft.claudeAuthMode}
-                          onValueChange={(value) => {
-                            if (
-                              CLAUDE_AUTH_MODES.includes(
-                                value as ClaudeAuthMode
-                              )
-                            ) {
-                              handleClaudeAuthModeChange(
-                                value as ClaudeAuthMode
-                              )
+                        {selectedModelProviders.length > 0 ? (
+                          <Select
+                            value={
+                              selectedDraft.modelProviderId != null
+                                ? String(selectedDraft.modelProviderId)
+                                : ""
                             }
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent align="start">
-                            <SelectItem value="official_subscription">
-                              {t("authModeOfficialSubscription")}
-                            </SelectItem>
-                            <SelectItem value="model_provider">
-                              {t("authModeModelProvider")}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[11px] text-muted-foreground">
-                          {selectedDraft.claudeAuthMode ===
-                          "official_subscription"
-                            ? t("claude.officialSubscriptionHint")
-                            : t("modelProviderHint")}
-                        </p>
+                            onValueChange={handleModelProviderSelect}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue
+                                placeholder={t("selectModelProvider")}
+                              />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {selectedModelProviders.map((provider) => (
+                                <SelectItem
+                                  key={provider.id}
+                                  value={String(provider.id)}
+                                >
+                                  {provider.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground">
+                            {t("noModelProviderAvailable")}
+                          </p>
+                        )}
                       </div>
                     )}
-
-                    {selectedAgent.agent_type === "claude_code" &&
-                      selectedDraft.claudeAuthMode === "model_provider" && (
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] text-muted-foreground">
-                            {t("selectModelProvider")}
-                          </label>
-                          {selectedModelProviders.length > 0 ? (
-                            <Select
-                              value={
-                                selectedDraft.modelProviderId != null
-                                  ? String(selectedDraft.modelProviderId)
-                                  : ""
-                              }
-                              onValueChange={handleModelProviderSelect}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue
-                                  placeholder={t("selectModelProvider")}
-                                />
-                              </SelectTrigger>
-                              <SelectContent align="start">
-                                {selectedModelProviders.map((provider) => (
-                                  <SelectItem
-                                    key={provider.id}
-                                    value={String(provider.id)}
-                                  >
-                                    {provider.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <p className="text-[11px] text-muted-foreground">
-                              {t("noModelProviderAvailable")}
-                            </p>
-                          )}
-                        </div>
-                      )}
 
                     {(selectedAgent.agent_type !== "claude_code" ||
                       selectedDraft.claudeAuthMode === "model_provider") && (

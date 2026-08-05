@@ -104,3 +104,14 @@ pub async fn fetch_provider_models(
     let models = mp_commands::fetch_provider_models_core(&state.db, params.id).await?;
     Ok(Json(models))
 }
+
+/// Run the full connectivity test for a model provider (OpenAI + Anthropic +
+/// models probes). Surfaces gateway defects like missing Anthropic-tools
+/// conversion before the user wastes time configuring an agent.
+pub async fn test_model_provider(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<FetchProviderModelsParams>,
+) -> Result<Json<mp_commands::ModelProviderTestResult>, AppCommandError> {
+    let result = mp_commands::test_model_provider_core(&state.db, params.id).await?;
+    Ok(Json(result))
+}

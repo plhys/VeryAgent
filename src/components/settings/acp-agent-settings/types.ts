@@ -20,11 +20,10 @@ export interface AgentCheckState {
 }
 
 // ── Claude Auth ────────────────────────────────────────────────────
+// Claude Code authenticates exclusively through a bound model provider;
+// the official subscription login is intentionally not offered.
 
-export const CLAUDE_AUTH_MODES = [
-  "official_subscription",
-  "model_provider",
-] as const
+export const CLAUDE_AUTH_MODES = ["model_provider"] as const
 export type ClaudeAuthMode = (typeof CLAUDE_AUTH_MODES)[number]
 
 export const CLAUDE_MODEL_ENV_KEYS = {
@@ -166,7 +165,7 @@ export type KimiAuthMode = "apikey" | "login" | "model_provider"
 export type HermesAuthMode = "native" | "model_provider"
 export type OpenClawAuthMode = "gateway" | "model_provider"
 export type ClineAuthMode = "native" | "model_provider"
-export type OpenCodeAuthMode = "native" | "model_provider"
+export type OpenCodeAuthMode = "apikey" | "model_provider"
 export type PiAuthMode = "native" | "model_provider"
 export type CodeBuddyAuthMode = "native" | "model_provider"
 

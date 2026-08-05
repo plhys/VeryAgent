@@ -1,6 +1,7 @@
 import { getTransport } from "../transport"
 import type {
   ModelProviderInfo,
+  ModelProviderTestResult,
   ProviderModelItem,
   UpdateModelProviderResult,
 } from "../types"
@@ -48,6 +49,18 @@ export async function fetchModelProviderModels(
   id: number
 ): Promise<ProviderModelItem[]> {
   return getTransport().call("fetch_provider_models", { id })
+}
+
+/**
+ * Run the full connectivity test for a saved model provider. Probes the
+ * OpenAI chat endpoint, the Anthropic messages endpoint (with tools — the
+ * exact shape Claude Code sends), and the /models list. Surfaces gateway
+ * defects before the user wires the provider to an agent.
+ */
+export async function testModelProvider(
+  id: number
+): Promise<ModelProviderTestResult> {
+  return getTransport().call("test_model_provider", { id })
 }
 
 // ─── Delegation settings ───────────────────────────────────────────────

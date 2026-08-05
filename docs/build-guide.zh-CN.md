@@ -74,7 +74,7 @@ CI 会自动：
 |---|---|
 | `build-exe.bat` | 快速构建 Windows exe（复用已有 out/） |
 | `build-exe.bat full` | 完整构建（重建前端 + exe） |
-| `build-release.bat` | 完整 release 构建（带 sccache 支持） |
+| `build-release.bat` | 完整 release 构建（带 sccache 支持，见 [`build-recovery.zh-CN.md`](docs/build-recovery.zh-CN.md) 第七节） |
 | `prepare-release-assets.bat` | 整理 out/ 和 sidecar，便于上传 Release |
 | `dev-detached.ps1` | 拆分启动：独立前端 + 按需 Rust debug + exe |
 

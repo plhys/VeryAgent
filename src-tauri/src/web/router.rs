@@ -818,6 +818,26 @@ pub fn build_router(
             "/acp_logout_command_code",
             post(handlers::acp::acp_logout_command_code),
         )
+        .route(
+            "/acp_get_native_login_status",
+            post(handlers::acp::acp_get_native_login_status),
+        )
+        .route(
+            "/acp_start_native_login",
+            post(handlers::acp::acp_start_native_login),
+        )
+        .route(
+            "/acp_cancel_native_login",
+            post(handlers::acp::acp_cancel_native_login),
+        )
+        .route(
+            "/acp_logout_native_login",
+            post(handlers::acp::acp_logout_native_login),
+        )
+        .route(
+            "/acp_supports_native_login",
+            post(handlers::acp::acp_supports_native_login),
+        )
         // ─── Experts ───
         .route("/experts_list", post(handlers::experts::experts_list))
         .route(
@@ -1108,6 +1128,10 @@ pub fn build_router(
         .route(
             "/fetch_provider_models",
             post(handlers::model_provider::fetch_provider_models),
+        )
+        .route(
+            "/test_model_provider",
+            post(handlers::model_provider::test_model_provider),
         )
         // ─── Quick Messages ───
         .route(

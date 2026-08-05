@@ -1603,6 +1603,15 @@ export interface CommandCodeLoginStatus {
   running: boolean
 }
 
+/** Unified native-login state for any agent with a first-party login. */
+export interface NativeLoginStatus {
+  loggedIn: boolean
+  accountName: string | null
+  source: string
+  /** Whether a background login command is in flight. */
+  running: boolean
+}
+
 export type AgentSkillScope = "global" | "project"
 export type AgentSkillLayout = "markdown_file" | "skill_directory"
 
@@ -2408,6 +2417,19 @@ export interface ModelProviderInfo {
 export interface ProviderModelItem {
   id: string
   name: string
+}
+
+/** Result of one protocol probe in the provider connectivity test. */
+export interface ProtocolProbeResult {
+  protocol: "openai" | "anthropic" | "models"
+  ok: boolean
+  detail: string
+}
+
+/** Full connectivity test result for a model provider. */
+export interface ModelProviderTestResult {
+  ok: boolean
+  probes: ProtocolProbeResult[]
 }
 
 /** Result of `updateModelProvider` (mirror of Rust `UpdateModelProviderResult`):

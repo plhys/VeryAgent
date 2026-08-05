@@ -1037,3 +1037,53 @@ pub async fn acp_logout_command_code() -> Result<Json<()>, AppCommandError> {
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeLoginParams {
+    pub agent_type: AgentType,
+}
+
+pub async fn acp_get_native_login_status(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<NativeLoginParams>,
+) -> Result<Json<acp_commands::NativeLoginStatus>, AppCommandError> {
+    let result = acp_commands::probe_native_login_status(&state.db, params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
+pub async fn acp_start_native_login(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<NativeLoginParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::start_native_login(&state.db, params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_cancel_native_login(
+    Json(params): Json<NativeLoginParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::cancel_native_login(params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_logout_native_login(
+    Json(params): Json<NativeLoginParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::logout_native_login(params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_supports_native_login(
+    Json(params): Json<NativeLoginParams>,
+) -> Result<Json<bool>, AppCommandError> {
+    Ok(Json(acp_commands::supports_native_login(params.agent_type)))
+}

@@ -109,11 +109,9 @@ export function KimiCodeConfigPanel({
     [agent.config_json]
   )
 
-  // Determine initial auth mode: if model_provider_id is set, start in
-  // model_provider mode; otherwise, infer from the config credentials.
-  const [mode, setMode] = useState<KimiAuthMode>(() =>
-    agent.model_provider_id != null ? "model_provider" : kimiInitialMode(config)
-  )
+  // Kimi Code authenticates exclusively through a bound model provider;
+  // the native API-key / OAuth login paths are intentionally not offered.
+  const [mode, setMode] = useState<KimiAuthMode>("model_provider")
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(
     () => agent.model_provider_id ?? null
   )
@@ -367,16 +365,18 @@ export function KimiCodeConfigPanel({
       <div
         className={cn(
           "rounded-md border px-2.5 py-1.5 text-[11px]",
-          config.credentialPresent
+          config.credentialPresent && !config.credentialSynthetic
             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
             : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
         )}
       >
-        {config.credentialPresent
+        {config.credentialPresent && !config.credentialSynthetic
           ? mode === "login"
             ? t("kimiCode.gateReadyLogin")
             : t("kimiCode.gateReadyApiKey")
-          : t("kimiCode.gateNotReady")}
+          : config.credentialSynthetic
+            ? t("kimiCode.gateSyntheticOnly")
+            : t("kimiCode.gateNotReady")}
       </div>
 
       <div className="space-y-1.5">
@@ -396,10 +396,6 @@ export function KimiCodeConfigPanel({
             <SelectValue />
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value="apikey">
-              {t("kimiCode.authModeApiKey")}
-            </SelectItem>
-            <SelectItem value="login">{t("kimiCode.authModeLogin")}</SelectItem>
             <SelectItem value="model_provider">
               {t("kimiCode.authModeModelProvider")}
             </SelectItem>

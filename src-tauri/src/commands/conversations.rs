@@ -502,28 +502,32 @@ pub async fn get_folder_conversation_core(
         .await
         .map_err(AppCommandError::from)?;
 
-    let (mut turns, session_stats, resolved_ext_id, parsed_title) = if summary.agent_type == AgentType::CommandCode {
-        (
-            conversation_turn_service::list(conn, conversation_id)
-                .await
-                .map_err(AppCommandError::from)?,
-            None,
-            None,
-            None,
-        )
-    } else if let Some(ref ext_id) = summary.external_id
-    {
-        let at = summary.agent_type;
-        let eid = ext_id.clone();
-        let db_created_at = summary.created_at;
-        let folder_path_for_fallback = {
-            let folder = folder_service::get_folder_by_id(conn, summary.folder_id)
-                .await
-                .ok()
-                .flatten();
-            folder.map(|f| f.path)
-        };
-        tokio::task::spawn_blocking(move || -> Result<_, AppCommandError> {
+    let (mut turns, session_stats, resolved_ext_id, parsed_title) = {
+        // Database-first for EVERY agent: conversation turns are persisted by
+        // VeryAgent via the ACP TranscriptTurns event, so history survives
+        // restarts and never depends on the underlying CLI's own transcript
+        // (or on adapter session-id quirks — e.g. claude-agent-acp reports a
+        // different id than the real Claude transcript file). When the DB has
+        // no turns yet (e.g. a conversation imported from a disk transcript,
+        // or an older session that predates DB persistence), fall back to the
+        // disk parser below.
+        let db_turns = conversation_turn_service::list(conn, conversation_id)
+            .await
+            .map_err(AppCommandError::from)?;
+        if !db_turns.is_empty() {
+            (db_turns, None, None, None)
+        } else if let Some(ref ext_id) = summary.external_id {
+            let at = summary.agent_type;
+            let eid = ext_id.clone();
+            let db_created_at = summary.created_at;
+            let folder_path_for_fallback = {
+                let folder = folder_service::get_folder_by_id(conn, summary.folder_id)
+                    .await
+                    .ok()
+                    .flatten();
+                folder.map(|f| f.path)
+            };
+            tokio::task::spawn_blocking(move || -> Result<_, AppCommandError> {
             let parser: Box<dyn AgentParser> = match at {
                 AgentType::ClaudeCode => Box::new(ClaudeParser::new()),
                 AgentType::Codex => Box::new(CodexParser::new()),
@@ -597,10 +601,10 @@ pub async fn get_folder_conversation_core(
             )
             .with_detail(e.to_string())
         })??
-    } else {
-        (vec![], None, None, None)
+        } else {
+            (vec![], None, None, None)
+        }
     };
-
     // If we resolved a different external_id (e.g. ACP UUID → parser branch ID),
     // update the database so future lookups are direct.
     if let Some(new_ext_id) = resolved_ext_id {

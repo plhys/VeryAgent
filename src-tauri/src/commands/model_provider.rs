@@ -522,6 +522,221 @@ pub async fn fetch_provider_models_core(
 }
 
 // ---------------------------------------------------------------------------
+// Provider connectivity test
+// ---------------------------------------------------------------------------
+
+/// Result of one protocol probe.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolProbeResult {
+    /// Protocol name: "openai" | "anthropic" | "models"
+    pub protocol: &'static str,
+    /// Whether the probe succeeded.
+    pub ok: bool,
+    /// Human-readable detail (success info or error message).
+    pub detail: String,
+}
+
+/// Full test result for a model provider.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelProviderTestResult {
+    /// True when every probe succeeded.
+    pub ok: bool,
+    pub probes: Vec<ProtocolProbeResult>,
+}
+
+fn probe_ok(protocol: &'static str, detail: String) -> ProtocolProbeResult {
+    ProtocolProbeResult { protocol, ok: true, detail }
+}
+
+fn probe_fail(protocol: &'static str, detail: String) -> ProtocolProbeResult {
+    ProtocolProbeResult { protocol, ok: false, detail }
+}
+
+/// Derive the base URL for a protocol path. Keeps the user's `/v1` if present,
+/// otherwise appends `/v1` (the conventional OpenAI/Anthropic root).
+fn base_v1(api_url: &str) -> String {
+    let trimmed = api_url.trim().trim_end_matches('/');
+    if trimmed.ends_with("/v1") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}/v1")
+    }
+}
+
+/// POST a JSON body to `url` and return (status, body). Tries the env-proxy
+/// client then a direct (no-proxy) client.
+async fn post_json(
+    url: &str,
+    headers: &[(&str, &str)],
+    body: &serde_json::Value,
+) -> Result<(u16, String), String> {
+    let clients = models_http_clients().map_err(|e| e.to_string())?;
+    let mut last_err = String::from("no client attempted");
+    for (idx, client) in clients.iter().enumerate() {
+        let mut req = client.post(url);
+        req = req.header("Content-Type", "application/json");
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        let resp = match req.json(body).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                last_err = format!("request failed ({})", if idx == 0 { "proxy-env" } else { "direct" });
+                let _ = &e;
+                continue;
+            }
+        };
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Ok((status, text));
+    }
+    Err(last_err)
+}
+
+/// Probe the OpenAI-compatible `/v1/chat/completions` endpoint with a minimal
+/// request. Confirms the gateway is reachable, the key works, and text
+/// generation actually produces output. Uses `model` (a model the gateway
+/// actually serves, from the /models probe) so the probe never 503s on a
+/// hard-coded name the gateway doesn't have.
+async fn probe_openai(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+) -> ProtocolProbeResult {
+    let base = base_v1(api_url);
+    let url = format!("{base}/chat/completions");
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": 4,
+        "messages": [{ "role": "user", "content": "ping" }],
+    });
+    match post_json(
+        &url,
+        &[("Authorization", &format!("Bearer {api_key}"))],
+        &body,
+    )
+    .await
+    {
+        Ok((status, text)) if status == 200 => {
+            let ok = text.contains("\"choices\"");
+            if ok {
+                probe_ok("openai", format!("HTTP 200, chat completions reachable ({url})"))
+            } else {
+                probe_fail("openai", format!("HTTP 200 but unexpected body: {}", text.chars().take(200).collect::<String>()))
+            }
+        }
+        Ok((status, text)) => {
+            let snippet = text.chars().take(200).collect::<String>();
+            probe_fail("openai", format!("HTTP {status}: {snippet}"))
+        }
+        Err(e) => probe_fail("openai", e),
+    }
+}
+
+/// Probe the Anthropic-compatible `/v1/messages` endpoint WITH tools. This is
+/// the exact shape Claude Code sends, so it surfaces the
+/// "Anthropic tools not converted" gateway defect (Tools[0].Type invalid).
+async fn probe_anthropic(
+    api_url: &str,
+    api_key: &str,
+    model: &str,
+) -> ProtocolProbeResult {
+    let base = base_v1(api_url);
+    let url = format!("{base}/messages");
+    let body = serde_json::json!({
+        "model": model,
+        "max_tokens": 4,
+        "messages": [{ "role": "user", "content": "ping" }],
+        "tools": [{
+            "name": "ping",
+            "description": "ping tool",
+            "input_schema": { "type": "object", "properties": {} }
+        }],
+    });
+    match post_json(
+        &url,
+        &[
+            ("x-api-key", api_key),
+            ("anthropic-version", "2023-06-01"),
+            ("Authorization", &format!("Bearer {api_key}")),
+        ],
+        &body,
+    )
+    .await
+    {
+        Ok((status, text)) if status == 200 => {
+            probe_ok("anthropic", format!("HTTP 200, Anthropic messages reachable ({url})"))
+        }
+        Ok((status, text)) => {
+            let snippet = text.chars().take(200).collect::<String>();
+            probe_fail("anthropic", format!("HTTP {status}: {snippet}"))
+        }
+        Err(e) => probe_fail("anthropic", e),
+    }
+}
+
+/// Probe the `/models` listing endpoint (reuses the existing model-fetch logic).
+async fn probe_models(
+    api_url: &str,
+    api_key: &str,
+) -> ProtocolProbeResult {
+    match fetch_openai_compatible_models(api_url, api_key).await {
+        Ok(models) => {
+            probe_ok("models", format!("listed {} model(s)", models.len()))
+        }
+        Err(e) => probe_fail("models", e.to_string()),
+    }
+}
+
+/// Run the full connectivity test for a model provider: OpenAI chat, Anthropic
+/// messages (with tools), and the models list. Every probe is independent so a
+/// failure in one protocol does not hide the others. The chat probes use the
+/// first model the gateway actually serves (from the /models probe) so they
+/// never 503 on a hard-coded model name the gateway lacks.
+pub async fn test_model_provider_core(
+    db: &AppDatabase,
+    id: i32,
+) -> Result<ModelProviderTestResult, AppCommandError> {
+    let provider = get_model_provider_core(db, id).await?;
+    let api_url = provider.api_url.clone();
+    let api_key = provider.api_key.clone();
+
+    // First: list models. This both probes the /models endpoint and gives us a
+    // real model id to drive the chat probes with.
+    let models_probe = probe_models(&api_url, &api_key).await;
+    let model = if models_probe.ok {
+        fetch_openai_compatible_models(&api_url, &api_key)
+            .await
+            .ok()
+            .and_then(|m| m.into_iter().next().map(|item| item.id))
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let mut probes = Vec::new();
+    if !model.is_empty() {
+        probes.push(probe_openai(&api_url, &api_key, &model).await);
+        probes.push(probe_anthropic(&api_url, &api_key, &model).await);
+    } else {
+        probes.push(probe_fail(
+            "openai",
+            "skipped (no model id available from /models)".to_string(),
+        ));
+        probes.push(probe_fail(
+            "anthropic",
+            "skipped (no model id available from /models)".to_string(),
+        ));
+    }
+    probes.push(models_probe);
+
+    let ok = probes.iter().all(|p| p.ok);
+    Ok(ModelProviderTestResult { ok, probes })
+}
+
+// ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
 
@@ -584,6 +799,15 @@ pub async fn fetch_provider_models(
     id: i32,
 ) -> Result<Vec<ProviderModelItem>, AppCommandError> {
     fetch_provider_models_core(&db, id).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub async fn test_model_provider(
+    db: tauri::State<'_, AppDatabase>,
+    id: i32,
+) -> Result<ModelProviderTestResult, AppCommandError> {
+    test_model_provider_core(&db, id).await
 }
 
 #[cfg(test)]

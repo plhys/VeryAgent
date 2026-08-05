@@ -28,6 +28,7 @@ import type {
   OpenCodeAuthMode,
   PiAuthMode,
   CodeBuddyAuthMode,
+  ClaudeAuthMode,
 } from "./types"
 import { CLAUDE_MODEL_ENV_KEYS, CLAUDE_EFFORT_LEVEL_CONFIG_KEY } from "./types"
 
@@ -2043,10 +2044,7 @@ export function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
             : agent.agent_type === "open_code"
               ? openCodeImportant.model
               : important.model,
-    claudeAuthMode:
-      agent.agent_type === "claude_code" && agent.model_provider_id != null
-        ? "model_provider"
-        : "official_subscription",
+    claudeAuthMode: "model_provider" as ClaudeAuthMode,
     modelProviderId: agent.model_provider_id ?? null,
     geminiAuthMode:
       agent.agent_type === "gemini" && agent.model_provider_id != null
@@ -2092,7 +2090,7 @@ export function buildAgentDraft(agent: AcpAgentInfo): AgentDraft {
     openCodeAuthMode:
       agent.agent_type === "open_code" && agent.model_provider_id != null
         ? ("model_provider" as OpenCodeAuthMode)
-        : "native",
+        : "apikey",
     piAuthMode:
       agent.agent_type === "pi" && agent.model_provider_id != null
         ? ("model_provider" as PiAuthMode)

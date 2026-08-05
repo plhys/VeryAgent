@@ -11,6 +11,19 @@
 
 ### 新增
 
+- **统一原生登录 API**：新增 `native_login.rs` 模块，为各智能体提供统一登录状态探测 / 启动 / 取消 / 登出接口（`acp_start_native_login` / `acp_get_native_login_status` / `acp_cancel_native_login` / `acp_logout_native_login` / `acp_supports_native_login`），Tauri 命令 + Web 路由 + 前端 `NativeLoginCard` 通用登录卡。已接入 MiMo（`mimo providers login`）、Cline（`cline auth`）、Command Code、Kimi、Gemini、CodeBuddy 等。
+- **模型供应商连通性测试**：模型供应商设置页每个供应商新增「测试」按钮，跑三项探测（OpenAI 兼容 chat / Anthropic 兼容 messages（带 tools，可暴露 Claude Code 场景的网关转换缺陷）/ 模型列表），逐项显示 ✓/✗ + 原因。后端 `test_model_provider` 接口 + 前端结果展示。
+- **所有智能体会话记录统一落库**：`emit_transcript_turns` 从仅 Command Code 放开到全部 ACP 智能体，`conversation_turn` 表保存所有通过 VeryAgent 的对话内容；`get_folder_conversation_core` 改为数据库优先（磁盘 parser 兜底），重启后历史不再丢失。
+
+### 变更
+
+- **Claude Code / Kimi Code 只支持模型供应商**：移除 Claude Code 的官方订阅登录、Kimi 的 API Key / 账号登录入口，统一为模型供应商绑定。
+- **OpenCode 双端口**：认证方式改为「官方密钥 + 模型供应商」两端口，移除误导性的「账号登录」（OpenCode 官方无 CLI 端跳转授权，仅网页注册拿 key）。
+- **Gemini 模型参数注入**：Gemini 启动参数加 `--model <GEMINI_MODEL>`（Gemini CLI 不读 `GEMINI_MODEL` env，此前默认模型导致 `model not found`）。
+- **Kimi 登录态误判修复**：面板登录状态检查 `credentialSynthetic`，仅存在本地门控令牌（合成凭据）时不再误显示「已通过 Kimi 账号登录」。
+
+### 修复
+
 - **Command Code 聊天历史持久化**：重启后对话记录不再丢失。新增 `conversation_turn` 表（m20260804），在 ACP turn 完成时自动将用户消息、助手回复、工具调用存入数据库，侧栏 message_count 同步更新；详情页读取改为从数据库加载，不再依赖空的 CommandCodeParser。
   - 后端：新增 migration/entity/service 层；`SessionState::completed_transcript_turns()` 投影方法；`TranscriptTurns` 事件 + lifecycle 持久化订阅；`get_folder_conversation_core` 对 Command Code 走 DB 分支。
 - **Command Code 原生模型选择器**：对话框上方显示 Command Code 原生模型下拉（`model` 开关），支持 10 个预置模型（DeepSeek、Kimi、GLM、MiniMax、Qwen、Gemini、Claude、GPT 等），选择后下一轮/重连生效。适配器通过 `session/new` 的 `configOptions` 广告，`session/set_config_option` 处理选择。

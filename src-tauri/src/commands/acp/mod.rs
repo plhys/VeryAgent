@@ -20,6 +20,8 @@ pub mod codebuddy_config;
 pub(crate) use codebuddy_config::*;
 pub mod command_code_config;
 pub(crate) use command_code_config::*;
+pub mod native_login;
+pub(crate) use native_login::*;
 pub mod skills;
 pub(crate) use skills::*;
 use std::collections::{BTreeMap, HashMap};
@@ -4320,6 +4322,48 @@ pub async fn acp_logout_command_code() -> Result<(), AcpError> {
 /// Web-mode wrapper for logout.
 pub(crate) async fn acp_logout_command_code_core() -> Result<(), AcpError> {
     logout_command_code()
+}
+
+// ---------------------------------------------------------------------------
+// Unified native-login API
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_start_native_login(
+    agent_type: AgentType,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<(), AcpError> {
+    start_native_login(&db, agent_type).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_get_native_login_status(
+    agent_type: AgentType,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<NativeLoginStatus, AcpError> {
+    probe_native_login_status(&db, agent_type).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_cancel_native_login(agent_type: AgentType) -> Result<(), AcpError> {
+    cancel_native_login(agent_type).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_logout_native_login(agent_type: AgentType) -> Result<(), AcpError> {
+    logout_native_login(agent_type).await
+}
+
+/// Whether an agent has a first-party native login at all (UI uses this to
+/// decide whether to show the "native login" half of the auth-mode choice).
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub fn acp_supports_native_login(agent_type: AgentType) -> bool {
+    supports_native_login(agent_type)
 }
 
 /// Ensure `~/.hermes` exists and reveal it in the system file manager.

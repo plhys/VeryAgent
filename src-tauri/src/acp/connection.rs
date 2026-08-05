@@ -426,6 +426,20 @@ async fn build_agent(
                     parts.push("--reset-session".into());
                 }
             }
+            // Gemini CLI does NOT read a GEMINI_MODEL env var; it uses its
+            // built-in default model unless `-m/--model` is passed. Inject the
+            // configured model (from the model-provider cascade) as a flag so
+            // the gateway model actually takes effect instead of the CLI's
+            // default (e.g. `gemini-3.5-flash` → model not found).
+            if agent_type == AgentType::Gemini {
+                if let Some(model) = runtime_env
+                    .get("GEMINI_MODEL")
+                    .filter(|v| !v.trim().is_empty())
+                {
+                    parts.push("--model".into());
+                    parts.push(model.clone());
+                }
+            }
             let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
             let agent_name = meta.name.to_string();
             AcpAgent::from_args(&refs)
@@ -3537,24 +3551,24 @@ fn turn_failure_error_event(reason_str: &str, agent_type: AgentType) -> Option<A
     })
 }
 
-/// Emit transcript turns for agents that have no native transcript storage
-/// (currently Command Code). Called before TurnComplete so the live state
-/// is still available for projection.
+/// Emit transcript turns for every ACP agent so the conversation content is
+/// persisted in VeryAgent's `conversation_turn` table. This makes history
+/// survive restarts regardless of whether the underlying CLI keeps its own
+/// transcript (and avoids depending on adapter session-id quirks). Called
+/// before TurnComplete so the live state is still available for projection.
 async fn emit_transcript_turns(
     state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
-    agent_type: AgentType,
+    _agent_type: AgentType,
 ) {
-    if agent_type == AgentType::CommandCode {
-        let turns = state.read().await.completed_transcript_turns();
-        if !turns.is_empty() {
-            emit_with_state(
-                state,
-                emitter,
-                AcpEvent::TranscriptTurns { turns },
-            )
-            .await;
-        }
+    let turns = state.read().await.completed_transcript_turns();
+    if !turns.is_empty() {
+        emit_with_state(
+            state,
+            emitter,
+            AcpEvent::TranscriptTurns { turns },
+        )
+        .await;
     }
 }
 

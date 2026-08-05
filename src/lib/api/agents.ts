@@ -21,6 +21,7 @@ import type {
   OfficecliSkill,
   SkillSyncReport,
   CommandCodeLoginStatus,
+  NativeLoginStatus,
 } from "../types"
 
 export async function acpListAgents(): Promise<AcpAgentInfo[]> {
@@ -176,6 +177,40 @@ export async function acpCancelCommandCodeLogin(): Promise<void> {
 /** Log out of Command Code by deleting the local auth.json credential. */
 export async function acpLogoutCommandCode(): Promise<void> {
   return getTransport().call("acp_logout_command_code", {})
+}
+
+/**
+ * Unified native-login API. Works for every agent with a first-party login;
+ * agents without one return an error from the backend.
+ */
+
+/** Whether an agent has a first-party native login at all. */
+export async function acpSupportsNativeLogin(
+  agentType: AgentType
+): Promise<boolean> {
+  return getTransport().call("acp_supports_native_login", { agentType })
+}
+
+/** Probe an agent's native-login state (logged in / account / in-flight). */
+export async function acpGetNativeLoginStatus(
+  agentType: AgentType
+): Promise<NativeLoginStatus> {
+  return getTransport().call("acp_get_native_login_status", { agentType })
+}
+
+/** Launch the agent's native login in the background (browser/device flow). */
+export async function acpStartNativeLogin(agentType: AgentType): Promise<void> {
+  return getTransport().call("acp_start_native_login", { agentType })
+}
+
+/** Cancel a pending background native login, if any. */
+export async function acpCancelNativeLogin(agentType: AgentType): Promise<void> {
+  return getTransport().call("acp_cancel_native_login", { agentType })
+}
+
+/** Log out of the agent's native credential. */
+export async function acpLogoutNativeLogin(agentType: AgentType): Promise<void> {
+  return getTransport().call("acp_logout_native_login", { agentType })
 }
 
 export async function codexRequestDeviceCode(): Promise<{

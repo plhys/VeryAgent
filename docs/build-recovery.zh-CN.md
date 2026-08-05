@@ -304,3 +304,50 @@ build-exe.bat full
    - `out/`
    - `src-tauri/binaries/`
 6. 双击 `build-exe.bat`
+
+---
+
+## 七、sccache 编译缓存（强烈推荐）
+
+sccache 会把 Rust 编译产物缓存到本机，命中时单个 crate 从「几十秒」降到「<1 秒」，是 **「改 Rust 后重编更快」和「换机快速就绪」两件事的共同加速器**。
+
+### 1. 安装（本机一次）
+
+```powershell
+# 有 winget 的机器（推荐）
+winget install --id Mozilla.sccache --exact
+
+# 没有 winget 时，用 cargo 安装（本仓库实测可用）
+cargo install sccache --locked
+```
+
+装好后确认：
+
+```powershell
+sccache --version   # 能输出版本即就绪
+```
+
+### 2. 启用
+
+仓库内已配置 `build.rustc-wrapper = "sccache"`（见项目根与 `src-tauri/` 下的 `.cargo/config.toml`），**装好 sccache 后编译自动走缓存**，无需额外操作。
+
+> 若某台机器没装 sccache 又要编译，把两个 `config.toml` 里的 `rustc-wrapper = "sccache"` 注释掉即可（源码注释里也写了）。
+
+### 3. 缓存位置与迁移（换机加速的关键）
+
+- 本机缓存目录：`%LOCALAPPDATA%\Mozilla\sccache\cache`（默认，10 GiB 上限）
+- **换新机器时，把整个 `cache` 目录拷到新机器同位置**，首次编译就能直接命中大部分依赖，省掉一整轮全量编译。
+- 缓存可跨机器复用（同平台同工具链），但**平台不同（Windows/Linux/macOS）或工具链不同（stable/beta）不通用**，别跨平台拷。
+
+### 4. 验证是否生效
+
+```powershell
+sccache --show-stats
+```
+
+看到 `Cache hits` 增长、`Cache hits rate` 上升即正常。首次编译是「填充缓存」阶段（miss 正常），第二次起才明显变快。
+
+### 5. 常见问题
+
+- **Windows Defender 拦截**：若 Defender 把 sccache 当可疑程序拦截（历史上有过），在「Windows 安全中心 → 病毒和威胁防护 → 排除项」里把 `sccache.exe` 加白名单。
+- **没装 sccache 直接编译报错**：`rustc-wrapper` 找不到 sccache 会失败，按上文第 2 节注释掉即可。

@@ -1,7 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2, Pencil, Plus, Server, Trash2 } from "lucide-react"
+import {
+  CheckCircle2,
+  Loader2,
+  Pencil,
+  Plug,
+  Plus,
+  Server,
+  Trash2,
+  XCircle,
+} from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -17,8 +26,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { listModelProviders, deleteModelProvider } from "@/lib/api"
-import type { ModelProviderInfo } from "@/lib/types"
+import {
+  listModelProviders,
+  deleteModelProvider,
+  testModelProvider,
+} from "@/lib/api"
+import type { ModelProviderInfo, ModelProviderTestResult } from "@/lib/types"
 import { AddModelProviderDialog } from "./add-model-provider-dialog"
 import { EditModelProviderDialog } from "./edit-model-provider-dialog"
 
@@ -42,6 +55,11 @@ export function ModelProviderSettingsBody({
   const [deleteTarget, setDeleteTarget] = useState<ModelProviderInfo | null>(
     null
   )
+  // Provider id → in-flight test / latest result.
+  const [testingId, setTestingId] = useState<number | null>(null)
+  const [testResults, setTestResults] = useState<
+    Record<number, ModelProviderTestResult>
+  >({})
 
   const loadProviders = useCallback(async () => {
     try {
@@ -83,6 +101,27 @@ export function ModelProviderSettingsBody({
     }
   }, [deleteTarget, loadProviders, t])
 
+  const handleTest = useCallback(
+    async (provider: ModelProviderInfo) => {
+      setTestingId(provider.id)
+      try {
+        const result = await testModelProvider(provider.id)
+        setTestResults((prev) => ({ ...prev, [provider.id]: result }))
+        if (result.ok) {
+          toast.success(t("testSuccess", { name: provider.name }))
+        } else {
+          toast.error(t("testFailed", { name: provider.name }))
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast.error(t("testError", { name: provider.name, message: msg }))
+      } finally {
+        setTestingId(null)
+      }
+    },
+    [t]
+  )
+
   const body = (
     <>
       <section className="space-y-4 rounded-xl border bg-card p-4">
@@ -117,37 +156,91 @@ export function ModelProviderSettingsBody({
           </div>
         ) : (
           <div className="space-y-2">
-            {providers.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
-              >
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="truncate text-sm font-medium">{p.name}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">
-                    {p.api_url}
+            {providers.map((p) => {
+              const result = testResults[p.id]
+              const testing = testingId === p.id
+              return (
+                <div key={p.id} className="rounded-md border px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="truncate text-sm font-medium">
+                        {p.name}
+                      </div>
+                      <div className="truncate font-mono text-xs text-muted-foreground">
+                        {p.api_url}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => handleTest(p)}
+                        disabled={testing}
+                      >
+                        {testing ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Plug className="mr-1 h-3 w-3" />
+                        )}
+                        {testing ? t("testing") : t("test")}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => setEditTarget(p)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => setDeleteTarget(p)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
+
+                  {result && (
+                    <div className="mt-2 space-y-1 border-t pt-2">
+                      {result.probes.map((probe) => (
+                        <div
+                          key={probe.protocol}
+                          className="flex items-start gap-1.5 text-[11px]"
+                        >
+                          {probe.ok ? (
+                            <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-green-600" />
+                          ) : (
+                            <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
+                          )}
+                          <span className="min-w-0">
+                            <span className="font-medium">
+                              {probe.protocol === "openai"
+                                ? t("protocolOpenai")
+                                : probe.protocol === "anthropic"
+                                  ? t("protocolAnthropic")
+                                  : t("protocolModels")}
+                            </span>
+                            <span
+                              className={
+                                probe.ok
+                                  ? "text-muted-foreground"
+                                  : "text-destructive"
+                              }
+                            >
+                              {probe.ok ? " ✓" : " ✗"} — {probe.detail}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    onClick={() => setEditTarget(p)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => setDeleteTarget(p)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
