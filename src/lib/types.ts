@@ -974,7 +974,13 @@ export interface SessionConfigSelectInfo {
   groups: SessionConfigSelectGroupInfo[]
 }
 
-export type SessionConfigKindInfo = { type: "select" } & SessionConfigSelectInfo
+export interface SessionConfigBooleanInfo {
+  current_value: boolean
+}
+
+export type SessionConfigKindInfo =
+  | ({ type: "select" } & SessionConfigSelectInfo)
+  | ({ type: "boolean" } & SessionConfigBooleanInfo)
 
 export interface SessionConfigOptionInfo {
   id: string

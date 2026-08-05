@@ -14,6 +14,9 @@
 - **统一原生登录 API**：新增 `native_login.rs` 模块，为各智能体提供统一登录状态探测 / 启动 / 取消 / 登出接口（`acp_start_native_login` / `acp_get_native_login_status` / `acp_cancel_native_login` / `acp_logout_native_login` / `acp_supports_native_login`），Tauri 命令 + Web 路由 + 前端 `NativeLoginCard` 通用登录卡。已接入 MiMo（`mimo providers login`）、Cline（`cline auth`）、Command Code、Kimi、Gemini、CodeBuddy 等。
 - **模型供应商连通性测试**：模型供应商设置页每个供应商新增「测试」按钮，跑三项探测（OpenAI 兼容 chat / Anthropic 兼容 messages（带 tools，可暴露 Claude Code 场景的网关转换缺陷）/ 模型列表），逐项显示 ✓/✗ + 原因。后端 `test_model_provider` 接口 + 前端结果展示。
 - **所有智能体会话记录统一落库**：`emit_transcript_turns` 从仅 Command Code 放开到全部 ACP 智能体，`conversation_turn` 表保存所有通过 VeryAgent 的对话内容；`get_folder_conversation_core` 改为数据库优先（磁盘 parser 兜底），重启后历史不再丢失。
+- **Codex 本地 HTTP 代理**：嵌入式 axum 代理，将 `developer`→`system` 角色转换，支持模型映射（`CODEX_PROVIDER_MODEL_ID`），解决 Codex Responses API 与第三方供应商不兼容问题。
+- **Codex 模型映射设置**：Codex 设置页新增「Provider Model ID」输入框，允许 Codex 配置知名模型名（如 `gpt-4o`）而实际发送供应商需要的 ID（如 `deepseek-v4-flash`）。
+- **ACP 协议 Boolean 配置支持**：`SessionConfigKindInfo` 新增 `Boolean` 变体，支持智能体发送布尔型配置选项。
 
 ### 变更
 
@@ -21,6 +24,9 @@
 - **OpenCode 双端口**：认证方式改为「官方密钥 + 模型供应商」两端口，移除误导性的「账号登录」（OpenCode 官方无 CLI 端跳转授权，仅网页注册拿 key）。
 - **Gemini 模型参数注入**：Gemini 启动参数加 `--model <GEMINI_MODEL>`（Gemini CLI 不读 `GEMINI_MODEL` env，此前默认模型导致 `model not found`）。
 - **Kimi 登录态误判修复**：面板登录状态检查 `credentialSynthetic`，仅存在本地门控令牌（合成凭据）时不再误显示「已通过 Kimi 账号登录」。
+- **Hermes 模型服务商同步**：cascade 写入 provider 从 `custom` 改为 `openai-api`，使 API key 写入 `.env` 而非内联在 `config.yaml`；启动时刷新 Hermes 配置文件（`~/.hermes/config.yaml` + `.env`），确保每次连接都使用最新凭据。
+- **代码框表头样式优化**：header 与操作按钮合并为同一行，减少垂直空白；按钮和图标缩小。
+- **图片显示优化**：移除 `Attached N attachment` 占位文字，改为显示文件名 + 文件大小（如 `image.png (2.3 MB)`）。
 
 ### 修复
 
@@ -28,6 +34,11 @@
   - 后端：新增 migration/entity/service 层；`SessionState::completed_transcript_turns()` 投影方法；`TranscriptTurns` 事件 + lifecycle 持久化订阅；`get_folder_conversation_core` 对 Command Code 走 DB 分支。
 - **Command Code 原生模型选择器**：对话框上方显示 Command Code 原生模型下拉（`model` 开关），支持 10 个预置模型（DeepSeek、Kimi、GLM、MiniMax、Qwen、Gemini、Claude、GPT 等），选择后下一轮/重连生效。适配器通过 `session/new` 的 `configOptions` 广告，`session/set_config_option` 处理选择。
 - **Command Code 自动工具权限**：默认"自动允许工具"（`permission_mode: auto`），不再弹逐工具审批卡；保留"询问后再执行"模式可切换。适配器 `tool_queued` 时根据模式跳过 `session/request_permission`。
+- **CodeBuddy 登录/登出 Windows 文件锁问题**：`fs::remove_file` 在 Windows 上因文件锁静默失败，改用三层清理（删除→重命名→覆写空白）；登出前先 `cancel_codebuddy_login()`；启动时加 `CREATE_NEW_CONSOLE` 标志防止终端关闭时带走 veryagent。
+- **Codex 启动失败**：`~/.codex/local.toml` 缺失导致 Codex 启动报错，新增 `seed_kimi_project_config` 在启动时创建空 `local.toml`。
+- **Kimi Code 启动失败**：`~/.kimi-code/local.toml` 缺失导致 Kimi Code 启动报错，新增 `seed_kimi_project_config` 在启动时创建空文件。
+- **i18n JSON 格式损坏导致设置页白屏**：`en.json` / `zh-CN.json` 的 `codex` 区块混入 tab 缩进破坏 JSON 结构，`JSON.parse` 失败导致设置页渲染白屏。统一缩进为空格修复。
+- **persistEnv 无错误处理**：前端 `persistEnv` 缺少 `catch` 块，后端保存失败时错误被静默吞掉，用户无任何反馈。新增 `catch` 块 + toast 成功/失败提示。
 - **Command Code ACP 适配器字段统一**：所有 ACP wire 字段改用 camelCase（`sessionId`、`sessionId`、`toolCall`、`toolCallId`、`optionId`、`rawInput`、`rawOutput`），`ToolCall`/`ToolCallUpdate` 字段平铺不嵌套，`session/set_config_option` 从 `-32601` 改为实现处理。
 
 ### 修复

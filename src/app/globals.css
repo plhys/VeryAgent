@@ -1168,6 +1168,61 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Streamdown code block: merge header and actions into one row.
+   Streamdown renders header and actions as separate flex-col rows with a
+   gap-2 space between them. The actions are sticky-positioned to float over
+   the code body. We override this by absolutely positioning the actions over
+   the header row.
+
+   DOM structure:
+   [data-streamdown="code-block"] (flex-col, gap-2)
+     ├─ [data-streamdown="code-block-header"]   ← header (language name)
+     ├─ div (sticky, pointer-events-none)         ← outer wrapper (NO data attr)
+     │   └─ [data-streamdown="code-block-actions"]  ← inner button container
+     └─ [data-streamdown="code-block-body"]      ← code content
+*/
+[data-streamdown="code-block"] {
+  gap: 0 !important;
+  position: relative;
+}
+[data-streamdown="code-block-header"] {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Outer sticky wrapper: position absolutely over the header row */
+[data-streamdown="code-block-header"] + div {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  z-index: 10;
+  pointer-events: none !important;
+  height: 32px !important;
+  max-height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+/* Inner button container: reduce padding to fit in 32px header */
+[data-streamdown="code-block-actions"] {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  height: 28px !important;
+  max-height: 28px !important;
+pointer-events: auto !important;
+}
+/* Make download/copy buttons smaller: reduce padding and icon size */
+[data-streamdown="code-block-actions"] button {
+  padding: 2px !important;
+}
+[data-streamdown="code-block-actions"] button svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
 /* Streamdown mermaid: keep diagrams crisp when zoomed.
    The pan/zoom container applies `transform: scale()` together with an inline
    `will-change: transform`. That pins it to a composited layer rasterized once

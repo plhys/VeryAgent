@@ -36,10 +36,10 @@ use crate::acp::session_state::SessionState;
 use crate::acp::terminal_runtime::{TerminalRuntime, TerminalRuntimeError};
 use crate::acp::types::{
     AcpEvent, AvailableCommandInfo, ConnectionInfo, ConnectionStatus, PermissionOptionInfo,
-    PlanEntryInfo, PromptCapabilitiesInfo, PromptInputBlock, SessionConfigKindInfo,
-    SessionConfigOptionInfo, SessionConfigSelectGroupInfo, SessionConfigSelectInfo,
-    SessionConfigSelectOptionInfo, SessionModeInfo, SessionModeStateInfo, ToolCallImageInfo,
-    UserMessageBlock,
+    PlanEntryInfo, PromptCapabilitiesInfo, PromptInputBlock, SessionConfigBooleanInfo,
+    SessionConfigKindInfo, SessionConfigOptionInfo, SessionConfigSelectGroupInfo,
+    SessionConfigSelectInfo, SessionConfigSelectOptionInfo, SessionModeInfo, SessionModeStateInfo,
+    ToolCallImageInfo, UserMessageBlock,
 };
 use crate::models::agent::AgentType;
 use crate::network::proxy;
@@ -359,6 +359,11 @@ async fn build_agent(
                 // config loading only, never execution; scoped, additive, and
                 // best-effort (never blocks the connect).
                 crate::commands::acp::seed_pi_workspace_trust(cwd, runtime_env);
+            }
+            // Kimi Code reads `.kimi-code/local.toml` from the working directory
+            // on startup. Seed an empty file so the read doesn't fail.
+            if agent_type == AgentType::KimiCode {
+                crate::commands::acp::seed_kimi_project_config(cwd);
             }
             let mut merged_env = merge_agent_env(env, runtime_env);
             // codex-acp 1.0.0 honors APP_SERVER_LOGS as a directory for its
@@ -980,6 +985,17 @@ fn map_session_config_option(option: &SessionConfigOption) -> Option<SessionConf
                     current_value: select.current_value.to_string(),
                     options: flat_options,
                     groups,
+                }),
+            })
+        }
+        SessionConfigKind::Boolean(boolean) => {
+            Some(SessionConfigOptionInfo {
+                id: option.id.to_string(),
+                name: option.name.clone(),
+                description: option.description.clone(),
+                category: option.category.as_ref().map(map_session_config_category),
+                kind: SessionConfigKindInfo::Boolean(SessionConfigBooleanInfo {
+                    current_value: boolean.current_value,
                 }),
             })
         }
@@ -2629,7 +2645,7 @@ async fn set_session_config_option_inner(
     config_id: String,
     value_id: String,
 ) -> Result<Vec<SessionConfigOption>, sacp::Error> {
-    let req = SetSessionConfigOptionRequest::new(session_id.clone(), config_id, value_id);
+    let req = SetSessionConfigOptionRequest::new(session_id.clone(), config_id, value_id.as_str());
     let untyped_req = UntypedMessage::new("session/set_config_option", req).map_err(|e| {
         sacp::util::internal_error(format!("Failed to build config option request: {e}"))
     })?;

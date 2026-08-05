@@ -15,6 +15,7 @@ pub mod manager;
 pub mod opencode_catalog;
 pub mod opencode_plugins;
 pub mod preflight;
+pub mod provider_proxy;
 pub mod question;
 pub mod registry;
 pub mod resident;

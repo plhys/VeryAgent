@@ -673,6 +673,12 @@ export function AcpAgentSettings() {
           )
         )
         reportAffectedSessions(affected)
+        toast.success(t("toasts.configSaved"))
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error)
+        toast.error(t("toasts.saveEnvFailed"))
+        console.error(`[persistEnv] save failed for ${agentType}:`, error)
       } finally {
         setSavingEnv((prev) => ({ ...prev, [agentType]: false }))
       }
@@ -4646,6 +4652,35 @@ export function AcpAgentSettings() {
                         />
                       </div>
                     )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-muted-foreground">
+                        {t("codex.providerModelId")}
+                      </label>
+                      <Input
+                        value={parseEnvText(selectedDraft.envText).CODEX_PROVIDER_MODEL_ID ?? ""}
+                        onChange={(event) => {
+                          setDrafts((prev) => {
+                            const at = selectedAgent.agent_type
+                            const current = prev[at]
+                            if (!current) return prev
+                            return {
+                              ...prev,
+                              [at]: {
+                                ...current,
+                                envText: patchEnvText(current.envText, {
+                                  CODEX_PROVIDER_MODEL_ID: event.target.value,
+                                }),
+                              },
+                            }
+                          })
+                        }}
+                        placeholder="deepseek-v4-flash"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("codex.providerModelIdHint")}
+                      </p>
+                    </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[11px] text-muted-foreground">

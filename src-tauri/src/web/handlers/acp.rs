@@ -1074,9 +1074,10 @@ pub async fn acp_cancel_native_login(
 }
 
 pub async fn acp_logout_native_login(
+    Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<NativeLoginParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    acp_commands::logout_native_login(params.agent_type)
+    acp_commands::logout_native_login(&state.db, params.agent_type)
         .await
         .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
     Ok(Json(()))

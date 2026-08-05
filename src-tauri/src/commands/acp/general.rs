@@ -483,20 +483,25 @@ pub(crate) async fn cascade_update_agent_config(
             write_openclaw_managed_provider(api_url, api_key, model_name)?;
         }
         AgentType::Hermes => {
+            tracing::info!(
+                "[Hermes] cascade update: api_url={api_url}, model={}, env_updates={}",
+                model_env.get("OPENAI_MODEL").and_then(|v| v.as_ref()).map(String::as_str).unwrap_or("(none)"),
+                model_env.len(),
+            );
             // When a model_provider_id is set, cascade the provider's credentials
             // into Hermes's config.yaml and .env using the existing structured
-            // write path. Use "custom" as the provider id (model providers expose
-            // OpenAI-compatible endpoints).
+            // write path. Use "openai-api" as the provider id (model providers
+            // expose OpenAI-compatible endpoints via OPENAI_API_KEY and
+            // OPENAI_BASE_URL, which Hermes' openai-api provider reads).
             let model_name = model_env
                 .get("OPENAI_MODEL")
                 .and_then(|v| v.as_ref())
                 .map(String::clone)
                 .unwrap_or_default();
-            // Hermes' custom provider treats model.base_url as an OpenAI-style base
-            // and appends /chat/completions itself. The base_url therefore needs
-            // the /v1 suffix so the final URL is …/v1/chat/completions. If the
-            // model_provider's api_url already ends with /v1 (or /v1/), leave it;
-            // otherwise append /v1.
+            // Hermes' openai-api provider reads OPENAI_API_KEY and
+            // OPENAI_BASE_URL from .env, and model.base_url from config.yaml.
+            // The base_url needs /v1 suffix so the final URL is …/v1.
+            // (The provider appends /chat/completions itself.)
             let hermes_base_url = {
                 let trimmed = api_url.trim_end_matches('/');
                 if trimmed.ends_with("/v1") {
@@ -510,7 +515,7 @@ pub(crate) async fn cascade_update_agent_config(
             let config_path = hermes_config_yaml_path();
             let existing = fs::read_to_string(&config_path).ok();
             let (config_yaml, env_updates) = plan_hermes_write(
-                "custom",
+                "openai-api",
                 Some(api_key),
                 &model_name,
                 Some(&hermes_base_url),

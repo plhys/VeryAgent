@@ -27,6 +27,7 @@ pub(crate) use skills::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "tauri-runtime")]
@@ -44,6 +45,12 @@ use crate::acp::types::{
 };
 #[cfg(feature = "tauri-runtime")]
 use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
+
+/// Global Codex proxy guard: (fingerprint, ShutdownGuard). The proxy is started
+/// once per process and reused across Codex sessions. If the upstream URL or
+/// API key changes, the old proxy is shut down and a new one is started.
+static CODECX_PROXY_GUARD: OnceLock<Mutex<Option<(String, crate::acp::provider_proxy::ShutdownGuard)>>> =
+    OnceLock::new();
 use crate::db::service::agent_setting_service;
 use crate::db::service::model_provider_service;
 use crate::db::AppDatabase;
@@ -2486,6 +2493,129 @@ pub(crate) async fn apply_model_provider_env(
         runtime_env.remove("OPENAI_API_KEY");
         runtime_env.remove("OPENAI_MODEL");
     }
+
+    // ── Hermes: refresh config files on every startup ──────────────────
+    //
+    // Hermes reads credentials from ~/.hermes/config.yaml and ~/.hermes/.env,
+    // not from runtime env. The cascade path writes these files on save, but
+    // we also refresh them here on every startup so that a session started
+    // after a provider change (or a config file cleanup) always picks up the
+    // current credentials. Mirrors the Pi/OpenCode/MiMoCode refresh pattern.
+    if agent_type == AgentType::Hermes {
+        tracing::info!(
+            "[Hermes] refresh config on startup: provider={}, api_url={}, model={}",
+            provider.name,
+            provider.api_url,
+            runtime_env.get(model_key).map(|s| s.as_str()).unwrap_or("(none)"),
+        );
+        let model = runtime_env
+            .get(model_key)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let mut model_env: BTreeMap<String, Option<String>> = BTreeMap::new();
+        model_env.insert("OPENAI_MODEL".to_string(), model);
+        // Use the same normalized base URL format as the cascade path.
+        let hermes_base_url = normalize_openai_compatible_base_url(&provider.api_url);
+        if let Err(e) = cascade_update_agent_config(
+            agent_type,
+            &hermes_base_url,
+            &provider.api_key,
+            &model_env,
+            &CodexModelAction::NoOp,
+        )
+        .await
+        {
+            tracing::warn!(
+                "[Hermes] refresh config on startup failed: {e}"
+            );
+        }
+    }
+
+    // ── Codex: local proxy for developer → system role conversion ────────
+    //
+    // Codex sends messages with `role: "developer"` (Responses API format),
+    // but many third-party model providers only recognise `role: "system"`.
+    // We start a lightweight local HTTP proxy that sits between Codex and
+    // the provider, rewriting `developer` → `system` before forwarding.
+    //
+    // The proxy is a process-level singleton: once started, it is reused
+    // across all Codex sessions. If the upstream URL or API key changes,
+    // the old proxy is shut down and a new one is started.
+    if agent_type == AgentType::Codex && inject_openai_compat_env {
+        let upstream = runtime_env.get(url_key).map(|s| s.as_str()).unwrap_or("");
+        let key = runtime_env.get(key_key).map(|s| s.as_str()).unwrap_or("");
+        if !upstream.is_empty() && !key.is_empty() {
+            let fingerprint = format!("{upstream}|{key}");
+
+            // Read the model name from config.toml so the proxy can advertise
+            // it via /v1/models and suppress Codex's metadata warning.
+            let model_name = crate::commands::acp::codex_config::read_codex_model_name();
+            // Read the provider model ID from runtime_env (set by user in settings).
+            // Fall back to reading from config.toml's env section.
+            let fallback_model_id = crate::commands::acp::codex_config::read_codex_env_value("CODEX_PROVIDER_MODEL_ID");
+            let provider_model_id = runtime_env
+                .get("CODEX_PROVIDER_MODEL_ID")
+                .map(|s| s.as_str())
+                .filter(|s| !s.is_empty())
+                .or_else(|| fallback_model_id.as_deref().filter(|s| !s.is_empty()));
+            if let Some(pid) = provider_model_id {
+                tracing::info!("[Codex] provider model ID mapping: Codex model → {pid}");
+            }
+
+            // Check if the proxy is already running with the correct upstream.
+            // Drop the lock before any .await to avoid !Send issues.
+            let (needs_restart, existing_port) = {
+                let mut guards = CODECX_PROXY_GUARD
+                    .get_or_init(|| Mutex::new(None))
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                match guards.as_ref() {
+                    Some((fp, guard)) if fp == &fingerprint => (false, Some(guard.port())),
+                    _ => {
+                        // Shut down the old proxy if one exists.
+                        guards.take();
+                        (true, None)
+                    }
+                }
+            };
+
+            if needs_restart {
+                match crate::acp::provider_proxy::start_proxy(upstream, key, model_name.as_deref(), provider_model_id).await {
+                    Ok(guard) => {
+                        let proxy_port = guard.port();
+                        let proxy_url = format!("http://127.0.0.1:{proxy_port}/v1");
+                        runtime_env.insert(url_key.to_string(), proxy_url);
+                        // Store the new guard.
+                        let mut guards = CODECX_PROXY_GUARD
+                            .get_or_init(|| Mutex::new(None))
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        guards.replace((fingerprint, guard));
+                        tracing::info!(
+                            "[Codex] started role-conversion proxy on port {proxy_port}"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!("[Codex] failed to start role-conversion proxy: {e}");
+                    }
+                }
+            } else if let Some(port) = existing_port {
+                let proxy_url = format!("http://127.0.0.1:{port}/v1");
+                runtime_env.insert(url_key.to_string(), proxy_url);
+            }
+
+            // Also rewrite the base_url in ~/.codex/config.toml so Codex reads
+            // the proxy URL from its config file (Codex uses config.toml rather
+            // than OPENAI_BASE_URL env var to resolve the provider endpoint).
+            let proxy_url = runtime_env
+                .get(url_key)
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if !proxy_url.is_empty() {
+                rewrite_codex_provider_base_url(&proxy_url);
+            }
+        }
+    }
 }
 
 /// Claude Code provider-model JSON keys → ANTHROPIC_*_MODEL env var names.
@@ -4354,8 +4484,11 @@ pub async fn acp_cancel_native_login(agent_type: AgentType) -> Result<(), AcpErr
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
-pub async fn acp_logout_native_login(agent_type: AgentType) -> Result<(), AcpError> {
-    logout_native_login(agent_type).await
+pub async fn acp_logout_native_login(
+    agent_type: AgentType,
+    db: tauri::State<'_, AppDatabase>,
+) -> Result<(), AcpError> {
+    logout_native_login(&db, agent_type).await
 }
 
 /// Whether an agent has a first-party native login at all (UI uses this to

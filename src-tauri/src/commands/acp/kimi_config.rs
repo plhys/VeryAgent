@@ -462,3 +462,24 @@ pub(crate) fn build_kimi_managed_spec(update: &KimiCodeConfigUpdate) -> Result<K
         max_context_size: update.max_context_size.filter(|c| *c > 0),
     })
 }
+
+/// Seed an empty `local.toml` in the project's `.kimi-code` directory so Kimi
+/// Code does not fail with a `readTextFile` error when it tries to read the
+/// project-local config on startup. Creates the `.kimi-code` directory if it
+/// does not exist, and writes an empty `local.toml` if one is not already
+/// present. Best-effort: a failure here is non-fatal (Kimi Code will still
+/// start, just with a warning).
+pub(crate) fn seed_kimi_project_config(cwd: &std::path::Path) {
+    let kimi_dir = cwd.join(".kimi-code");
+    if let Err(e) = std::fs::create_dir_all(&kimi_dir) {
+        tracing::warn!("[KimiCode] failed to create .kimi-code directory: {e}");
+        return;
+    }
+    let local_toml = kimi_dir.join("local.toml");
+    if local_toml.exists() {
+        return;
+    }
+    if let Err(e) = std::fs::write(&local_toml, "") {
+        tracing::warn!("[KimiCode] failed to create local.toml: {e}");
+    }
+}

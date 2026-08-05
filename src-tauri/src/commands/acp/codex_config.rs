@@ -374,6 +374,102 @@ pub(crate) fn apply_codex_root_model_action(action: &CodexModelAction) -> Result
     Ok(())
 }
 
+/// Read the model name from `~/.codex/config.toml` (the `model` field at root).
+pub(crate) fn read_codex_model_name() -> Option<String> {
+    let config_path = codex_config_toml_path();
+    let raw = fs::read_to_string(&config_path).ok()?;
+    let value: toml::Value = raw.parse().ok()?;
+    value
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Read a value from the `[env]` section of `~/.codex/config.toml`.
+pub(crate) fn read_codex_env_value(key: &str) -> Option<String> {
+    let config_path = codex_config_toml_path();
+    let raw = fs::read_to_string(&config_path).ok()?;
+    let value: toml::Value = raw.parse().ok()?;
+    value
+        .get("env")
+        .and_then(|env| env.get(key))
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// Rewrite the `base_url` of the `veryagent` provider in `~/.codex/config.toml`
+/// to point to the local role-conversion proxy. This is called during session
+/// startup so Codex reads the proxy URL from its config file (Codex prefers
+/// config.toml over the `OPENAI_BASE_URL` env var).
+///
+/// Also adds model metadata to the `[models]` section so Codex doesn't warn
+/// about missing metadata for the configured model.
+pub(crate) fn rewrite_codex_provider_base_url(proxy_url: &str) {
+    let config_path = codex_config_toml_path();
+    let mut toml_value = match config_path.exists() {
+        true => fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|raw| raw.parse::<toml::Value>().ok())
+            .filter(|v| v.is_table())
+            .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new())),
+        false => return,
+    };
+    let table = match toml_value.as_table_mut() {
+        Some(t) => t,
+        None => return,
+    };
+    // Navigate to model_providers.veryagent.base_url
+    let providers = match table
+        .get_mut("model_providers")
+        .and_then(|v| v.as_table_mut())
+    {
+        Some(p) => p,
+        None => return,
+    };
+    let veryagent = match providers.get_mut("veryagent").and_then(|v| v.as_table_mut()) {
+        Some(v) => v,
+        None => return,
+    };
+    let normalized = normalize_openai_compatible_base_url(proxy_url);
+    veryagent.insert(
+        "base_url".to_string(),
+        toml::Value::String(normalized),
+    );
+
+    // Also add model metadata to suppress Codex's "Model metadata for ... not
+    // found" warning. Read the model name first, then modify the table.
+    let model_name = table
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if let Some(ref name) = model_name {
+        let models = table
+            .entry("models".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+        if let Some(models_table) = models.as_table_mut() {
+            if !models_table.contains_key(name.as_str()) {
+                let mut meta = toml::map::Map::new();
+                meta.insert(
+                    "context_window".to_string(),
+                    toml::Value::Integer(128_000),
+                );
+                meta.insert(
+                    "max_output".to_string(),
+                    toml::Value::Integer(16_384),
+                );
+                models_table.insert(name.clone(), toml::Value::Table(meta));
+            }
+        }
+    }
+
+    if let Ok(toml_str) = toml::to_string_pretty(&toml_value) {
+        let _ = fs::write(&config_path, format!("{toml_str}\n"));
+    }
+}
+
 // ─── Codex Device Code OAuth ───
 
 pub(crate) const CODEX_OAUTH_ISSUER: &str = "https://auth.openai.com";

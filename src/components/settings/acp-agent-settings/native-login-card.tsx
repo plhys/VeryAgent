@@ -128,7 +128,9 @@ export function NativeLoginCard({ agentType }: { agentType: AgentType }) {
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             <span className="text-muted-foreground">
-              {t("nativeLogin.waiting")}
+              {agentType === "code_buddy"
+                ? t("nativeLogin.waitingCodeBuddy")
+                : t("nativeLogin.waiting")}
             </span>
           </>
         ) : status.loggedIn ? (

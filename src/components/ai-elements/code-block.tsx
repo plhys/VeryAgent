@@ -338,7 +338,7 @@ export const CodeBlockHeader = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex items-center justify-between border-b bg-muted/80 px-3 py-2 text-muted-foreground text-xs",
+      "flex items-center justify-between border-b bg-muted/80 px-3 py-0.5 text-muted-foreground text-xs",
       className
     )}
     {...props}
@@ -525,7 +525,7 @@ export const CodeBlockLanguageSelectorTrigger = ({
 }: CodeBlockLanguageSelectorTriggerProps) => (
   <SelectTrigger
     className={cn(
-      "h-7 border-none bg-transparent px-2 text-xs shadow-none",
+      "h-6 border-none bg-transparent px-2 text-xs shadow-none",
       className
     )}
     size="sm"

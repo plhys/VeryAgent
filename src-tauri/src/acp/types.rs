@@ -470,9 +470,15 @@ pub struct SessionConfigSelectInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionConfigBooleanInfo {
+    pub current_value: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SessionConfigKindInfo {
     Select(SessionConfigSelectInfo),
+    Boolean(SessionConfigBooleanInfo),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
