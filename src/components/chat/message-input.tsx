@@ -2907,7 +2907,7 @@ export function MessageInput({
           onSelect={(configId, valueId) =>
             onConfigOptionChange?.(configId, valueId)
           }
-          variant="name"
+          variant="name-value"
         />
       ))}
       {modelOptions.map((option) => {
@@ -2943,7 +2943,7 @@ export function MessageInput({
           onSelect={(configId, valueId) =>
             onConfigOptionChange?.(configId, valueId)
           }
-          variant="name"
+          variant="name-value"
         />
       ))}
     </>

@@ -1425,6 +1425,41 @@ pub(crate) fn hermes_config_yaml_path() -> PathBuf {
     hermes_home_dir().join("config.yaml")
 }
 
+/// Ensure the Hermes git runtime has a `git.exe`. Hermes bundles a minimal
+/// Git for Windows runtime, but the `git.exe` binary may be missing if the
+/// installation was interrupted or incomplete. When detected, we locate
+/// `git.exe` on the system PATH and copy it into the runtime directory so
+/// Hermes' terminal tool works correctly.
+pub(crate) fn ensure_hermes_git_runtime() {
+    let git_runtime_dir = home_dir_or_default()
+        .join("AppData")
+        .join("Local")
+        .join("hermes")
+        .join("runtime")
+        .join("git")
+        .join("bin");
+    let git_exe = git_runtime_dir.join("git.exe");
+    if git_exe.exists() {
+        return;
+    }
+    // Locate git.exe on the system PATH.
+    let found = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).find_map(|dir| {
+            let candidate = dir.join("git.exe");
+            if candidate.exists() { Some(candidate) } else { None }
+        })
+    });
+    if let Some(src) = found {
+        if let Err(e) = std::fs::copy(&src, &git_exe) {
+            tracing::warn!("[Hermes] failed to copy git.exe to runtime: {e}");
+        } else {
+            tracing::info!("[Hermes] copied git.exe to runtime dir: {}", git_exe.display());
+        }
+    } else {
+        tracing::warn!("[Hermes] git.exe not found on PATH — terminal tool may fail");
+    }
+}
+
 /// A managed Hermes provider: the config.yaml `model.provider` value (its `id`)
 /// and the `.env` variable that carries its API key. `key_env_var` is the
 /// variable Hermes' own setup writes first (mirrors `auth.py` PROVIDER_REGISTRY
@@ -3711,11 +3746,46 @@ pub(crate) async fn acp_list_agents_core(db: &AppDatabase) -> Result<Vec<AcpAgen
         // advanced editor. The env-merge block above is skipped because
         // `load_agent_local_config_json` returns None for Hermes (no veryagent
         // local config path), so no Hermes credential leaks into process env.
+        //
+        // Auto-repair: when the local config files are missing (e.g. after
+        // switching machines or wiping ~/.hermes) but the agent has a model
+        // provider bound in the database, regenerate the config files from the
+        // provider so the settings page shows correct values immediately.
         let (config_json, hermes_config_yaml) = if agent_type == AgentType::Hermes {
-            (
-                load_hermes_local_config_json(),
-                fs::read_to_string(hermes_config_yaml_path()).ok(),
-            )
+            let initial_config = load_hermes_local_config_json();
+            let initial_yaml = fs::read_to_string(hermes_config_yaml_path()).ok();
+            if initial_config.is_none() && initial_yaml.is_none() {
+                if let Some(provider_id) = setting.and_then(|s| s.model_provider_id) {
+                    if let Ok(Some(provider)) =
+                        model_provider_service::get_by_id(&db.conn, provider_id).await
+                    {
+                        let model_env: BTreeMap<String, Option<String>> = BTreeMap::new();
+                        let hermes_base_url = normalize_openai_compatible_base_url(
+                                &provider.api_url,
+                            );
+                        if let Err(e) = cascade_update_agent_config(
+                            agent_type,
+                            &hermes_base_url,
+                            &provider.api_key,
+                            &model_env,
+                            &CodexModelAction::NoOp,
+                        )
+                        .await
+                        {
+                            tracing::warn!(
+                                "[Hermes] auto-repair config on list failed: {e}"
+                            );
+                        }
+                        (load_hermes_local_config_json(), fs::read_to_string(hermes_config_yaml_path()).ok())
+                    } else {
+                        (initial_config, initial_yaml)
+                    }
+                } else {
+                    (initial_config, initial_yaml)
+                }
+            } else {
+                (initial_config, initial_yaml)
+            }
         } else {
             (local_config_json, None)
         };

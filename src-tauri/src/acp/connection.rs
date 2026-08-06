@@ -701,6 +701,25 @@ pub async fn spawn_agent_connection(
         owner_window_label.clone(),
         None, // folder_id 由后续 prompt handler 在首次 send 时绑定 (Phase 2)
     );
+    // Resolve the model name from the runtime env so the chat input's model
+    // selector can show it even when the agent doesn't advertise config options.
+    let (url_key, key_key, model_key) = crate::commands::acp::general::agent_env_keys(agent_type);
+    if let Some(model) = runtime_env.get(model_key).filter(|v| !v.trim().is_empty()) {
+        initial_state.model_name = Some(model.clone());
+    }
+    // Fetch the provider's model list to populate the chat input's model
+    // selector. Only for agents that have a model provider bound (URL + key).
+    if let (Some(url), Some(key)) = (runtime_env.get(url_key), runtime_env.get(key_key)) {
+        let url = url.trim();
+        let key = key.trim();
+        if !url.is_empty() && !key.is_empty() {
+            let models = crate::commands::model_provider::fetch_openai_compatible_models(url, key)
+                .await
+                .ok()
+                .unwrap_or_default();
+            initial_state.provider_models = models.into_iter().map(|m| (m.id, m.name)).collect();
+        }
+    }
 
     // Install the SessionStarted dedup signal BEFORE wrapping into Arc so the
     // first event (StatusChanged{Connecting} below) doesn't race with the
@@ -724,6 +743,9 @@ pub async fn spawn_agent_connection(
     // same endpoint as the main conversation. Best-effort; never blocks launch.
     if agent_type == AgentType::Hermes {
         crate::commands::acp::reconcile_hermes_runtime_env(&runtime_env);
+        // Ensure the Hermes git runtime has git.exe — Hermes bundles a minimal
+        // Git for Windows runtime that may be incomplete on a fresh install.
+        crate::commands::acp::ensure_hermes_git_runtime();
     }
 
     // Resolve the launch cwd from the same `working_dir` (via the same helper)
@@ -1073,6 +1095,65 @@ fn ensure_codex_mode_option(options: &mut Vec<SessionConfigOptionInfo>) {
     );
 }
 
+/// Add a synthetic "model" config option for agents that don't advertise
+/// config options but have a model provider bound. This lets the chat input
+/// show the model picker even when the ACP agent doesn't emit
+/// `session_config_options`.
+fn ensure_model_option(options: &mut Vec<SessionConfigOptionInfo>, state: &SessionState) {
+    if options.iter().any(|o| o.id == "model" || o.category.as_deref() == Some("model")) {
+        return;
+    }
+    let current_value = state.model_name.clone().unwrap_or_default();
+    let model_options: Vec<SessionConfigSelectOptionInfo> = state
+        .provider_models
+        .iter()
+        .map(|(id, name)| SessionConfigSelectOptionInfo {
+            value: id.clone(),
+            name: name.clone(),
+            description: None,
+        })
+        .collect();
+    options.push(SessionConfigOptionInfo {
+        id: "model".to_string(),
+        name: "Model".to_string(),
+        description: None,
+        category: Some("model".to_string()),
+        kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
+            current_value,
+            options: model_options,
+            groups: vec![],
+        }),
+    });
+    // Also add a synthetic permission/mode option for agents that don't
+    // advertise config options. The "mode" option controls the agent's
+    // permission level (default / yolo).
+    if options.iter().any(|o| o.id == "mode") {
+        return;
+    }
+    options.push(SessionConfigOptionInfo {
+        id: "mode".to_string(),
+        name: "Mode".to_string(),
+        description: Some("Controls the agent's permission level.".to_string()),
+        category: Some("mode".to_string()),
+        kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
+            current_value: "default".to_string(),
+            options: vec![
+                SessionConfigSelectOptionInfo {
+                    value: "default".to_string(),
+                    name: "Default".to_string(),
+                    description: Some("Standard permission checks.".to_string()),
+                },
+                SessionConfigSelectOptionInfo {
+                    value: "yolo".to_string(),
+                    name: "YOLO".to_string(),
+                    description: Some("Bypass all permission checks.".to_string()),
+                },
+            ],
+            groups: vec![],
+        }),
+    });
+}
+
 async fn emit_session_config_options_values(
     state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
@@ -1082,6 +1163,13 @@ async fn emit_session_config_options_values(
     let mut mapped = map_session_config_options(&config_options);
     if agent_type == AgentType::Codex {
         ensure_codex_mode_option(&mut mapped);
+    }
+    // Agents that don't advertise config options still get a synthetic
+    // "model" option so the chat input shows the model picker. The model
+    // name is resolved from the state's pending_user_message metadata when
+    // available; otherwise the selector is shown with an empty value.
+    if mapped.is_empty() && !matches!(agent_type, AgentType::Codex) {
+        ensure_model_option(&mut mapped, &*state.read().await);
     }
     emit_with_state(
         state,
@@ -3578,14 +3666,18 @@ async fn emit_transcript_turns(
     _agent_type: AgentType,
 ) {
     let turns = state.read().await.completed_transcript_turns();
-    if !turns.is_empty() {
-        emit_with_state(
-            state,
-            emitter,
-            AcpEvent::TranscriptTurns { turns },
-        )
-        .await;
+    if turns.is_empty() {
+        return;
     }
+    emit_with_state(
+        state,
+        emitter,
+        AcpEvent::TranscriptTurns { turns },
+    )
+    .await;
+    // Mark emitted so a second call (e.g. select! racing StopReason and
+    // prompt_result) is a no-op. Cleared on TurnComplete.
+    state.write().await.transcript_turns_emitted = true;
 }
 
 /// Returns `Ok(None)` on normal exit (disconnect / channel closed) or

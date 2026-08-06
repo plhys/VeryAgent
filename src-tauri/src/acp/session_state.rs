@@ -221,6 +221,19 @@ pub struct SessionState {
     // 状态
     pub status: ConnectionStatus,
     pub live_message: Option<LiveMessage>,
+    /// The current model name for this session, resolved from the agent's
+    /// runtime env during connect. Used by the chat input's model selector
+    /// when the agent doesn't advertise config options.
+    pub model_name: Option<String>,
+    /// Provider model list fetched during session init, used to populate the
+    /// synthetic model config option for agents that don't advertise config
+    /// options. Each entry is (model_id, display_name).
+    pub provider_models: Vec<(String, String)>,
+    /// Guards against duplicate `TranscriptTurns` emission. Set to `true` by
+    /// `emit_transcript_turns` after it emits the current turn's turns; checked
+    /// by `completed_transcript_turns` which returns empty when the flag is set.
+    /// Cleared on `TurnComplete` so the next turn can emit normally.
+    pub transcript_turns_emitted: bool,
     pub active_tool_calls: BTreeMap<String, ToolCallState>,
     pub pending_permission: Option<PendingPermissionState>,
 
@@ -406,6 +419,9 @@ impl SessionState {
             folder_id,
             status: ConnectionStatus::Connecting,
             live_message: None,
+            model_name: None,
+            provider_models: Vec::new(),
+            transcript_turns_emitted: false,
             active_tool_calls: BTreeMap::new(),
             pending_permission: None,
             pending_question: None,
@@ -442,7 +458,13 @@ impl SessionState {
     /// Build the completed transcript turns currently represented by the live
     /// state. This is intentionally limited to the current turn and is used by
     /// ACP agents without a parseable native transcript (Command Code).
+    /// Returns an empty vec when `transcript_turns_emitted` is true to prevent
+    /// duplicate emission (e.g. when the select! loop races StopReason and
+    /// prompt_result).
     pub fn completed_transcript_turns(&self) -> Vec<MessageTurn> {
+        if self.transcript_turns_emitted {
+            return Vec::new();
+        }
         let mut turns = Vec::new();
         if let Some(pending) = &self.pending_user_message {
             let blocks = pending
@@ -793,6 +815,7 @@ impl SessionState {
                     };
                 }
                 self.live_message = None;
+                self.transcript_turns_emitted = false;
                 self.active_tool_calls.clear();
                 // The turn's user prompt is no longer "in flight" — the
                 // assistant reply is done and the transcript is the source of

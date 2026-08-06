@@ -11,12 +11,19 @@
 
 ### 新增
 
-- **统一原生登录 API**：新增 `native_login.rs` 模块，为各智能体提供统一登录状态探测 / 启动 / 取消 / 登出接口（`acp_start_native_login` / `acp_get_native_login_status` / `acp_cancel_native_login` / `acp_logout_native_login` / `acp_supports_native_login`），Tauri 命令 + Web 路由 + 前端 `NativeLoginCard` 通用登录卡。已接入 MiMo（`mimo providers login`）、Cline（`cline auth`）、Command Code、Kimi、Gemini、CodeBuddy 等。
-- **模型供应商连通性测试**：模型供应商设置页每个供应商新增「测试」按钮，跑三项探测（OpenAI 兼容 chat / Anthropic 兼容 messages（带 tools，可暴露 Claude Code 场景的网关转换缺陷）/ 模型列表），逐项显示 ✓/✗ + 原因。后端 `test_model_provider` 接口 + 前端结果展示。
-- **所有智能体会话记录统一落库**：`emit_transcript_turns` 从仅 Command Code 放开到全部 ACP 智能体，`conversation_turn` 表保存所有通过 VeryAgent 的对话内容；`get_folder_conversation_core` 改为数据库优先（磁盘 parser 兜底），重启后历史不再丢失。
-- **Codex 本地 HTTP 代理**：嵌入式 axum 代理，将 `developer`→`system` 角色转换，支持模型映射（`CODEX_PROVIDER_MODEL_ID`），解决 Codex Responses API 与第三方供应商不兼容问题。
-- **Codex 模型映射设置**：Codex 设置页新增「Provider Model ID」输入框，允许 Codex 配置知名模型名（如 `gpt-4o`）而实际发送供应商需要的 ID（如 `deepseek-v4-flash`）。
-- **ACP 协议 Boolean 配置支持**：`SessionConfigKindInfo` 新增 `Boolean` 变体，支持智能体发送布尔型配置选项。
+- **模型供应商测试 401 修复**：`probe_openai` / `probe_anthropic` 补发 `api-key` 请求头，与模型列表请求保持一致；`base_v1` 剥离 API 路径后缀，支持用户粘贴完整地址；遍历模型列表逐个尝试，解决 key 无权限访问首模型时的误报。
+- **Hermes 环境自动修复**：启动时自动检测 `~/.hermes/config.yaml` + `.env` 是否存在，缺失时从数据库重新生成；自动检测 Hermes git 运行时是否缺少 `git.exe`，从系统 PATH 复制补全。
+- **Hermes 模型选择器**：合成 model config option，启动时从供应商 API 拉取模型列表，对话框底部显示模型选择器。
+- **Hermes 权限选择器**：合成 mode config option（Default / YOLO），对话框底部显示权限选择器。
+- **思考链/工具链折叠合并**：对话结束后，思考和工具调用合并到一个可折叠容器中，按原始逻辑顺序排列，显示消耗 token 数；运行时实时更新状态计数，带旋转动画；支持全屏弹窗查看。
+- **Claude 双回复修复**：`SessionState` 新增 `transcript_turns_emitted` 标志，防止 `emit_transcript_turns` 重复发射。
+- **环境变量编辑器优化**：去掉模糊遮罩，添加说明文字，改为等宽字体。
+
+### 变更
+
+- **权限/模式显示优化**：从 `variant="name"` 改为 `variant="name-value"`，显示当前值而非仅名称。
+- **多智能体协同设置**：从常规设置中独立出来，入口更明显。
+- **Hermes 认证模式统一**：`handleModelProviderSelect` 中设置 `hermesAuthMode: "model_provider"`，确保模型列表能正常刷新。
 
 ### 变更
 

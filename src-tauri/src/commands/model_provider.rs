@@ -194,26 +194,31 @@ pub struct ProviderModelItem {
 /// - `https://api.openai.com/v1/models`
 /// - `https://gateway.example.com/v1/chat/completions` (chat endpoint pasted by mistake)
 /// - `https://gateway.example.com/v1/images/generations` (image endpoint pasted by mistake)
-fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
-    let mut base = api_url.trim().trim_end_matches('/').to_string();
-    if base.is_empty() {
-        return Vec::new();
-    }
+/// Common suffixes that users may paste into the API URL field (e.g. from
+/// OpenAI / Anthropic docs). Stripping them yields the base URL.
+/// Longer paths first so `/v1/chat/completions` is matched before
+/// `/chat/completions` (which would leave a bare `/v1`).
+const API_PATH_SUFFIXES: &[&str] = &[
+    "/v1/chat/completions",
+    "/v1/messages",
+    "/v1/images/generations",
+    "/v1/images/edits",
+    "/chat/completions",
+    "/completions",
+    "/messages",
+    "/images/generations",
+    "/images/edits",
+];
 
-    // Strip accidental chat/image suffixes so we can recover a models list URL.
-    // Longer paths first so `/v1/chat/completions` does not leave a bare `/v1`
-    // stripped only partially via `/chat/completions`.
-    for suffix in [
-        "/v1/chat/completions",
-        "/v1/messages",
-        "/v1/images/generations",
-        "/v1/images/edits",
-        "/chat/completions",
-        "/completions",
-        "/messages",
-        "/images/generations",
-        "/images/edits",
-    ] {
+/// Strip known API path suffixes from the user-provided URL, returning the
+/// base URL (protocol + host + optional /v1). If the URL has no recognized
+/// suffix, returns the original trimmed URL as-is.
+fn strip_api_path_suffixes(raw: &str) -> String {
+    let mut base = raw.trim().trim_end_matches('/').to_string();
+    if base.is_empty() {
+        return base;
+    }
+    for suffix in API_PATH_SUFFIXES {
         if let Some(stripped) = base
             .strip_suffix(suffix)
             .map(|s| s.trim_end_matches('/').to_string())
@@ -223,6 +228,14 @@ fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
             }
             break;
         }
+    }
+    base
+}
+
+fn provider_models_url_candidates(api_url: &str) -> Vec<String> {
+    let base = strip_api_path_suffixes(api_url);
+    if base.is_empty() {
+        return Vec::new();
     }
 
     let mut candidates = Vec::new();
@@ -556,12 +569,18 @@ fn probe_fail(protocol: &'static str, detail: String) -> ProtocolProbeResult {
 
 /// Derive the base URL for a protocol path. Keeps the user's `/v1` if present,
 /// otherwise appends `/v1` (the conventional OpenAI/Anthropic root).
+/// Automatically strips common API path suffixes so the user can paste a full
+/// endpoint URL (e.g. `https://gateway.com/v1/chat/completions`) and still get
+/// the correct base.
 fn base_v1(api_url: &str) -> String {
-    let trimmed = api_url.trim().trim_end_matches('/');
-    if trimmed.ends_with("/v1") {
-        trimmed.to_string()
+    let base = strip_api_path_suffixes(api_url);
+    if base.is_empty() {
+        return String::new();
+    }
+    if base.ends_with("/v1") {
+        base
     } else {
-        format!("{trimmed}/v1")
+        format!("{base}/v1")
     }
 }
 
@@ -605,6 +624,7 @@ async fn probe_openai(
     api_key: &str,
     model: &str,
 ) -> ProtocolProbeResult {
+    let api_key = api_key.trim();
     let base = base_v1(api_url);
     let url = format!("{base}/chat/completions");
     let body = serde_json::json!({
@@ -614,7 +634,10 @@ async fn probe_openai(
     });
     match post_json(
         &url,
-        &[("Authorization", &format!("Bearer {api_key}"))],
+        &[
+            ("Authorization", &format!("Bearer {api_key}")),
+            ("api-key", api_key),
+        ],
         &body,
     )
     .await
@@ -643,6 +666,7 @@ async fn probe_anthropic(
     api_key: &str,
     model: &str,
 ) -> ProtocolProbeResult {
+    let api_key = api_key.trim();
     let base = base_v1(api_url);
     let url = format!("{base}/messages");
     let body = serde_json::json!({
@@ -659,6 +683,7 @@ async fn probe_anthropic(
         &url,
         &[
             ("x-api-key", api_key),
+            ("api-key", api_key),
             ("anthropic-version", "2023-06-01"),
             ("Authorization", &format!("Bearer {api_key}")),
         ],
@@ -703,24 +728,20 @@ pub async fn test_model_provider_core(
     let api_url = provider.api_url.clone();
     let api_key = provider.api_key.clone();
 
-    // First: list models. This both probes the /models endpoint and gives us a
-    // real model id to drive the chat probes with.
+    // First: list models. This both probes the /models endpoint and gives us
+    // model ids to drive the chat probes with.
     let models_probe = probe_models(&api_url, &api_key).await;
-    let model = if models_probe.ok {
+    let models = if models_probe.ok {
         fetch_openai_compatible_models(&api_url, &api_key)
             .await
             .ok()
-            .and_then(|m| m.into_iter().next().map(|item| item.id))
             .unwrap_or_default()
     } else {
-        String::new()
+        Vec::new()
     };
 
     let mut probes = Vec::new();
-    if !model.is_empty() {
-        probes.push(probe_openai(&api_url, &api_key, &model).await);
-        probes.push(probe_anthropic(&api_url, &api_key, &model).await);
-    } else {
+    if models.is_empty() {
         probes.push(probe_fail(
             "openai",
             "skipped (no model id available from /models)".to_string(),
@@ -729,6 +750,40 @@ pub async fn test_model_provider_core(
             "anthropic",
             "skipped (no model id available from /models)".to_string(),
         ));
+    } else {
+        // Try each model from the list until one succeeds. The user's API key
+        // may not have permission for every model the gateway lists (e.g. the
+        // first model in the list might be one the key can't use), so we crawl
+        // the list rather than blindly using the first entry.
+        let mut openai_probe: Option<ProtocolProbeResult> = None;
+        let mut anthropic_probe: Option<ProtocolProbeResult> = None;
+        let mut last_error: Option<String> = None;
+        for m in &models {
+            if openai_probe.as_ref().map_or(false, |p| !p.ok) || openai_probe.is_none() {
+                let r = probe_openai(&api_url, &api_key, &m.id).await;
+                if r.ok || openai_probe.is_none() {
+                    openai_probe = Some(r);
+                }
+            }
+            if anthropic_probe.as_ref().map_or(false, |p| !p.ok) || anthropic_probe.is_none() {
+                let r = probe_anthropic(&api_url, &api_key, &m.id).await;
+                if r.ok || anthropic_probe.is_none() {
+                    anthropic_probe = Some(r);
+                }
+            }
+            if openai_probe.as_ref().map_or(false, |p| p.ok)
+                && anthropic_probe.as_ref().map_or(false, |p| p.ok)
+            {
+                break;
+            }
+            last_error = Some(format!("tried model '{}': both probes failed", m.id));
+        }
+        probes.push(openai_probe.unwrap_or_else(|| {
+            probe_fail("openai", last_error.clone().unwrap_or_else(|| "no model responded successfully".to_string()))
+        }));
+        probes.push(anthropic_probe.unwrap_or_else(|| {
+            probe_fail("anthropic", last_error.unwrap_or_else(|| "no model responded successfully".to_string()))
+        }));
     }
     probes.push(models_probe);
 

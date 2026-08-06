@@ -1,6 +1,32 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-08-04
+> 更新日期：2026-08-06
+
+---
+
+## 近期（2026-08-06）
+
+### 修复
+
+- [x] 模型供应商测试 401 修复（`api-key` 请求头 + URL 路径剥离 + 模型遍历）
+- [x] Claude 双回复修复（`transcript_turns_emitted` 防重复标志）
+- [x] Hermes 换机器配置自动修复（缺失时从数据库重新生成）
+- [x] Hermes git 运行时缺失自动补全（从系统 PATH 复制 `git.exe`）
+- [x] Hermes 模型选择器（合成 config option，从供应商 API 拉取模型列表）
+- [x] Hermes 权限选择器（合成 mode config option：Default / YOLO）
+
+### 优化
+
+- [x] 权限/模式显示当前值（`variant="name-value"`）
+- [x] 环境变量编辑器优化（去掉模糊遮罩，加说明文字）
+- [x] 思考链/工具链折叠合并（实时状态 + token 统计 + 全屏查看）
+
+### 待跟进
+
+- [ ] Hermes 权限切换真实生效（后端拦截 `set_config_option` + 更新环境变量）
+- [ ] 命名统一（跨智能体的配置选项名称）
+- [ ] Hermes 开机自启（常驻智能体自动连接）
+- [ ] 多智能体协同功能完善（`delegate_to_agent` 工具暴露与使用）
 
 ---
 

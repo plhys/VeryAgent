@@ -18,11 +18,21 @@ import {
 } from "@/lib/line-change-stats"
 import { MessageResponse } from "@/components/ai-elements/message"
 import { Shimmer } from "@/components/ai-elements/shimmer"
+import { Button } from "@/components/ui/button"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ChevronDown, Clock, Loader2, Maximize2 } from "lucide-react"
 import {
   Tool,
   ToolHeader,
@@ -2660,12 +2670,19 @@ const ToolGroupPart = memo(function ToolGroupPart({
 interface ContentPartsRendererProps {
   parts: AdaptedContentPart[]
   role?: MessageRole
+  usage?: import("@/lib/types").TurnUsage | null
+  duration_ms?: number | null
 }
 
 export const ContentPartsRenderer = memo(function ContentPartsRenderer({
   parts,
   role,
+  usage,
+  duration_ms,
 }: ContentPartsRendererProps) {
+  const t = useTranslations("Folder.chat.contentParts")
+  const [fullScreenOpen, setFullScreenOpen] = useState(false)
+
   const renderPart = (part: AdaptedContentPart, keyId: string): ReactNode => {
     if (part.type === "text") {
       return (
@@ -2734,9 +2751,178 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
     return null
   }
 
+  // Group reasoning and tool parts after turn is complete.
+  // During streaming, render parts as-is for live feedback.
+  const { reasoningParts, toolParts, otherParts, isStreaming, hasGroupedContent } =
+    useMemo(() => {
+      const reasoning: (Extract<AdaptedContentPart, { type: "reasoning" }> & {
+        _index: number
+      })[] = []
+      const tools: (AdaptedContentPart & { _index: number })[] = []
+      const other: (AdaptedContentPart & { _index: number })[] = []
+      let streaming = false
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i]
+        if (p.type === "reasoning") {
+          if (p.isStreaming) streaming = true
+          reasoning.push({ ...p, _index: i })
+        } else if (
+          p.type === "tool-call" ||
+          p.type === "tool-result" ||
+          p.type === "tool-group"
+        ) {
+          tools.push({ ...p, _index: i })
+        } else {
+          other.push({ ...p, _index: i })
+        }
+      }
+      return {
+        reasoningParts: reasoning,
+        toolParts: tools,
+        otherParts: other,
+        isStreaming: streaming,
+        hasGroupedContent: reasoning.length > 0 || tools.length > 0,
+      }
+    }, [parts])
+
+  // During streaming: show a real-time status header + the live parts.
+  // Reasoning and tool parts are still rendered inline for live feedback,
+  // but we also show a compact header with the current counts.
+  const showLiveHeader = isStreaming && hasGroupedContent
+  const liveStatusText = isStreaming
+    ? toolParts.length > 0 && reasoningParts.length === 0
+      ? t("toolCalling", { count: toolParts.length })
+      : reasoningParts.length > 0 && toolParts.length === 0
+        ? t("thinkingProgress", { count: reasoningParts.length })
+        : t("reasoningAndTools", {
+            reasoningCount: reasoningParts.length,
+            toolCount: toolParts.length,
+          })
+    : ""
+
+  if (isStreaming || !hasGroupedContent) {
+    return (
+      <div className="space-y-4">
+        {showLiveHeader && (
+          <Collapsible className="rounded-lg border" defaultOpen={true}>
+            <CollapsibleTrigger asChild>
+              <div
+                className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 cursor-pointer"
+                role="button"
+                tabIndex={0}
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                <span className="truncate">{liveStatusText}</span>
+                <div className="ml-auto">
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                </div>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border-t px-3 py-3 space-y-3">
+                {parts.map((part, i) => renderPart(part, `${i}`))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+        {!showLiveHeader && parts.map((part, i) => renderPart(part, `${i}`))}
+      </div>
+    )
+  }
+
+  // For grouped view, render reasoning content without the nested Reasoning
+// wrapper (which adds its own collapsible) to avoid redundant nesting.
+const renderGroupedPart = (part: AdaptedContentPart, keyId: string): ReactNode => {
+  if (part.type === "reasoning") {
+    return (
+      <div key={`reasoning-${keyId}`} className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+        {part.content}
+      </div>
+    )
+  }
+  return renderPart(part, keyId)
+}
+  // preserving their original logical order (thinking → tool → thinking → tool).
+  const collapsiblePartIds = new Set(["reasoning", "tool-call", "tool-result", "tool-group"])
+  const collapsibleParts = parts.filter((p) => collapsiblePartIds.has(p.type))
+  const remainingParts = parts.filter((p) => !collapsiblePartIds.has(p.type))
+
   return (
     <div className="space-y-4">
-      {parts.map((part, i) => renderPart(part, `${i}`))}
+      {/* Collapsible container for reasoning + tools */}
+      {/* During streaming: expanded so user sees live feedback. After completion: collapsed with summary. */}
+      <Collapsible
+        className="rounded-lg border"
+        defaultOpen={isStreaming}
+      >
+        <CollapsibleTrigger asChild>
+          <div
+            className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 cursor-pointer"
+            role="button"
+            tabIndex={0}
+          >
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {reasoningParts.length > 0 && toolParts.length > 0
+                ? t("reasoningAndTools", {
+                    reasoningCount: reasoningParts.length,
+                    toolCount: toolParts.length,
+                  })
+                : reasoningParts.length > 0
+                  ? t("reasoningCount", { count: reasoningParts.length })
+                  : t("toolCount", { count: toolParts.length })}
+              {usage && (
+                <span className="ml-2 text-muted-foreground/60">
+                  · {t("tokenUsage", {
+                    tokens: (usage.input_tokens + usage.output_tokens).toLocaleString(),
+                  })}
+                </span>
+              )}
+            </span>
+            <div className="ml-auto flex items-center gap-1">
+              <Dialog open={fullScreenOpen} onOpenChange={setFullScreenOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setFullScreenOpen(true)
+                    }}
+                    title={t("fullScreen")}
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm">
+                      {t("reasoningAndToolDetails")}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <ScrollArea className="max-h-[60vh]">
+                    <div className="space-y-3">
+                      {collapsibleParts.map((part, i) =>
+                        renderGroupedPart(part, `${i}`)
+                      )}
+                    </div>
+                  </ScrollArea>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="max-h-[300px] overflow-y-auto border-t px-3 py-3 space-y-3">
+            {collapsibleParts.map((part, i) => renderGroupedPart(part, `${i}`))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Other parts (text, plan, etc.) */}
+      {remainingParts.map((part, i) => renderPart(part, `${i}`))}
     </div>
   )
 })

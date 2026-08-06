@@ -1891,6 +1891,7 @@ export function AcpAgentSettings() {
         updateSelectedDraft((current) => ({
           ...current,
           modelProviderId: providerId,
+          hermesAuthMode: "model_provider",
           apiBaseUrl: apiUrl,
           apiKey,
           model: keepModel,
@@ -4161,20 +4162,20 @@ export function AcpAgentSettings() {
 
                 <div className="space-y-2">
                   <label className="text-xs font-medium">{t("envVars")}</label>
-                  <div className="relative group">
-                    <Textarea
-                      value={selectedDraft.envText}
-                      onChange={(event) => {
-                        updateSelectedDraft((current) => ({
-                          ...current,
-                          envText: event.target.value,
-                        }))
-                      }}
-                      placeholder={"KEY1=VALUE1\nKEY2=VALUE2"}
-                      className="min-h-24"
-                    />
-                    <div className="pointer-events-none absolute inset-0 rounded-md bg-background/10 backdrop-blur-[3px] transition-opacity duration-200 group-focus-within:opacity-0" />
-                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("envVarsHint")}
+                  </p>
+                  <Textarea
+                    value={selectedDraft.envText}
+                    onChange={(event) => {
+                      updateSelectedDraft((current) => ({
+                        ...current,
+                        envText: event.target.value,
+                      }))
+                    }}
+                    placeholder={"KEY1=VALUE1\nKEY2=VALUE2"}
+                    className="min-h-24 font-mono text-xs"
+                  />
                   <div className="flex justify-end">
                     <Button
                       size="sm"
