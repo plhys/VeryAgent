@@ -3109,15 +3109,15 @@ pub(crate) fn fingerprint_config(
 pub(crate) fn all_agent_types() -> &'static [AgentType] {
     &[
         AgentType::ClaudeCode,
-        AgentType::Codex,
+        AgentType::KimiCode,
         AgentType::OpenCode,
+        AgentType::CodeBuddy,
+        AgentType::Pi,
         AgentType::Gemini,
         AgentType::OpenClaw,
         AgentType::Cline,
         AgentType::Hermes,
-        AgentType::CodeBuddy,
-        AgentType::KimiCode,
-        AgentType::Pi,
+        AgentType::Codex,
         AgentType::MimoCode,
         AgentType::CommandCode,
     ]
