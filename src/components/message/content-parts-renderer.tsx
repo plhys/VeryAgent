@@ -2478,7 +2478,7 @@ const ToolCallPart = memo(function ToolCallPart({
     )
   }
 
-  const open = (isRunning && (isCommandTool || hasLiveOutput)) || manualOpen
+  const open = (isRunning && (isCommandTool || hasLiveOutput)) || (!isRunning && (part.output != null || part.errorText != null)) || manualOpen
 
   return (
     <Tool open={open} onOpenChange={setManualOpen}>
@@ -2579,7 +2579,7 @@ const ToolGroupPart = memo(function ToolGroupPart({
   part: Extract<AdaptedContentPart, { type: "tool-group" }>
 }) {
   const t = useTranslations("Folder.chat.contentParts.toolGroup")
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   const { phrases, errorPhrase } = useMemo(() => {
     const counts = TOOL_KIND_ORDER.reduce(
