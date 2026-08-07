@@ -41,7 +41,7 @@ import { useSessionFeedback } from "@/hooks/use-session-feedback"
 import { useVisionBridgeEnabledForAgent } from "@/hooks/use-vision-bridge-enabled"
 import { AgentSelector } from "@/components/chat/agent-selector"
 import { ChatInput } from "@/components/chat/chat-input"
-import { WelcomeHero, WelcomeTip } from "@/components/chat/welcome-hero"
+import { WelcomeHero } from "@/components/chat/welcome-hero"
 import type { ComposerInjectContent } from "@/components/chat/message-input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useConversationSkillInjectStore } from "@/stores/conversation-skill-inject-store"
@@ -1551,7 +1551,7 @@ const ConversationTabView = memo(function ConversationTabView({
           </div>
           <div className="flex-1" />
           <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-6">
-            <WelcomeTip />
+            
           </div>
         </div>
       ) : showDraftHeader ? (
