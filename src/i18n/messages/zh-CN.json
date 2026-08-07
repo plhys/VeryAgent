@@ -53,7 +53,6 @@
       "experts": "专家",
       "office_tools": "办公工具",
       "skill_packs": "技能包（高级）",
-      "quick_messages": "快捷消息",
       "logs": "运行日志",
       "vision_bridge": "多模态路由",
       "skills": "个人技能"
@@ -2235,9 +2234,6 @@
         "attachLocalUpload": "附加本地文件",
         "attachServerFile": "附加服务端文件",
         "addActions": "添加",
-        "quickMessages": "快捷消息",
-        "quickMessagesEmpty": "暂无快捷消息",
-        "quickMessagesLoading": "加载中...",
         "skills": "技能",
         "pasteAsPlainText": "粘贴为纯文本",
         "cut": "剪切",
@@ -2245,7 +2241,6 @@
         "selectAll": "全选",
         "pasteUnavailable": "无法读取剪贴板，请改用 Ctrl/⌘V 粘贴。",
         "clipboardWriteFailed": "无法写入剪贴板，请改用键盘快捷键。",
-        "quickMessageUntitled": "未命名",
         "liveFeedback": "实时反馈",
         "liveFeedbackDisabledHint": "智能体工作时可发送",
         "dropFilesToAttach": "拖拽文件到此处附加",
@@ -2344,7 +2339,6 @@
           "customShortcuts": "所有快捷键都可在「设置 → 快捷键」中自定义",
           "webService": "开启「设置 → Web 服务」后，团队成员可从浏览器接入同一台 veryagent",
           "fusionMode": "打开文件或差异后，会自动与会话并排显示",
-          "quickMessages": "点输入框旁的 + 按钮选择「快捷消息」，可一键插入预存片段（在「设置 → 快捷消息」中管理）",
           "experts": "通过 + 按钮里的「专家技能」可一键加载预设角色（调试 / 规划等）"
         },
         "quickActions": {
@@ -2926,77 +2920,6 @@
       "cloneFailed": "克隆仓库失败"
     }
   },
-  "ProjectBoot": {
-    "title": "项目启动器",
-    "tabs": {
-      "shadcn": "shadcn",
-      "hyperframes": "HyperFrames"
-    },
-    "hyperframes": {
-      "title": "HyperFrames 视频项目",
-      "subtitle": "脚手架一个 HTML 转视频项目，随后工作区的智能体即可编写并渲染它。",
-      "resolution": "分辨率",
-      "skillsTitle": "智能体技能",
-      "skillsDesc": "为所选智能体全局安装 HyperFrames 技能(软链接),让它们会编写并渲染视频。",
-      "recheck": "重新检查",
-      "installedBadge": "已安装",
-      "skillsInstall": "安装 / 更新技能",
-      "skillsInstalling": "正在安装技能…",
-      "skillsInstalled": "HyperFrames 技能安装成功",
-      "skillsInstallFailed": "HyperFrames 技能安装失败"
-    },
-    "config": {
-      "base": "基础库",
-      "style": "风格",
-      "baseColor": "基础颜色",
-      "theme": "主题",
-      "chartColor": "图表颜色",
-      "iconLibrary": "图标库",
-      "font": "字体",
-      "fontHeading": "标题字体",
-      "menuAccent": "菜单强调",
-      "menuColor": "菜单颜色",
-      "radius": "圆角",
-      "template": "模板",
-      "createProject": "创建项目",
-      "sectionStyle": "风格",
-      "sectionColors": "配色",
-      "sectionTypography": "排版",
-      "sectionInterface": "界面"
-    },
-    "preview": {
-      "loading": "加载预览..."
-    },
-    "createDialog": {
-      "title": "创建项目",
-      "projectName": "项目名称",
-      "projectNamePlaceholder": "my-app",
-      "frameworkTemplate": "框架模板",
-      "packageManager": "包管理器",
-      "saveDirectory": "保存目录",
-      "saveDirectoryPlaceholder": "选择目录...",
-      "browseDirectory": "浏览",
-      "projectPath": "项目将创建在：{path}",
-      "advancedOptions": "高级选项",
-      "base": "基础库",
-      "enableRtl": "启用 RTL 支持",
-      "enableRtlDescription": "为从右到左书写的语言（如阿拉伯语、希伯来语）启用布局支持",
-      "pmChecking": "正在检测...",
-      "pmNotInstalled": "未安装",
-      "cancel": "取消",
-      "create": "创建",
-      "creating": "正在创建项目..."
-    },
-    "toasts": {
-      "createFailed": "创建项目失败",
-      "createSuccess": "项目创建成功",
-      "openWorkspaceFailed": "项目已创建，但无法在工作区中打开"
-    },
-    "errors": {
-      "directoryExists": "目标目录已存在",
-      "commandFailed": "项目创建命令执行失败。"
-    }
-  },
   "WebServiceSettings": {
     "addressSwitchHint": "切换只改变这里显示和打开的地址；服务监听所有网卡，每个地址都可访问。",
     "sectionTitle": "Web 服务",
@@ -3439,44 +3362,6 @@
     },
     "autoPreviewLabel": "自动打开预览",
     "autoPreviewHint": "当智能体创建或编辑 Word、Excel、PowerPoint 文件时，自动打开其实时预览。"
-  },
-  "QuickMessagesSettings": {
-    "title": "快捷消息",
-    "description": "管理可复用的消息片段。拖拽以调整顺序。",
-    "loading": "加载快捷消息…",
-    "emptyList": "暂无快捷消息。点击“新建”创建一条。",
-    "emptySelection": "选择一条快捷消息进行编辑。",
-    "searchPlaceholder": "按标题或内容搜索",
-    "untitled": "未命名",
-    "actions": {
-      "new": "新建",
-      "save": "保存",
-      "delete": "删除",
-      "dragSort": "拖拽排序",
-      "dragSortMessage": "拖拽排序快捷消息：{name}"
-    },
-    "fields": {
-      "title": "标题",
-      "titlePlaceholder": "为此消息取一个简短的标题",
-      "content": "内容",
-      "contentPlaceholder": "在此输入消息内容"
-    },
-    "confirmDelete": {
-      "title": "删除快捷消息？",
-      "message": "将永久删除“{name}”。确定吗？",
-      "cancel": "取消",
-      "confirm": "删除"
-    },
-    "toasts": {
-      "loadFailed": "加载快捷消息失败",
-      "createFailed": "创建快捷消息失败",
-      "saveFailed": "保存快捷消息失败",
-      "deleteFailed": "删除快捷消息失败",
-      "saveOrderFailed": "保存顺序失败",
-      "created": "已创建快捷消息",
-      "saved": "已保存快捷消息",
-      "deleted": "已删除快捷消息"
-    }
   },
   "Pet": {
     "badge": {

@@ -42,7 +42,6 @@ import { useThemeColor, useZoomLevel } from "@/hooks/use-appearance"
 import { useSortedAvailableAgents } from "@/hooks/use-sorted-available-agents"
 import {
   importLocalConversations,
-  openProjectBootWindow,
   updateConversationTitle,
   updateConversationStatus,
   updateConversationPinned,
@@ -1770,15 +1769,6 @@ export function SidebarConversationList({
     },
     [openFolder]
   )
-
-  const handleProjectBoot = useCallback(() => {
-    openProjectBootWindow().catch((err) => {
-      console.error(
-        "[SidebarConversationList] failed to open project boot:",
-        err
-      )
-    })
-  }, [])
 
   const showEmptyWorkspaceActions =
     folders.length === 0 && filteredConversations.length === 0

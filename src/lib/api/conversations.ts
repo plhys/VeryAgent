@@ -287,18 +287,7 @@ export async function openSettingsWindow(
   window.open(result.path, `settings-${section ?? "general"}`)
 }
 
-export async function openProjectBootWindow(source?: string): Promise<void> {
-  if (isDesktop()) {
-    return getShellTransport().call("open_project_boot_window", {
-      source,
-      locale: getCurrentEffectiveAppLocale(),
-      remoteConnectionId: getActiveRemoteConnectionId(),
-    })
-  }
-  if (typeof window !== "undefined") {
-    window.open("/project-boot", "project-boot")
-  }
-}
+// Removed: openProjectBootWindow (project-boot feature deleted)
 
 // Cross-window handoff for the project launcher, which lives in its own
 // window/tab and can't reach the workspace's React state directly. The

@@ -16,7 +16,6 @@ import {
   Globe,
   Keyboard,
   Menu,
-  MessageSquareText,
   SendHorizontal,
   Palette,
   PlugZap,
@@ -49,7 +48,6 @@ type SettingsNavLabelKey =
   | "image_generation"
   | "mcp"
   | "office_tools"
-  | "quick_messages"
   | "shortcuts"
   | "version_control"
   | "chat_channels"
@@ -110,11 +108,6 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
  * stay available under advanced so no existing route is dropped from the nav.
  */
 const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
-  {
-    href: "/settings/quick-messages",
-    labelKey: "quick_messages",
-    icon: MessageSquareText,
-  },
   {
     href: "/settings/mcp",
     labelKey: "mcp",

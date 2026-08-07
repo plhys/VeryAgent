@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { openProjectBootWindow } from "@/lib/api"
+
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
@@ -68,7 +68,6 @@ export function NewFolderDropdown() {
             {t("cloneRepository")}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => openProjectBootWindow()}
             className="py-1.5"
           >
             <Rocket className="h-3 w-3 shrink-0" />

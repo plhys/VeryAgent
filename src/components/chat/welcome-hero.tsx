@@ -26,7 +26,6 @@ type TipKey =
   | "customShortcuts"
   | "webService"
   | "fusionMode"
-  | "quickMessages"
   | "experts"
 
 interface TipDef {
@@ -74,7 +73,6 @@ const TIPS: TipDef[] = [
   { key: "customShortcuts" },
   { key: "webService" },
   { key: "fusionMode" },
-  { key: "quickMessages" },
   { key: "experts" },
 ]
 

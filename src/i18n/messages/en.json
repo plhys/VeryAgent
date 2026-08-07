@@ -53,7 +53,6 @@
       "experts": "Experts",
       "office_tools": "Office Tools",
       "skill_packs": "Skill Packs (Advanced)",
-      "quick_messages": "Quick Messages",
       "logs": "Runtime Logs",
       "vision_bridge": "Vision Bridge",
       "skills": "Skills"
@@ -2235,9 +2234,6 @@
         "attachLocalUpload": "Upload local file",
         "attachServerFile": "Pick server file",
         "addActions": "Add",
-        "quickMessages": "Quick messages",
-        "quickMessagesEmpty": "No quick messages",
-        "quickMessagesLoading": "Loading...",
         "skills": "Skills",
         "pasteAsPlainText": "Paste as plain text",
         "cut": "Cut",
@@ -2245,7 +2241,6 @@
         "selectAll": "Select all",
         "pasteUnavailable": "Couldn't read the clipboard. Press Ctrl/⌘V to paste instead.",
         "clipboardWriteFailed": "Couldn't write to the clipboard. Use the keyboard shortcut instead.",
-        "quickMessageUntitled": "Untitled",
         "liveFeedback": "Live feedback",
         "liveFeedbackDisabledHint": "Available while the agent is working",
         "dropFilesToAttach": "Drop files to attach",
@@ -2344,7 +2339,6 @@
           "customShortcuts": "Every shortcut is fully remappable under Settings → Shortcuts.",
           "webService": "Enable Settings → Web Service so teammates can reach the same veryagent from a browser.",
           "fusionMode": "Open a file or diff to automatically show it alongside the conversation.",
-          "quickMessages": "Open the + button next to the input and pick Quick Messages to insert a saved snippet (manage them under Settings → Quick Messages).",
           "experts": "The + button has an Expert Skills menu — preload roles like Debug or Planning with one click."
         },
         "quickActions": {
@@ -2926,77 +2920,6 @@
       "cloneFailed": "Failed to clone repository"
     }
   },
-  "ProjectBoot": {
-    "title": "Project Boot",
-    "tabs": {
-      "shadcn": "shadcn",
-      "hyperframes": "HyperFrames"
-    },
-    "hyperframes": {
-      "title": "HyperFrames Video Project",
-      "subtitle": "Scaffold an HTML-to-video project. Your workspace agent can then write and render it.",
-      "resolution": "Resolution",
-      "skillsTitle": "Agent Skills",
-      "skillsDesc": "Globally install the HyperFrames skills (symlinked) for the selected agents so they can author and render video.",
-      "recheck": "Re-check",
-      "installedBadge": "Installed",
-      "skillsInstall": "Install / update skills",
-      "skillsInstalling": "Installing skills…",
-      "skillsInstalled": "HyperFrames skills installed",
-      "skillsInstallFailed": "Couldn't install HyperFrames skills"
-    },
-    "config": {
-      "base": "Base",
-      "style": "Style",
-      "baseColor": "Base Color",
-      "theme": "Theme",
-      "chartColor": "Chart Color",
-      "iconLibrary": "Icon Library",
-      "font": "Font",
-      "fontHeading": "Heading Font",
-      "menuAccent": "Menu Accent",
-      "menuColor": "Menu Color",
-      "radius": "Radius",
-      "template": "Template",
-      "createProject": "Create Project",
-      "sectionStyle": "Style",
-      "sectionColors": "Colors",
-      "sectionTypography": "Typography",
-      "sectionInterface": "Interface"
-    },
-    "preview": {
-      "loading": "Loading preview..."
-    },
-    "createDialog": {
-      "title": "Create Project",
-      "projectName": "Project Name",
-      "projectNamePlaceholder": "my-app",
-      "frameworkTemplate": "Framework Template",
-      "packageManager": "Package Manager",
-      "saveDirectory": "Save Directory",
-      "saveDirectoryPlaceholder": "Select directory...",
-      "browseDirectory": "Browse",
-      "projectPath": "Project will be created at: {path}",
-      "advancedOptions": "Advanced Options",
-      "base": "Base Library",
-      "enableRtl": "Enable RTL Support",
-      "enableRtlDescription": "Enable layout support for right-to-left languages (e.g. Arabic, Hebrew)",
-      "pmChecking": "Checking...",
-      "pmNotInstalled": "Not installed",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating project..."
-    },
-    "toasts": {
-      "createFailed": "Failed to create project",
-      "createSuccess": "Project created successfully",
-      "openWorkspaceFailed": "Project created, but couldn't open it in the workspace"
-    },
-    "errors": {
-      "directoryExists": "Target directory already exists",
-      "commandFailed": "Project creation command failed."
-    }
-  },
   "WebServiceSettings": {
     "addressSwitchHint": "Switching only changes the address shown and opened here — the service listens on all interfaces and stays reachable at every address.",
     "sectionTitle": "Web Service",
@@ -3439,44 +3362,6 @@
     },
     "autoPreviewLabel": "Auto-open preview",
     "autoPreviewHint": "When an agent creates or edits a Word, Excel, or PowerPoint file, open its live preview automatically."
-  },
-  "QuickMessagesSettings": {
-    "title": "Quick Messages",
-    "description": "Manage reusable message snippets. Drag to reorder.",
-    "loading": "Loading quick messages…",
-    "emptyList": "No quick messages yet. Click \"New\" to create one.",
-    "emptySelection": "Select a quick message to edit.",
-    "searchPlaceholder": "Search by title or content",
-    "untitled": "Untitled",
-    "actions": {
-      "new": "New",
-      "save": "Save",
-      "delete": "Delete",
-      "dragSort": "Drag to reorder",
-      "dragSortMessage": "Drag to reorder quick message: {name}"
-    },
-    "fields": {
-      "title": "Title",
-      "titlePlaceholder": "Give this message a short title",
-      "content": "Content",
-      "contentPlaceholder": "Write the message content here"
-    },
-    "confirmDelete": {
-      "title": "Delete quick message?",
-      "message": "This will permanently delete \"{name}\". Are you sure?",
-      "cancel": "Cancel",
-      "confirm": "Delete"
-    },
-    "toasts": {
-      "loadFailed": "Failed to load quick messages",
-      "createFailed": "Failed to create quick message",
-      "saveFailed": "Failed to save quick message",
-      "deleteFailed": "Failed to delete quick message",
-      "saveOrderFailed": "Failed to save order",
-      "created": "Quick message created",
-      "saved": "Quick message saved",
-      "deleted": "Quick message deleted"
-    }
   },
   "Pet": {
     "badge": {

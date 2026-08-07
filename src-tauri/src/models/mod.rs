@@ -6,7 +6,6 @@ pub mod folder;
 pub mod message;
 pub mod model_provider;
 pub mod pet;
-pub mod quick_message;
 pub mod remote_workspace_connection;
 pub mod system;
 
@@ -30,7 +29,6 @@ pub use message::{
     AgentExecutionStats, AgentToolCall, ContentBlock, ImageData, MessageRole, MessageTurn,
     TurnRole, TurnUsage, UnifiedMessage,
 };
-pub use quick_message::QuickMessageInfo;
 pub use remote_workspace_connection::RemoteWorkspaceConnectionInfo;
 #[cfg(feature = "tauri-runtime")]
 pub use system::SystemRenderingSettings;

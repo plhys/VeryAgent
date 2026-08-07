@@ -12,7 +12,6 @@ pub mod folder_command;
 pub mod model_provider;
 pub mod opened_tab;
 pub mod prelude;
-pub mod quick_message;
 pub mod remote_workspace_connection;
 pub mod image_generation;
 pub mod vision_bridge;

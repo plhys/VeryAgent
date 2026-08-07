@@ -65,7 +65,6 @@ import {
 import { useShortcutSettings } from "@/hooks/use-shortcut-settings"
 import {
   readFileBase64,
-  quickMessagesList,
   uploadAttachment,
   uploadLocalPathToRemote,
   isEmptyAttachmentError,
@@ -95,7 +94,7 @@ import type {
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
-  QuickMessage,
+  PlanEntry,
   SessionConfigOptionInfo,
   SessionModeInfo,
 } from "@/lib/types"
@@ -680,8 +679,6 @@ export function MessageInput({
   const [attachments, setAttachments] = useState<InputAttachment[]>([])
   const embeddedPayloadsRef = useRef<Map<string, PromptInputBlock>>(new Map())
   const [isDragActive, setIsDragActive] = useState(false)
-  const [quickMessages, setQuickMessages] = useState<QuickMessage[]>([])
-  const [quickMessagesLoading, setQuickMessagesLoading] = useState(false)
   // Whether the async Clipboard read API is usable here. It's absent in
   // non-secure web deployments served over HTTP/LAN (see installClipboardFallback
   // in lib/utils, which only shims writeText), so the composer's custom
@@ -3289,48 +3286,6 @@ export function MessageInput({
                           </DropdownMenuItem>
                         </>
                       )}
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger className="text-xs gap-2 px-3 py-1.5 rounded-md">
-                          <MessageSquareText className="size-3.5" />
-                          {t("quickMessages")}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent
-                          className="min-w-40 overflow-y-auto"
-                          style={{
-                            maxWidth: "min(20rem, calc(100vw - 1rem))",
-                            maxHeight:
-                              "min(32rem, var(--radix-dropdown-menu-content-available-height))",
-                          }}
-                        >
-                          {quickMessagesLoading &&
-                          quickMessages.length === 0 ? (
-                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                              {t("quickMessagesLoading")}
-                            </div>
-                          ) : quickMessages.length === 0 ? (
-                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                              {t("quickMessagesEmpty")}
-                            </div>
-                          ) : (
-                            quickMessages.map((message) => (
-                              <DropdownMenuItem
-                                key={message.id}
-                                onClick={() =>
-                                  handleQuickMessageSelect(message)
-                                }
-                              >
-                                <span className="truncate">
-                                  {message.title || (
-                                    <span className="italic text-muted-foreground">
-                                      {t("quickMessageUntitled")}
-                                    </span>
-                                  )}
-                                </span>
-                              </DropdownMenuItem>
-                            ))
-                          )}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
                       {onAddFeedback && (
                         <DropdownMenuItem
                           className="text-xs gap-2 px-3 py-1.5 rounded-md"
@@ -3806,47 +3761,7 @@ export function MessageInput({
               <TextSelect className="size-4" />
               {t("selectAll")}
             </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuSub>
-              <ContextMenuSubTrigger disabled={disabled}>
-                <MessageSquareText className="size-4" />
-                {t("quickMessages")}
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent
-                className="min-w-40 overflow-y-auto"
-                style={{
-                  maxWidth: "min(20rem, calc(100vw - 1rem))",
-                  maxHeight:
-                    "min(32rem, var(--radix-context-menu-content-available-height))",
-                }}
-              >
-                {quickMessagesLoading && quickMessages.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                    {t("quickMessagesLoading")}
-                  </div>
-                ) : quickMessages.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                    {t("quickMessagesEmpty")}
-                  </div>
-                ) : (
-                  quickMessages.map((message) => (
-                    <ContextMenuItem
-                      key={message.id}
-                      onSelect={() => handleQuickMessageSelect(message)}
-                    >
-                      <span className="truncate">
-                        {message.title || (
-                          <span className="italic text-muted-foreground">
-                            {t("quickMessageUntitled")}
-                          </span>
-                        )}
-                      </span>
-                    </ContextMenuItem>
-                  ))
-                )}
-              </ContextMenuSubContent>
-            </ContextMenuSub>
-          </ContextMenuContent>
+            </ContextMenuContent>
         </ContextMenu>
         {hasFolderBranchPicker && (
           // `pl-2` mirrors the action bar's `px-2` so this row lines up with the
