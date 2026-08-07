@@ -29,11 +29,11 @@ pub struct NpmInstallResult {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NpmInstallParams {
-    /// npm package name, e.g. `"openwiki"`.
+    /// npm package name, e.g. `"@org/my-cli"`.
     pub package_name: String,
-    /// Expected binary name produced by the package, e.g. `"openwiki"`.
+    /// Expected binary name produced by the package, e.g. `"my-cli"`.
     pub binary_name: String,
-    /// Tauri / web event channel for streamed progress, e.g. `"app://openwiki-install"`.
+    /// Tauri / web event channel for streamed progress, e.g. `"app://my-cli-install"`.
     pub event_channel: String,
     /// Client-side correlation id for the install stream.
     pub task_id: String,

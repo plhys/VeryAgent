@@ -842,12 +842,6 @@ pub(crate) async fn do_start_web_server_tauri(
             .state::<crate::acp::image_generation::ImageGenerationRuntimeConfig>()
             .inner()
             .clone(),
-        // Reuse the same OpenWiki config handle session inject reads, so
-        // HTTP-side openwiki settings target the identical runtime snapshot.
-        openwiki_config: app
-            .state::<crate::openwiki::OpenWikiRuntimeConfig>()
-            .inner()
-            .clone(),
         system_op_lock: crate::app_state::default_system_op_lock(),
         // Reuse the same handle the desktop `app_update` commands write to so
         // HTTP and webview readers see the identical update snapshot.

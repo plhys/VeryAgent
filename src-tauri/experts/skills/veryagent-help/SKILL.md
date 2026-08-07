@@ -84,7 +84,6 @@ description: "VeryAgent 内部助手 — 熟悉平台架构、配置、功能导
 | **System** | Settings → System | 数据目录路径、更新源（GitHub/Gitea） |
 | **Vision Bridge** | Settings → Vision Bridge | 多模态视觉模型配置（图片分析能力） |
 | **Office Tools** | Settings → Office Tools | .docx/.xlsx/.pptx 生成与预览配置 |
-| **OpenWiki** | Settings → OpenWiki | Wiki 插件安装与管理 |
 
 ---
 

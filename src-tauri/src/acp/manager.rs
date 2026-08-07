@@ -210,13 +210,6 @@ pub struct ConnectionManager {
     /// no cap, no cumulative growth; entries are removed on answer / cancel /
     /// connection teardown.
     pending_questions: Arc<Mutex<HashMap<String, PendingQuestionEntry>>>,
-    /// Hot-swappable OpenWiki config used at first-prompt inject time.
-    /// Wrapped in `Arc<std::sync::Mutex<…>>` so `clone_ref` clones share the
-    /// same slot and bootstrap can install from a sync call even while the
-    /// tokio runtime is already running (server path calls this from
-    /// `async_main`). Do not use `tokio::sync::Mutex` here: its
-    /// `blocking_lock()` panics inside a runtime.
-    openwiki_config: Arc<std::sync::Mutex<Option<crate::openwiki::OpenWikiRuntimeConfig>>>,
 }
 
 /// A parked `ask_user_question` awaiting its answer. The `sender` resolves the
@@ -243,7 +236,6 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
-            openwiki_config: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -256,7 +248,6 @@ impl ConnectionManager {
             delegation_injection: self.delegation_injection.clone(),
             probe_locks: self.probe_locks.clone(),
             pending_questions: self.pending_questions.clone(),
-            openwiki_config: self.openwiki_config.clone(),
         }
     }
 
@@ -267,28 +258,8 @@ impl ConnectionManager {
         let _ = self.delegation_injection.set(injection);
     }
 
-    /// Install the OpenWiki runtime config used for first-prompt injection.
-    /// Shared across `clone_ref` clones via the Arc slot.
-    pub fn install_openwiki_config(&self, config: crate::openwiki::OpenWikiRuntimeConfig) {
-        // Critical short critical section: store the shared Arc handle only.
-        // Safe to call from sync bootstrap and from inside a tokio runtime.
-        *self
-            .openwiki_config
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(config);
-    }
-
     fn delegation_snapshot(&self) -> Option<crate::acp::connection::DelegationInjection> {
         self.delegation_injection.get().cloned()
-    }
-
-    /// Snapshot the OpenWiki runtime config for session inject.
-    /// Returns `None` when not installed (unit tests / bare managers).
-    async fn openwiki_runtime(&self) -> Option<crate::openwiki::OpenWikiRuntimeConfig> {
-        self.openwiki_config
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
     }
 
     /// Test-only constructor that overrides the spawn-handshake timeout.
@@ -302,7 +273,6 @@ impl ConnectionManager {
             delegation_injection: Arc::new(std::sync::OnceLock::new()),
             probe_locks: Arc::new(Mutex::new(HashMap::new())),
             pending_questions: Arc::new(Mutex::new(HashMap::new())),
-            openwiki_config: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -1154,37 +1124,7 @@ impl ConnectionManager {
         // before any write lock below. Holding a tokio RwLock read guard across
         // an await while later acquiring write on the same lock causes a deadlock
         // (or, under concurrent traffic, an Arc assert_unchecked crash).
-        let mut blocks = blocks;
-        let mut did_inject_openwiki = false;
-        if delegation.is_none() {
-            // Single read — guard drops at the end of this block.
-            let (already_wiki, working_dir) = {
-                let s = state_arc.read().await;
-                (
-                    s.openwiki_injected,
-                    s.working_dir.clone(),
-                )
-            };
-
-            // OpenWiki preamble: first-prompt latch, authorized agents only.
-            // Uses the hot-swappable runtime config when present on AppState; when
-            // the manager is exercised without it (unit tests), injection is a no-op.
-            if let Some(runtime) = self.openwiki_runtime().await {
-                let config = runtime.snapshot().await;
-                match crate::openwiki::maybe_inject_openwiki(
-                    &config,
-                    agent_type,
-                    already_wiki,
-                    working_dir.as_ref().map(|p| p.as_path()),
-                ) {
-                    crate::openwiki::OpenWikiInjectDecision::Inject { preamble } => {
-                        crate::openwiki::inject::prepend_preamble(&mut blocks, preamble);
-                        did_inject_openwiki = true;
-                    }
-                    crate::openwiki::OpenWikiInjectDecision::Skip => {}
-                }
-            }
-        }
+        let blocks = blocks;
 
         // We hold `_prompt_guard` here, so call the lock-free inner helper —
         // re-entering `send_prompt` would try to acquire the same mutex and
@@ -1199,19 +1139,6 @@ impl ConnectionManager {
         // row would be stuck until a follow-up `send_prompt_linked` re-flipped it.
         match self.send_prompt_inner(conn_id, blocks, user_message).await {
             Ok(()) => {
-                // Latch only after the prompt actually reached the agent so a
-                // failed enqueue can still inject on the next attempt.
-                // Single write lock for both flags — avoids two consecutive
-                // write acquisitions that could race with concurrent readers.
-                if did_inject_openwiki {
-                    let mut s = state_arc.write().await;
-                    if did_inject_openwiki {
-                        s.openwiki_injected = true;
-                        tracing::info!(
-                            "[openwiki] injected wiki preamble for conn={conn_id} agent={agent_type:?}"
-                        );
-                    }
-                }
                 // The prompt reached the agent: surface it to the chat-channel
                 // "user message" event feed. Notification-only — never gates the
                 // send result.

@@ -7,6 +7,7 @@ import type {
   LiveSessionSnapshot,
   QuestionAnswer,
   PromptInputBlock,
+  AgentOptionsSnapshot,
 } from "../types"
 
 export async function acpConnect(
@@ -51,6 +52,21 @@ export async function acpSetMode(
   modeId: string
 ): Promise<void> {
   return getTransport().call("acp_set_mode", { connectionId, modeId })
+}
+
+/**
+ * Probe a transient session for the agent's modes / config options / slash
+ * commands. Used by the automation editor and delegation defaults to render
+ * live selectors without touching an active connection.
+ */
+export async function describeAgentOptions(
+  agentType: AgentType,
+  workingDir: string | null = null
+): Promise<AgentOptionsSnapshot> {
+  return getTransport().call("acp_describe_agent_options", {
+    agentType,
+    workingDir,
+  })
 }
 
 export async function acpSetConfigOption(

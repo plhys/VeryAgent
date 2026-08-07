@@ -114,38 +114,6 @@ pub fn build_router(
             post(handlers::image_generation::fetch_image_generation_models),
         )
         .route(
-            "/openwiki_get_config",
-            post(handlers::openwiki::get_openwiki_config),
-        )
-        .route(
-            "/openwiki_save_config",
-            post(handlers::openwiki::set_openwiki_config),
-        )
-        .route(
-            "/openwiki_status",
-            post(handlers::openwiki::get_openwiki_status),
-        )
-        .route(
-            "/openwiki_run",
-            post(handlers::openwiki::run_openwiki),
-        )
-        .route(
-            "/openwiki_get_instructions",
-            post(handlers::openwiki::get_openwiki_instructions),
-        )
-        .route(
-            "/openwiki_save_instructions",
-            post(handlers::openwiki::set_openwiki_instructions),
-        )
-        .route(
-            "/openwiki_install_cli",
-            post(handlers::openwiki::install_openwiki_cli),
-        )
-        .route(
-            "/openwiki_uninstall_cli",
-            post(handlers::openwiki::uninstall_openwiki_cli),
-        )
-        .route(
             "/npm_install_cli",
             post(handlers::npm_cli::install_npm_cli),
         )

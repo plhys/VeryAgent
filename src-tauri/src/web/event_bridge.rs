@@ -180,10 +180,6 @@ pub const VISION_BRIDGE_SETTINGS_CHANGED_EVENT: &str = "vision-bridge-settings:/
 /// [`VISION_BRIDGE_SETTINGS_CHANGED_EVENT`].
 pub const IMAGE_GENERATION_SETTINGS_CHANGED_EVENT: &str = "image-generation-settings://changed";
 
-/// Global side-channel announcing an OpenWiki config save. Same cross-window
-/// rationale as [`VISION_BRIDGE_SETTINGS_CHANGED_EVENT`]. Payload: `OpenWikiConfig`.
-pub const OPENWIKI_SETTINGS_CHANGED_EVENT: &str = "openwiki-settings://changed";
-
 /// Payload for the global [`CONVERSATION_CHANGED_EVENT`] side-channel. Drives
 /// cross-client sidebar sync (membership + status) independent of the
 /// per-connection ACP attach protocol, so clients that are NOT attached to a
@@ -372,6 +368,10 @@ where
         }
         s.apply_event(&payload);
         s.event_seq += 1;
+        // TEMP DEBUG: log TurnComplete emission with seq
+        if matches!(&payload, AcpEvent::TurnComplete { .. }) {
+            tracing::info!("[ACP-DEBUG] emit_with_state TurnComplete seq={} conn_id={}", s.event_seq, s.connection_id);
+        }
         let envelope = Arc::new(EventEnvelope {
             seq: s.event_seq,
             connection_id: s.connection_id.clone(),

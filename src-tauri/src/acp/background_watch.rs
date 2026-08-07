@@ -140,9 +140,10 @@ impl PromptLedger {
         };
         let mut entries = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         entries.push_back(LedgerEntry {
-            fingerprint,
+            fingerprint: fingerprint.clone(),
             recorded_at: Instant::now(),
         });
+        tracing::info!("[bg-watch] recorded fingerprint={:?}", fingerprint.chars().take(40).collect::<String>());
         while entries.len() > LEDGER_CAP {
             entries.pop_front();
         }
@@ -160,12 +161,23 @@ impl PromptLedger {
         }
         let mut entries = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         entries.retain(|e| e.recorded_at.elapsed() < LEDGER_TTL);
+        // Log ledger state for debugging
+        if entries.is_empty() {
+            tracing::info!("[bg-watch] consume_matching: ledger EMPTY, text={:?}", text.chars().take(60).collect::<String>());
+        }
         if let Some(pos) = entries
             .iter()
             .position(|e| text == e.fingerprint || text.starts_with(e.fingerprint.as_str()))
         {
             entries.remove(pos);
             return true;
+        }
+        if !entries.is_empty() {
+            tracing::info!(
+                "[bg-watch] consume_matching: NO MATCH text={:?} fingerprints={:?}",
+                text.chars().take(60).collect::<String>(),
+                entries.iter().map(|e| e.fingerprint.chars().take(40).collect::<String>()).collect::<Vec<_>>()
+            );
         }
         false
     }
@@ -766,10 +778,18 @@ impl WatchState {
                 self.mode = Mode::Foreground;
                 return;
             }
-            tracing::debug!(
-                "[bg-watch] out-of-turn initiator: {:?}",
-                initiator_text.chars().take(60).collect::<String>()
+            tracing::info!(
+                "[bg-watch] LEDGER_MISS initiator={:?}",
+                initiator_text.chars().take(120).collect::<String>(),
             );
+            // When mode is Foreground (wire-rendered turn in progress), a user
+            // record that doesn't match the ledger is a Claude Code internal
+            // continuation prompt (e.g. "[Your previous response had no visible
+            // output...]"). Skip it entirely — don't start a background episode.
+            if matches!(self.mode, Mode::Foreground) {
+                tracing::info!("[bg-watch] skipping auto-continuation prompt in foreground mode");
+                return;
+            }
             let rotate = self
                 .episode
                 .as_ref()

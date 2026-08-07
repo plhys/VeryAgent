@@ -2352,16 +2352,6 @@ export interface OfficecliInstallEvent {
   payload: string
 }
 
-export type OpenWikiInstallEventKind =
-  "started" | "progress" | "log" | "completed" | "failed"
-
-export interface OpenWikiInstallEvent {
-  task_id: string
-  kind: OpenWikiInstallEventKind
-  /** Log line, or JSON `{"percent":n,"label":"..."}` for progress. */
-  payload: string
-}
-
 // ─── Chat Channels ───
 
 export type ChannelType = "lark" | "telegram" | "weixin"

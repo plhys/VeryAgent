@@ -3928,6 +3928,16 @@ async fn run_conversation_loop<'a>(
                                     {
                                         emit_with_state(state, emitter, err_event).await;
                                     }
+                                    // Guard against duplicate TurnComplete from select! race
+                                    {
+                                        let mut s = state.write().await;
+                                        if s.turn_complete_emitted {
+                                            tracing::info!("[ACP-DEBUG] TurnComplete ALREADY emitted, skipping (StopReason branch)");
+                                            break;
+                                        }
+                                        s.turn_complete_emitted = true;
+                                        tracing::info!("[ACP-DEBUG] TurnComplete emitted (StopReason branch) reason={} conn={}", reason_str, conn_id);
+                                    }
                                     emit_transcript_turns(state, emitter, agent_type).await;
                                     emit_with_state(
                                         state,
@@ -3999,6 +4009,16 @@ async fn run_conversation_loop<'a>(
                                 turn_failure_error_event(reason_str, agent_type)
                             {
                                 emit_with_state(state, emitter, err_event).await;
+                            }
+                            // Guard against duplicate TurnComplete from select! race
+                            {
+                                let mut s = state.write().await;
+                                if s.turn_complete_emitted {
+                                    tracing::info!("[ACP-DEBUG] TurnComplete ALREADY emitted, skipping (prompt_result branch)");
+                                    break;
+                                }
+                                s.turn_complete_emitted = true;
+                                tracing::info!("[ACP-DEBUG] TurnComplete emitted (prompt_result branch) reason={} conn={}", reason_str, conn_id);
                             }
                             emit_transcript_turns(state, emitter, agent_type).await;
                             emit_with_state(

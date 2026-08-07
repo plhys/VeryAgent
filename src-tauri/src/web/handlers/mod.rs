@@ -29,7 +29,6 @@ pub mod terminal;
 pub mod image_generation;
 pub mod vision_bridge;
 pub mod npm_cli;
-pub mod openwiki;
 mod upload_jail;
 pub mod version_control;
 pub mod web_server;

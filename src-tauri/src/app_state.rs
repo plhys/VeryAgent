@@ -68,10 +68,6 @@ pub struct AppState {
     /// `DelegationInjection`; updated by the image generation settings command.
     /// Populated at startup by `apply_persisted_image_generation_config`.
     pub image_generation_config: crate::acp::image_generation::ImageGenerationRuntimeConfig,
-    /// Hot-swappable OpenWiki config (permissions + inject policy). Read at
-    /// session-prompt inject time; updated by the OpenWiki settings command on
-    /// save. Populated at startup by `apply_persisted_openwiki_config`.
-    pub openwiki_config: crate::openwiki::OpenWikiRuntimeConfig,
     /// Serializes mutually-exclusive system operations — in-place
     /// self-update, restart, rollback — so a second click can't race a
     /// download/swap already in flight. Handlers `try_lock` and reject when
@@ -279,7 +275,6 @@ impl AppState {
             session_info_config,
             vision_bridge_config,
             image_generation_config,
-            openwiki_config: crate::openwiki::OpenWikiRuntimeConfig::new(),
             system_op_lock: default_system_op_lock(),
             update_state: default_update_state(),
         }

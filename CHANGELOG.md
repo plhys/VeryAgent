@@ -21,6 +21,15 @@
 
 ### 变更
 
+- **移除 OpenWiki 集成**：删除整个 OpenWiki 模块（`src-tauri/src/openwiki/`、`commands/openwiki.rs`、`web/handlers/openwiki.rs`、前端设置页面及 API），约 2.6k 行。
+- **补充缺失前端 API 模块**：新增 `image-generation.ts`、`vision-bridge.ts`，补充 `describeAgentOptions` 导出，修复前端编译报错。
+
+### 修复
+
+- **Claude Code 双回复**：`background_watch.rs` 中，当 watcher 处于 `Foreground` 模式时，跳过不匹配 ledger 的 user 记录（Claude Code 自动续写提示），防止被当作 BackgroundActivity 重复发射。
+
+### 变更
+
 - **权限/模式显示优化**：从 `variant="name"` 改为 `variant="name-value"`，显示当前值而非仅名称。
 - **多智能体协同设置**：从常规设置中独立出来，入口更明显。
 - **Hermes 认证模式统一**：`handleModelProviderSelect` 中设置 `hermesAuthMode: "model_provider"`，确保模型列表能正常刷新。

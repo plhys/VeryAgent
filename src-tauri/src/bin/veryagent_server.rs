@@ -299,16 +299,9 @@ async fn async_main() -> ExitCode {
         session_info_config: session_info_config.clone(),
         vision_bridge_config: vision_bridge_config.clone(),
         image_generation_config: image_generation_config.clone(),
-        openwiki_config: veryagent_lib::openwiki::OpenWikiRuntimeConfig::new(),
         system_op_lock: veryagent_lib::app_state::default_system_op_lock(),
         update_state: veryagent_lib::app_state::default_update_state(),
     });
-    // Session inject reads OpenWiki from ConnectionManager; share the same
-    // hot-swappable handle as AppState / HTTP settings.
-    state
-        .connection_manager
-        .install_openwiki_config(state.openwiki_config.clone());
-
     // Logging phase 3: wire the emitter so the Logs viewer's live tail
     // (`logs://appended`) reaches WS clients.
     if let Some(hub) = veryagent_lib::logging::hub::log_hub() {
@@ -351,12 +344,6 @@ async fn async_main() -> ExitCode {
     veryagent_lib::commands::image_generation::apply_persisted_image_generation_config(
         &state.db.conn,
         &image_generation_config,
-    )
-    .await;
-    // Same for OpenWiki config + agent permissions.
-    veryagent_lib::commands::openwiki::apply_persisted_openwiki_config(
-        &state.db.conn,
-        &state.openwiki_config,
     )
     .await;
 

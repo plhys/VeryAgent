@@ -837,6 +837,19 @@ pub async fn get_folder_conversation_with_live_core(
         detail.in_flight_user_turn_id =
             apply_in_flight_message_id(&mut detail.turns, &pending, started_at);
     }
+    // When the conversation has an active connection, the frontend's streaming
+    // localTurns are the authoritative source for the assistant reply. Strip
+    // assistant turns from detail.turns so the frontend doesn't render them
+    // alongside the streaming copy (the IDs differ and deduplication won't catch
+    // them). Also set in_flight_user_turn_id so FETCH_DETAIL_SUCCESS preserves
+    // localTurns instead of clearing them.
+    if manager.find_connection_by_conversation_id(conversation_id).await.is_some()
+    {
+        detail.turns.retain(|t| !matches!(t.role, crate::models::message::TurnRole::Assistant));
+        if detail.in_flight_user_turn_id.is_none() {
+            detail.in_flight_user_turn_id = Some("live".to_string());
+        }
+    }
     Ok(detail)
 }
 

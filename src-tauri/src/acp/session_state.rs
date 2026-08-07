@@ -234,6 +234,7 @@ pub struct SessionState {
     /// by `completed_transcript_turns` which returns empty when the flag is set.
     /// Cleared on `TurnComplete` so the next turn can emit normally.
     pub transcript_turns_emitted: bool,
+    pub turn_complete_emitted: bool,
     pub active_tool_calls: BTreeMap<String, ToolCallState>,
     pub pending_permission: Option<PendingPermissionState>,
 
@@ -394,11 +395,7 @@ pub struct SessionState {
     /// connection alive forever. Backend-internal; not serialized.
     pub background_activity_at: Option<DateTime<Utc>>,
 
-    /// Whether the OpenWiki preamble has already been injected on this
-    /// connection. Once-per-connection latch so follow-up prompts do not
-    /// re-send the wiki context. Backend-internal; not serialized.
-    pub openwiki_injected: bool,
-}
+    }
 
 impl SessionState {
     pub fn new(
@@ -422,6 +419,7 @@ impl SessionState {
             model_name: None,
             provider_models: Vec::new(),
             transcript_turns_emitted: false,
+            turn_complete_emitted: false,
             active_tool_calls: BTreeMap::new(),
             pending_permission: None,
             pending_question: None,
@@ -451,7 +449,6 @@ impl SessionState {
             config_stale_kind: None,
             background_outstanding: 0,
             background_activity_at: None,
-            openwiki_injected: false,
         }
     }
 
@@ -843,6 +840,7 @@ impl SessionState {
                 self.status = ConnectionStatus::Connected;
             }
             AcpEvent::UserMessage { message_id, blocks } => {
+                self.turn_complete_emitted = false;
                 // Capture the in-flight user prompt so a client attaching
                 // mid-turn renders the user turn from the snapshot (the
                 // one-shot event won't replay for it). Cleared on TurnComplete.
