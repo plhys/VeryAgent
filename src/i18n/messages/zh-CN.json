@@ -603,6 +603,9 @@
       "enabled": "启用",
       "disabled": "禁用",
       "unchecked": "未检测",
+      "pass": "可用",
+      "warn": "警告",
+      "fail": "不可用",
       "agentEnabledAria": "{name} 已启用",
       "agentEnabledSwitch": "{name} 启用"
     },

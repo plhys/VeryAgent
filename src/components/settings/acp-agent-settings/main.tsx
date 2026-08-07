@@ -1236,7 +1236,11 @@ export function AcpAgentSettings() {
           <span
             className={`text-[11px] font-semibold shrink-0 ${statusTone(check.status)}`}
           >
-            {check.status.toUpperCase()}
+            {check.status === "pass"
+              ? t("status.pass")
+              : check.status === "warn"
+                ? t("status.warn")
+                : t("status.fail")}
           </span>
         </button>
 
@@ -3786,7 +3790,11 @@ export function AcpAgentSettings() {
                   ? t("status.unchecked")
                   : displaySummary === "checking"
                     ? t("readiness.badge.checking")
-                    : displaySummary.toUpperCase()
+                    : displaySummary === "pass"
+                      ? t("status.pass")
+                      : displaySummary === "warn"
+                        ? t("status.warn")
+                        : t("status.fail")
               const statusToneClass = pilotReadiness
                 ? readinessToneClass(pilotReadiness.kind)
                 : !draft.enabled

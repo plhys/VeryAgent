@@ -604,7 +604,10 @@
       "disabled": "Disabled",
       "unchecked": "Unchecked",
       "agentEnabledAria": "{name} enabled",
-      "agentEnabledSwitch": "{name} enable switch"
+      "agentEnabledSwitch": "{name} enable switch",
+      "pass": "Available",
+      "warn": "Warning",
+      "fail": "Unavailable"
     },
     "readiness": {
       "badge": {
