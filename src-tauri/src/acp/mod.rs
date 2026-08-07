@@ -1,3 +1,4 @@
+pub mod agent_runtime;
 pub mod background_watch;
 pub mod binary_cache;
 pub mod codex_goal;

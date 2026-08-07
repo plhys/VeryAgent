@@ -2,6 +2,8 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::acp::error::AcpError;
+
 #[cfg(windows)]
 use std::path::Path;
 
@@ -107,6 +109,16 @@ pub fn normalized_program<S>(program: S) -> OsString
 where
     S: AsRef<OsStr>,
 {
+    // Bundled Node.js takes priority over system PATH — this is the core of
+    // the "zero-dependency" runtime strategy. If veryAgent ships with a
+    // bundled Node.js in its resource directory, use it so agents work even
+    // when the user has no Node.js installed.
+    if program.as_ref() == OsStr::new("node") {
+        if let Some(bundled) = resolve_bundled_node() {
+            return bundled.into_os_string();
+        }
+    }
+
     #[cfg(windows)]
     {
         if let Some(resolved) = resolve_windows_program(program.as_ref()) {
@@ -124,6 +136,137 @@ where
     let mut command = tokio::process::Command::new(normalized_program(program));
     configure_tokio_command(&mut command);
     command
+}
+
+/// If veryAgent ships with a bundled Node.js, return its path.
+///
+/// Resolution order:
+/// 1. `VERYAGENT_BUNDLED_NODE_DIR` env var (development override)
+/// 2. `<resource_dir>/node/node.exe` (production bundle)
+///
+/// Returns `None` when no bundled Node.js is found.
+pub fn resolve_bundled_node() -> Option<PathBuf> {
+    // Allow override via env var (useful in development)
+    if let Ok(dir) = std::env::var("VERYAGENT_BUNDLED_NODE_DIR") {
+        if !dir.is_empty() {
+            let node_exe = PathBuf::from(dir).join("node.exe");
+            if node_exe.exists() {
+                return Some(node_exe);
+            }
+        }
+    }
+
+    // Check for bundled node in the app's resource directory.
+    // In production, this is next to the veryagent executable.
+    let exe_dir = std::env::current_exe().ok()?
+        .parent()?
+        .to_path_buf();
+
+    // Check sibling `node/` directory (side-by-side with the exe)
+    let sibling = exe_dir.join("node").join("node.exe");
+    if sibling.exists() {
+        return Some(sibling);
+    }
+
+    // Check `resources/node/` relative to the exe (Tauri bundle layout)
+    let resources = exe_dir.join("resources").join("node").join("node.exe");
+    if resources.exists() {
+        return Some(resources);
+    }
+
+    None
+}
+
+/// Download and cache a portable Node.js binary for the current platform.
+///
+/// This is called automatically when no bundled or system Node.js is found,
+/// making the first agent connection slightly slower (download time) but
+/// ensuring zero manual setup.
+pub async fn download_node() -> Result<PathBuf, AcpError> {
+    let cache_dir = match crate::acp::binary_cache::cache_dir() {
+        Ok(d) => d,
+        Err(e) => return Err(AcpError::DownloadFailed(format!(
+            "failed to resolve cache dir: {e}"
+        ))),
+    };
+    let node_dir = cache_dir.join("node");
+    let node_exe = node_dir.join("node.exe");
+
+    // Already cached
+    if node_exe.exists() {
+        return Ok(node_exe);
+    }
+
+    tracing::info!("[Node] Node.js not found locally; downloading portable build...");
+
+    // Download portable Node.js for Windows x64
+    // Using the official Node.js prebuilt binaries
+    #[cfg(target_os = "windows")]
+    let url = "https://nodejs.org/dist/v22.19.0/win-x64/node.exe";
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.gz";
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-arm64.tar.gz";
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-darwin-arm64.tar.gz";
+
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-darwin-x64.tar.gz";
+
+    std::fs::create_dir_all(&node_dir).map_err(|e| {
+        AcpError::DownloadFailed(format!("failed to create node cache dir: {e}"))
+    })?;
+
+    let response = reqwest::get(url).await.map_err(|e| {
+        AcpError::DownloadFailed(format!("failed to download Node.js: {e}"))
+    })?;
+
+    let bytes = response.bytes().await.map_err(|e| {
+        AcpError::DownloadFailed(format!("failed to read Node.js download: {e}"))
+    })?;
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: single exe file
+        std::fs::write(&node_exe, &bytes).map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to write node.exe: {e}"))
+        })?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix: tar.gz archive, extract node binary
+        use std::io::Read;
+        let decoded = flate2::read::GzDecoder::new(&bytes[..]);
+        let mut archive = tar::Archive::new(decoded);
+        for entry in archive.entries().map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to read node archive: {e}"))
+        })? {
+            let mut entry = entry.map_err(|e| {
+                AcpError::DownloadFailed(format!("failed to read node archive entry: {e}"))
+            })?;
+            if entry.path().ok().map_or(false, |p| {
+                p.ends_with("bin/node")
+            }) {
+                entry.unpack(&node_exe).map_err(|e| {
+                    AcpError::DownloadFailed(format!("failed to extract node: {e}"))
+                })?;
+                break;
+            }
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&node_exe, std::fs::Permissions::from_mode(0o755))
+                .ok();
+        }
+    }
+
+    tracing::info!("[Node] Node.js downloaded to {:?}", node_exe);
+    Ok(node_exe)
 }
 
 /// If `node` is not already in PATH, detect common Node.js version manager
@@ -145,6 +288,11 @@ where
 /// * In Docker / systemd services: typically a no-op — `which("node")`
 ///   succeeds because `node` is installed to a standard PATH directory.
 pub fn ensure_node_in_path() {
+    // Bundled Node.js takes priority — no need to search PATH further.
+    if resolve_bundled_node().is_some() {
+        return;
+    }
+
     // Already reachable — nothing to do.
     if which::which("node").is_ok() {
         return;

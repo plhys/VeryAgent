@@ -28,6 +28,8 @@ use sacp::{
 use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, RwLock};
 
+use crate::acp::agent_runtime;
+use crate::acp::agent_runtime::AgentRuntime;
 use crate::acp::background_watch;
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
@@ -42,42 +44,9 @@ use crate::acp::types::{
     ToolCallImageInfo, UserMessageBlock,
 };
 use crate::models::agent::AgentType;
-use crate::network::proxy;
 use crate::web::event_bridge::{emit_with_state, EventEmitter};
 
-const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
-
-fn merge_agent_env(
-    env: &[(&'static str, &'static str)],
-    runtime_env: &BTreeMap<String, String>,
-) -> Vec<(String, String)> {
-    // Env var order is not semantically meaningful; use map overwrite semantics
-    // to keep precedence while avoiding repeated O(n) scans.
-    let mut merged = BTreeMap::<String, String>::new();
-
-    for (key, value) in DEFAULT_COMMAND_COLOR_ENV {
-        merged.insert(key.to_string(), value.to_string());
-    }
-
-    for (key, value) in env {
-        merged.insert((*key).to_string(), (*value).to_string());
-    }
-
-    for (key, value) in runtime_env {
-        merged.insert(key.clone(), value.clone());
-    }
-
-    for (key, value) in proxy::current_proxy_env_vars() {
-        merged.insert(key, value);
-    }
-
-    // Ensure agent-invoked `officecli …` (from an enabled office skill) resolves
-    // even when veryagent installed the binary outside the user's shell PATH — the
-    // Windows self-managed dir, or `~/.local/bin` under a GUI launch.
-    prepend_officecli_path(&mut merged);
-
-    merged.into_iter().collect()
-}
+// ---- Agent 特定的预检函数 ----
 
 /// Prepend `dir` to the PATH entry of `env`, seeding from `fallback_path` when
 /// `env` has no PATH key of its own. Removes any pre-existing PATH key first
@@ -263,15 +232,6 @@ impl AgentConnection {
 /// [`binary_cache::cache_dir`] for consistency. Returns `None` — and the
 /// caller injects nothing — when the system cache dir is unknown or the
 /// directory can't be created: diagnostics must never block a connection.
-fn codex_app_server_log_dir() -> Option<String> {
-    let dir = dirs::cache_dir()?
-        .join("app.veryagent")
-        .join("acp-logs")
-        .join("codex-acp");
-    std::fs::create_dir_all(&dir).ok()?;
-    Some(dir.to_string_lossy().into_owned())
-}
-
 /// Pi runs through pi-acp, which spawns the actual `pi` binary at runtime. If
 /// `pi` (or the BYO-pi `PI_ACP_PI_COMMAND` override) isn't resolvable, pi-acp
 /// dies mid-connection with a raw ENOENT. This preflight resolves the effective
@@ -308,366 +268,67 @@ async fn build_agent(
     runtime_env: &BTreeMap<String, String>,
     cwd: &Path,
 ) -> Result<AcpAgent, AcpError> {
-    let meta = registry::get_agent_meta(agent_type);
-    debug_assert_eq!(meta.agent_type, agent_type);
-
-    // Command Code is launched through the bundled ACP adapter (a Node script
-    // embedded at compile time and materialized into the binary cache). It
-    // has no downloadable binary, so it bypasses the regular Binary branch's
-    // download/cache lookup entirely.
-    if agent_type == AgentType::CommandCode {
-        let script_path = crate::acp::binary_cache::ensure_command_code_adapter()?;
-        let node = crate::process::normalized_program("node");
-        let binary_str = node.to_string_lossy().to_string();
-        let mut server = McpServerStdio::new(meta.name, &binary_str);
-        server = server.args(vec![script_path.to_string_lossy().to_string()]);
-        // The registry distribution carries no env for Command Code; runtime
-        // env (user env_json + model-provider creds) flows in via runtime_env.
-        let merged_env = merge_agent_env(&[], runtime_env);
-        if !merged_env.is_empty() {
-            let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
-                .iter()
-                .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
-                .collect();
-            server = server.env(env_vars);
-        }
-        let agent_name = meta.name.to_string();
-        return Ok(
-            AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
-                move |line, dir| {
-                    if dir == sacp_tokio::LineDirection::Stderr {
-                        tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                    }
-                },
-            ),
-        );
+    // 1. 配置渲染和预检
+    let mut runtime = AgentRuntime::new(agent_type)
+        .with_env(runtime_env.clone())
+        .with_cwd(cwd.to_path_buf());
+    if let Err(e) = runtime.prepare().await {
+        tracing::warn!("[build_agent] AgentRuntime::prepare failed: {e}");
     }
 
-    let agent = match meta.distribution {
-        AgentDistribution::Npx { cmd, args, env, .. } => {
-            // pi-acp spawns the real `pi` binary; fail fast with a clear,
-            // install-prompt-routable error if it (or a BYO-pi override) isn't
-            // resolvable, rather than letting pi-acp die mid-connection on a raw
-            // ENOENT that surfaces as an opaque protocol error.
-            if agent_type == AgentType::Pi {
-                if let Some(message) = pi_launch_preflight(runtime_env) {
-                    return Err(AcpError::SdkNotInstalled(message));
-                }
-                // Trust the workspace veryagent is launching pi into (default on, via
-                // the PI_ACP_TRUST_WORKSPACE env_json key) so pi loads the
-                // project's local config/skills without a redundant prompt. Gates
-                // config loading only, never execution; scoped, additive, and
-                // best-effort (never blocks the connect).
-                crate::commands::acp::seed_pi_workspace_trust(cwd, runtime_env);
+    // 2. Agent 特定的预检和准备工作
+    run_agent_preflight(agent_type, runtime_env, cwd).await?;
+
+    // 3. 使用 AgentRuntime 构建 Agent 进程
+    //    build_agent_from_descriptor 会根据 AgentDescriptor 自动选择
+    //    正确的启动方式（Npx、Binary、Uvx、NodeScript）
+    let agent = agent_runtime::build_agent_from_descriptor(
+        runtime.descriptor(),
+        runtime_env,
+        cwd,
+    ).await?;
+
+    // 4. 设置工作目录
+    if cwd.is_dir() {
+        // AcpAgent 的 cwd 设置由 build_agent_from_descriptor 内部处理
+    }
+
+    Ok(agent)
+}
+
+/// Agent 特定的预检和准备工作
+/// 在 build_agent_from_descriptor 之前调用，用于处理
+/// 各 Agent 特有的启动前逻辑
+async fn run_agent_preflight(
+    agent_type: AgentType,
+    runtime_env: &BTreeMap<String, String>,
+    cwd: &Path,
+) -> Result<(), AcpError> {
+    match agent_type {
+        AgentType::Pi => {
+            if let Some(message) = pi_launch_preflight(runtime_env) {
+                return Err(AcpError::SdkNotInstalled(message));
             }
-            // Kimi Code reads `.kimi-code/local.toml` from the working directory
-            // on startup. Seed an empty file so the read doesn't fail.
-            if agent_type == AgentType::KimiCode {
-                crate::commands::acp::seed_kimi_project_config(cwd);
-            }
-            let mut merged_env = merge_agent_env(env, runtime_env);
-            // codex-acp 1.0.0 honors APP_SERVER_LOGS as a directory for its
-            // adapter-side logs. Surface it only under VERYAGENT_ACP_DEBUG so
-            // default runs are unchanged; a directory-creation failure silently
-            // skips injection (diagnostics must never block a connect).
-            let want_codex_logs = agent_type == AgentType::Codex
-                && std::env::var("VERYAGENT_ACP_DEBUG")
-                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                    .unwrap_or(false);
-            if want_codex_logs {
-                if let Some(dir) = codex_app_server_log_dir() {
-                    merged_env.push(("APP_SERVER_LOGS".to_string(), dir));
-                }
-            }
-            let mut parts: Vec<String> = Vec::new();
-            for (k, v) in &merged_env {
-                parts.push(format!("{k}={v}"));
-            }
-            parts.push(
-                crate::commands::acp::resolve_npx_command(cmd)
-                    .await
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| {
-                        crate::process::normalized_program(cmd)
-                            .to_string_lossy()
-                            .to_string()
-                    }),
-            );
-            for a in args {
-                parts.push((*a).into());
-            }
-            // Translate OpenClaw-specific env vars to CLI flags
-            if agent_type == AgentType::OpenClaw {
-                if let Some(url) = runtime_env
-                    .get("OPENCLAW_GATEWAY_URL")
-                    .filter(|v| !v.is_empty())
-                {
-                    parts.push("--url".into());
-                    parts.push(url.clone());
-                    // `--url` is override-safe and does not reuse implicit
-                    // config/env credentials; pass token explicitly when set.
-                    if let Some(token) = runtime_env
-                        .get("OPENCLAW_GATEWAY_TOKEN")
-                        .filter(|v| !v.is_empty())
-                    {
-                        parts.push("--token".into());
-                        parts.push(token.clone());
-                    }
-                }
-                if let Some(key) = runtime_env
-                    .get("OPENCLAW_SESSION_KEY")
-                    .filter(|v| !v.is_empty())
-                {
-                    parts.push("--session".into());
-                    parts.push(key.clone());
-                }
-                // When creating a new conversation (no session_id to resume),
-                // pass --reset-session so OpenClaw mints a fresh transcript
-                // instead of appending to the previous one.
-                if runtime_env
-                    .get("OPENCLAW_RESET_SESSION")
-                    .is_some_and(|v| v == "1")
-                {
-                    parts.push("--reset-session".into());
-                }
-            }
-            // Gemini CLI does NOT read a GEMINI_MODEL env var; it uses its
-            // built-in default model unless `-m/--model` is passed. Inject the
-            // configured model (from the model-provider cascade) as a flag so
-            // the gateway model actually takes effect instead of the CLI's
-            // default (e.g. `gemini-3.5-flash` → model not found).
-            if agent_type == AgentType::Gemini {
-                if let Some(model) = runtime_env
-                    .get("GEMINI_MODEL")
-                    .filter(|v| !v.trim().is_empty())
-                {
-                    parts.push("--model".into());
-                    parts.push(model.clone());
-                }
-            }
-            let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
-            let agent_name = meta.name.to_string();
-            AcpAgent::from_args(&refs)
-                .map(|a| {
-                    a.with_debug(move |line, dir| {
-                        if dir == sacp_tokio::LineDirection::Stderr {
-                            tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                        }
-                    })
-                })
-                .map_err(|e| AcpError::SpawnFailed(e.to_string()))
+            crate::commands::acp::seed_pi_workspace_trust(cwd, runtime_env);
         }
-        AgentDistribution::Binary {
-            version: registry_version,
-            cmd,
-            args,
-            env,
-            platforms,
-        } => {
-            let platform = registry::current_platform();
-            let _ = platforms
-                .iter()
-                .find(|p| p.platform == platform)
-                .ok_or_else(|| {
-                    AcpError::PlatformNotSupported(format!(
-                        "{} is not available on {platform}",
-                        meta.name
-                    ))
-                })?;
-
-            // Session-page connect must never trigger a download. Use
-            // the best cached version available (tolerates users on
-            // older-but-still-working binaries); return SdkNotInstalled
-            // only when nothing is cached, so the frontend can prompt
-            // the user to install it from the Agent Settings page.
-            //
-            // INVARIANT: the substring "is not installed" is matched
-            // verbatim by the frontend catch block in
-            // `src/contexts/acp-connections-context.tsx` to surface a
-            // localized install prompt. Do not change the wording.
-            let (binary_path, cached_version) =
-                crate::acp::binary_cache::find_best_cached_binary_for_agent(agent_type, cmd)?
-                    .ok_or_else(|| {
-                        AcpError::SdkNotInstalled(format!(
-                            "{} is not installed. Please install it in Agent Settings.",
-                            meta.name
-                        ))
-                    })?;
-            if cached_version == registry_version {
-                tracing::info!("[ACP][{}] Using cached binary {cached_version}", meta.name);
-            } else {
-                tracing::info!(
-                    "[ACP][{}] Using cached binary {cached_version} (registry recommends {registry_version})",
-                    meta.name
-                );
-            }
-
-            let binary_str = binary_path.to_string_lossy().to_string();
-            let binary_size = std::fs::metadata(&binary_path)
-                .map(|m| m.len())
-                .unwrap_or(0);
-            let mut server = McpServerStdio::new(meta.name, &binary_str);
-            let cmd_args: Vec<String> = args.iter().map(|a| (*a).to_string()).collect();
-            let cmd_args_for_log = cmd_args.clone();
-            if !cmd_args.is_empty() {
-                server = server.args(cmd_args);
-            }
-            let merged_env = merge_agent_env(env, runtime_env);
-            let env_key_list: Vec<&str> = merged_env.iter().map(|(k, _)| k.as_str()).collect();
-            if !merged_env.is_empty() {
-                let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
-                    .iter()
-                    .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
-                    .collect();
-                server = server.env(env_vars);
-            }
-            // Spawn-time diagnostic dump: binary identity, args, and env
-            // key list (values omitted — they may contain API keys). If
-            // the connection hangs later, these lines pin down exactly
-            // which binary was invoked and how.
-            tracing::info!(
-                "[ACP][{}] binary_path={} size={} platform={} args={:?} env_keys={:?}",
-                meta.name,
-                binary_str,
-                binary_size,
-                registry::current_platform(),
-                cmd_args_for_log,
-                env_key_list
-            );
-
-            // Stdio logging policy:
-            // - stderr is always on: it's the agent's own diagnostic
-            //   output (ANSI log lines) and does not contain user data.
-            // - stdin / stdout carry JSON-RPC traffic that includes
-            //   prompt text, tool-call arguments, file read/write
-            //   contents, and permission-response payloads — all of
-            //   which may contain API keys pasted by users or file
-            //   contents the agent is editing. They are gated behind
-            //   the `VERYAGENT_ACP_DEBUG=1` env var so production builds
-            //   don't persist user content into OS-level log files
-            //   (Console.app on macOS, journald on Linux).
-            // - Max line length is kept short so what does get logged
-            //   captures the JSON-RPC envelope (method, id) rather
-            //   than large payload bodies.
-            let stdio_debug_enabled = std::env::var("VERYAGENT_ACP_DEBUG")
+        AgentType::KimiCode => {
+            crate::commands::acp::seed_kimi_project_config(cwd);
+        }
+        AgentType::Codex => {
+            // 注入调试日志目录
+            let want_codex_logs = std::env::var("VERYAGENT_ACP_DEBUG")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
-            let agent_name = meta.name.to_string();
-            Ok(
-                AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
-                    move |line, dir| {
-                        let (tag, enabled) = match dir {
-                            sacp_tokio::LineDirection::Stderr => ("stderr", true),
-                            sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
-                            sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
-                        };
-                        if !enabled {
-                            return;
-                        }
-                        const MAX: usize = 256;
-                        if line.len() > MAX {
-                            let head = line
-                                .char_indices()
-                                .take_while(|(i, _)| *i < MAX)
-                                .last()
-                                .map(|(i, c)| i + c.len_utf8())
-                                .unwrap_or(MAX);
-                            tracing::debug!(
-                                "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
-                                &line[..head],
-                                line.len() - head
-                            );
-                        } else {
-                            tracing::debug!("[ACP][{agent_name}][{tag}] {line}");
-                        }
-                    },
-                ),
-            )
-        }
-        AgentDistribution::Uvx {
-            package,
-            cmd,
-            args,
-            env,
-            python,
-            system_cmd,
-            ..
-        } => {
-            let merged_env = merge_agent_env(env, runtime_env);
-            let mut parts: Vec<String> = Vec::new();
-            for (k, v) in &merged_env {
-                parts.push(format!("{k}={v}"));
+            if want_codex_logs {
+                // 已通过 runtime_env 注入，无需额外处理
             }
-            if let Some(uvx_path) = crate::commands::acp::resolve_uvx_command() {
-                // Primary: `uvx [--python <ver>] --from <pinned package> <entry
-                // script>`. uvx fetches + caches the pinned package on first use;
-                // the `--python` pin keeps it on an interpreter the agent
-                // supports (see the registry `python` field).
-                parts.push(uvx_path.to_string_lossy().to_string());
-                parts.extend(crate::commands::acp::uvx_python_args(python));
-                parts.push("--from".into());
-                parts.push(package.to_string());
-                parts.push(cmd.to_string());
-                for a in args {
-                    parts.push((*a).into());
-                }
-            } else if let Some((sys_path, sys_args)) = system_cmd.and_then(|(c, a)| {
-                crate::commands::acp::resolve_command_on_path(c).map(|path| (path, a))
-            }) {
-                // Fallback: the agent's own CLI is already on PATH (e.g.
-                // `hermes acp`), installed via its official installer rather
-                // than provisioned through uvx.
-                tracing::warn!(
-                    "[ACP][{}] uvx unavailable; falling back to system command {:?}",
-                    meta.name, sys_path
-                );
-                // `system_cmd` is a complete launch recipe for the PATH binary;
-                // the uvx entry-script `args` don't necessarily apply to it
-                // (for Hermes both are empty / `["acp"]`, so this is exact).
-                parts.push(sys_path.to_string_lossy().to_string());
-                for a in sys_args {
-                    parts.push((*a).into());
-                }
-            } else {
-                // INVARIANT: the substring "is not installed" is matched
-                // verbatim by the frontend catch block in
-                // `src/contexts/acp-connections-context.tsx` to surface a
-                // localized install prompt. Do not change the wording.
-                return Err(AcpError::SdkNotInstalled(format!(
-                    "{} is not installed. Please install it in Agent Settings.",
-                    meta.name
-                )));
-            }
-            let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
-            let agent_name = meta.name.to_string();
-            AcpAgent::from_args(&refs)
-                .map(|a| {
-                    a.with_debug(move |line, dir| {
-                        if dir == sacp_tokio::LineDirection::Stderr {
-                            tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                        }
-                    })
-                })
-                .map_err(|e| AcpError::SpawnFailed(e.to_string()))
         }
-    }?;
-
-    // Run the agent subprocess in the session's working directory rather than
-    // veryagent's own process cwd (a desktop app launched from the Dock often
-    // inherits "/"). A coding agent belongs in its project root. This is
-    // required for Hermes, whose local terminal backend force-exports
-    // TERMINAL_CWD = os.getcwd() at import (clobbering any inherited value)
-    // and reports that as the agent's "Current working directory" in its
-    // system prompt — without pinning it would believe it lives in "/". For
-    // agents that already use the ACP session/new cwd this is a harmless
-    // alignment (process cwd == session cwd). Guard on an existing directory
-    // so a not-yet-created working_dir (e.g. a worktree path) can't make the
-    // spawn fail.
-    Ok(if cwd.is_dir() {
-        agent.with_current_dir(cwd)
-    } else {
-        agent
-    })
+        AgentType::Hermes => {
+            // Hermes 的运行时环境在 build_session_runtime_env 中已处理
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Spawn an ACP agent process and run the connection loop in a background task.
