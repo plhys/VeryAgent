@@ -2003,15 +2003,6 @@ export function SidebarConversationList({
             <FolderGit2 className="h-3.5 w-3.5 mr-1.5" />
             {tFolderDropdown("cloneRepository")}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full max-w-[14rem] justify-start"
-            onClick={handleProjectBoot}
-          >
-            <Rocket className="h-3.5 w-3.5 mr-1.5" />
-            {tFolderDropdown("projectBoot")}
-          </Button>
         </div>
       ) : (
         <ContextMenu>
@@ -2120,10 +2111,6 @@ export function SidebarConversationList({
             <ContextMenuItem onSelect={() => setCloneOpen(true)}>
               <FolderGit2 className="h-4 w-4" />
               {tFolderDropdown("cloneRepository")}
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={handleProjectBoot}>
-              <Rocket className="h-4 w-4" />
-              {tFolderDropdown("projectBoot")}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>

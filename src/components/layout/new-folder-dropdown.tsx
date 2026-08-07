@@ -67,12 +67,6 @@ export function NewFolderDropdown() {
             <FolderGit2 className="h-3 w-3 shrink-0" />
             {t("cloneRepository")}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="py-1.5"
-          >
-            <Rocket className="h-3 w-3 shrink-0" />
-            {t("projectBoot")}
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <CloneDialog open={cloneOpen} onOpenChange={setCloneOpen} />
