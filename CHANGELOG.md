@@ -39,6 +39,8 @@
 
 - **Command Code 聊天历史持久化**：重启后对话记录不再丢失。新增 `conversation_turn` 表（m20260804），在 ACP turn 完成时自动将用户消息、助手回复、工具调用存入数据库，侧栏 message_count 同步更新；详情页读取改为从数据库加载，不再依赖空的 CommandCodeParser。
   - 后端：新增 migration/entity/service 层；`SessionState::completed_transcript_turns()` 投影方法；`TranscriptTurns` 事件 + lifecycle 持久化订阅；`get_folder_conversation_core` 对 Command Code 走 DB 分支。
+- **Claude 智能体双回复修复**：`emit_transcript_turns` 中 `transcript_turns_emitted` 标志改为在 `emit_with_state` 之前设置，防止并发竞态导致重复发射 `TranscriptTurns` 事件；同时增加 `turn_in_flight` 检查，仅当 turn 进行中时才发射。
+- **工具调用结果不显示修复**：`buildStreamingTurnsFromLiveMessage` 中 `else if` 条件从 `resolvedOutput`（空字符串时为 falsy）改为 `raw_output_chunks.length > 0 || content != null`，确保有输出时始终生成 `tool_result` 块；`ToolOutput` 和 `ToolCallPart` 中输出条件从 `output || errorText` 改为 `output != null || errorText != null`，支持空字符串结果渲染。
 - **Command Code 原生模型选择器**：对话框上方显示 Command Code 原生模型下拉（`model` 开关），支持 10 个预置模型（DeepSeek、Kimi、GLM、MiniMax、Qwen、Gemini、Claude、GPT 等），选择后下一轮/重连生效。适配器通过 `session/new` 的 `configOptions` 广告，`session/set_config_option` 处理选择。
 - **Command Code 自动工具权限**：默认"自动允许工具"（`permission_mode: auto`），不再弹逐工具审批卡；保留"询问后再执行"模式可切换。适配器 `tool_queued` 时根据模式跳过 `session/request_permission`。
 - **CodeBuddy 登录/登出 Windows 文件锁问题**：`fs::remove_file` 在 Windows 上因文件锁静默失败，改用三层清理（删除→重命名→覆写空白）；登出前先 `cancel_codebuddy_login()`；启动时加 `CREATE_NEW_CONSOLE` 标志防止终端关闭时带走 veryagent。

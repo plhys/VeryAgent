@@ -354,7 +354,11 @@ export const ToolOutput = ({
   ...props
 }: ToolOutputProps) => {
   const t = useTranslations("Folder.chat.tool")
-  if (!(output || errorText)) {
+  // Show the result section when there's output text (including empty string
+  // from a completed but empty tool call), error text, or a React element.
+  // Only truly absent (null/undefined) output is hidden — an empty string
+  // still renders the "Result" header so the user sees the tool completed.
+  if (output == null && errorText == null) {
     return null
   }
 

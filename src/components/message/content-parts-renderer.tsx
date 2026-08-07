@@ -2519,7 +2519,7 @@ const ToolCallPart = memo(function ToolCallPart({
               </div>
             ) : (
               !shouldHideDuplicateResult &&
-              (part.output || part.errorText) && (
+              (part.output != null || part.errorText != null) && (
                 <ToolOutput output={part.output} errorText={part.errorText} />
               )
             )}

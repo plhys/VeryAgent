@@ -3665,19 +3665,22 @@ async fn emit_transcript_turns(
     emitter: &EventEmitter,
     _agent_type: AgentType,
 ) {
-    let turns = state.read().await.completed_transcript_turns();
-    if turns.is_empty() {
+    let (turns, in_flight) = {
+        let s = state.read().await;
+        (s.completed_transcript_turns(), s.turn_in_flight)
+    };
+    if turns.is_empty() || !in_flight {
         return;
     }
+    // Set the flag BEFORE emitting to prevent a concurrent call from
+    // reading the same turns and emitting them again. Cleared on TurnComplete.
+    state.write().await.transcript_turns_emitted = true;
     emit_with_state(
         state,
         emitter,
         AcpEvent::TranscriptTurns { turns },
     )
     .await;
-    // Mark emitted so a second call (e.g. select! racing StopReason and
-    // prompt_result) is a no-op. Cleared on TurnComplete.
-    state.write().await.transcript_turns_emitted = true;
 }
 
 /// Returns `Ok(None)` on normal exit (disconnect / channel closed) or

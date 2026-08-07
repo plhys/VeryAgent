@@ -1002,7 +1002,7 @@ export function buildStreamingTurnsFromLiveMessage(
             ...(resultImages.length > 0 ? { images: resultImages } : {}),
           })
           currentGroupHasCompletedTool = true
-        } else if (resolvedOutput || (isAgent && children.length > 0)) {
+        } else if (block.info.raw_output_chunks.length > 0 || block.info.content != null || (isAgent && children.length > 0)) {
           // In-progress tool that already produced partial output (or an
           // agent with child calls). Emit the running result so the renderer
           // can display live output / nested tool calls, and flag the
