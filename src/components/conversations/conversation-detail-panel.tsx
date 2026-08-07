@@ -238,6 +238,7 @@ const ConversationTabView = memo(function ConversationTabView({
     appendOptimisticTurn,
     removeOptimisticTurn,
     appendViewerUserTurn,
+    clearBackgroundTurns,
     completeTurn,
     refetchDetail,
     syncTurnMetadata,
@@ -734,8 +735,13 @@ const ConversationTabView = memo(function ConversationTabView({
           effectiveConversationId,
           buildUserTurnFromMessageBlocks(envelope.message_id, envelope.blocks)
         )
+        // Clear stale background overlay turns from the previous turn (e.g.
+        // Claude Code auto-continuation prompts that the bg-watch misclassified
+        // as background activity). A new user message starts a fresh turn, so
+        // any lingering background turns are now stale.
+        clearBackgroundTurns(effectiveConversationId)
       },
-      [conn.connectionId, effectiveConversationId, appendViewerUserTurn]
+      [conn.connectionId, effectiveConversationId, appendViewerUserTurn, clearBackgroundTurns]
     )
   )
 
@@ -874,6 +880,7 @@ const ConversationTabView = memo(function ConversationTabView({
         optimisticTurn,
         optimisticTurn.id
       )
+      clearBackgroundTurns(effectiveConversationId)
       setSendSignal((prev) => prev + 1)
       setSyncState(effectiveConversationId, "awaiting_persist")
       setHasSentMessage(true)

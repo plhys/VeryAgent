@@ -218,6 +218,15 @@ type Action =
       watermark: number
     }
   | {
+      // Clear all background overlay turns for a conversation. Dispatched when
+      // a new user message starts a turn, so stale background activity from a
+      // previous turn (e.g. Claude Code auto-continuation prompts that the
+      // bg-watch misclassified) doesn't linger alongside the wire-rendered
+      // assistant reply.
+      type: "CLEAR_BACKGROUND_TURNS"
+      conversationId: number
+    }
+  | {
       type: "APPEND_OPTIMISTIC_TURN"
       conversationId: number
       turn: MessageTurn
@@ -1316,6 +1325,12 @@ function reducer(
         return { ...current, backgroundTurns: bounded }
       })
     }
+    case "CLEAR_BACKGROUND_TURNS": {
+      return updateSessionInState(state, action.conversationId, (current) => ({
+        ...current,
+        backgroundTurns: [],
+      }))
+    }
 
     case "APPEND_OPTIMISTIC_TURN":
       return updateSessionInState(state, action.conversationId, (current) => ({
@@ -1670,6 +1685,7 @@ export interface RuntimeActions {
     turns: MessageTurn[],
     watermark: number
   ) => void
+  clearBackgroundTurns: (conversationId: number) => void
   setLiveMessage: (
     conversationId: number,
     liveMessage: LiveMessage | null,
@@ -2252,6 +2268,8 @@ export const useConversationRuntimeStore = create<ConversationRuntimeStore>()((
         turns,
         watermark,
       }),
+    clearBackgroundTurns: (conversationId) =>
+      dispatch({ type: "CLEAR_BACKGROUND_TURNS", conversationId }),
     setLiveMessage: (conversationId, liveMessage, isLive) =>
       dispatch({
         type: "SET_LIVE_MESSAGE",

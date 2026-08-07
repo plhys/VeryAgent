@@ -1,0 +1,8 @@
+import re
+f = open('src-tauri/src/commands/conversations.rs', 'r', encoding='utf-8').read()
+old = '    // If the conversation has an active connection, strip assistant turns from\n    // detail.turns so the frontend doesn\'t render them alongside the streaming\n    // localTurns (which have different IDs and would not be deduplicated).\n    // The frontend\'s liveMessage/localTurns are the authoritative source during\n    // a live session; DB turns are only for cold starts.\n    if manager.find_connection_by_conversation_id(conversation_id).await.is_some()\n    {\n        detail.turns.retain(|t| t.role != crate::models::message::TurnRole::Assistant);\n    }'
+new = '    // When the conversation has an active connection, the frontend\'s streaming\n    // localTurns are the authoritative source for the assistant reply. Strip\n    // assistant turns from detail.turns so the frontend doesn\'t render them\n    // alongside the streaming copy (the IDs differ and deduplication won\'t catch\n    // them). Also set in_flight_user_turn_id so FETCH_DETAIL_SUCCESS preserves\n    // localTurns instead of clearing them.\n    if manager.find_connection_by_conversation_id(conversation_id).await.is_some()\n    {\n        detail.turns.retain(|t| t.role != crate::models::message::TurnRole::Assistant);\n        if detail.in_flight_user_turn_id.is_none() {\n            detail.in_flight_user_turn_id = Some("live".to_string());\n        }\n    }'
+assert old in f, 'old text not found!'
+f = f.replace(old, new, 1)
+open('src-tauri/src/commands/conversations.rs', 'w', encoding='utf-8').write(f)
+print('PATCH_OK')

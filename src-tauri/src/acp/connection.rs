@@ -5331,6 +5331,20 @@ async fn emit_conversation_update(
     raw_output_cache: &mut ToolCallOutputCache,
     cb_state: &mut CodeBuddyLiveState,
 ) {
+    // After TurnComplete has been emitted, ignore content/thinking chunks
+    // that arrive via the idle loop (e.g. Claude Code's autonomous
+    // continuation after the stop reason). They belong to a new turn that
+    // the wire already rendered — emitting them here would duplicate the
+    // response. Checked on every call so the first chunk after TurnComplete
+    // is caught; subsequent chunks within the same stale batch are also
+    // skipped because the flag stays true until the next UserMessage.
+    {
+        let s = state.read().await;
+        if s.turn_complete_emitted {
+            tracing::info!("[ACP-DEBUG] emit_conversation_update SKIPPED (turn_complete_emitted) agent={:?}", agent_type);
+            return;
+        }
+    }
     match update {
         SessionUpdate::UserMessageChunk(_) => {
             // User echo chunks are informational for transcript sync and
