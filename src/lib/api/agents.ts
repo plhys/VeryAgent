@@ -10,7 +10,6 @@ import type {
   AgentSkillContent,
   ExpertListItem,
   ExpertInstallStatus,
-  ExpertLinkState,
   LinkOp,
   LinkOpResult,
   ScienceListItem,
@@ -353,17 +352,8 @@ export async function expertsListAllInstallStatuses(): Promise<
   const result = (await getTransport().call(
     "experts_list_all_install_statuses"
   )) as ExpertInstallStatus[]
-  // 后端序列化为 "linked_to_app"（linked_to_veryagent 为旧版兼容名），前端统一用
-  // "linked_to_veryagent" —— 保留后端返回的真实状态，不能覆盖成统一的值，
-  // 否则矩阵显示与文件系统脱节、toggleCell 会走错启用/禁用分支。
-  return result.map((item) => ({
-    ...item,
-    state:
-      item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_veryagent" as ExpertLinkState)
-        ? ("linked_to_veryagent" as const)
-        : item.state,
-  }))
+  // 后端返回 "linked" 或 "not_linked"，直接透传
+  return result
 }
 
 /** Apply a batch of enable/disable ops; returns one result per op. */
@@ -424,16 +414,8 @@ export async function scienceListAllInstallStatuses(): Promise<
   const result = (await getTransport().call(
     "science_list_all_install_statuses"
   )) as ExpertInstallStatus[]
-  // Same state normalization as experts: backend may serialize as
-  // "linked_to_app" or "linked_to_veryagent", frontend uses "linked_to_veryagent".
-  return result.map((item) => ({
-    ...item,
-    state:
-      item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_veryagent" as ExpertLinkState)
-        ? ("linked_to_veryagent" as const)
-        : item.state,
-  }))
+  // 后端返回 "linked" 或 "not_linked"，直接透传
+  return result
 }
 
 /** Apply a batch of enable/disable ops; returns one result per op. */
@@ -532,16 +514,8 @@ export async function officecliSkillListAllInstallStatuses(): Promise<
   const result = (await getTransport().call(
     "officecli_skill_list_all_install_statuses"
   )) as ExpertInstallStatus[]
-  // 同 expertsListAllInstallStatuses：只做命名映射，保留真实状态。
-  // 同时兼容新版 "linked_to_app" 和旧版 "linked_to_veryagent" 序列化名。
-  return result.map((item) => ({
-    ...item,
-    state:
-      item.state === ("linked_to_app" as ExpertLinkState) ||
-      item.state === ("linked_to_veryagent" as ExpertLinkState)
-        ? ("linked_to_veryagent" as const)
-        : item.state,
-  }))
+  // 后端返回 "linked" 或 "not_linked"，直接透传
+  return result
 }
 
 /** Apply a batch of enable/disable ops; returns one result per op. */

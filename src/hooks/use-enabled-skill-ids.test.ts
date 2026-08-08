@@ -103,11 +103,9 @@ function piLinkedStatus(expertId: string): ExpertInstallStatus {
   return {
     expertId,
     agentType: "pi",
-    state: "linked_to_veryagent",
+    state: "linked",
     linkPath: "",
-    targetPath: null,
     expectedTargetPath: "",
-    copyMode: false,
   }
 }
 
