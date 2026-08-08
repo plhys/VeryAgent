@@ -15,6 +15,46 @@ use sacp_tokio::AcpAgent;
 use crate::acp::error::AcpError;
 use crate::acp::registry;
 use crate::models::agent::AgentType;
+use crate::network::proxy;
+
+/// 强制子进程彩色输出（与重构前行为一致）
+const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
+
+/// 合并 agent 子进程环境变量。
+///
+/// 优先级（后者覆盖前者）：
+/// 1. 默认彩色输出标记
+/// 2. runtime_env（DB 配置 + model provider 级联）
+/// 3. 当前进程的代理变量（HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/NO_PROXY 等）
+///
+/// 并在 PATH 前插入 officecli 安装目录，保证 agent 调用的 `officecli …` 可解析。
+///
+/// 这是重构前 `connection.rs::merge_agent_env` 的行为等价物，重构时被误删。
+/// 恢复它是因为：走代理的用户需要代理变量透传给 agent；officecli 需要 PATH
+/// 注入；CLICOLOR_FORCE 保证 ANSI 日志不被吞。
+pub(crate) fn merge_agent_env(
+    runtime_env: &BTreeMap<String, String>,
+) -> Vec<(String, String)> {
+    let mut merged = BTreeMap::<String, String>::new();
+
+    for (key, value) in DEFAULT_COMMAND_COLOR_ENV {
+        merged.insert(key.to_string(), value.to_string());
+    }
+
+    for (key, value) in runtime_env {
+        merged.insert(key.clone(), value.clone());
+    }
+
+    for (key, value) in proxy::current_proxy_env_vars() {
+        merged.insert(key, value);
+    }
+
+    // officecli 可能安装在 veryagent 自管理目录（Windows）或 ~/.local/bin（GUI 启动），
+    // 不在用户 shell PATH 里；注入使其在 agent 子进程中可解析。
+    crate::acp::connection::prepend_officecli_path(&mut merged);
+
+    merged.into_iter().collect()
+}
 
 // ---------------------------------------------------------------------------
 // AgentDescriptor — 智能体的完整描述
@@ -579,7 +619,7 @@ fn build_descriptor_for(agent_type: AgentType) -> (
     match agent_type {
         AgentType::ClaudeCode => (
             ExecutableSource::Npx {
-                package: "@agentclientprotocol/claude-agent-acp",
+                package: "@agentclientprotocol/claude-agent-acp@0.55.0",
                 cmd: "claude-agent-acp",
                 args: &[],
             },
@@ -606,7 +646,7 @@ fn build_descriptor_for(agent_type: AgentType) -> (
         ),
         AgentType::Codex => (
             ExecutableSource::Npx {
-                package: "@agentclientprotocol/codex-acp",
+                package: "@agentclientprotocol/codex-acp@1.1.0",
                 cmd: "codex-acp",
                 args: &[],
             },
@@ -628,7 +668,7 @@ model = "{{model}}"
         ),
         AgentType::Gemini => (
             ExecutableSource::Npx {
-                package: "@google/gemini-cli",
+                package: "@google/gemini-cli@0.47.0",
                 cmd: "gemini",
                 args: &["--acp", "--skip-trust"],
             },
@@ -685,7 +725,7 @@ model = "{{model}}"
         ),
         AgentType::OpenClaw => (
             ExecutableSource::Npx {
-                package: "openclaw",
+                package: "openclaw@2026.7.1",
                 cmd: "openclaw",
                 args: &["acp"],
             },
@@ -722,7 +762,7 @@ model = "{{model}}"
         ),
         AgentType::Cline => (
             ExecutableSource::Npx {
-                package: "cline",
+                package: "cline@3.0.34",
                 cmd: "cline",
                 args: &["--acp"],
             },
@@ -734,7 +774,7 @@ model = "{{model}}"
         ),
         AgentType::CodeBuddy => (
             ExecutableSource::Npx {
-                package: "@tencent-ai/codebuddy-code",
+                package: "@tencent-ai/codebuddy-code@2.117.0",
                 cmd: "codebuddy",
                 args: &["--acp"],
             },
@@ -746,7 +786,7 @@ model = "{{model}}"
         ),
         AgentType::KimiCode => (
             ExecutableSource::Npx {
-                package: "@moonshot-ai/kimi-code",
+                package: "@moonshot-ai/kimi-code@0.22.3",
                 cmd: "kimi",
                 args: &["acp"],
             },
@@ -758,7 +798,7 @@ model = "{{model}}"
         ),
         AgentType::Pi => (
             ExecutableSource::Npx {
-                package: "pi-acp",
+                package: "pi-acp@0.0.31",
                 cmd: "pi-acp",
                 args: &[],
             },
@@ -770,7 +810,7 @@ model = "{{model}}"
         ),
         AgentType::MimoCode => (
             ExecutableSource::Npx {
-                package: "@mimo-ai/cli",
+                package: "@mimo-ai/cli@0.1.6",
                 cmd: "mimo",
                 args: &["acp"],
             },
@@ -805,14 +845,14 @@ pub async fn build_agent_from_descriptor(
 ) -> Result<AcpAgent, AcpError> {
 
     match &descriptor.executable {
-        ExecutableSource::Npx { package: _, cmd, args } => {
-            build_npx_agent(descriptor, cmd, args, runtime_env).await
+        ExecutableSource::Npx { package, cmd, args } => {
+            build_npx_agent(descriptor, package, cmd, args, runtime_env, cwd).await
         }
         ExecutableSource::Binary { cmd, args } => {
-            build_binary_agent(descriptor, cmd, args, runtime_env).await
+            build_binary_agent(descriptor, cmd, args, runtime_env, cwd).await
         }
         ExecutableSource::Uvx { package, cmd, args, python, system_cmd } => {
-            build_uvx_agent(descriptor, package, cmd, args, *python, *system_cmd, runtime_env).await
+            build_uvx_agent(descriptor, package, cmd, args, *python, *system_cmd, runtime_env, cwd).await
         }
         ExecutableSource::NodeScript { script_path } => {
             build_node_script_agent(descriptor, script_path, runtime_env, cwd)
@@ -823,28 +863,38 @@ pub async fn build_agent_from_descriptor(
 /// 构建 npx 启动的 Agent
 async fn build_npx_agent(
     descriptor: &AgentDescriptor,
+    package: &str,
     cmd: &str,
     args: &[&str],
     runtime_env: &BTreeMap<String, String>,
+    cwd: &Path,
 ) -> Result<AcpAgent, AcpError> {
     let mut parts: Vec<String> = Vec::new();
 
-    // 合并环境变量（格式：KEY=VALUE）
-    for (k, v) in runtime_env {
+    // 合并环境变量（format：KEY=VALUE），含代理变量 / CLICOLOR / officecli PATH。
+    // 重构前由 merge_agent_env 注入，重构时被误删，此处恢复。
+    for (k, v) in merge_agent_env(runtime_env) {
         parts.push(format!("{k}={v}"));
     }
 
     // 解析 npx 命令路径
-    parts.push(
-        crate::commands::acp::resolve_npx_command(cmd)
-            .await
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| {
-                crate::process::normalized_program(cmd)
-                    .to_string_lossy()
-                    .to_string()
-            }),
+    let resolved = crate::commands::acp::resolve_npx_command(cmd)
+        .await
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| {
+            crate::process::normalized_program(cmd)
+                .to_string_lossy()
+                .to_string()
+        });
+
+    // 诊断日志：记录 registry-pinned package 与解析到的启动路径。
+    // 启动本身用已安装的命令（resolve_npx_command），package 仅作为版本 pin
+    // 的单一事实源（与 registry.rs 保持一致），供排障时核对安装版本。
+    tracing::debug!(
+        "[ACP][{}] npx package={} resolved_cmd={}",
+        descriptor.name, package, resolved
     );
+    parts.push(resolved);
 
     // 添加参数
     for a in args {
@@ -857,15 +907,35 @@ async fn build_npx_agent(
     let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
     let agent_name = descriptor.name.to_string();
 
-    AcpAgent::from_args(&refs)
-        .map(|a| {
-            a.with_debug(move |line, dir| {
-                if dir == sacp_tokio::LineDirection::Stderr {
-                    tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                }
+    build_agent_with_cwd(cwd, || {
+        AcpAgent::from_args(&refs)
+            .map(|a| {
+                a.with_debug(move |line, dir| {
+                    if dir == sacp_tokio::LineDirection::Stderr {
+                        tracing::debug!("[ACP][{agent_name}][stderr] {line}");
+                    }
+                })
             })
-        })
-        .map_err(|e| AcpError::SpawnFailed(e.to_string()))
+            .map_err(|e| AcpError::SpawnFailed(e.to_string()))
+    })
+}
+
+/// 若 cwd 是存在的目录，则把 agent 子进程的工作目录设为 cwd；否则原样返回。
+///
+/// 重构前 build_agent 尾部有 `agent.with_current_dir(cwd)`，重构时被误删。
+/// 恢复它是因为编码 agent 必须跑在项目根目录（Hermes 的本地终端后端会从
+/// os.getcwd() 强制导出 TERMINAL_CWD，若跑在 "/" 会报告错误的工作目录在它的
+/// system prompt 里）。对已通过 ACP session/new 设置 cwd 的 agent 是无害对齐。
+fn build_agent_with_cwd(
+    cwd: &Path,
+    build: impl FnOnce() -> Result<AcpAgent, AcpError>,
+) -> Result<AcpAgent, AcpError> {
+    let agent = build()?;
+    Ok(if cwd.is_dir() {
+        agent.with_current_dir(cwd)
+    } else {
+        agent
+    })
 }
 
 /// 构建二进制本地缓存的 Agent
@@ -874,6 +944,7 @@ async fn build_binary_agent(
     cmd: &str,
     args: &[&str],
     runtime_env: &BTreeMap<String, String>,
+    cwd: &Path,
 ) -> Result<AcpAgent, AcpError> {
     use sacp::schema::McpServerStdio;
 
@@ -897,9 +968,10 @@ async fn build_binary_agent(
         server = server.args(cmd_args);
     }
 
-    // 注入环境变量
-    if !runtime_env.is_empty() {
-        let env_vars: Vec<sacp::schema::EnvVariable> = runtime_env
+    // 注入环境变量（含代理变量 / CLICOLOR / officecli PATH，同重构前 merge_agent_env）
+    let merged_env = merge_agent_env(runtime_env);
+    if !merged_env.is_empty() {
+        let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
             .iter()
             .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
             .collect();
@@ -911,32 +983,34 @@ async fn build_binary_agent(
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    Ok(
-        AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
-            move |line, dir| {
-                let (tag, enabled) = match dir {
-                    sacp_tokio::LineDirection::Stderr => ("stderr", true),
-                    sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
-                    sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
-                };
-                if !enabled { return; }
-                const MAX: usize = 256;
-                if line.len() > MAX {
-                    let head = line.char_indices()
-                        .take_while(|(i, _)| *i < MAX)
-                        .last()
-                        .map(|(i, c)| i + c.len_utf8())
-                        .unwrap_or(MAX);
-                    tracing::debug!(
-                        "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
-                        &line[..head], line.len() - head
-                    );
-                } else {
-                    tracing::debug!("[ACP][{agent_name}][{tag}] {line}");
-                }
-            },
-        ),
-    )
+    build_agent_with_cwd(cwd, || {
+        Ok(
+            AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                move |line, dir| {
+                    let (tag, enabled) = match dir {
+                        sacp_tokio::LineDirection::Stderr => ("stderr", true),
+                        sacp_tokio::LineDirection::Stdout => ("stdout", stdio_debug_enabled),
+                        sacp_tokio::LineDirection::Stdin => ("stdin", stdio_debug_enabled),
+                    };
+                    if !enabled { return; }
+                    const MAX: usize = 256;
+                    if line.len() > MAX {
+                        let head = line.char_indices()
+                            .take_while(|(i, _)| *i < MAX)
+                            .last()
+                            .map(|(i, c)| i + c.len_utf8())
+                            .unwrap_or(MAX);
+                        tracing::debug!(
+                            "[ACP][{agent_name}][{tag}] {}... <truncated {} bytes>",
+                            &line[..head], line.len() - head
+                        );
+                    } else {
+                        tracing::debug!("[ACP][{agent_name}][{tag}] {line}");
+                    }
+                },
+            ),
+        )
+    })
 }
 
 /// 构建 uvx 启动的 Agent
@@ -948,11 +1022,12 @@ async fn build_uvx_agent(
     python: Option<&str>,
     system_cmd: Option<(&str, &[&str])>,
     runtime_env: &BTreeMap<String, String>,
+    cwd: &Path,
 ) -> Result<AcpAgent, AcpError> {
     let mut parts: Vec<String> = Vec::new();
 
-    // 合并环境变量
-    for (k, v) in runtime_env {
+    // 合并环境变量（含代理变量 / CLICOLOR / officecli PATH，同重构前 merge_agent_env）
+    for (k, v) in merge_agent_env(runtime_env) {
         parts.push(format!("{k}={v}"));
     }
 
@@ -991,15 +1066,17 @@ async fn build_uvx_agent(
     let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
     let agent_name = descriptor.name.to_string();
 
-    AcpAgent::from_args(&refs)
-        .map(|a| {
-            a.with_debug(move |line, dir| {
-                if dir == sacp_tokio::LineDirection::Stderr {
-                    tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                }
+    build_agent_with_cwd(cwd, || {
+        AcpAgent::from_args(&refs)
+            .map(|a| {
+                a.with_debug(move |line, dir| {
+                    if dir == sacp_tokio::LineDirection::Stderr {
+                        tracing::debug!("[ACP][{agent_name}][stderr] {line}");
+                    }
+                })
             })
-        })
-        .map_err(|e| AcpError::SpawnFailed(e.to_string()))
+            .map_err(|e| AcpError::SpawnFailed(e.to_string()))
+    })
 }
 
 /// 构建 Node.js 脚本启动的 Agent（如 CommandCode）
@@ -1007,7 +1084,7 @@ fn build_node_script_agent(
     descriptor: &AgentDescriptor,
     script_path: &str,
     runtime_env: &BTreeMap<String, String>,
-    _cwd: &Path,
+    cwd: &Path,
 ) -> Result<AcpAgent, AcpError> {
     use sacp::schema::McpServerStdio;
 
@@ -1023,8 +1100,10 @@ fn build_node_script_agent(
     let mut server = McpServerStdio::new(descriptor.name, &binary_str);
     server = server.args(vec![script_path.to_string_lossy().to_string()]);
 
-    if !runtime_env.is_empty() {
-        let env_vars: Vec<sacp::schema::EnvVariable> = runtime_env
+    // 注入环境变量（含代理变量 / CLICOLOR / officecli PATH，同重构前 merge_agent_env）
+    let merged_env = merge_agent_env(runtime_env);
+    if !merged_env.is_empty() {
+        let env_vars: Vec<sacp::schema::EnvVariable> = merged_env
             .iter()
             .map(|(k, v)| sacp::schema::EnvVariable::new(k, v))
             .collect();
@@ -1032,15 +1111,17 @@ fn build_node_script_agent(
     }
 
     let agent_name = descriptor.name.to_string();
-    Ok(
-        AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
-            move |line, dir| {
-                if dir == sacp_tokio::LineDirection::Stderr {
-                    tracing::debug!("[ACP][{agent_name}][stderr] {line}");
-                }
-            },
-        ),
-    )
+    build_agent_with_cwd(cwd, || {
+        Ok(
+            AcpAgent::new(sacp::schema::McpServer::Stdio(server)).with_debug(
+                move |line, dir| {
+                    if dir == sacp_tokio::LineDirection::Stderr {
+                        tracing::debug!("[ACP][{agent_name}][stderr] {line}");
+                    }
+                },
+            ),
+        )
+    })
 }
 
 /// 处理 Agent 特定的 CLI 参数翻译

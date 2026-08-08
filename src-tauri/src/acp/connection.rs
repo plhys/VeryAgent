@@ -55,7 +55,7 @@ use crate::web::event_bridge::{emit_with_state, EventEmitter};
 /// differently-cased duplicate (e.g. an inherited `Path` plus an inserted
 /// `PATH`) could clobber the injected value when the child `Command` applies
 /// them. Pure (no env/fs access) so it is unit-tested for both platforms.
-fn prepend_dir_to_path_env(
+pub(crate) fn prepend_dir_to_path_env(
     env: &mut BTreeMap<String, String>,
     dir: &str,
     fallback_path: &str,
@@ -105,7 +105,7 @@ fn prepend_dir_to_path_env(
 /// agent-invoked `officecli` resolves whether the agent execs it directly or
 /// runs it through the client `terminal/create` tool. PATH-only: never forwards
 /// model/API secrets.
-fn prepend_officecli_path(env: &mut BTreeMap<String, String>) {
+pub(crate) fn prepend_officecli_path(env: &mut BTreeMap<String, String>) {
     if let Some(dir) = crate::commands::office_tools::officecli_agent_path_dir() {
         let fallback = std::env::var("PATH").unwrap_or_default();
         prepend_dir_to_path_env(env, &dir.to_string_lossy(), &fallback, cfg!(windows));
@@ -281,17 +281,13 @@ async fn build_agent(
 
     // 3. 使用 AgentRuntime 构建 Agent 进程
     //    build_agent_from_descriptor 会根据 AgentDescriptor 自动选择
-    //    正确的启动方式（Npx、Binary、Uvx、NodeScript）
+    //    正确的启动方式（Npx、Binary、Uvx、NodeScript），并在内部设置子进程
+    //    工作目录（cwd）与合并后的环境变量（代理/CLICOLOR/officecli PATH）。
     let agent = agent_runtime::build_agent_from_descriptor(
         runtime.descriptor(),
         runtime_env,
         cwd,
     ).await?;
-
-    // 4. 设置工作目录
-    if cwd.is_dir() {
-        // AcpAgent 的 cwd 设置由 build_agent_from_descriptor 内部处理
-    }
 
     Ok(agent)
 }
