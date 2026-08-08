@@ -385,16 +385,19 @@ interface UnifiedSkillItem {
 }
 
 /** Visible warehouse group for a skill. */
+const OLD_SCIENCE_CATEGORIES = new Set(["ideation", "design", "analysis", "visualization", "evaluation", "literature"])
+
 function skillDisplayGroup(
   skill: Pick<UnifiedSkillItem, "source" | "category">
 ): SkillDisplayGroup {
   if (skill.source === "custom") return "custom"
-  // Map old warehouse categories to new industry groups
   const cat = skill.category
   if (cat === "creative") return "creative"
   if (cat === "office") return "office"
   if (cat === "help") return "help"
   if (cat === "presentations" || cat === "general" || cat === "documents" || cat === "spreadsheets") return "office"
+  // Map old science categories to academic
+  if (OLD_SCIENCE_CATEGORIES.has(cat)) return "science"
   if (skill.source === "science") return "science"
   // All other categories (discovery, planning, execution, quality, debugging,
   // review, meta, etc.) are development workflow skills → "expert" (编程)
