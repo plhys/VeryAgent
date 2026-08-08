@@ -15,45 +15,19 @@ use sacp_tokio::AcpAgent;
 use crate::acp::error::AcpError;
 use crate::acp::registry;
 use crate::models::agent::AgentType;
-use crate::network::proxy;
 
-/// 强制子进程彩色输出（与重构前行为一致）
-const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
-
-/// 合并 agent 子进程环境变量。
+/// 合并 agent 子进程环境变量并转换为 `(String, String)` 列表。
 ///
-/// 优先级（后者覆盖前者）：
-/// 1. 默认彩色输出标记
-/// 2. runtime_env（DB 配置 + model provider 级联）
-/// 3. 当前进程的代理变量（HTTP_PROXY/HTTPS_PROXY/ALL_PROXY/NO_PROXY 等）
-///
-/// 并在 PATH 前插入 officecli 安装目录，保证 agent 调用的 `officecli …` 可解析。
-///
-/// 这是重构前 `connection.rs::merge_agent_env` 的行为等价物，重构时被误删。
-/// 恢复它是因为：走代理的用户需要代理变量透传给 agent；officecli 需要 PATH
-/// 注入；CLICOLOR_FORCE 保证 ANSI 日志不被吞。
+/// 底层委托给 `agent_env::build_agent_env`（继承当前进程 + 净化黑名单 + 叠加，
+/// 详见该模块）。返回值保持与旧接口一致（`Vec<(String, String)>`），各启动路径
+/// 无需改动调用方式。
 pub(crate) fn merge_agent_env(
     runtime_env: &BTreeMap<String, String>,
 ) -> Vec<(String, String)> {
-    let mut merged = BTreeMap::<String, String>::new();
-
-    for (key, value) in DEFAULT_COMMAND_COLOR_ENV {
-        merged.insert(key.to_string(), value.to_string());
-    }
-
-    for (key, value) in runtime_env {
-        merged.insert(key.clone(), value.clone());
-    }
-
-    for (key, value) in proxy::current_proxy_env_vars() {
-        merged.insert(key, value);
-    }
-
-    // officecli 可能安装在 veryagent 自管理目录（Windows）或 ~/.local/bin（GUI 启动），
-    // 不在用户 shell PATH 里；注入使其在 agent 子进程中可解析。
-    crate::acp::connection::prepend_officecli_path(&mut merged);
-
-    merged.into_iter().collect()
+    crate::acp::agent_env::build_agent_env(runtime_env)
+        .into_iter()
+        .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
