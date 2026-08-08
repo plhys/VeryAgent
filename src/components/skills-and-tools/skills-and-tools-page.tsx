@@ -294,14 +294,15 @@ function removeCreatedSkillId(agentType: AgentType, skillId: string) {
 
 // Top-level filter groups shown in the Skills warehouse:
 // 编程 / 办公 / 学术 / 创意 / 帮助 / 自制
-type SkillDisplayGroup = "expert" | "creative" | "science" | "office" | "custom"
+type SkillDisplayGroup = "expert" | "creative" | "science" | "office" | "help" | "custom"
 
 const SOURCE_ORDER: Record<SkillDisplayGroup, number> = {
   expert: 1,
   office: 2,
   science: 3,
   creative: 4,
-  custom: 5,
+  help: 5,
+  custom: 6,
 }
 
 // Category display order (lower = first). Used only to keep a stable order
@@ -390,6 +391,7 @@ function skillDisplayGroup(
   if (skill.source === "custom") return "custom"
   if (skill.category === "creative") return "creative"
   if (skill.category === "office") return "office"
+  if (skill.category === "help") return "help"
   if (skill.source === "science") return "science"
   return "expert"
 }
@@ -461,7 +463,7 @@ function SkillCard({
   skill: UnifiedSkillItem
   locale: string
   enabled: boolean
-  onToggle: (id: string, source: "expert" | "science" | "office") => void
+  onToggle: (id: string, source: SkillDisplayGroup) => void
   togglingId: string | null
 }) {
   const t = useTranslations("SkillsAndTools")
@@ -557,7 +559,8 @@ function SkillCard({
                 return isZh ? "创意" : "Creative"
               if (group === "expert") return isZh ? "编程" : "Development"
               if (group === "science") return isZh ? "学术" : "Academic"
-              return isZh ? "办公" : "Office"
+              if (group === "office") return isZh ? "办公" : "Office"
+              return isZh ? "帮助" : "Help"
             })()}
           </Badge>
           {hasSettings && (
@@ -927,11 +930,12 @@ function EnabledTab({
   )
 
   const enabledBySource = useMemo(() => {
-    const order: Array<"expert" | "creative" | "science" | "office"> = [
+    const order: Array<SkillDisplayGroup> = [
       "expert",
-      "creative",
-      "science",
       "office",
+      "science",
+      "creative",
+      "help",
     ]
     const groups: Record<string, UnifiedSkillItem[]> = {}
     for (const skill of enabledSkills) {
@@ -945,12 +949,12 @@ function EnabledTab({
   }, [enabledSkills])
 
   const handleToggleSkill = useCallback(
-    async (skillId: string, source: "expert" | "science" | "office") => {
+    async (skillId: string, source: SkillDisplayGroup) => {
       if (!lockedAgentType) return
       setTogglingSkillId(skillId)
       const currentlyEnabled = enabledIds.has(skillId)
       try {
-        if (source === "expert") {
+        if (source === "expert" || source === "creative" || source === "help") {
           if (currentlyEnabled) {
             await expertsUnlinkFromAgent({
               expertId: skillId,
@@ -1197,7 +1201,9 @@ function EnabledTab({
                         ? t("sourceCreative")
                         : source === "science"
                           ? t("sourceScience")
-                          : t("sourceOffice")}
+                          : source === "office"
+                            ? t("sourceOffice")
+                            : t("sourceHelp")}
                   </h5>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((skill) => (
@@ -1539,8 +1545,8 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     ]
   )
 
-  // Coarse filter: all | expert | creative | science
-  type SourceFilter = "all" | "expert" | "creative" | "science"
+  // Coarse filter: all | expert | creative | science | office | help
+  type SourceFilter = "all" | "expert" | "creative" | "science" | "office" | "help"
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
 
   const sourceFilters: { id: SourceFilter; label: string }[] = useMemo(
@@ -1549,6 +1555,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
       { id: "expert", label: t("filterExpert") },
       { id: "creative", label: t("filterCreative") },
       { id: "science", label: t("filterScience") },
+      { id: "office", label: t("filterOffice") },
     ],
     [t]
   )
@@ -1560,6 +1567,12 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
     }
     if (sourceFilter === "expert") {
       return skills.filter((s) => skillDisplayGroup(s) === "expert")
+    }
+    if (sourceFilter === "office") {
+      return skills.filter((s) => skillDisplayGroup(s) === "office")
+    }
+    if (sourceFilter === "help") {
+      return skills.filter((s) => skillDisplayGroup(s) === "help")
     }
     return skills.filter((s) => s.source === sourceFilter)
   }, [skills, sourceFilter])
