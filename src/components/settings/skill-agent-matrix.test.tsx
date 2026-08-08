@@ -37,9 +37,7 @@ function makeStatus(
     agentType,
     state,
     linkPath: "",
-    targetPath: null,
     expectedTargetPath: "",
-    copyMode: false,
   }
 }
 
@@ -56,7 +54,7 @@ const enableable = () => true
 describe("computeLinkDelta", () => {
   it("emits only cells that actually change when enabling", () => {
     const statuses = makeMap([
-      makeStatus("a", "claude_code", "linked_to_veryagent"), // already on
+      makeStatus("a", "claude_code", "linked"), // already on
       makeStatus("a", "codex", "not_linked"), // needs enabling
     ])
     const ops = computeLinkDelta(

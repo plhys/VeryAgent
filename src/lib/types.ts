@@ -1118,6 +1118,15 @@ export interface ToolCallImageWire {
 
 // ACP events pushed from Rust backend (discriminated by "type" field)
 export type AcpEvent =
+  | {
+      type: "spawn_diagnostics"
+      phase: "spawn" | "connect" | "ready"
+      status: "running" | "ok" | "failed"
+      code?: string | null
+      message?: string | null
+      elapsed_ms: number
+      total_ms: number
+    }
   | { type: "content_delta"; text: string }
   | { type: "thinking"; text: string }
   | {
@@ -1706,19 +1715,14 @@ export interface ScienceListItem {
 
 export type ExpertLinkState =
   | "not_linked"
-  | "linked_to_veryagent"
-  | "linked_elsewhere"
-  | "blocked_by_real_directory"
-  | "broken"
+  | "linked"
 
 export interface ExpertInstallStatus {
   expertId: string
   agentType: AgentType
   state: ExpertLinkState
   linkPath: string
-  targetPath: string | null
   expectedTargetPath: string
-  copyMode: boolean
 }
 
 /** A single enable/disable request for one (skill, agent) pair. For office

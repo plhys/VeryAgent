@@ -8,8 +8,7 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ExpertsBody } from "@/components/settings/experts-settings"
-import { ScienceBody } from "@/components/settings/science-settings"
+import { SkillsBody } from "@/components/settings/skills-tab"
 import { OfficeToolsBody } from "@/components/settings/office-tools-settings"
 import { expertsOpenCentralDir, openFolder } from "@/lib/api"
 import { revealItemInDir } from "@/lib/platform"
@@ -146,13 +145,13 @@ export function SkillPacksSettings() {
           value="experts"
           className="mt-0 flex-1 min-h-0 flex flex-col"
         >
-          <ExpertsBody onRegisterRefresh={registerRefresh} />
+          <SkillsBody source="experts" onRegisterRefresh={registerRefresh} />
         </TabsContent>
         <TabsContent
           value="science"
           className="mt-0 flex-1 min-h-0 flex flex-col"
         >
-          <ScienceBody onRegisterRefresh={registerRefresh} />
+          <SkillsBody source="science" onRegisterRefresh={registerRefresh} />
         </TabsContent>
         <TabsContent
           value="office"

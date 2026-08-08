@@ -105,15 +105,12 @@ export function statusKey(skillId: string, agentType: AgentType): string {
 }
 
 function isEnabled(status: ExpertInstallStatus | undefined): boolean {
-  return status?.state === "linked_to_veryagent"
+  return status?.state === "linked"
 }
 
 /** Blocked from being enabled: a real dir or a foreign link sits in the way. */
-function isBlockedForEnable(status: ExpertInstallStatus | undefined): boolean {
-  return (
-    status?.state === "blocked_by_real_directory" ||
-    status?.state === "linked_elsewhere"
-  )
+function isBlockedForEnable(_status: ExpertInstallStatus | undefined): boolean {
+  return false
 }
 
 export interface DeltaTarget {
@@ -319,11 +316,9 @@ export function SkillAgentMatrix({
           next.set(key, {
             expertId: op.expertId,
             agentType: op.agentType,
-            state: op.enable ? "linked_to_veryagent" : "not_linked",
+            state: op.enable ? "linked" : "not_linked",
             linkPath: existing?.linkPath ?? "",
-            targetPath: existing?.targetPath ?? null,
             expectedTargetPath: existing?.expectedTargetPath ?? "",
-            copyMode: existing?.copyMode ?? false,
           })
         }
         return next
@@ -738,7 +733,6 @@ export function SkillAgentMatrix({
                                 disabled={!interactive}
                                 translateState={translateState}
                                 notReadyHint={notReadyHint}
-                                copyModeHint={t("copyModeHint")}
                                 onToggle={() =>
                                   toggleCell(skill.id, agent.agent_type)
                                 }
@@ -988,7 +982,6 @@ function MatrixCell({
   disabled,
   translateState,
   notReadyHint,
-  copyModeHint,
   onToggle,
 }: {
   skillName: string
@@ -999,12 +992,10 @@ function MatrixCell({
   disabled: boolean
   translateState: (state: ExpertLinkState) => string
   notReadyHint?: string
-  copyModeHint: string
   onToggle: () => void
 }) {
   const enabled = isEnabled(status)
   const blocked = isBlockedForEnable(status)
-  const broken = status?.state === "broken"
   // Mirror the single-toggle predicate: a not-ready skill or a blocked cell
   // can't be enabled, so it's non-interactive unless already enabled.
   const notInteractive =
@@ -1014,7 +1005,6 @@ function MatrixCell({
   const tip = [
     `${skillName} · ${agentName}`,
     stateLabel,
-    status?.copyMode ? copyModeHint : null,
     !ready && !enabled ? notReadyHint : null,
   ]
     .filter(Boolean)
@@ -1032,18 +1022,12 @@ function MatrixCell({
           disabled={notInteractive}
           onClick={onToggle}
           className={cn(
-            // `align-middle` decouples the button from the text baseline so an
-            // empty cell (no svg) and a filled cell (Check svg) reserve the same
-            // line-box height — otherwise a fully-enabled row renders shorter.
             "inline-flex h-7 w-7 items-center justify-center rounded-md border align-middle transition-colors",
             enabled
               ? "border-primary bg-primary text-primary-foreground"
-              : broken
-                ? "border-amber-500/50 text-amber-600 dark:text-amber-400"
-                : blocked || !ready
-                  ? "border-dashed border-border/70 text-muted-foreground/60"
-                  : "border-border hover:bg-muted/60",
-            status?.copyMode && enabled && "ring-1 ring-amber-400",
+              : blocked || !ready
+                ? "border-dashed border-border/70 text-muted-foreground/60"
+                : "border-border hover:bg-muted/60",
             notInteractive && !enabled && "cursor-not-allowed opacity-60"
           )}
         >
@@ -1051,8 +1035,6 @@ function MatrixCell({
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : enabled ? (
             <Check className="h-4 w-4" />
-          ) : broken ? (
-            <AlertTriangle className="h-3.5 w-3.5" />
           ) : blocked || !ready ? (
             <Lock className="h-3 w-3" />
           ) : null}

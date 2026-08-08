@@ -191,6 +191,11 @@
 - [x] 已移除 shared identity / memory 路径（产品决策）
 - [ ] 若后续重做「跨智能体偏好」，需新方案（不再沿用已删模块）
 
+### 待学习（AionCore 借鉴）
+
+- [ ] **启动诊断体系**：结构化启动阶段报告（spawn → port_report → ready），每阶段独立超时/错误分类，前端可展示诊断面板，帮助用户快速定位启动失败原因。
+- [ ] **扩展完整性校验**：技能/扩展下载后做 SHA-512 完整性校验，防止下载被篡改，参考 AionHub 的 `integrity` 字段 + `unpackedSize` 验证。
+
 ### 项目拆分/重构
 
 - [x] **acp-agent-settings.tsx 拆分**：11853 行 → 7 个模块文件（types/shared/checks/kimi-code-config/opencode-combobox/agent-reorder-item/main.tsx）

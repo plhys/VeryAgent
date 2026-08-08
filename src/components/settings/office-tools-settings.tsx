@@ -242,14 +242,8 @@ export function OfficeToolsBody({
       switch (state) {
         case "not_linked":
           return t("states.not_linked")
-        case "linked_to_veryagent":
+        case "linked":
           return t("states.linked_to_veryagent")
-        case "linked_elsewhere":
-          return t("states.linked_elsewhere")
-        case "blocked_by_real_directory":
-          return t("states.blocked_by_real_directory")
-        case "broken":
-          return t("states.broken")
         default:
           return state
       }

@@ -18,6 +18,7 @@ pub mod mcp;
 pub mod model_provider;
 pub mod office_tools;
 pub mod science;
+pub mod skills;
 #[cfg(feature = "tauri-runtime")]
 pub mod notification;
 pub mod pet;

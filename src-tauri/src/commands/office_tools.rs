@@ -19,12 +19,12 @@ use tokio::sync::Mutex;
 
 use crate::acp::types::AgentSkillScope;
 use crate::commands::acp::{
-    preferred_scope_skill_dir, remove_skill_entry, resolve_command_on_path, scoped_skill_dirs,
+    preferred_scope_skill_dir, resolve_command_on_path, scoped_skill_dirs,
     skill_storage_spec, validate_skill_id,
 };
-use crate::commands::experts::{
-    central_experts_dir, classify_link, create_link_raw, path_is_symlink, read_link_target,
-    ExpertInstallStatus, ExpertLinkState, LinkOp, LinkOpResult,
+use crate::commands::skills::{
+    copy_dir_recursive, dir_exists, path_exists, central_experts_dir,
+    SkillInstallStatus, SkillLinkState, ExpertInstallStatus, LinkOp, LinkOpResult, SkillsError,
 };
 use crate::app_error::AppCommandError;
 use crate::commands::folders::resolve_tree_path;
@@ -959,35 +959,19 @@ pub async fn officecli_uninstall() -> Result<OfficecliInfo, OfficeToolsError> {
             Ok(d) => d,
             Err(_) => continue,
         };
-        for def in skill_defs() {
-            let central = skill_central_path(def.id);
-            for dir in &dirs {
-                let candidate = dir.join(def.id);
-                if !candidate.exists() && !path_is_symlink(&candidate) {
-                    continue;
-                }
-                let state = classify_link(&candidate, &central);
-                let should_remove = match state {
-                    ExpertLinkState::LinkedToApp => true,
-                    ExpertLinkState::Broken => {
-                        // Only remove broken links whose target was our
-                        // central skill dir (not user-owned danglers).
-                        read_link_target(&candidate)
-                            .map(|t| t.starts_with(&central))
-                            .unwrap_or(false)
-                    }
-                    _ => false,
-                };
-                if should_remove {
-                    if let Err(e) = remove_skill_entry(&candidate) {
-                        cleanup_errors.push(format!(
-                            "failed to remove link {}: {e}",
-                            candidate.display()
-                        ));
-                    }
-                }
-            }
-        }
+for def in skill_defs() {
+	            for dir in &dirs {
+	                let candidate = dir.join(def.id);
+	                if candidate.exists() {
+	                    if let Err(e) = fs::remove_dir_all(&candidate) {
+	                        cleanup_errors.push(format!(
+	                            "failed to remove {}: {e}",
+	                            candidate.display()
+	                        ));
+	                    }
+	                }
+	            }
+	        }
     }
 
     // Clean up OfficeCLI skills from central store
@@ -1135,53 +1119,22 @@ fn link_one_locked(
         fs::create_dir_all(parent)?;
     }
 
-    let mut copy_mode = false;
-    match create_link_raw(&central, &link_path) {
-        Ok(is_copy) => {
-            copy_mode = is_copy;
-        }
-        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-            match classify_link(&link_path, &central) {
-                ExpertLinkState::LinkedToApp => {}
-                ExpertLinkState::BlockedByRealDirectory => {
-                    return Err(OfficeToolsError::NameCollision {
-                        path: link_path.to_string_lossy().to_string(),
-                    });
-                }
-                ExpertLinkState::LinkedElsewhere | ExpertLinkState::Broken => {
-                    // A stale or foreign link sits in the way (commonly a
-                    // leftover from the `.veryagent` → `.veryagent` rename, or a
-                    // dangling junction from a prior session). Remove it and
-                    // re-link to our current central store instead of locking
-                    // the user out with an unrecoverable ForeignLink error.
-                    remove_skill_entry(&link_path).map_err(|e| {
-                        OfficeToolsError::Io(format!(
-                            "remove stale link {}: {e}",
-                            link_path.display()
-                        ))
-                    })?;
-                    create_link_raw(&central, &link_path)
-                        .map_err(|e| OfficeToolsError::Io(format!("relink failed: {e}")))?;
-                }
-                ExpertLinkState::NotLinked => {
-                    create_link_raw(&central, &link_path)
-                        .map_err(|e| OfficeToolsError::Io(format!("retry link failed: {e}")))?;
-                }
-            }
-        }
-        Err(err) => return Err(OfficeToolsError::Io(err.to_string())),
+    // Remove existing directory if present, then copy fresh.
+    if link_path.exists() {
+        fs::remove_dir_all(&link_path).map_err(|e| {
+            OfficeToolsError::Io(format!("remove existing {}: {e}", link_path.display()))
+        })?;
     }
+    copy_dir_recursive(&central, &link_path).map_err(|e| {
+        OfficeToolsError::Io(format!("copy skill {}: {e}", link_path.display()))
+    })?;
 
-    let state = classify_link(&link_path, &central);
-    let target_path = read_link_target(&link_path).map(|p| p.to_string_lossy().to_string());
     Ok(ExpertInstallStatus {
-        expert_id: skill_id.clone(),
+        skill_id: skill_id.clone(),
         agent_type,
-        state,
+        state: SkillLinkState::Linked,
         link_path: link_path.to_string_lossy().to_string(),
-        target_path,
         expected_target_path: central.to_string_lossy().to_string(),
-        copy_mode,
     })
 }
 
@@ -1203,7 +1156,7 @@ pub async fn officecli_skill_unlink_from_agent(
     unlink_one_locked(&skill_id, agent_type)
 }
 
-/// Remove one office skill's link from one agent's skill dirs. **Assumes the
+/// Remove one office skill's copy from one agent's skill dirs. **Assumes the
 /// mutation lock is already held** (see `link_one_locked`).
 fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), OfficeToolsError> {
     let skill_id = validate_skill_id(skill_id).map_err(|e| OfficeToolsError::Io(e.to_string()))?;
@@ -1213,30 +1166,13 @@ fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), Office
     let dirs = scoped_skill_dirs(agent_type, AgentSkillScope::Global, None)
         .map_err(|_| OfficeToolsError::UnsupportedAgent(agent_type))?;
 
-    let central = skill_central_path(&skill_id);
     for dir in dirs {
         let candidate = dir.join(&skill_id);
-        if !candidate.exists() && !path_is_symlink(&candidate) {
-            continue;
-        }
-        let state = classify_link(&candidate, &central);
-        let should_remove = match state {
-            ExpertLinkState::LinkedToApp
-            | ExpertLinkState::Broken
-            | ExpertLinkState::LinkedElsewhere => {
-                // Remove links to our central store, dangling links, and stale
-                // links left over from a rename (`.veryagent` → `.veryagent`). Only
-                // the link itself is removed, never the target's contents.
-                true
-            }
-            _ => false,
-        };
-        if should_remove {
-            remove_skill_entry(&candidate).map_err(|e| {
-                OfficeToolsError::Io(format!("remove link {}: {e}", candidate.display()))
+        if candidate.exists() {
+            fs::remove_dir_all(&candidate).map_err(|e| {
+                OfficeToolsError::Io(format!("remove {}: {e}", candidate.display()))
             })?;
         }
-        // BlockedByRealDirectory (a real dir / copy-mode fallback) is left alone.
     }
     Ok(())
 }
@@ -1244,12 +1180,11 @@ fn unlink_one_locked(skill_id: &str, agent_type: AgentType) -> Result<(), Office
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn officecli_skill_get_install_status(
     skill_id: String,
-) -> Result<Vec<ExpertInstallStatus>, OfficeToolsError> {
+) -> Result<Vec<SkillInstallStatus>, OfficeToolsError> {
     let skill_id = validate_skill_id(&skill_id).map_err(|e| OfficeToolsError::Io(e.to_string()))?;
     let _ = find_skill_def(&skill_id)
         .ok_or_else(|| OfficeToolsError::SkillNotFound(skill_id.clone()))?;
 
-    let expected = skill_central_path(&skill_id);
     let agents = supported_agents();
 
     let mut out = Vec::with_capacity(agents.len());
@@ -1258,16 +1193,17 @@ pub async fn officecli_skill_get_install_status(
             Ok(p) => p,
             Err(_) => continue,
         };
-        let state = classify_link(&link_path, &expected);
-        let target_path = read_link_target(&link_path).map(|p| p.to_string_lossy().to_string());
-        out.push(ExpertInstallStatus {
-            expert_id: skill_id.clone(),
+        let state = if link_path.exists() {
+            SkillLinkState::Linked
+        } else {
+            SkillLinkState::NotLinked
+        };
+        out.push(SkillInstallStatus {
+            skill_id: skill_id.clone(),
             agent_type: agent,
             state,
             link_path: link_path.to_string_lossy().to_string(),
-            target_path,
-            expected_target_path: expected.to_string_lossy().to_string(),
-            copy_mode: false,
+            expected_target_path: String::new(),
         });
     }
     Ok(out)
@@ -1318,27 +1254,26 @@ pub async fn officecli_skill_apply_links(
 /// One-shot snapshot of every (skill, agent) link state for the matrix UI.
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn officecli_skill_list_all_install_statuses(
-) -> Result<Vec<ExpertInstallStatus>, OfficeToolsError> {
+) -> Result<Vec<SkillInstallStatus>, OfficeToolsError> {
     let agents = supported_agents();
     let mut out = Vec::with_capacity(skill_defs().len() * agents.len());
     for def in skill_defs() {
-        let expected = skill_central_path(def.id);
         for &agent in &agents {
             let link_path = match agent_link_path(agent, def.id) {
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            let state = classify_link(&link_path, &expected);
-            let target_path =
-                read_link_target(&link_path).map(|p| p.to_string_lossy().to_string());
-            out.push(ExpertInstallStatus {
-                expert_id: def.id.to_string(),
+            let state = if link_path.exists() {
+                SkillLinkState::Linked
+            } else {
+                SkillLinkState::NotLinked
+            };
+            out.push(SkillInstallStatus {
+                skill_id: def.id.to_string(),
                 agent_type: agent,
                 state,
                 link_path: link_path.to_string_lossy().to_string(),
-                target_path,
-                expected_target_path: expected.to_string_lossy().to_string(),
-                copy_mode: false,
+                expected_target_path: String::new(),
             });
         }
     }
