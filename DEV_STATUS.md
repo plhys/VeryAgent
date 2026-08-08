@@ -4,6 +4,17 @@
 
 ---
 
+## 近期（2026-08-08）
+
+### 修复
+
+- [x] Windows agent spawn `os error 123`：过滤 `=C:=`/`=D:=` 驱动器变量 + `CommonProgramFiles(x86)` 等含括号变量名（`build_agent_env` 增加 `is_valid_env_var_name` 校验）
+- [x] Hermes 权限切换真实生效（后端拦截 `set_config_option` + 写入 `HERMES_PERMISSION_MODE` 到 `~/.hermes/.env`）
+
+### 新增
+
+- [x] P3 配置渲染备份机制 + TOML/YAML 格式转义（已合入 main）
+
 ## 近期（2026-08-06）
 
 ### 修复

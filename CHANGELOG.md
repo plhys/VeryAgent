@@ -48,7 +48,10 @@
 
 ### 修复
 
-- **Windows 智能体无法启动（`os error 123`）**：`build_agent_env` 未过滤 Windows 特殊驱动器环境变量（`=C:=`、`=D:=` 等，记录各驱动器当前目录）。这些以 `=` 开头的键被格式化为 `KEY=VALUE` 传给 `AcpAgent::from_args` 时，`parse_env_var` 会误认为命令而非环境变量，导致 `cmd.spawn()` 报 `ERROR_INVALID_NAME`。现已在继承净化阶段统一剔除 `=` 前缀键。
+- **Windows 智能体无法启动（`os error 123`）**：`build_agent_env` 未过滤 Windows 特殊环境变量，导致 `AcpAgent::from_args` 解析 `KEY=VALUE` 前缀时误判命令。两类变量被剔除：
+  - 驱动器特殊变量（`=C:=`、`=D:=` 等，记录各驱动器当前目录），以 `=` 开头；
+  - 含 `(` `)` 等非标准字符的变量名（如 `CommonProgramFiles(x86)`、`ProgramFiles(x86)`），不符合 `parse_env_var` 的命名规则（仅接受字母/数字/下划线）。
+  - 现用 `is_valid_env_var_name` 统一校验，非法变量名在继承净化阶段剔除。
 - **Command Code 聊天历史持久化**：重启后对话记录不再丢失。新增 `conversation_turn` 表（m20260804），在 ACP turn 完成时自动将用户消息、助手回复、工具调用存入数据库，侧栏 message_count 同步更新；详情页读取改为从数据库加载，不再依赖空的 CommandCodeParser。
   - 后端：新增 migration/entity/service 层；`SessionState::completed_transcript_turns()` 投影方法；`TranscriptTurns` 事件 + lifecycle 持久化订阅；`get_folder_conversation_core` 对 Command Code 走 DB 分支。
 - **Claude 智能体双回复修复**：`emit_transcript_turns` 中 `transcript_turns_emitted` 标志改为在 `emit_with_state` 之前设置，防止并发竞态导致重复发射 `TranscriptTurns` 事件；同时增加 `turn_in_flight` 检查，仅当 turn 进行中时才发射。

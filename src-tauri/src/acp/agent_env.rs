@@ -43,6 +43,21 @@ const DROP_KEYS: &[&str] = &[
     "SSL_CERT_DIR",
 ];
 
+/// 判断环境变量名是否能通过 `AcpAgent::from_args` 的 `parse_env_var` 校验。
+///
+/// `parse_env_var` 要求：首字符必须是 ASCII 字母或 `_`，其余字符必须是
+/// ASCII 字母、数字或 `_`。Windows 系统变量如 `CommonProgramFiles(x86)`
+/// 含有 `(` 和 `)`，无法通过此校验——若混入 `KEY=VALUE` 前缀列表会被误判
+/// 为命令而非环境变量，导致 spawn 失败（`os error 123`）。
+fn is_valid_env_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 /// 构建 agent 子进程环境变量列表。
 ///
 /// 返回 `Vec<(OsString, OsString)>`，兼容 `McpServerStdio::env`（`EnvVariable`）
@@ -53,13 +68,16 @@ pub(crate) fn build_agent_env(
     // 1. 继承当前进程环境
     let mut merged: BTreeMap<OsString, OsString> = std::env::vars_os().collect();
 
-    // 2. 净化黑名单 + Windows 特殊驱动器变量（`=C:=`/`=D:=`）
+    // 2. 净化黑名单 + Windows 特殊驱动器变量 + 非法环境变量名
     for key in DROP_KEYS {
         merged.remove(std::ffi::OsStr::new(key));
     }
     merged.retain(|key, _| {
         let k = key.to_string_lossy();
-        !k.starts_with("npm_") && !k.starts_with('=')
+        // 过滤 npm 配置命名空间、Windows 驱动器变量（`=C:=`/`=D:=`）、
+        // 以及含 `(` `)` 等非标准字符的变量名（如 `CommonProgramFiles(x86)`）。
+        // 后者会破坏 `AcpAgent::from_args` 的 `KEY=VALUE` 前缀解析。
+        !k.starts_with("npm_") && !k.starts_with('=') && is_valid_env_var_name(&k)
     });
 
     // 3. 叠加（后者覆盖前者）
@@ -127,6 +145,37 @@ mod tests {
         assert!(built.contains_key(OsStr::new("APPDATA")));
     }
 
+    #[test]
+    fn drops_invalid_env_var_names() {
+        // Windows 标准变量 `CommonProgramFiles(x86)` 和 `ProgramFiles(x86)`
+        // 含有 `(` 和 `)`，不符合 `parse_env_var` 的命名规则，必须剔除。
+        let mut env = BTreeMap::new();
+        env.insert(OsString::from("CommonProgramFiles(x86)"), OsString::from("C:\\Program Files (x86)\\Common Files"));
+        env.insert(OsString::from("ProgramFiles(x86)"), OsString::from("C:\\Program Files (x86)"));
+        env.insert(OsString::from("PATH"), OsString::from("C:\\Windows"));
+        env.insert(OsString::from("MY_VAR_123"), OsString::from("ok"));
+
+        let built = clean_for_test(env);
+        assert!(!built.contains_key(OsStr::new("CommonProgramFiles(x86)")),
+            "含括号的变量名必须剔除，否则破坏 from_args 解析");
+        assert!(!built.contains_key(OsStr::new("ProgramFiles(x86)")),
+            "含括号的变量名必须剔除");
+        assert!(built.contains_key(OsStr::new("PATH")));
+        assert!(built.contains_key(OsStr::new("MY_VAR_123")));
+    }
+
+    #[test]
+    fn is_valid_env_var_name_works() {
+        assert!(is_valid_env_var_name("PATH"));
+        assert!(is_valid_env_var_name("MY_VAR_123"));
+        assert!(is_valid_env_var_name("_HELLO"));
+        assert!(!is_valid_env_var_name("CommonProgramFiles(x86)"));
+        assert!(!is_valid_env_var_name("ProgramFiles(x86)"));
+        assert!(!is_valid_env_var_name("=C:"));
+        assert!(!is_valid_env_var_name("123ABC"));
+        assert!(!is_valid_env_var_name(""));
+    }
+
     /// 测试用：对所有系统预先构建完整环境（继承+净化），仅验证黑名单逻辑。
     fn clean_for_test(
         base: BTreeMap<OsString, OsString>,
@@ -137,7 +186,7 @@ mod tests {
         }
         merged.retain(|key, _| {
             let k = key.to_string_lossy();
-            !k.starts_with("npm_") && !k.starts_with('=')
+            !k.starts_with("npm_") && !k.starts_with('=') && is_valid_env_var_name(&k)
         });
         merged
     }
