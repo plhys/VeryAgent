@@ -23,7 +23,7 @@
 
 ### 待跟进
 
-- [ ] Hermes 权限切换真实生效（后端拦截 `set_config_option` + 更新环境变量）
+- [x] ~~Hermes 权限切换真实生效~~（后端拦截 `set_config_option` + 写入 `HERMES_PERMISSION_MODE` 到 `~/.hermes/.env`，session 重启生效）
 - [ ] 命名统一（跨智能体的配置选项名称）
 - [ ] Hermes 开机自启（常驻智能体自动连接）
 - [ ] 多智能体协同功能完善（`delegate_to_agent` 工具暴露与使用）

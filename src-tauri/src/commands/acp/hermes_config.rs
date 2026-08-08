@@ -586,6 +586,27 @@ pub(crate) fn reconcile_hermes_runtime_env_in(home: &Path) -> Result<(), AcpErro
     write_hermes_secret_file(&env_path, &patched, ".env")
 }
 
+/// Write the synthetic "mode" config option (Default / YOLO) to `~/.hermes/.env`
+/// as `HERMES_PERMISSION_MODE`, so the permission level survives agent restart.
+/// This is a VeryAgent-side concept — Hermes does not natively read this env var,
+/// but the ACP adapter can be configured to honour it.
+pub(crate) fn write_hermes_mode_env(mode: &str) -> Result<(), AcpError> {
+    let env_path = hermes_env_path();
+    let parent = env_path.parent().unwrap_or_else(|| Path::new("."));
+    if !parent.exists() {
+        // Hermes home doesn't exist yet — nothing to persist; the mode will
+        // be applied on first session start via saved preferences.
+        return Ok(());
+    }
+    let existing_env = match fs::read_to_string(&env_path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(AcpError::protocol(format!("read hermes .env: {e}"))),
+    };
+    let patched = patch_env_text(&existing_env, &[("HERMES_PERMISSION_MODE", mode)]);
+    write_hermes_secret_file(&env_path, &patched, ".env")
+}
+
 /// Quote a string for a single-quoted POSIX shell argument.
 #[cfg(all(feature = "tauri-runtime", target_os = "macos"))]
 pub(crate) fn shell_single_quote(value: &str) -> String {

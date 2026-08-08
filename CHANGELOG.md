@@ -11,10 +11,12 @@
 
 ### 新增
 
+- **配置渲染备份机制**：`render_and_write_config()` 覆写前自动备份旧配置到 `~/.veryagent/config-backups/<agent_type>/<timestamp>/<relative_path>`，提供回滚保险，备份失败不阻塞主写入。
+- **TOML/YAML 格式感知转义**：`render_toml_template()` 和 `render_yaml_template()` 不再复用 JSON 序列化，改为格式感知转义（转义 `\` 和 `"`），避免配置值中的特殊字符破坏 TOML/YAML 结构。
 - **模型供应商测试 401 修复**：`probe_openai` / `probe_anthropic` 补发 `api-key` 请求头，与模型列表请求保持一致；`base_v1` 剥离 API 路径后缀，支持用户粘贴完整地址；遍历模型列表逐个尝试，解决 key 无权限访问首模型时的误报。
 - **Hermes 环境自动修复**：启动时自动检测 `~/.hermes/config.yaml` + `.env` 是否存在，缺失时从数据库重新生成；自动检测 Hermes git 运行时是否缺少 `git.exe`，从系统 PATH 复制补全。
 - **Hermes 模型选择器**：合成 model config option，启动时从供应商 API 拉取模型列表，对话框底部显示模型选择器。
-- **Hermes 权限选择器**：合成 mode config option（Default / YOLO），对话框底部显示权限选择器。
+- **Hermes 权限选择器**：合成 mode config option（Default / YOLO），对话框底部显示权限选择器。后端拦截 `set_config_option` 写入 `~/.hermes/.env` 的 `HERMES_PERMISSION_MODE`，重启 session 后生效。
 - **思考链/工具链折叠合并**：对话结束后，思考和工具调用合并到一个可折叠容器中，按原始逻辑顺序排列，显示消耗 token 数；运行时实时更新状态计数，带旋转动画；支持全屏弹窗查看。
 - **Claude 双回复修复**：`SessionState` 新增 `transcript_turns_emitted` 标志，防止 `emit_transcript_turns` 重复发射。
 - **环境变量编辑器优化**：去掉模糊遮罩，添加说明文字，改为等宽字体。

@@ -822,7 +822,7 @@ fn ensure_model_option(options: &mut Vec<SessionConfigOptionInfo>, state: &Sessi
         description: Some("Controls the agent's permission level.".to_string()),
         category: Some("mode".to_string()),
         kind: SessionConfigKindInfo::Select(SessionConfigSelectInfo {
-            current_value: "default".to_string(),
+            current_value: state.current_mode.clone().unwrap_or_else(|| "default".to_string()),
             options: vec![
                 SessionConfigSelectOptionInfo {
                     value: "default".to_string(),
@@ -1848,6 +1848,7 @@ async fn run_connection(
                                 &mut session,
                                 &state,
                                 &emitter_clone,
+                                agent_type,
                                 preferred_mode_id.as_deref(),
                                 &preferred_config_values,
                                 initial_config_options.unwrap_or_default(),
@@ -2007,6 +2008,7 @@ async fn run_connection(
                             &mut session,
                             &state,
                             &emitter_clone,
+                            agent_type,
                             preferred_mode_id.as_deref(),
                             &preferred_config_values,
                             initial_config_options.unwrap_or_default(),
@@ -2147,6 +2149,7 @@ async fn run_connection(
                             &mut session,
                             &state,
                             &emitter_clone,
+                            agent_type,
                             preferred_mode_id.as_deref(),
                             &preferred_config_values,
                             initial_config_options.unwrap_or_default(),
@@ -2223,6 +2226,7 @@ async fn run_connection(
                     &mut session,
                     &state,
                     &emitter_clone,
+                    agent_type,
                     preferred_mode_id.as_deref(),
                     &preferred_config_values,
                     initial_config_options.unwrap_or_default(),
@@ -2403,6 +2407,28 @@ async fn set_session_config_option(
     config_id: String,
     value_id: String,
 ) -> Result<(), sacp::Error> {
+    // Intercept the synthetic "mode" config option — it is a VeryAgent-side
+    // permission concept (Default / YOLO), not understood by the agent itself.
+    // Persist it locally and skip the agent round-trip.
+    if config_id == "mode" {
+        {
+            let mut s = state.write().await;
+            s.current_mode = Some(value_id.clone());
+        }
+        // Persist to Hermes .env so the mode survives agent restart.
+        if agent_type == AgentType::Hermes {
+            if let Err(e) = crate::commands::acp::hermes_config::write_hermes_mode_env(&value_id) {
+                tracing::warn!("[ACP] failed to persist Hermes mode env: {e}");
+            }
+        }
+        // Re-emit with the updated current_value so the frontend reflects the
+        // change immediately. An empty vec triggers the synthetic-option path
+        // inside emit_session_config_options_values, which calls
+        // ensure_model_option and picks up the new state.current_mode.
+        emit_session_config_options_values(state, emitter, agent_type, vec![]).await;
+        return Ok(());
+    }
+
     let updated = set_session_config_option_inner(cx, session_id, config_id, value_id).await?;
     emit_session_config_options_values(state, emitter, agent_type, updated).await;
     Ok(())
@@ -2458,6 +2484,7 @@ async fn apply_preferred_session_options(
     session: &mut sacp::ActiveSession<'_, Agent>,
     state: &Arc<RwLock<SessionState>>,
     emitter: &EventEmitter,
+    agent_type: AgentType,
     preferred_mode_id: Option<&str>,
     preferred_config_values: &BTreeMap<String, String>,
     initial_config_options: Vec<SessionConfigOption>,
@@ -2488,6 +2515,16 @@ async fn apply_preferred_session_options(
         // requested config_id is absent from the advertised options — older or
         // edge-case builds accept `set_config_option` for an unadvertised "mode"
         // (see `ensure_codex_mode_option`), so let the agent decide.
+        // Intercept the synthetic "mode" option — it's a VeryAgent-side
+        // permission concept, not understood by the agent. Update the local
+        // state and skip the round-trip (the agent's response for an unknown
+        // config_id is a no-op that would leave `current_mode` unchanged).
+        if config_id == "mode" && !matches!(agent_type, AgentType::Codex) {
+            let mut s = state.write().await;
+            s.current_mode = Some(value_id.clone());
+            continue;
+        }
+
         let already_matches = options.iter().any(|o| {
             o.id.to_string() == *config_id
                 && matches!(
