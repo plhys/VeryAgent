@@ -17,6 +17,89 @@ use sea_orm_migration::MigratorTrait;
 use error::DbError;
 use migration::Migrator;
 
+/// 迁移记录表名（sea-orm 默认，注意是 `seaql_migrations`）。
+const MIGRATION_TABLE: &str = "seaql_migrations";
+
+/// 清理孤儿迁移记录。
+///
+/// 当某个迁移文件在重构中被删除（例如 quick_message 功能被移除，其迁移
+/// `m20260424_000002_quick_message` 从 Migrator 列表消失），已应用过该迁移的
+/// 旧数据库 `seaorm_migrations` 表仍保留其记录，`Migrator::up` 会因
+/// “Migration file is missing but has been applied” 直接报错导致应用无法启动。
+///
+/// 这里在跑 `Migrator::up` 前先把“已应用但当前 Migrator 已不认识的版本”
+/// 从迁移表中删除，让启动继续。删除是安全的：
+/// 1. 迁移文件已从代码库移除，意味着其 schema 变更已被后续迁移覆盖或
+///    该功能已下线（表已被 drop 或不再使用）。
+/// 2. 我们只删 Migrator 列表里不存在的孤儿记录，不动任何仍受管的迁移。
+async fn prune_orphan_migration_records(
+    conn: &DatabaseConnection,
+) -> Result<(), DbError> {
+    // 当前 Migrator 认识的所有迁移名
+    let known: Vec<String> = Migrator::migrations()
+        .iter()
+        .map(|m| m.name().to_string())
+        .collect();
+    if known.is_empty() {
+        return Ok(());
+    }
+
+    // 全新数据库还没有迁移表（Migrator::up 首次运行才创建），无需清理。
+    // 用 sqlite_master 判断表是否存在，避免对不存在的表查询报错。
+    let table_exists: bool = conn
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = '{MIGRATION_TABLE}'"
+            ),
+        ))
+        .await
+        .map_err(|e| DbError::Migration(format!("check migration table failed: {e}")))?
+        .is_some();
+    if !table_exists {
+        return Ok(());
+    }
+
+    let rows: Vec<(String, i64)> = conn
+        .query_all(Statement::from_string(
+            DbBackend::Sqlite,
+            format!(
+                "SELECT version, applied_at FROM {MIGRATION_TABLE}"
+            ),
+        ))
+        .await
+        .map_err(|e| DbError::Migration(format!("read migration table failed: {e}")))?
+        .into_iter()
+        .map(|row| {
+            (
+                row.try_get("", "version")
+                    .unwrap_or_default(),
+                row.try_get("", "applied_at")
+                    .unwrap_or_default(),
+            )
+        })
+        .collect();
+
+    for (version, applied_at) in rows {
+        if !known.contains(&version) {
+            tracing::warn!(
+                "[db] pruning orphan migration record: {version} (applied_at={applied_at})"
+            );
+            // version 是代码库内部迁移名（自控，非用户输入），无注入风险。
+            conn.execute(Statement::from_string(
+                DbBackend::Sqlite,
+                format!("DELETE FROM {MIGRATION_TABLE} WHERE version = '{version}'"),
+            ))
+            .await
+            .map_err(|e| DbError::Migration(format!(
+                "prune orphan migration {version} failed: {e}"
+            )))?;
+        }
+    }
+
+    Ok(())
+}
+
 pub struct AppDatabase {
     pub conn: DatabaseConnection,
 }
@@ -69,6 +152,9 @@ pub async fn init_database(
         .sqlx_logging(false);
     let migrate_conn = Database::connect(migrate_opts).await?;
     apply_sqlite_pragmas(&migrate_conn).await?;
+    // 先清理孤儿迁移记录，避免“迁移文件已删除但数据库仍标记已应用”导致
+    // Migrator::up 报错（重构移除功能/迁移时会出现）。
+    prune_orphan_migration_records(&migrate_conn).await?;
     Migrator::up(&migrate_conn, None)
         .await
         .map_err(|e| DbError::Migration(e.to_string()))?;
