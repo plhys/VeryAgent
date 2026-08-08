@@ -293,38 +293,31 @@ function removeCreatedSkillId(agentType: AgentType, skillId: string) {
 }
 
 // Top-level filter groups shown in the Skills warehouse:
-// 编程 / 艺术设计 / 科研 / 办公 / 自制
-// "creative" is a first-class group (not buried under 编程).
+// 编程 / 办公 / 学术 / 创意 / 帮助 / 自制
 type SkillDisplayGroup = "expert" | "creative" | "science" | "office" | "custom"
 
 const SOURCE_ORDER: Record<SkillDisplayGroup, number> = {
   expert: 1,
-  creative: 2,
+  office: 2,
   science: 3,
-  office: 4,
+  creative: 4,
   custom: 5,
 }
 
 // Category display order (lower = first). Used only to keep a stable order
 // within the same source; not shown as filter chips.
 const CATEGORY_ORDER: Record<string, number> = {
-  // Experts
-  discovery: 1,
-  planning: 2,
-  execution: 3,
-  quality: 4,
-  debugging: 5,
-  review: 6,
-  meta: 7,
-  creative: 8,
-  // Science
-  ideation: 11,
-  design: 12,
-  analysis: 13,
-  visualization: 14,
-  evaluation: 15,
-  literature: 16,
-  // Office
+  // 编程行业
+  development: 1,
+  // 办公行业
+  office: 2,
+  // 学术行业
+  academic: 3,
+  // 创意行业
+  creative: 4,
+  // 帮助行业
+  help: 5,
+  // 已有自定义分类
   general: 21,
   presentations: 22,
   documents: 23,
@@ -390,13 +383,15 @@ interface UnifiedSkillItem {
   source: "expert" | "science" | "office" | "custom"
 }
 
-/** Visible warehouse group for a skill (creative splits out of expert). */
+/** Visible warehouse group for a skill. */
 function skillDisplayGroup(
   skill: Pick<UnifiedSkillItem, "source" | "category">
 ): SkillDisplayGroup {
   if (skill.source === "custom") return "custom"
   if (skill.category === "creative") return "creative"
-  return skill.source
+  if (skill.category === "office") return "office"
+  if (skill.source === "science") return "science"
+  return "expert"
 }
 
 function expertToUnified(expert: ExpertListItem): UnifiedSkillItem {
@@ -559,9 +554,9 @@ function SkillCard({
             {(() => {
               const group = skillDisplayGroup(skill)
               if (group === "creative")
-                return isZh ? "艺术设计" : "Art & Design"
-              if (group === "expert") return isZh ? "编程" : "Coding"
-              if (group === "science") return isZh ? "科研" : "Science"
+                return isZh ? "创意" : "Creative"
+              if (group === "expert") return isZh ? "编程" : "Development"
+              if (group === "science") return isZh ? "学术" : "Academic"
               return isZh ? "办公" : "Office"
             })()}
           </Badge>

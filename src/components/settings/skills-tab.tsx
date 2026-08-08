@@ -49,15 +49,6 @@ const CATEGORY_SORT: Record<string, Record<string, number>> = {
     academic: 1,
   },
 }
-  science: {
-    ideation: 1,
-    design: 2,
-    analysis: 3,
-    visualization: 4,
-    evaluation: 5,
-    literature: 6,
-  },
-}
 
 interface SkillsBodyProps {
   source: SkillSource
