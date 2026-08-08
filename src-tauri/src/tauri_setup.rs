@@ -1179,6 +1179,8 @@ use crate::commands::git;
                 version_control::save_account_token,
                 version_control::get_account_token,
                 version_control::delete_account_token,
+                acp_commands::acp_discover_openclaw_gateway,
+                acp_commands::acp_ensure_openclaw_gateway,
                 acp_commands::acp_preflight,
                 acp_commands::acp_connect,
                 acp_commands::acp_prompt,
