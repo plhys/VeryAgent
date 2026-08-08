@@ -3207,77 +3207,62 @@
     },
     "copyModeHint": "已复制（非链接）——更新后请重新启用以获取最新版本"
   },
-  "ExpertsSettings": {
-    "title": "专家技能",
-    "description": "为 AI 编码代理启用精心挑选、经过实战验证的技能工作流。每个专家都是 superpowers 项目中的独立技能 —— veryagent 维护中央副本，并将其软链接到你选择的代理目录。",
-    "loading": "正在加载专家列表…",
-    "loadingContent": "正在加载内容…",
-    "emptyExperts": "当前没有可用的专家，请查看应用日志。",
-    "emptySelection": "从左侧选择一个专家以查看内容并管理启用状态。",
-    "emptySearch": "没有匹配当前搜索条件的专家。",
-    "searchPlaceholder": "按名称、ID 或描述搜索专家",
-    "enableForAgents": "为代理启用",
-    "noAgents": "未检测到 ACP 代理。",
-    "copyModeWarning": "已复制(非软链接)。veryagent 更新后需要重新启用以获取最新版本。",
-    "previewTitle": "SKILL.md 预览",
-    "categories": {
-      "discovery": "发现与设计",
-      "planning": "规划",
-      "execution": "执行",
-      "quality": "质量与测试",
-      "debugging": "调试",
-      "review": "评审与集成",
-      "meta": "元技能",
-      "creative": "艺术设计"
-    },
+"ExpertsSettings": {
+	    "title": "专家技能",
+	    "description": "为 AI 编码代理启用精心挑选、经过实战验证的技能工作流。",
+	    "loading": "正在加载专家列表…",
+	    "loadingContent": "正在加载内容…",
+	    "emptyExperts": "当前没有可用的专家，请查看应用日志。",
+	    "emptySelection": "从左侧选择一个专家以查看内容并管理启用状态。",
+	    "emptySearch": "没有匹配当前搜索条件的专家。",
+	    "searchPlaceholder": "按名称、ID 或描述搜索专家",
+	    "enableForAgents": "为代理启用",
+	    "noAgents": "未检测到 ACP 代理。",
+	    "previewTitle": "SKILL.md 预览",
+	    "categories": {
+	      "development": "编程",
+	      "office": "办公",
+	      "academic": "学术",
+	      "creative": "创意",
+	      "help": "帮助"
+	    },
+	    "states": {
+	      "not_linked": "未启用",
+	      "linked_to_veryagent": "已启用"
+	    },
+	    "badges": {
+	      "userModified": "用户修改过"
+	    },
+	    "actions": {
+	      "openCentralDir": "打开中央目录",
+	      "refresh": "刷新"
+	    },
+	    "toasts": {
+	      "loadFailed": "加载专家详情失败",
+	      "enabled": "已为该代理启用专家",
+	      "disabled": "已为该代理禁用专家",
+	      "enableFailed": "启用专家失败",
+	      "disableFailed": "禁用专家失败",
+	      "openFolderFailed": "打开目录失败"
+	    }
+	  },
+"ScienceSettings": {
+	    "title": "学术技能",
+	    "description": "为 AI 编程代理启用学术科研技能 — 假设生成、实验设计、统计分析、可视化、文献检索等。",
+	    "loading": "加载学术技能…",
+	    "emptySkills": "暂无学术技能。请检查应用日志。",
+	    "searchPlaceholder": "按名称、ID 或描述搜索学术技能",
+	    "categories": {
+	      "academic": "学术"
+},
     "states": {
       "not_linked": "未启用",
-      "linked_to_veryagent": "已启用",
-      "linked_elsewhere": "冲突 — 已有其他链接",
-      "blocked_by_real_directory": "冲突 — 已有同名的自定义 skill 占用",
-      "broken": "链接损坏"
+      "linked_to_veryagent": "已启用"
     },
     "badges": {
-      "userModified": "用户修改过"
-    },
-    "actions": {
-      "openCentralDir": "打开中央目录",
-      "refresh": "刷新"
-    },
-    "toasts": {
-      "loadFailed": "加载专家详情失败",
-      "enabled": "已为该代理启用专家",
-      "disabled": "已为该代理禁用专家",
-      "enableFailed": "启用专家失败",
-      "disableFailed": "禁用专家失败",
-      "openFolderFailed": "打开目录失败"
-    }
-  },
-  "ScienceSettings": {
-    "title": "科研技能",
-    "description": "为 AI 编程代理启用精选科研技能 — 假设生成、实验设计、统计分析、可视化、批判性评估和文献检索。VeryAgent 管理中央副本并将技能链接到您选择的代理。",
-    "loading": "加载科研技能…",
-    "emptySkills": "暂无科研技能。请检查应用日志。",
-    "searchPlaceholder": "按名称、ID 或描述搜索科研技能",
-    "categories": {
-      "ideation": "构思",
-      "design": "研究设计",
-      "analysis": "分析",
-      "visualization": "可视化",
-      "evaluation": "评估",
-      "literature": "文献"
-    },
-    "states": {
-      "not_linked": "未启用",
-      "linked_to_veryagent": "已启用",
-      "linked_elsewhere": "被阻止 — 存在另一个链接",
-      "blocked_by_real_directory": "被阻止 — 自定义技能已占用此名称",
-      "broken": "链接损坏"
-    },
-    "badges": {
-      "userModified": "用户已修改",
-      "needsKey": "需要 API 密钥",
-      "needsSetup": "可能需要配置"
+      "userModified": "用户修改过",
+      "needsKey": "需 API 密钥",
+      "needsSetup": "可能需要环境配置"
     },
     "actions": {
       "openCentralDir": "打开中央文件夹",
@@ -3287,14 +3272,14 @@
       "openFolderFailed": "打开文件夹失败"
     }
   },
-  "SkillPacksSettings": {
-    "title": "技能包（高级）",
-    "description": "日常请在工作台「技能和连接器」里点「添加」挂到当前智能体。这里是高级管理：浏览中央技能包、排查链接、打开中央文件夹。",
-    "tabs": {
-      "experts": "专家",
-      "science": "科研",
-      "office": "办公"
-    },
+"SkillPacksSettings": {
+	    "title": "技能包",
+	    "description": "浏览和管理所有技能。启用后可在工作台「技能和连接器」中为智能体开启。",
+	    "tabs": {
+	      "experts": "编程",
+	      "science": "学术",
+	      "office": "办公"
+	    },
     "actions": {
       "openCentralDir": "打开中央文件夹",
       "refresh": "刷新"

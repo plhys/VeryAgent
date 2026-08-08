@@ -8,7 +8,7 @@
 
 [[expert]]
 id = "brainstorming"
-category = "discovery"
+category = "development"
 icon = "Lightbulb"
 sort_order = 10
 
@@ -39,7 +39,7 @@ ar = "يستكشف نية المستخدم والمتطلبات والتصميم
 
 [[expert]]
 id = "writing-plans"
-category = "planning"
+category = "development"
 icon = "ListTodo"
 sort_order = 20
 
@@ -70,7 +70,7 @@ ar = "ينشئ خطط تنفيذ مفصلة مع رمز ومسارات ملفا�
 
 [[expert]]
 id = "executing-plans"
-category = "planning"
+category = "development"
 icon = "PlayCircle"
 sort_order = 30
 
@@ -101,7 +101,7 @@ ar = "ينفذ خطة التنفيذ المكتوبة في جلسة منفصلة
 
 [[expert]]
 id = "subagent-driven-development"
-category = "execution"
+category = "development"
 icon = "Bot"
 sort_order = 40
 
@@ -132,7 +132,7 @@ ar = "يرسل عملاء فرعيين جددًا لكل مهمة مع مراج�
 
 [[expert]]
 id = "dispatching-parallel-agents"
-category = "execution"
+category = "development"
 icon = "GitFork"
 sort_order = 50
 
@@ -163,7 +163,7 @@ ar = "يشغّل مهمتين أو أكثر مستقلتين بالتوازي ب
 
 [[expert]]
 id = "using-git-worktrees"
-category = "execution"
+category = "development"
 icon = "GitBranch"
 sort_order = 60
 
@@ -194,7 +194,7 @@ ar = "ينشئ مساحات عمل git معزولة للعمل على الميز
 
 [[expert]]
 id = "test-driven-development"
-category = "quality"
+category = "development"
 icon = "FlaskConical"
 sort_order = 70
 
@@ -225,7 +225,7 @@ ar = "دورة أحمر-أخضر-إعادة هيكلة: اكتب اختبارً�
 
 [[expert]]
 id = "verification-before-completion"
-category = "quality"
+category = "development"
 icon = "CheckCheck"
 sort_order = 80
 
@@ -256,7 +256,7 @@ ar = "يشغّل أوامر التحقق ويؤكد الإخراج قبل الإ
 
 [[expert]]
 id = "systematic-debugging"
-category = "debugging"
+category = "development"
 icon = "Bug"
 sort_order = 90
 
@@ -287,7 +287,7 @@ ar = "يحقق في السبب الجذري عبر عملية من أربع مر
 
 [[expert]]
 id = "requesting-code-review"
-category = "review"
+category = "development"
 icon = "MessageSquareQuote"
 sort_order = 100
 
@@ -318,7 +318,7 @@ ar = "يرسل عميلًا فرعيًا لمراجعة الكود بعد إكم
 
 [[expert]]
 id = "receiving-code-review"
-category = "review"
+category = "development"
 icon = "MessageSquareReply"
 sort_order = 110
 
@@ -349,7 +349,7 @@ ar = "يستجيب لملاحظات المراجعة بصرامة تقنية ب�
 
 [[expert]]
 id = "finishing-a-development-branch"
-category = "review"
+category = "development"
 icon = "GitMerge"
 sort_order = 120
 
@@ -380,7 +380,7 @@ ar = "يتحقق من الاختبارات ويقدم خيارات منظمة ل
 
 [[expert]]
 id = "using-superpowers"
-category = "meta"
+category = "development"
 icon = "Sparkles"
 sort_order = 200
 
@@ -412,7 +412,7 @@ ar = "يحدد كيفية اكتشاف واستخدام المهارات في ب
 
 [[expert]]
 id = "writing-skills"
-category = "meta"
+category = "development"
 icon = "FileCode2"
 sort_order = 210
 
@@ -443,7 +443,7 @@ ar = "إنشاء وتحرير والتحقق من مستندات المهارا�
 
 [[expert]]
 id = "web-search"
-category = "discovery"
+category = "creative"
 icon = "Search"
 sort_order = 310
 
@@ -503,7 +503,7 @@ ar = "إنشاء الصور وتعديلها. الإعدادات: بوابات �
 
 [[expert]]
 id = "pptx-generator"
-category = "presentations"
+category = "office"
 icon = "Presentation"
 sort_order = 400
 
@@ -522,7 +522,7 @@ ja = "Markdown または HTML のスライドを編集可能な .pptx ファイ�
 
 [[expert]]
 id = "veryagent-help"
-category = "meta"
+category = "help"
 icon = "CircleHelp"
 sort_order = 999
 

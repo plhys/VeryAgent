@@ -93,7 +93,7 @@ pub enum SkillLinkState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillInstallStatus {
-    pub skill_id: String,
+    pub expert_id: String,
     pub agent_type: AgentType,
     pub state: SkillLinkState,
     pub link_path: String,
@@ -694,7 +694,7 @@ pub fn get_install_status(
             SkillLinkState::NotLinked
         };
         out.push(SkillInstallStatus {
-            skill_id: skill_id.clone(),
+            expert_id: skill_id.clone(),
             agent_type: *agent,
             state,
             link_path: link_path.to_string_lossy().to_string(),
@@ -733,7 +733,7 @@ pub fn link_skill(
     copy_dir_recursive(&central, &link_path)?;
 
     Ok(SkillInstallStatus {
-        skill_id: skill_id.clone(),
+        expert_id: skill_id.clone(),
         agent_type,
         state: SkillLinkState::Linked,
         link_path: link_path.to_string_lossy().to_string(),
@@ -809,7 +809,7 @@ pub fn list_all_install_statuses(
                 SkillLinkState::NotLinked
             };
             out.push(SkillInstallStatus {
-                skill_id: meta.id.clone(),
+                expert_id: meta.id.clone(),
                 agent_type: *agent,
                 state,
                 link_path: link_path.to_string_lossy().to_string(),

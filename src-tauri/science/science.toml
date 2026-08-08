@@ -20,7 +20,7 @@
 
 [[skill]]
 id = "scientific-brainstorming"
-category = "ideation"
+category = "academic"
 icon = "Sparkles"
 sort_order = 10
 featured = true
@@ -53,7 +53,7 @@ ar = "توليد أفكار بحثية مفتوحة: استكشاف الرواب
 
 [[skill]]
 id = "hypothesis-generation"
-category = "ideation"
+category = "academic"
 icon = "FlaskConical"
 sort_order = 20
 featured = true
@@ -87,7 +87,7 @@ ar = "تحويل الملاحظات إلى فرضيات قابلة للاختب�
 
 [[skill]]
 id = "experimental-design"
-category = "design"
+category = "academic"
 icon = "TestTubes"
 sort_order = 30
 featured = true
@@ -121,7 +121,7 @@ ar = "تصميم دراسات دقيقة قبل جمع البيانات: الع�
 
 [[skill]]
 id = "statistical-power"
-category = "design"
+category = "academic"
 icon = "Gauge"
 sort_order = 40
 featured = true
@@ -155,7 +155,7 @@ ar = "تحليل حجم العينة والقوة الإحصائية: عدد ا�
 
 [[skill]]
 id = "statistical-analysis"
-category = "analysis"
+category = "academic"
 icon = "Sigma"
 sort_order = 50
 featured = true
@@ -189,7 +189,7 @@ ar = "تحليل إحصائي موجَّه: اختيار الاختبار، وا
 
 [[skill]]
 id = "exploratory-data-analysis"
-category = "analysis"
+category = "academic"
 icon = "ScatterChart"
 sort_order = 60
 featured = true
@@ -223,7 +223,7 @@ ar = "استكشاف آلي لملفات البيانات العلمية بأك�
 
 [[skill]]
 id = "scientific-visualization"
-category = "visualization"
+category = "academic"
 icon = "LineChart"
 sort_order = 70
 featured = true
@@ -257,7 +257,7 @@ ar = "أشكال جاهزة للنشر: تخطيطات متعددة اللوحا
 
 [[skill]]
 id = "scientific-critical-thinking"
-category = "evaluation"
+category = "academic"
 icon = "ScanSearch"
 sort_order = 80
 featured = true
@@ -290,7 +290,7 @@ ar = "تقييم الادعاءات العلمية وجودة الأدلة: رص
 
 [[skill]]
 id = "paper-lookup"
-category = "literature"
+category = "academic"
 icon = "Search"
 sort_order = 90
 featured = true
@@ -323,7 +323,7 @@ ar = "البحث في 10 واجهات برمجية أكاديمية (PubMed وar
 
 [[skill]]
 id = "peer-review"
-category = "evaluation"
+category = "academic"
 icon = "ClipboardCheck"
 sort_order = 100
 needs_env = true
@@ -355,7 +355,7 @@ ar = "مراجعة منظَّمة للمخطوطات والمنح قائمة ع�
 
 [[skill]]
 id = "citation-management"
-category = "literature"
+category = "academic"
 icon = "Quote"
 sort_order = 110
 needs_env = true
@@ -387,7 +387,7 @@ ar = "العثور على الأوراق والتحقق من البيانات ا
 
 [[skill]]
 id = "scholar-evaluation"
-category = "evaluation"
+category = "academic"
 icon = "GraduationCap"
 sort_order = 120
 needs_env = true
@@ -419,7 +419,7 @@ ar = "تقييم الأعمال البحثية بإطار ScholarEval عبر ص�
 
 [[skill]]
 id = "scientific-schematics"
-category = "visualization"
+category = "academic"
 icon = "Workflow"
 sort_order = 130
 needs_key = true

@@ -162,7 +162,7 @@ function releaseFocusRefresh(): void {
  * agent — i.e. symlinked into that agent's skill directory.
  *
  * When `strict` is true (warehouse / enabled list), only real
- * `linked_to_veryagent` pairs count. When `strict` is false (composer
+ * `linked` pairs count. When `strict` is false (composer
  * QuickActions), fail-open: treat all skills as usable so a missing snapshot
  * never blocks the user mid-chat.
  *
@@ -220,7 +220,7 @@ export function useEnabledSkillIds(
           .filter(
             (item) =>
               item.agentType === agentType &&
-              item.state === ("linked_to_veryagent" as ExpertLinkState)
+              item.state === ("linked" as ExpertLinkState)
           )
           .map((item) => item.expertId)
       )

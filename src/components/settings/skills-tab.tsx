@@ -39,15 +39,16 @@ type SkillSource = "experts" | "science"
 /** 行业分类排序 */
 const CATEGORY_SORT: Record<string, Record<string, number>> = {
   experts: {
-    discovery: 1,
-    planning: 2,
-    execution: 3,
-    quality: 4,
-    debugging: 5,
-    review: 6,
-    meta: 7,
-    creative: 8,
+    development: 1,
+    office: 2,
+    academic: 3,
+    creative: 4,
+    help: 5,
   },
+  science: {
+    academic: 1,
+  },
+}
   science: {
     ideation: 1,
     design: 2,

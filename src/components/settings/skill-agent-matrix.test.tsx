@@ -70,7 +70,7 @@ describe("computeLinkDelta", () => {
   })
 
   it("returns [] when nothing needs to change (idempotent)", () => {
-    const statuses = makeMap([makeStatus("a", "codex", "linked_to_veryagent")])
+    const statuses = makeMap([makeStatus("a", "codex", "linked")])
     expect(
       computeLinkDelta(
         [{ skillId: "a", agentType: "codex" }],
@@ -81,11 +81,11 @@ describe("computeLinkDelta", () => {
     ).toEqual([])
   })
 
-  it("skips not-ready skills and blocked cells when enabling", () => {
+  it("skips not-ready skills when enabling", () => {
     const statuses = makeMap([
       makeStatus("ready", "codex", "not_linked"),
-      makeStatus("blocked", "codex", "blocked_by_real_directory"),
-      makeStatus("foreign", "codex", "linked_elsewhere"),
+      makeStatus("blocked", "codex", "not_linked"),
+      makeStatus("foreign", "codex", "not_linked"),
     ])
     const isReady = (id: string) => id !== "notsynced"
     const ops = computeLinkDelta(
@@ -101,14 +101,16 @@ describe("computeLinkDelta", () => {
     )
     expect(ops).toEqual([
       { expertId: "ready", agentType: "codex", enable: true },
+      { expertId: "blocked", agentType: "codex", enable: true },
+      { expertId: "foreign", agentType: "codex", enable: true },
     ])
   })
 
   it("disabling only emits currently-enabled cells", () => {
     const statuses = makeMap([
-      makeStatus("a", "claude_code", "linked_to_veryagent"),
+      makeStatus("a", "claude_code", "linked"),
       makeStatus("a", "codex", "not_linked"),
-      makeStatus("a", "gemini", "blocked_by_real_directory"),
+      makeStatus("a", "gemini", "not_linked"),
     ])
     const ops = computeLinkDelta(
       [
@@ -166,7 +168,7 @@ function renderMatrix(overrides: Partial<SkillAgentMatrixProps> = {}) {
         status: makeStatus(
           "brainstorming",
           "claude_code",
-          "linked_to_veryagent"
+          "linked"
         ),
         error: null,
       },
@@ -240,7 +242,7 @@ describe("SkillAgentMatrix", () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it("does not toggle a blocked cell", async () => {
+  it("toggles a not-linked cell", async () => {
     const applyLinks = vi.fn()
     renderMatrix({
       applyLinks,
@@ -250,17 +252,17 @@ describe("SkillAgentMatrix", () => {
           makeStatus(
             "brainstorming",
             "claude_code",
-            "blocked_by_real_directory"
+            "not_linked"
           ),
           makeStatus("brainstorming", "codex", "not_linked"),
         ]),
     })
     const cell = await screen.findByRole("switch", {
-      name: "Brainstorming, Claude Code: blocked_by_real_directory",
+      name: "Brainstorming, Claude Code: Not enabled",
     })
-    expect(cell).toBeDisabled()
+    expect(cell).not.toBeDisabled()
     fireEvent.click(cell)
-    expect(applyLinks).not.toHaveBeenCalled()
+    expect(applyLinks).toHaveBeenCalled()
   })
 
   it("disables cells for a not-ready (un-synced) skill", async () => {

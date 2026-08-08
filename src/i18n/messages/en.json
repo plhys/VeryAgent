@@ -3209,7 +3209,7 @@
   },
   "ExpertsSettings": {
     "title": "Expert Skills",
-    "description": "Enable curated, battle-tested skill workflows for your AI coding agents. Each expert is a standalone skill from the superpowers project — veryagent manages the central copy and links it into the agents you choose.",
+    "description": "Enable curated, battle-tested skill workflows for your AI coding agents.",
     "loading": "Loading experts…",
     "loadingContent": "Loading content…",
     "emptyExperts": "No experts available. Check the application logs.",
@@ -3218,24 +3218,17 @@
     "searchPlaceholder": "Search experts by name, id, or description",
     "enableForAgents": "Enable for agents",
     "noAgents": "No ACP agents detected.",
-    "copyModeWarning": "Copied (not linked). Re-enable after veryagent updates to get the latest version.",
     "previewTitle": "SKILL.md preview",
     "categories": {
-      "discovery": "Discovery & Design",
-      "planning": "Planning",
-      "execution": "Execution",
-      "quality": "Quality & Testing",
-      "debugging": "Debugging",
-      "review": "Review & Integration",
-      "meta": "Meta",
-      "creative": "Art & Design"
+      "development": "Development",
+      "office": "Office",
+      "academic": "Academic",
+      "creative": "Creative",
+      "help": "Help"
     },
     "states": {
       "not_linked": "Not enabled",
-      "linked_to_veryagent": "Enabled",
-      "linked_elsewhere": "Blocked — another link exists",
-      "blocked_by_real_directory": "Blocked — a custom skill occupies this name",
-      "broken": "Broken link"
+      "linked_to_veryagent": "Enabled"
     },
     "badges": {
       "userModified": "User modified"
@@ -3254,25 +3247,17 @@
     }
   },
   "ScienceSettings": {
-    "title": "Scientific Research Skills",
-    "description": "Enable curated scientific-research skills for your AI coding agents — hypothesis generation, experimental design, statistics, visualization, critical appraisal, and literature search. VeryAgent manages a central copy and links each skill into the agents you choose.",
-    "loading": "Loading science skills…",
-    "emptySkills": "No science skills available. Check the application logs.",
-    "searchPlaceholder": "Search science skills by name, id, or description",
+    "title": "Academic Skills",
+    "description": "Enable academic research skills for your AI coding agents — hypothesis generation, experimental design, statistics, visualization, literature search.",
+    "loading": "Loading academic skills…",
+    "emptySkills": "No academic skills available. Check the application logs.",
+    "searchPlaceholder": "Search academic skills by name, id, or description",
     "categories": {
-      "ideation": "Ideation",
-      "design": "Study Design",
-      "analysis": "Analysis",
-      "visualization": "Visualization",
-      "evaluation": "Evaluation",
-      "literature": "Literature"
+      "academic": "Academic"
     },
     "states": {
       "not_linked": "Not enabled",
-      "linked_to_veryagent": "Enabled",
-      "linked_elsewhere": "Blocked — another link exists",
-      "blocked_by_real_directory": "Blocked — a custom skill occupies this name",
-      "broken": "Broken link"
+      "linked_to_veryagent": "Enabled"
     },
     "badges": {
       "userModified": "User modified",
@@ -3288,11 +3273,11 @@
     }
   },
   "SkillPacksSettings": {
-    "title": "Skill Packs (Advanced)",
-    "description": "Day-to-day: use workbench Skills & Connectors and click Add for the current agent. This page is advanced management — browse packs, troubleshoot links, open the central folder.",
+    "title": "Skill Packs",
+    "description": "Browse and manage all skills. Enable them in workbench Skills & Connectors for each agent.",
     "tabs": {
-      "experts": "Experts",
-      "science": "Science",
+      "experts": "Development",
+      "science": "Academic",
       "office": "Office"
     },
     "actions": {

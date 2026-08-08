@@ -1130,7 +1130,7 @@ fn link_one_locked(
     })?;
 
     Ok(ExpertInstallStatus {
-        skill_id: skill_id.clone(),
+        expert_id: skill_id.clone(),
         agent_type,
         state: SkillLinkState::Linked,
         link_path: link_path.to_string_lossy().to_string(),
@@ -1199,7 +1199,7 @@ pub async fn officecli_skill_get_install_status(
             SkillLinkState::NotLinked
         };
         out.push(SkillInstallStatus {
-            skill_id: skill_id.clone(),
+            expert_id: skill_id.clone(),
             agent_type: agent,
             state,
             link_path: link_path.to_string_lossy().to_string(),
@@ -1269,7 +1269,7 @@ pub async fn officecli_skill_list_all_install_statuses(
                 SkillLinkState::NotLinked
             };
             out.push(SkillInstallStatus {
-                skill_id: def.id.to_string(),
+                expert_id: def.id.to_string(),
                 agent_type: agent,
                 state,
                 link_path: link_path.to_string_lossy().to_string(),
