@@ -4519,11 +4519,6 @@ pub async fn acp_logout_command_code() -> Result<(), AcpError> {
     logout_command_code()
 }
 
-/// Web-mode wrapper for logout.
-pub(crate) async fn acp_logout_command_code_core() -> Result<(), AcpError> {
-    logout_command_code()
-}
-
 // ---------------------------------------------------------------------------
 // Unified native-login API
 // ---------------------------------------------------------------------------

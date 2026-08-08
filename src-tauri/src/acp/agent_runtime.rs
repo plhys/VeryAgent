@@ -255,7 +255,7 @@ pub struct AgentRuntime {
     /// 底层 ACP 连接
     agent: Option<AcpAgent>,
     /// 重启计数
-    retry_count: u32,
+    _retry_count: u32,
     /// 状态变化回调（连接层注入，把 AgentStatus 推给前端）
     on_status: Option<Arc<dyn Fn(AgentStatus) + Send + Sync>>,
 }
@@ -270,7 +270,7 @@ impl AgentRuntime {
             runtime_env: BTreeMap::new(),
             cwd: PathBuf::from("."),
             agent: None,
-            retry_count: 0,
+            _retry_count: 0,
             on_status: None,
         }
     }

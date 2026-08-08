@@ -155,7 +155,6 @@ pub async fn update_status(
 /// Reset all "in_progress" conversations to "completed".
 /// Called at startup to clean up zombie connections from an ungraceful shutdown.
 pub async fn reset_zombie_conversations(conn: &DatabaseConnection) -> Result<usize, DbError> {
-    use sea_orm::prelude::DateTimeUtc;
     let result = conversation::Entity::update_many()
         .col_expr(conversation::Column::Status, Expr::value(conversation::ConversationStatus::Completed))
         .col_expr(conversation::Column::UpdatedAt, Expr::value(Utc::now()))

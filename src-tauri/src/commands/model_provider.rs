@@ -691,7 +691,7 @@ async fn probe_anthropic(
     )
     .await
     {
-        Ok((status, text)) if status == 200 => {
+        Ok((status, _text)) if status == 200 => {
             probe_ok("anthropic", format!("HTTP 200, Anthropic messages reachable ({url})"))
         }
         Ok((status, text)) => {

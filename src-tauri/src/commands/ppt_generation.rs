@@ -182,6 +182,7 @@ fn get_generator_script_path() -> Result<PathBuf, AppCommandError> {
 
 #[cfg(feature = "tauri-runtime")]
 #[tauri::command]
+#[allow(non_snake_case)]
 pub async fn __cmd__ppt_generation(
     req: PptxRequest,
 ) -> Result<PptxResult, String> {

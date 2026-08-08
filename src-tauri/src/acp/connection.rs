@@ -28,12 +28,11 @@ use sacp::{
 use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, RwLock};
 
-use crate::acp::agent_runtime;
 use crate::acp::agent_runtime::{AgentRuntime, AgentStatus};
 use crate::acp::background_watch;
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
-use crate::acp::registry::{self, AgentDistribution};
+use crate::acp::registry::{self};
 use crate::acp::session_state::SessionState;
 use crate::acp::terminal_runtime::{TerminalRuntime, TerminalRuntimeError};
 use crate::acp::types::{

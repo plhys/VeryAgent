@@ -9,6 +9,16 @@
 
 ## [Unreleased]
 
+### 重构
+
+- **智能体调用系统重构（4 阶段）**：引入 `AgentRuntime` + `AgentDescriptor` + 配置渲染器，统一管理 Agent 进程生命周期。
+  - **P0 止血**：恢复重构丢失的 `cwd`/`env`/版本 pin 能力。
+  - **P1 环境构建集中化**：`agent_env` 模块实现环境变量继承、净化、叠加，替换 45 个 per-agent 分支。
+  - **P2 状态机接入**：`AgentRuntime` 状态机接入连接生命周期，统一管理进程启停与状态流转。
+  - **P3 配置渲染备份**：`render_and_write_config()` 覆写前自动备份旧配置到 `~/.veryagent/config-backups/`；`render_toml_template()` / `render_yaml_template()` 增加格式感知转义。
+- **前端设置页重构**：`AgentDescriptor` 注册表 + `AgentSettingsForm` 通用表单组件，`main.tsx` 删除 3300 行嵌套三元表达式，替换为 40 行声明式渲染。
+- **ACP 模块清理**：移除未使用的 `acp_logout_command_code_core` 函数；清理编译 warning 7 处（未使用 import、未使用变量、字段命名等）。
+
 ### 新增
 
 - **配置渲染备份机制**：`render_and_write_config()` 覆写前自动备份旧配置到 `~/.veryagent/config-backups/<agent_type>/<timestamp>/<relative_path>`，提供回滚保险，备份失败不阻塞主写入。
