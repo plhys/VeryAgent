@@ -388,6 +388,10 @@ impl AgentRuntime {
                 let _ = std::fs::create_dir_all(parent);
             }
 
+            // 覆写前先备份旧文件（配置永不丢失，可回滚）。
+            // 备份目录：~/.veryagent/config-backups/<agent>/<ts>/<相对路径>
+            self.backup_config_file(&config_path, config_file).await?;
+
             // 写入文件
             std::fs::write(&config_path, &content).map_err(|e| {
                 AcpError::SpawnFailed(format!(
@@ -397,6 +401,52 @@ impl AgentRuntime {
             })?;
         }
         Ok(())
+    }
+
+    /// 把现有配置文件备份一份（仅当文件已存在），供用户回滚。
+    async fn backup_config_file(
+        &self,
+        config_path: &Path,
+        config_file: &ConfigFile,
+    ) -> Result<(), AcpError> {
+        if !config_path.exists() {
+            return Ok(());
+        }
+        let home = dirs::home_dir().ok_or_else(|| {
+            AcpError::SpawnFailed("cannot determine home directory".to_string())
+        })?;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let backup_dir = home
+            .join(".veryagent")
+            .join("config-backups")
+            .join(format!("{:?}", self.descriptor.agent_type))
+            .join(ts.to_string());
+        // 保留相对路径目录结构
+        let backup_path = backup_dir.join(config_file.relative_path);
+        if let Some(parent) = backup_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::copy(config_path, &backup_path) {
+            Ok(_) => {
+                tracing::info!(
+                    "[config] backed up {} → {}",
+                    config_path.display(),
+                    backup_path.display()
+                );
+                Ok(())
+            }
+            Err(e) => {
+                // 备份失败不阻塞写入（尽力而为），仅告警
+                tracing::warn!(
+                    "[config] backup failed for {}: {e}",
+                    config_path.display()
+                );
+                Ok(())
+            }
+        }
     }
 
     /// 检查现有配置文件内容是否有效
@@ -453,12 +503,51 @@ impl AgentRuntime {
     }
 
     fn render_toml_template(&self, template: &str) -> Result<String, AcpError> {
-        // 与 JSON 模板类似，但输出 TOML 格式
-        self.render_json_template(template)
+        // TOML 值在模板里通常用双引号包裹（如 `key = "{{base_url}}"`），
+        // 替换值若含引号/反斜杠会破坏格式——这里做 TOML 字符串转义。
+        let mut result = template.to_string();
+        let env = &self.runtime_env;
+        let mapping = &self.descriptor.env_mapping;
+
+        let escape = |v: &str| {
+            // TOML basic string: 转义 \ 和 "（换行等由模板结构保证，不出现）
+            v.replace('\\', "\\\\").replace('"', "\\\"")
+        };
+        if let Some(val) = env.get(mapping.api_key_key) {
+            result = result.replace("{{api_key}}", &escape(val));
+        }
+        if let Some(val) = env.get(mapping.base_url_key) {
+            result = result.replace("{{base_url}}", &escape(val));
+        }
+        if let Some(val) = env.get(mapping.model_key) {
+            result = result.replace("{{model}}", &escape(val));
+        }
+
+        Ok(result)
     }
 
     fn render_yaml_template(&self, template: &str) -> Result<String, AcpError> {
-        self.render_json_template(template)
+        // YAML 标量在模板里通常用双引号包裹（如 `model: "{{model}}"`），
+        // 替换值若含特殊字符（冒号/引号/井号等）会破坏 YAML——做基本转义。
+        let mut result = template.to_string();
+        let env = &self.runtime_env;
+        let mapping = &self.descriptor.env_mapping;
+
+        let escape = |v: &str| {
+            // YAML double-quoted style: 转义反斜杠、双引号、控制字符
+            v.replace('\\', "\\\\").replace('"', "\\\"")
+        };
+        if let Some(val) = env.get(mapping.api_key_key) {
+            result = result.replace("{{api_key}}", &escape(val));
+        }
+        if let Some(val) = env.get(mapping.base_url_key) {
+            result = result.replace("{{base_url}}", &escape(val));
+        }
+        if let Some(val) = env.get(mapping.model_key) {
+            result = result.replace("{{model}}", &escape(val));
+        }
+
+        Ok(result)
     }
 
     fn render_dotenv(&self) -> Result<String, AcpError> {
