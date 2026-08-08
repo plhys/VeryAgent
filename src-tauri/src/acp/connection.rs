@@ -29,7 +29,7 @@ use sacp_tokio::AcpAgent;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::acp::agent_runtime;
-use crate::acp::agent_runtime::AgentRuntime;
+use crate::acp::agent_runtime::{AgentRuntime, AgentStatus};
 use crate::acp::background_watch;
 use crate::acp::error::AcpError;
 use crate::acp::file_system_runtime::{FileSystemRuntime, FileSystemRuntimeError};
@@ -267,11 +267,31 @@ async fn build_agent(
     agent_type: AgentType,
     runtime_env: &BTreeMap<String, String>,
     cwd: &Path,
+    emitter: &EventEmitter,
 ) -> Result<AcpAgent, AcpError> {
     // 1. 配置渲染和预检
     let mut runtime = AgentRuntime::new(agent_type)
         .with_env(runtime_env.clone())
         .with_cwd(cwd.to_path_buf());
+    // 状态机接入连接生命周期：AgentStatus 变化实时推给前端（agent_status 事件）
+    {
+        let emitter = emitter.clone();
+        let agent_name = runtime.descriptor().name.to_string();
+        runtime = runtime.with_status_callback(Arc::new(move |status: AgentStatus| {
+            crate::web::event_bridge::emit_event(
+                &emitter,
+                "agent_status",
+                serde_json::json!({
+                    "agentType": agent_name,
+                    "status": agent_status_label(&status),
+                    "retryCount": match &status {
+                        AgentStatus::Crashed { retry_count, .. } => *retry_count,
+                        _ => 0,
+                    },
+                }),
+            );
+        }));
+    }
     if let Err(e) = runtime.prepare().await {
         tracing::warn!("[build_agent] AgentRuntime::prepare failed: {e}");
     }
@@ -279,17 +299,26 @@ async fn build_agent(
     // 2. Agent 特定的预检和准备工作
     run_agent_preflight(agent_type, runtime_env, cwd).await?;
 
-    // 3. 使用 AgentRuntime 构建 Agent 进程
+    // 3. 使用 AgentRuntime 启动 Agent 进程（状态机：Starting → Running）
     //    build_agent_from_descriptor 会根据 AgentDescriptor 自动选择
     //    正确的启动方式（Npx、Binary、Uvx、NodeScript），并在内部设置子进程
     //    工作目录（cwd）与合并后的环境变量（代理/CLICOLOR/officecli PATH）。
-    let agent = agent_runtime::build_agent_from_descriptor(
-        runtime.descriptor(),
-        runtime_env,
-        cwd,
-    ).await?;
+    let agent = runtime.start().await?;
 
     Ok(agent)
+}
+
+/// AgentStatus → 前端可读标签。
+fn agent_status_label(status: &AgentStatus) -> &'static str {
+    match status {
+        AgentStatus::Idle => "idle",
+        AgentStatus::Preparing => "preparing",
+        AgentStatus::Starting => "starting",
+        AgentStatus::Running => "running",
+        AgentStatus::Checking => "checking",
+        AgentStatus::Crashed { .. } => "crashed",
+        AgentStatus::Stopped => "stopped",
+    }
 }
 
 /// Agent 特定的预检和准备工作
@@ -411,7 +440,7 @@ pub async fn spawn_agent_connection(
     // agree. Computed here because `working_dir` is moved into run_connection
     // below.
     let launch_cwd = resolve_working_dir(working_dir.as_deref());
-    let agent = build_agent(agent_type, &runtime_env, &launch_cwd).await?;
+    let agent = build_agent(agent_type, &runtime_env, &launch_cwd, &emitter).await?;
 
     // Forward only the veryagent git credential helper keys into the terminal
     // runtime — not the agent's API tokens or model provider credentials.

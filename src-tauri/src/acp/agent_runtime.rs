@@ -8,6 +8,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use sacp_tokio::AcpAgent;
@@ -255,6 +256,8 @@ pub struct AgentRuntime {
     agent: Option<AcpAgent>,
     /// 重启计数
     retry_count: u32,
+    /// 状态变化回调（连接层注入，把 AgentStatus 推给前端）
+    on_status: Option<Arc<dyn Fn(AgentStatus) + Send + Sync>>,
 }
 
 impl AgentRuntime {
@@ -268,6 +271,24 @@ impl AgentRuntime {
             cwd: PathBuf::from("."),
             agent: None,
             retry_count: 0,
+            on_status: None,
+        }
+    }
+
+    /// 注入状态变化回调（连接层调用，把状态机事件推给前端）
+    pub fn with_status_callback(
+        mut self,
+        cb: Arc<dyn Fn(AgentStatus) + Send + Sync>,
+    ) -> Self {
+        self.on_status = Some(cb);
+        self
+    }
+
+    /// 更新状态并触发回调（状态机生效的入口）
+    fn set_status(&mut self, status: AgentStatus) {
+        self.status = status.clone();
+        if let Some(cb) = &self.on_status {
+            cb(status);
         }
     }
 
@@ -299,7 +320,7 @@ impl AgentRuntime {
     ///
     /// 在启动智能体之前调用，确保所有配置文件和运行时依赖就绪。
     pub async fn prepare(&mut self) -> Result<(), AcpError> {
-        self.status = AgentStatus::Preparing;
+        self.set_status(AgentStatus::Preparing);
 
         // 1. 渲染原生配置文件
         self.render_config_files().await?;
@@ -317,7 +338,7 @@ impl AgentRuntime {
     ///
     /// 调用 `prepare()` 后调用此方法。
     pub async fn start(&mut self) -> Result<AcpAgent, AcpError> {
-        self.status = AgentStatus::Starting;
+        self.set_status(AgentStatus::Starting);
 
         let agent = build_agent_from_descriptor(
             &self.descriptor,
@@ -325,7 +346,7 @@ impl AgentRuntime {
             &self.cwd,
         ).await?;
 
-        self.status = AgentStatus::Running;
+        self.set_status(AgentStatus::Running);
         self.agent = Some(agent);
         // 返回克隆或引用 — 实际使用中 AcpAgent 需要 move 到 run_connection
         // 这里的设计是：AgentRuntime 创建 AcpAgent，然后交给 connection.rs 使用
@@ -336,8 +357,9 @@ impl AgentRuntime {
 
     /// 停止智能体
     pub async fn stop(&mut self) {
-        self.status = AgentStatus::Stopped;
-        // AcpAgent 的清理由 drop 处理
+        self.set_status(AgentStatus::Stopped);
+        // AcpAgent 的清理由 drop 处理（sacp ChildGuard 杀整树）
+        self.agent = None;
     }
 
     // ---- 内部方法 ----
