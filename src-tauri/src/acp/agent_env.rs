@@ -28,6 +28,12 @@ const DEFAULT_COMMAND_COLOR_ENV: [(&str, &str); 1] = [("CLICOLOR_FORCE", "1")];
 /// agent 的运行时行为），要么在用户机器上有自定义值但会干扰子进程的网络
 /// 证书校验（SSL_CERT_*）。`npm_*` 是 npm 配置命名空间，混入 agent 环境
 /// 会让其 npm/npx 行为与本机全局配置不一致——全部剔除。
+///
+/// Windows 特殊环境变量（`=C:=`, `=D:=` 等）由 `GetEnvironmentStrings` 返回，
+/// 记录每个驱动器的当前目录。它们以 `=` 开头，在 `build_agent_env` 中
+/// 通过 `retain` 统一过滤，不会进入子进程环境——否则在 `KEY=VALUE` 前缀
+/// 解析路径（`AcpAgent::from_args`）中会被误认为命令而非环境变量，
+/// 导致 spawn 失败（`os error 123` / `ERROR_INVALID_NAME`）。
 const DROP_KEYS: &[&str] = &[
     "NODE_OPTIONS",
     "NODE_INSPECT",
@@ -47,11 +53,14 @@ pub(crate) fn build_agent_env(
     // 1. 继承当前进程环境
     let mut merged: BTreeMap<OsString, OsString> = std::env::vars_os().collect();
 
-    // 2. 净化黑名单
+    // 2. 净化黑名单 + Windows 特殊驱动器变量（`=C:=`/`=D:=`）
     for key in DROP_KEYS {
         merged.remove(std::ffi::OsStr::new(key));
     }
-    merged.retain(|key, _| !key.to_string_lossy().starts_with("npm_"));
+    merged.retain(|key, _| {
+        let k = key.to_string_lossy();
+        !k.starts_with("npm_") && !k.starts_with('=')
+    });
 
     // 3. 叠加（后者覆盖前者）
     for (key, value) in DEFAULT_COMMAND_COLOR_ENV {
@@ -82,6 +91,7 @@ pub(crate) fn build_agent_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
 
     #[test]
     fn drops_blacklist_keys() {
@@ -93,10 +103,28 @@ mod tests {
         env.insert(OsString::from("HTTP_PROXY"), OsString::from("http://proxy:1"));
 
         let built = clean_for_test(env);
-        assert!(!built.contains_key("NODE_OPTIONS"));
-        assert!(!built.contains_key("npm_config_registry"));
-        assert!(built.contains_key("HTTP_PROXY"), "网络变量必须保留");
-        assert!(built.contains_key("PATH"));
+        assert!(!built.contains_key(OsStr::new("NODE_OPTIONS")));
+        assert!(!built.contains_key(OsStr::new("npm_config_registry")));
+        assert!(built.contains_key(OsStr::new("HTTP_PROXY")), "网络变量必须保留");
+        assert!(built.contains_key(OsStr::new("PATH")));
+    }
+
+    #[test]
+    fn drops_windows_drive_special_env_vars() {
+        // Windows 的 `GetEnvironmentStrings` 会返回记录每个驱动器当前目录的
+        // 特殊变量（`=C:=`, `=D:=`）。它们以 `=` 开头，不是合法的环境变量名，
+        // 若进入 `KEY=VALUE` 前缀解析会被误判为命令，导致 spawn 失败。
+        let mut env = BTreeMap::new();
+        env.insert(OsString::from("=C:"), OsString::from("C:\\Users\\test"));
+        env.insert(OsString::from("=D:"), OsString::from("D:\\Projects"));
+        env.insert(OsString::from("PATH"), OsString::from("C:\\Windows"));
+        env.insert(OsString::from("APPDATA"), OsString::from("C:\\Users\\test\\AppData"));
+
+        let built = clean_for_test(env);
+        assert!(!built.contains_key(OsStr::new("=C:")), "`=C:` 驱动器变量必须剔除");
+        assert!(!built.contains_key(OsStr::new("=D:")), "`=D:` 驱动器变量必须剔除");
+        assert!(built.contains_key(OsStr::new("PATH")));
+        assert!(built.contains_key(OsStr::new("APPDATA")));
     }
 
     /// 测试用：对所有系统预先构建完整环境（继承+净化），仅验证黑名单逻辑。
@@ -105,9 +133,12 @@ mod tests {
     ) -> BTreeMap<OsString, OsString> {
         let mut merged = base;
         for key in DROP_KEYS {
-            merged.remove(key);
+            merged.remove(OsStr::new(key));
         }
-        merged.retain(|key, _| !key.to_string_lossy().starts_with("npm_"));
+        merged.retain(|key, _| {
+            let k = key.to_string_lossy();
+            !k.starts_with("npm_") && !k.starts_with('=')
+        });
         merged
     }
 }
