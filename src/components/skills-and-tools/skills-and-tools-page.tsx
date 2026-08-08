@@ -1418,6 +1418,18 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             const nameB = pickLocalizedText(b.name, navigatorLocale, b.id)
             return nameA.localeCompare(nameB)
           })
+          // Also load office skills from OfficeCLI and merge them in
+          try {
+            const officeSkills = await officecliListSkills()
+            for (const os of officeSkills) {
+              // Only add if not already in the list
+              if (!unified.some((u) => u.id === os.id)) {
+                unified.push(officeSkillToUnified(os))
+              }
+            }
+          } catch (_) {
+            // OfficeCLI not installed — skip silently
+          }
           setSkills(unified)
         }
 
