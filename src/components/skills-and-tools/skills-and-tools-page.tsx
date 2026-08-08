@@ -389,10 +389,15 @@ function skillDisplayGroup(
   skill: Pick<UnifiedSkillItem, "source" | "category">
 ): SkillDisplayGroup {
   if (skill.source === "custom") return "custom"
-  if (skill.category === "creative") return "creative"
-  if (skill.category === "office") return "office"
-  if (skill.category === "help") return "help"
+  // Map old warehouse categories to new industry groups
+  const cat = skill.category
+  if (cat === "creative") return "creative"
+  if (cat === "office") return "office"
+  if (cat === "help") return "help"
+  if (cat === "presentations" || cat === "general" || cat === "documents" || cat === "spreadsheets") return "office"
   if (skill.source === "science") return "science"
+  // All other categories (discovery, planning, execution, quality, debugging,
+  // review, meta, etc.) are development workflow skills → "expert" (编程)
   return "expert"
 }
 
