@@ -257,21 +257,20 @@ export function VisionBridgeSettingsBody({
         <div className="flex items-center gap-2">
           <Eye className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">{t("title")}</h2>
+          <label className="ml-auto flex items-center gap-2">
+            <Switch
+              id="vision-bridge-enabled"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              disabled={loading}
+            />
+            <span className="text-xs text-muted-foreground">{t("enable")}</span>
+          </label>
         </div>
 
         <p className="text-xs leading-5 text-muted-foreground">
           {t("description")}
         </p>
-
-        <label className="flex items-center gap-2">
-          <Switch
-            id="vision-bridge-enabled"
-            checked={enabled}
-            onCheckedChange={setEnabled}
-            disabled={loading}
-          />
-          <span className="text-xs text-muted-foreground">{t("enable")}</span>
-        </label>
         <p className="text-[11px] text-muted-foreground">{t("enableHint")}</p>
 
         {/* Vision model config — collapsible, only when enabled */}
