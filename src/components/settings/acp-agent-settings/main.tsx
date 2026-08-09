@@ -187,6 +187,34 @@ import { OpenCodeModelCombobox } from "./opencode-model-combobox"
 import { AgentReorderItem } from "./agent-reorder-item"
 import { KimiCodeConfigPanel } from "./kimi-code-config"
 
+/** 智能体能识别的目标模型列表（用于模型提供商映射） */
+const CLAUDE_TARGET_MODELS = [
+  { id: "claude-opus-4-20250805", name: "Claude Opus 4.8" },
+  { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4.5" },
+  { id: "claude-haiku-4-20251001", name: "Claude Haiku 4.5" },
+  { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
+  { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku" },
+]
+
+const CODEX_TARGET_MODELS = [
+  { id: "gpt-5-codex", name: "GPT-5 Codex" },
+  { id: "gpt-5.1-codex", name: "GPT-5.1 Codex" },
+  { id: "o3", name: "o3" },
+  { id: "o4-mini", name: "o4-mini" },
+  { id: "gpt-4.1", name: "GPT-4.1" },
+]
+
+function getTargetModelOptions(agentType: string): { id: string; name: string }[] {
+  switch (agentType) {
+    case "claude_code":
+      return CLAUDE_TARGET_MODELS
+    case "codex":
+      return CODEX_TARGET_MODELS
+    default:
+      return []
+  }
+}
+
 export function AcpAgentSettings() {
   const locale = useLocale()
   const t = useTranslations("AcpAgentSettings")
@@ -4369,6 +4397,7 @@ export function AcpAgentSettings() {
                     key={selectedAgent.agent_type}
                     agent={selectedAgent}
                     modelProviders={modelProviders}
+                    targetModelOptions={getTargetModelOptions(selectedAgent.agent_type)}
                     onModelProviderChange={async (providerId) => {
                       // 保存 model_provider_id 到后端
                       const envText = Object.entries(selectedAgent.env)

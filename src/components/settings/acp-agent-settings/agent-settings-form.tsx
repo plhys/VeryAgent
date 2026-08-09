@@ -40,6 +40,8 @@ interface AgentSettingsFormProps {
   fetchingModels?: boolean;
   /** 可用模型列表 */
   availableModels?: { id: string; name: string }[];
+  /** 目标模型映射选项（例如 Claude Code 可选的模型列表） */
+  targetModelOptions?: { id: string; name: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +154,7 @@ export function AgentSettingsForm({
   onFetchModels,
   fetchingModels,
   availableModels,
+  targetModelOptions,
 }: AgentSettingsFormProps) {
   const descriptor = getAgentDescriptor(agent.agent_type);
   const [authMode, setAuthMode] = useState<string>(
@@ -276,31 +279,56 @@ export function AgentSettingsForm({
             }
             if (field.key === "model" && authMode === "model_provider") {
               return (
-                <div key={field.key} className="space-y-1.5">
-                  <label className="text-sm font-medium">模型</label>
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={values["model"] ?? ""}
-                      onChange={(e) => handleFieldChange("model", e.target.value)}
-                    >
-                      <option value="">{field.placeholder || "请选择..."}</option>
-                      {availableModels?.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={onFetchModels}
-                      disabled={fetchingModels}
-                      className="shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
-                    >
-                      {fetchingModels ? "加载中..." : "获取模型"}
-                    </button>
+                <div key={field.key} className="space-y-3">
+                  {/* 提供商模型选择 */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium">提供商模型</label>
+                    <div className="flex gap-2">
+                      <select
+                        className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={values["provider_model"] ?? ""}
+                        onChange={(e) => handleFieldChange("provider_model", e.target.value)}
+                      >
+                        <option value="">{field.placeholder || "请选择..."}</option>
+                        {availableModels?.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={onFetchModels}
+                        disabled={fetchingModels}
+                        className="shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                      >
+                        {fetchingModels ? "加载中..." : "获取模型"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">从提供商 API 拉取的可用模型列表</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{field.helpText}</p>
+
+                  {/* 目标模型映射 */}
+                  {targetModelOptions && targetModelOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">映射到智能体模型</label>
+                      <select
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={values["model"] ?? ""}
+                        onChange={(e) => handleFieldChange("model", e.target.value)}
+                      >
+                        <option value="">请选择目标模型...</option>
+                        {targetModelOptions.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        提供商模型将通过此映射名称发送给智能体
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             }
