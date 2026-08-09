@@ -372,6 +372,8 @@ function extractConfigFromDescriptor(
   if (env[apiKeyKey]) result[apiKeyKey] = env[apiKeyKey];
   if (env[baseUrlKey]) result[baseUrlKey] = env[baseUrlKey];
   if (env[modelKey]) result[modelKey] = env[modelKey];
+  // Also store with the generic "model" key used by the modelProviderAuthMode field
+  if (env[modelKey]) result["model"] = env[modelKey];
 
   return result;
 }

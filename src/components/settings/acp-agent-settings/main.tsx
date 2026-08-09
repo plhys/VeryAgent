@@ -4366,6 +4366,7 @@ export function AcpAgentSettings() {
 
                 {selectedAgent && (
                   <AgentSettingsForm
+                    key={selectedAgent.agent_type}
                     agent={selectedAgent}
                     modelProviders={modelProviders}
                     onModelProviderChange={async (providerId) => {
