@@ -119,11 +119,6 @@ const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
     icon: Keyboard,
   },
   {
-    href: "/settings/version-control",
-    labelKey: "version_control",
-    icon: GitBranch,
-  },
-  {
     href: "/settings/web-service",
     labelKey: "web_service",
     icon: Globe,
