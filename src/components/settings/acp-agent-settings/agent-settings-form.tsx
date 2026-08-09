@@ -400,12 +400,12 @@ function extractConfigFromDescriptor(
   if (env[apiKeyKey]) result[apiKeyKey] = env[apiKeyKey];
   if (env[baseUrlKey]) result[baseUrlKey] = env[baseUrlKey];
   if (env[modelKey]) result[modelKey] = env[modelKey];
-  // Also store with the generic "model" key used by the modelProviderAuthMode field
-  if (env[modelKey]) result["model"] = env[modelKey];
-  // Populate "provider_model" from PROVIDER_MODEL env key (for agents with
-  // target model mapping), or fall back to the standard modelKey.
-  if (env["PROVIDER_MODEL"]) result["provider_model"] = env["PROVIDER_MODEL"];
-  else if (env[modelKey]) result["provider_model"] = env[modelKey];
+  // "model" — 目标模型映射（PROVIDER_MAPPED_MODEL），用于"映射到智能体模型"下拉框。
+  // 无映射时回退到 provider model。
+  if (env["PROVIDER_MAPPED_MODEL"]) result["model"] = env["PROVIDER_MAPPED_MODEL"];
+  else if (env[modelKey]) result["model"] = env[modelKey];
+  // "provider_model" — 提供商模型，始终来自 modelKey（API 实际能识别的模型名）
+  if (env[modelKey]) result["provider_model"] = env[modelKey];
 
   return result;
 }
