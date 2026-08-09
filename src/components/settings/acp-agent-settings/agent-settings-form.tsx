@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { AcpAgentInfo } from "@/lib/types";
 import {
   getAgentDescriptor,
@@ -164,6 +164,15 @@ export function AgentSettingsForm({
     return initial;
   });
 
+  // Sync internal state when the agent prop changes (e.g. after a provider
+  // is saved, the parent re-renders with an updated model_provider_id).
+  useEffect(() => {
+    setAuthMode(detectAuthMode(agent.agent_type ? descriptor! : descriptor!, agent.env, agent.model_provider_id));
+    const extracted = extractConfigFromDescriptor(descriptor!, agent.env);
+    setValues((prev) => ({ ...prev, ...extracted }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.model_provider_id]);
+
   const handleFieldChange = useCallback(
     (key: string, value: string) => {
       setValues((prev) => ({ ...prev, [key]: value }));
@@ -174,12 +183,8 @@ export function AgentSettingsForm({
   const handleAuthModeChange = useCallback(
     (modeId: string) => {
       setAuthMode(modeId);
-      if (modeId === "model_provider") {
-        // 切换到模型提供商模式，清空手动配置
-        onModelProviderChange?.(null);
-      }
     },
-    [onModelProviderChange]
+    []
   );
 
   const currentAuthMode = descriptor?.authModes.find((m) => m.id === authMode);
