@@ -3824,6 +3824,7 @@
     "title": "技能和连接器",
     "tabSkillsRepo": "技能仓库",
     "tabPluginsRepo": "连接器仓库",
+    "cancel": "取消",
     "loading": "加载中…",
     "active": "已添加",
     "available": "可用",

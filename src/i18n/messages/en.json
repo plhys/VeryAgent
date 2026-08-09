@@ -3824,6 +3824,7 @@
     "title": "Skills & Connectors",
     "tabSkillsRepo": "Skill Warehouse",
     "tabPluginsRepo": "Connector Warehouse",
+    "cancel": "Cancel",
     "loading": "Loading…",
     "active": "Added",
     "available": "Available",
