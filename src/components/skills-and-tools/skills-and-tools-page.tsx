@@ -210,7 +210,7 @@ function warehouseToUnified(skill: WarehouseSkill): UnifiedSkillItem {
     description: skill.description,
     category: skill.category,
     icon: skill.icon,
-    source: "expert" as const,
+    source: skill.source,
   }
 }
 
@@ -1569,15 +1569,25 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   type SourceFilter = "all" | "expert" | "creative" | "science" | "office" | "help"
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
 
-  const sourceFilters: { id: SourceFilter; label: string }[] = useMemo(
+  const filterCounts = useMemo(() => {
+    const total = skills.length
+    const expert = skills.filter((s) => skillDisplayGroup(s) === "expert").length
+    const creative = skills.filter((s) => skillDisplayGroup(s) === "creative").length
+    const science = skills.filter((s) => skillDisplayGroup(s) === "science").length
+    const office = skills.filter((s) => skillDisplayGroup(s) === "office").length
+    const help = skills.filter((s) => skillDisplayGroup(s) === "help").length
+    return { total, expert, creative, science, office, help }
+  }, [skills])
+
+  const sourceFilters: { id: SourceFilter; label: string; count: number }[] = useMemo(
     () => [
-      { id: "all", label: t("filterAll") },
-      { id: "expert", label: t("filterExpert") },
-      { id: "creative", label: t("filterCreative") },
-      { id: "science", label: t("filterScience") },
-      { id: "office", label: t("filterOffice") },
+      { id: "all", label: t("filterAll"), count: filterCounts.total },
+      { id: "expert", label: t("filterExpert"), count: filterCounts.expert },
+      { id: "creative", label: t("filterCreative"), count: filterCounts.creative },
+      { id: "science", label: t("filterScience"), count: filterCounts.science },
+      { id: "office", label: t("filterOffice"), count: filterCounts.office },
     ],
-    [t]
+    [t, filterCounts]
   )
 
   const displayedSkills = useMemo(() => {
@@ -1633,6 +1643,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
               }
             >
               {f.label}
+              <span className="ml-1.5 opacity-60">{f.count}</span>
             </button>
           ))}
           <div className="ml-auto flex items-center gap-1">
