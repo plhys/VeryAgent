@@ -168,12 +168,11 @@ export function AgentSettingsForm({
     return initial;
   });
 
-  // Sync internal state when the agent prop changes (e.g. after a provider
+  // Sync auth mode when the agent prop changes (e.g. after a provider
   // is saved, the parent re-renders with an updated model_provider_id).
+  // Do NOT overwrite values — the user may have typed custom config.
   useEffect(() => {
-    setAuthMode(detectAuthMode(agent.agent_type ? descriptor! : descriptor!, agent.env, agent.model_provider_id));
-    const extracted = extractConfigFromDescriptor(descriptor!, agent.env);
-    setValues((prev) => ({ ...prev, ...extracted }));
+    setAuthMode(detectAuthMode(descriptor!, agent.env, agent.model_provider_id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent.model_provider_id]);
 

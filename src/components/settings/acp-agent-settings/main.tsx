@@ -4399,6 +4399,13 @@ export function AcpAgentSettings() {
                           else delete env[modelKey]
                         }
                         modelProviderId = null // 手动模式清除模型提供商绑定
+                      } else if (authMode === "model_provider" && values["model"]) {
+                        // 模型提供商模式：保存用户在「获取模型」下拉中选择的模型
+                        const desc = getAgentDescriptor(selectedAgent.agent_type)
+                        if (desc) {
+                          const { modelKey } = desc.envMapping
+                          env[modelKey] = values["model"]
+                        }
                       }
 
                       const envText = Object.entries(env)
