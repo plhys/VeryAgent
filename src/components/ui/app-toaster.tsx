@@ -19,6 +19,7 @@ export function AppToaster(props: ToasterProps) {
       theme={theme}
       duration={1500}
       visibleToasts={3}
+      position="top-center"
       toastOptions={{
         style: {
           opacity: 0.8,
