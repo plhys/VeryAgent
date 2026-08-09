@@ -2768,11 +2768,35 @@ pub(crate) fn provider_codex_model_action(
 ///   (when there's only one agent_type) → returned as-is.
 ///
 /// Returns `None` when the model field is absent or the agent_type has no entry.
+/// Strip ANSI escape codes from a string. Model names copied from terminal
+/// output may carry `\x1b[1m` (bold) or similar sequences that would cause
+/// "model not found" errors when passed to the agent CLI.
+fn strip_ansi(s: &str) -> String {
+    // Matches ANSI escape sequences: \x1b\[ ... m
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until we hit 'm' (the end of an ANSI sequence)
+            while let Some(n) = chars.next() {
+                if n == 'm' {
+                    break;
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 pub(crate) fn extract_agent_model(
     raw: Option<&str>,
     agent_type_str: &str,
 ) -> Option<String> {
     let trimmed = raw.map(str::trim).filter(|s| !s.is_empty())?;
+    let cleaned = strip_ansi(trimmed);
+    let trimmed = cleaned.as_str();
     // Try parsing as a multi-agent JSON object first.
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
         if let Some(obj) = val.as_object() {
