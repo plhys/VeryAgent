@@ -4379,6 +4379,9 @@ export function AcpAgentSettings() {
                         console.error("[AgentSettings] save model provider failed:", e)
                       }
                     }}
+                    onFetchModels={() => setProviderModelsRefreshKey((n) => n + 1)}
+                    fetchingModels={providerModelsLoading}
+                    availableModels={providerModels}
                     onSave={async (values, authMode) => {
                       const env = { ...selectedAgent.env }
                       let modelProviderId: number | null = selectedAgent.model_provider_id

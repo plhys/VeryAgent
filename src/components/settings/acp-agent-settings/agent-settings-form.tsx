@@ -34,6 +34,12 @@ interface AgentSettingsFormProps {
   onSave?: (values: Record<string, string>, authMode: string) => void;
   /** 是否正在保存 */
   saving?: boolean;
+  /** 获取模型列表回调（仅模型提供商模式） */
+  onFetchModels?: () => void;
+  /** 是否正在获取模型 */
+  fetchingModels?: boolean;
+  /** 可用模型列表 */
+  availableModels?: { id: string; name: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +149,9 @@ export function AgentSettingsForm({
   onModelProviderChange,
   onSave,
   saving,
+  onFetchModels,
+  fetchingModels,
+  availableModels,
 }: AgentSettingsFormProps) {
   const descriptor = getAgentDescriptor(agent.agent_type);
   const [authMode, setAuthMode] = useState<string>(
@@ -178,8 +187,16 @@ export function AgentSettingsForm({
   const handleAuthModeChange = useCallback(
     (modeId: string) => {
       setAuthMode(modeId);
+      if (modeId !== "model_provider" && onModelProviderChange) {
+        // 切换到非模型提供商模式时，清空共享提供商绑定
+        onModelProviderChange(null);
+      }
+      if (modeId !== "model_provider") {
+        // 切换到手动模式时，清空字段值，让用户自己填写
+        setValues({});
+      }
     },
-    []
+    [onModelProviderChange]
   );
 
   const currentAuthMode = descriptor?.authModes.find((m) => m.id === authMode);
@@ -259,8 +276,34 @@ export function AgentSettingsForm({
               );
             }
             if (field.key === "model" && authMode === "model_provider") {
-              // 模型选择在模型提供商模式下由提供商决定
-              return null;
+              return (
+                <div key={field.key} className="space-y-1.5">
+                  <label className="text-sm font-medium">模型</label>
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={values["model"] ?? ""}
+                      onChange={(e) => handleFieldChange("model", e.target.value)}
+                    >
+                      <option value="">{field.placeholder || "请选择..."}</option>
+                      {availableModels?.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={onFetchModels}
+                      disabled={fetchingModels}
+                      className="shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                    >
+                      {fetchingModels ? "加载中..." : "获取模型"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                </div>
+              );
             }
             return (
               <ConfigFieldInput
