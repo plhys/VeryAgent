@@ -45,6 +45,7 @@ use crate::acp::types::{
 };
 #[cfg(feature = "tauri-runtime")]
 use crate::acp::types::{ConnectionInfo, ForkResultInfo, PromptInputBlock};
+use crate::commands::skills::{copy_dir_recursive, user_skills_dir};
 
 /// Global Codex proxy guard: (fingerprint, ShutdownGuard). The proxy is started
 /// once per process and reused across Codex sessions. If the upstream URL or
@@ -5339,6 +5340,28 @@ pub async fn acp_save_agent_skill(
     fs::write(&content_path, content)
         .map_err(|e| AcpError::protocol(format!("failed to write skill content: {e}")))?;
 
+    // Also save a copy to the user central store (~/.veryagent/user-skills/<id>/)
+    // so the skill can be enabled/disabled per agent without losing content.
+    if scope == AgentSkillScope::Global {
+        let central_root = user_skills_dir();
+        if let Err(e) = fs::create_dir_all(&central_root) {
+            tracing::warn!("[Skills] failed to create user skills dir: {e}");
+        }
+        let central_path = if skill.layout == AgentSkillLayout::SkillDirectory {
+            let dir = central_root.join(&id);
+            if let Err(e) = fs::create_dir_all(&dir) {
+                tracing::warn!("[Skills] failed to create central skill dir: {e}");
+            }
+            dir.join("SKILL.md")
+        } else {
+            central_root.join(format!("{id}.md"))
+        };
+        // Only copy the content file, not the full directory
+        if let Err(e) = fs::copy(&content_path, &central_path) {
+            tracing::warn!("[Skills] failed to save to central store: {e}");
+        }
+    }
+
     // Re-read the name, description, and category from the freshly written
     // frontmatter so the returned item reflects the user's actual name and
     // category grouping (not the id or none).
@@ -5374,6 +5397,55 @@ pub async fn acp_delete_agent_skill(
     let skill_path = PathBuf::from(&skill.path);
     remove_skill_entry(&skill_path)
         .map_err(|e| AcpError::protocol(format!("failed to delete skill entry: {e}")))?;
+    Ok(())
+}
+
+/// Enable a custom skill: copy from user central store to agent's skill dir.
+/// If the skill doesn't exist in the central store, it's created there first.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_enable_custom_skill(
+    agent_type: AgentType,
+    skill_id: String,
+) -> Result<(), AcpError> {
+    let id = validate_skill_id(&skill_id)
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    let central = user_skills_dir().join(&id);
+    if !central.exists() {
+        return Err(AcpError::protocol(format!(
+            "custom skill '{id}' not found in central store"
+        )));
+    }
+    let agent_dir = preferred_scope_skill_dir(agent_type, AgentSkillScope::Global, None)
+        .map_err(|_| AcpError::protocol(format!("{agent_type} does not support skills")))?;
+    let target = agent_dir.join(&id);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| AcpError::protocol(e.to_string()))?;
+    }
+    // Remove existing, then copy fresh
+    if target.exists() {
+        fs::remove_dir_all(&target).map_err(|e| AcpError::protocol(e.to_string()))?;
+    }
+    copy_dir_recursive(&central, &target).map_err(|e| AcpError::protocol(e.to_string()))?;
+    Ok(())
+}
+
+/// Disable a custom skill: remove from agent's skill dir but keep in central store.
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn acp_disable_custom_skill(
+    agent_type: AgentType,
+    skill_id: String,
+) -> Result<(), AcpError> {
+    let id = validate_skill_id(&skill_id)
+        .map_err(|e| AcpError::protocol(e.to_string()))?;
+    let dirs = scoped_skill_dirs(agent_type, AgentSkillScope::Global, None)
+        .map_err(|_| AcpError::protocol(format!("{agent_type} does not support skills")))?;
+    for dir in dirs {
+        let candidate = dir.join(&id);
+        if candidate.exists() {
+            remove_skill_entry(&candidate)
+                .map_err(|e| AcpError::protocol(format!("failed to remove skill: {e}")))?;
+        }
+    }
     Ok(())
 }
 

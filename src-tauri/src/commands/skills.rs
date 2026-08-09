@@ -191,6 +191,15 @@ pub fn central_experts_dir() -> PathBuf {
     central_skills_dir()
 }
 
+/// User-created custom skills central store: `~/.veryagent/user-skills/`.
+/// Skills saved here persist across agent resets and can be enabled/disabled
+/// per agent without losing the original content.
+pub fn user_skills_dir() -> PathBuf {
+    home_dir_or_default()
+        .join(CENTRAL_DIR_NAME)
+        .join("user-skills")
+}
+
 fn manifest_path(bundle: &SkillBundle) -> PathBuf {
     central_skills_dir().join(bundle.manifest_name)
 }

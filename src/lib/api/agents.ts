@@ -332,6 +332,28 @@ export async function acpDeleteAgentSkill(params: {
   })
 }
 
+/** Enable a custom skill for an agent (copy from user central store). */
+export async function acpEnableCustomSkill(params: {
+  agentType: AgentType
+  skillId: string
+}): Promise<void> {
+  return getTransport().call("acp_enable_custom_skill", {
+    agentType: params.agentType,
+    skillId: params.skillId,
+  })
+}
+
+/** Disable a custom skill for an agent (remove from agent dir, keep in central store). */
+export async function acpDisableCustomSkill(params: {
+  agentType: AgentType
+  skillId: string
+}): Promise<void> {
+  return getTransport().call("acp_disable_custom_skill", {
+    agentType: params.agentType,
+    skillId: params.skillId,
+  })
+}
+
 // ─── Experts (built-in expert skills) ───────────────────────────────────
 
 export async function expertsList(): Promise<ExpertListItem[]> {

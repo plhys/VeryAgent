@@ -699,6 +699,26 @@ use crate::commands::git;
                     ));
                 }
 
+                // Resident butlers (Hermes / OpenClaw): best-effort warm start so
+                // the first chat finds the agent already connected. Mirrors
+                // `bin/veryagent_server.rs`; soft-fails (missing install,
+                // disabled settings, spawn failure never block app startup).
+                {
+                    let cm = app.state::<ConnectionManager>().clone_ref();
+                    let db = crate::db::AppDatabase {
+                        conn: app.state::<crate::db::AppDatabase>().conn.clone(),
+                    };
+                    let data_dir = effective_data_dir.clone();
+                    let emitter =
+                        crate::web::event_bridge::EventEmitter::Tauri(app.handle().clone());
+                    tauri::async_runtime::spawn(async move {
+                        crate::acp::bootstrap_resident_agents(
+                            cm, db, data_dir, emitter, "main".to_string(),
+                        )
+                        .await;
+                    });
+                }
+
                 // Automation engine: drives manual + scheduled fires, settles
                 // runs off the event bus, reconciles, and recovers on boot. One
                 // per process; mirrored in `bin/codeg_server.rs`.
@@ -1232,6 +1252,8 @@ use crate::commands::git;
                 acp_commands::acp_read_agent_skill,
                 acp_commands::acp_save_agent_skill,
                 acp_commands::acp_delete_agent_skill,
+                acp_commands::acp_enable_custom_skill,
+                acp_commands::acp_disable_custom_skill,
                 acp_commands::opencode_list_plugins,
                 acp_commands::opencode_provider_catalog,
                 acp_commands::opencode_install_plugins,

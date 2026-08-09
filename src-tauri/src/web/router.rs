@@ -747,6 +747,14 @@ pub fn build_router(
             post(handlers::acp::acp_delete_agent_skill),
         )
         .route(
+            "/acp_enable_custom_skill",
+            post(handlers::acp::acp_enable_custom_skill),
+        )
+        .route(
+            "/acp_disable_custom_skill",
+            post(handlers::acp::acp_disable_custom_skill),
+        )
+        .route(
             "/opencode_list_plugins",
             post(handlers::acp::opencode_list_plugins),
         )

@@ -74,6 +74,8 @@ import {
   acpSaveAgentSkill,
   acpDeleteAgentSkill,
   acpReadAgentSkill,
+  acpEnableCustomSkill,
+  acpDisableCustomSkill,
 } from "@/lib/api"
 import type {
   AgentType,
@@ -1115,29 +1117,14 @@ function EnabledTab({
   const agentLabel =
     currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
 
-  // Custom skill disable handler — saves content to localStorage, then deletes from agent dir
+  // Custom skill disable handler — removes from agent dir, keeps in central store
   const handleDisableCustomSkill = useCallback(
     async () => {
       if (!lockedAgentType || !deleteCustomTarget) return
       setDeletingCustomSkillId(deleteCustomTarget)
       try {
-        // 1. Read the skill content before deleting
-        const detail = await acpReadAgentSkill({
+        await acpDisableCustomSkill({
           agentType: lockedAgentType,
-          scope: "global",
-          skillId: deleteCustomTarget,
-        })
-        // 2. Save to localStorage
-        saveDisabledSkill(lockedAgentType, deleteCustomTarget, {
-          content: detail.content,
-          name: detail.skill.name,
-          description: detail.skill.description,
-          layout: detail.skill.layout,
-        })
-        // 3. Delete from agent directory
-        await acpDeleteAgentSkill({
-          agentType: lockedAgentType,
-          scope: "global",
           skillId: deleteCustomTarget,
         })
         invalidateAgentSkillsCache(lockedAgentType)

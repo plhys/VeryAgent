@@ -286,6 +286,31 @@ pub async fn acp_delete_agent_skill(
     Ok(Json(()))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpCustomSkillParams {
+    pub agent_type: AgentType,
+    pub skill_id: String,
+}
+
+pub async fn acp_enable_custom_skill(
+    Json(params): Json<AcpCustomSkillParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::acp_enable_custom_skill(params.agent_type, params.skill_id)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_disable_custom_skill(
+    Json(params): Json<AcpCustomSkillParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::acp_disable_custom_skill(params.agent_type, params.skill_id)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
 // --- Pattern C: ConnectionManager handlers ---
 
 #[derive(Deserialize)]
