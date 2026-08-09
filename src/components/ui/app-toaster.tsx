@@ -20,13 +20,12 @@ export function AppToaster(props: ToasterProps) {
       duration={1500}
       visibleToasts={1}
       position="top-center"
-      gap={8}
-      offset="30vh"
+      offset="50vh"
       toastOptions={{
         style: {
           fontSize: "13px",
           padding: "8px 12px",
-          gap: "6px",
+          transition: "opacity 0.15s ease, transform 0.15s ease",
         },
       }}
       closeButton
