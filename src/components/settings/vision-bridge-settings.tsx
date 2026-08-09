@@ -329,6 +329,32 @@ export function VisionBridgeSettingsBody({
 
               <div className="space-y-2">
                 <label
+                  htmlFor="vision-api-key"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  {t("apiKey")}
+                </label>
+                <Input
+                  id="vision-api-key"
+                  type="password"
+                  placeholder={t("apiKeyPlaceholder")}
+                  value={apiKey}
+                  onChange={(e) => {
+                    setApiKey(e.target.value)
+                    setValidationErrors((prev) => ({ ...prev, apiKey: "" }))
+                  }}
+                  disabled={loading || saving}
+                  className={validationErrors.apiKey ? "border-destructive" : ""}
+                />
+                {validationErrors.apiKey && (
+                  <p className="text-xs text-destructive">
+                    {validationErrors.apiKey}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label
                   htmlFor="vision-model-name"
                   className="text-xs font-medium text-muted-foreground"
                 >
@@ -394,32 +420,6 @@ export function VisionBridgeSettingsBody({
                 <p className="text-[11px] text-muted-foreground">
                   {t("modelNameHint")}
                 </p>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="vision-api-key"
-                  className="text-xs font-medium text-muted-foreground"
-                >
-                  {t("apiKey")}
-                </label>
-                <Input
-                  id="vision-api-key"
-                  type="password"
-                  placeholder={t("apiKeyPlaceholder")}
-                  value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value)
-                    setValidationErrors((prev) => ({ ...prev, apiKey: "" }))
-                  }}
-                  disabled={loading || saving}
-                  className={validationErrors.apiKey ? "border-destructive" : ""}
-                />
-                {validationErrors.apiKey && (
-                  <p className="text-xs text-destructive">
-                    {validationErrors.apiKey}
-                  </p>
-                )}
               </div>
 
               {/* Agent selection — inside the collapsible vision model config */}
