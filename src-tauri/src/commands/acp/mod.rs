@@ -2700,15 +2700,21 @@ pub(crate) fn parse_provider_model(
             let parsed = trimmed_raw
                 .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
                 .and_then(|v| v.as_object().cloned());
-            for (key, env_name) in CLAUDE_MODEL_KEY_MAP {
-                let value = parsed
-                    .as_ref()
-                    .and_then(|obj| obj.get(*key))
-                    .and_then(|x| x.as_str())
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_string);
-                out.insert((*env_name).to_string(), value);
+            if parsed.is_some() {
+                // JSON object format: {"main": "...", "reasoning": "...", ...}
+                for (key, env_name) in CLAUDE_MODEL_KEY_MAP {
+                    let value = parsed
+                        .as_ref()
+                        .and_then(|obj| obj.get(*key))
+                        .and_then(|x| x.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string);
+                    out.insert((*env_name).to_string(), value);
+                }
+            } else if let Some(raw) = trimmed_raw {
+                // Plain string: use as the main model (ANTHROPIC_MODEL)
+                out.insert("ANTHROPIC_MODEL".to_string(), Some(raw.to_string()));
             }
         }
         AgentType::Gemini => {
