@@ -3893,7 +3893,12 @@
     "customSkillDeleted": "技能已删除",
     "customSkillIdRequired": "技能名称不能为空",
     "customSkillsSection": "自制技能",
-    "confirmDeleteCustomSkill": "确定删除此技能？此操作不可撤销。"
+    "confirmDeleteCustomSkill": "确定删除此技能？此操作不可撤销。",
+    "aiCreateSkillTitle": "新建技能",
+    "aiCreateSkillDesc": "描述你想创建的技能，AI 将为你生成初始内容。你可以稍后编辑。",
+    "aiCreateSkillPlaceholder": "例如：帮我创建一个代码审查技能，每次提交前自动检查代码质量和安全性。",
+    "aiCreateSkillGenerate": "生成技能",
+    "generating": "生成中…"
   },
   "VisionBridgeSettings": {
     "title": "多模态路由",

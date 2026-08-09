@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Cpu,
   Puzzle,
@@ -47,6 +47,14 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { AgentIcon } from "@/components/agent-icon"
 import { ImageGenerationConfigDialog } from "@/components/skills-and-tools/image-generation-config-dialog"
 import { useAcpAgents } from "@/hooks/use-acp-agents"
@@ -1687,6 +1695,11 @@ function CustomTab({ onToggled }: { onToggled: () => void }) {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [enableInProgress, setEnableInProgress] = useState<string | null>(null)
 
+  // AI skill creation dialog
+  const [aiCreateDialogOpen, setAiCreateDialogOpen] = useState(false)
+  const [aiCreatePrompt, setAiCreatePrompt] = useState("")
+  const [aiCreateLoading, setAiCreateLoading] = useState(false)
+
   // Editor mode
   const [editorMode, setEditorMode] = useState<"browse" | "edit">("browse")
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null)
@@ -1730,28 +1743,53 @@ function CustomTab({ onToggled }: { onToggled: () => void }) {
     void fetchCustomSkills()
   }, [fetchCustomSkills])
 
-  const handleNew = useCallback(() => {
+  const handleNewClick = useCallback(() => {
     if (!lockedAgentType) return
-    setEditingSkillId(null)
-    setEditingContent(`---
-name: my-skill
-description: Describe when this skill should be used.
+    setAiCreatePrompt("")
+    setAiCreateDialogOpen(true)
+  }, [lockedAgentType])
+
+  const handleAiCreate = useCallback(async () => {
+    if (!lockedAgentType || !aiCreatePrompt.trim()) return
+    setAiCreateLoading(true)
+    try {
+      // Generate skill name from prompt: lowercase, hyphenated, max 30 chars
+      const nameFromPrompt = aiCreatePrompt.trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 30)
+        .replace(/[^\w-]/g, "")
+      const skillId = nameFromPrompt || "my-skill"
+
+      // Generate a basic SKILL.md from the user's description
+      const generatedContent = `---
+name: ${nameFromPrompt || "my-skill"}
+description: ${aiCreatePrompt.trim()}
 ---
 
-# Skill: my-skill
+# ${nameFromPrompt || "my-skill"}
 
-## When to use
-
-- Describe trigger conditions.
+${aiCreatePrompt.trim()}
 
 ## Instructions
 
-1. Add actionable instruction one.
-2. Add actionable instruction two.
-`)
-    setIsNewSkill(true)
-    setEditorMode("edit")
-  }, [lockedAgentType])
+1. Analyze the user's request based on the skill description above.
+2. Follow the described workflow step by step.
+3. Verify the output before marking the task complete.
+`
+
+      setEditingSkillId(skillId)
+      setEditingContent(generatedContent)
+      setIsNewSkill(true)
+      setAiCreateDialogOpen(false)
+      setEditorMode("edit")
+    } catch (err) {
+      toast.error(t("installFailed", { error: String(err) }))
+    } finally {
+      setAiCreateLoading(false)
+    }
+  }, [lockedAgentType, aiCreatePrompt, t])
 
   const handleEdit = useCallback(
     async (skillId: string) => {
@@ -1860,9 +1898,55 @@ description: Describe when this skill should be used.
     onToggled()
   }, [lockedAgentType, fetchCustomSkills, onToggled])
 
+  // AI skill creation dialog
+  const aiCreateDialog = (
+    <Dialog open={aiCreateDialogOpen} onOpenChange={setAiCreateDialogOpen}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("aiCreateSkillTitle")}</DialogTitle>
+          <DialogDescription>{t("aiCreateSkillDesc")}</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <Textarea
+            value={aiCreatePrompt}
+            onChange={(e) => setAiCreatePrompt(e.target.value)}
+            placeholder={t("aiCreateSkillPlaceholder")}
+            className="min-h-[120px] resize-y text-sm"
+            disabled={aiCreateLoading}
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAiCreateDialogOpen(false)}
+            disabled={aiCreateLoading}
+          >
+            {t("cancel")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleAiCreate}
+            disabled={aiCreateLoading || !aiCreatePrompt.trim()}
+          >
+            {aiCreateLoading ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-1 h-4 w-4" />
+            )}
+            {aiCreateLoading ? t("generating") : t("aiCreateSkillGenerate")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
   // If in editor mode, render the inline editor
   if (editorMode === "edit" && lockedAgentType) {
     return (
+      {aiCreateDialog}
       <CustomSkillEditor
         agentType={lockedAgentType}
         skillId={isNewSkill ? "" : (editingSkillId ?? "")}
@@ -1908,7 +1992,7 @@ description: Describe when this skill should be used.
               size="sm"
               variant="outline"
               className="h-7 gap-1 text-xs"
-              onClick={handleNew}
+              onClick={handleNewClick}
             >
               <Plus className="h-3.5 w-3.5" />
               {t("newCustomSkill")}

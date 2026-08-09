@@ -3893,7 +3893,12 @@
     "customSkillDeleted": "Skill deleted",
     "customSkillIdRequired": "Skill name cannot be empty",
     "customSkillsSection": "Custom Skills",
-    "confirmDeleteCustomSkill": "Delete this skill? This action cannot be undone."
+    "confirmDeleteCustomSkill": "Delete this skill? This action cannot be undone.",
+    "aiCreateSkillTitle": "New Skill",
+    "aiCreateSkillDesc": "Describe the skill you want to create, and AI will generate the initial content. You can edit it later.",
+    "aiCreateSkillPlaceholder": "e.g. Create a code review skill that checks code quality and security before every commit.",
+    "aiCreateSkillGenerate": "Generate Skill",
+    "generating": "Generating…"
   },
   "VisionBridgeSettings": {
     "title": "Vision Bridge",
