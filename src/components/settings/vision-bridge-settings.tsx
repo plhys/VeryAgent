@@ -336,54 +336,40 @@ export function VisionBridgeSettingsBody({
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    {models.length > 0 ? (
-                      <Select
-                        value={modelName}
-                        onValueChange={(v) => {
-                          setModelName(v)
-                          setValidationErrors((prev) => ({
-                            ...prev,
-                            modelName: "",
-                          }))
-                        }}
+                    <Select
+                      value={modelName}
+                      onValueChange={(v) => {
+                        setModelName(v)
+                        setValidationErrors((prev) => ({
+                          ...prev,
+                          modelName: "",
+                        }))
+                      }}
+                      disabled={models.length === 0}
+                    >
+                      <SelectTrigger
+                        className={
+                          validationErrors.modelName
+                            ? "border-destructive"
+                            : ""
+                        }
                       >
-                        <SelectTrigger
-                          className={
-                            validationErrors.modelName
-                              ? "border-destructive"
-                              : ""
+                        <SelectValue
+                          placeholder={
+                            models.length === 0
+                              ? t("modelNameFetchFirst")
+                              : t("modelNamePlaceholder")
                           }
-                        >
-                          <SelectValue
-                            placeholder={t("modelNamePlaceholder")}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {models.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        id="vision-model-name"
-                        placeholder={t("modelNamePlaceholder")}
-                        value={modelName}
-                        onChange={(e) => {
-                          setModelName(e.target.value)
-                          setValidationErrors((prev) => ({
-                            ...prev,
-                            modelName: "",
-                          }))
-                        }}
-                        disabled={loading || saving}
-                        className={`w-full sm:w-64 ${
-                          validationErrors.modelName ? "border-destructive" : ""
-                        }`}
-                      />
-                    )}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Button
                     variant="outline"
