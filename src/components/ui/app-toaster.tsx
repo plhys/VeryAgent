@@ -18,11 +18,12 @@ export function AppToaster(props: ToasterProps) {
       {...props}
       theme={theme}
       duration={1500}
-      visibleToasts={3}
+      visibleToasts={1}
       position="top-center"
+      gap={8}
+      offset="30vh"
       toastOptions={{
         style: {
-          opacity: 0.8,
           fontSize: "13px",
           padding: "8px 12px",
           gap: "6px",
