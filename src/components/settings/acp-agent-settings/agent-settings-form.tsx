@@ -402,6 +402,10 @@ function extractConfigFromDescriptor(
   if (env[modelKey]) result[modelKey] = env[modelKey];
   // Also store with the generic "model" key used by the modelProviderAuthMode field
   if (env[modelKey]) result["model"] = env[modelKey];
+  // Populate "provider_model" from PROVIDER_MODEL env key (for agents with
+  // target model mapping), or fall back to the standard modelKey.
+  if (env["PROVIDER_MODEL"]) result["provider_model"] = env["PROVIDER_MODEL"];
+  else if (env[modelKey]) result["provider_model"] = env[modelKey];
 
   return result;
 }

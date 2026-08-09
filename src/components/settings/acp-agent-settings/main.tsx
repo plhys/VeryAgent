@@ -4429,12 +4429,21 @@ export function AcpAgentSettings() {
                           else delete env[modelKey]
                         }
                         modelProviderId = null // 手动模式清除模型提供商绑定
-                      } else if (authMode === "model_provider" && values["model"]) {
-                        // 模型提供商模式：保存用户在「获取模型」下拉中选择的模型
+                      } else if (authMode === "model_provider") {
                         const desc = getAgentDescriptor(selectedAgent.agent_type)
                         if (desc) {
                           const { modelKey } = desc.envMapping
-                          env[modelKey] = values["model"]
+                          const targetOpts = getTargetModelOptions(selectedAgent.agent_type)
+                          if (targetOpts.length > 0 && values["model"]) {
+                            // 有目标模型映射：保存映射后的模型名，同时保留原始提供商模型
+                            env[modelKey] = values["model"]
+                            if (values["provider_model"]) {
+                              env["PROVIDER_MODEL"] = values["provider_model"]
+                            }
+                          } else if (values["provider_model"]) {
+                            // 无目标模型映射：直接保存提供商模型
+                            env[modelKey] = values["provider_model"]
+                          }
                         }
                       }
 
