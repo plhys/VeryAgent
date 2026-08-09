@@ -13,5 +13,21 @@ export function AppToaster(props: ToasterProps) {
       ? "dark"
       : "light")
 
-  return <Toaster {...props} theme={theme} duration={3000} />
+  return (
+    <Toaster
+      {...props}
+      theme={theme}
+      duration={1500}
+      visibleToasts={3}
+      toastOptions={{
+        style: {
+          opacity: 0.8,
+          fontSize: "13px",
+          padding: "8px 12px",
+          gap: "6px",
+        },
+      }}
+      closeButton
+    />
+  )
 }
