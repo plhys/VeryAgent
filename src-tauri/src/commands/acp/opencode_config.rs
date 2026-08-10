@@ -84,9 +84,13 @@ pub(crate) fn write_opencode_managed_provider(
 ) -> Result<(), AcpError> {
     let config_path = resolve_opencode_config_path();
     let mut config = if config_path.exists() {
+        // opencode.json is JSONC (comments allowed) — strip comments before
+        // parsing so a user's annotated config does not degrade to `{}` and
+        // get silently replaced by the managed block.
         fs::read_to_string(&config_path)
             .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .map(|raw| strip_jsonc_comments(&raw))
+            .and_then(|clean| serde_json::from_str::<serde_json::Value>(&clean).ok())
             .filter(|v| v.is_object())
             .unwrap_or_else(|| serde_json::json!({}))
     } else {

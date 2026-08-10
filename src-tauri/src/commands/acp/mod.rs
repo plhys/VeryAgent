@@ -2456,6 +2456,18 @@ pub(crate) async fn apply_model_provider_env(
                 "[CodeBuddy] write managed models.json for shared model provider failed: {e}"
             );
         }
+        // Mirror the key into ~/.codebuddy/settings.json env so CodeBuddy's
+        // ACP startup passes its global auth check (models.json apiKey alone
+        // is per-model and does not satisfy the env-based auth probe).
+        if !provider.api_key.trim().is_empty() {
+            if let Err(e) = crate::commands::acp::codebuddy_config::persist_codebuddy_settings_env(
+                &provider.api_key,
+            ) {
+                tracing::warn!(
+                    "[CodeBuddy] write settings.json env for shared model provider failed: {e}"
+                );
+            }
+        }
     }
 
     // OpenClaw's gateway owns inference. Keep openclaw.json in sync even when
@@ -2650,6 +2662,65 @@ pub(crate) async fn apply_model_provider_env(
             if !proxy_url.is_empty() {
                 rewrite_codex_provider_base_url(&proxy_url);
             }
+
+            // ── codex-acp 1.1.0 custom-provider wiring ─────────────────────
+            //
+            // codex-acp resolves its model provider at session creation:
+            //   - new sessions: `MODEL_PROVIDER` env → threadStart modelProvider
+            //   - config: `CODEX_CONFIG` env JSON is merged into every session
+            //     config, so `model_providers.<name>` defined here reaches the
+            //     Codex app server even when `~/.codex/config.toml` is a
+            //     template-rendered `[provider]` layout that Codex ignores.
+            //
+            // Without these, codex-acp falls back to the built-in `openai`
+            // provider and sends the gateway API key to api.openai.com → 401.
+            let codex_provider_name = "veryagent";
+            runtime_env.insert(
+                "MODEL_PROVIDER".to_string(),
+                codex_provider_name.to_string(),
+            );
+            let mut codex_config = serde_json::Map::new();
+            let mut provider_def = serde_json::Map::new();
+            provider_def.insert(
+                "name".to_string(),
+                serde_json::Value::String(codex_provider_name.to_string()),
+            );
+            provider_def.insert(
+                "base_url".to_string(),
+                serde_json::Value::String(proxy_url.clone()),
+            );
+            // Codex reads the API key from this process env var. VeryAgent
+            // injects `OPENAI_API_KEY` (= key_key) into the codex-acp process
+            // env earlier in this function, and codex-acp forwards its own
+            // process env to the codex app server it spawns.
+            provider_def.insert(
+                "env_key".to_string(),
+                serde_json::Value::String(key_key.to_string()),
+            );
+            // Codex 2026+ only supports the Responses API (chat was removed).
+            provider_def.insert(
+                "wire_api".to_string(),
+                serde_json::Value::String("responses".to_string()),
+            );
+            let mut providers = serde_json::Map::new();
+            providers.insert(
+                codex_provider_name.to_string(),
+                serde_json::Value::Object(provider_def),
+            );
+            codex_config.insert(
+                "model_providers".to_string(),
+                serde_json::Value::Object(providers),
+            );
+            runtime_env.insert(
+                "CODEX_CONFIG".to_string(),
+                serde_json::to_string(&serde_json::Value::Object(codex_config))
+                    .unwrap_or_default(),
+            );
+            tracing::info!(
+                "[Codex] wired codex-acp custom provider: MODEL_PROVIDER={}, CODEX_CONFIG base_url={}",
+                codex_provider_name,
+                proxy_url
+            );
         }
     }
 }

@@ -10,9 +10,7 @@ import {
 } from "react"
 import {
   Bot,
-  ChevronDown,
   FileSpreadsheet,
-  GitBranch,
   Globe,
   Keyboard,
   Menu,
@@ -29,11 +27,6 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { AppToaster } from "@/components/ui/app-toaster"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import { detectEnvironment } from "@/lib/transport/detect"
 import { AppTitleBar } from "@/components/layout/app-title-bar"
@@ -61,27 +54,17 @@ interface SettingsNavItem {
   icon: ComponentType<{ className?: string }>
 }
 
-type SettingsNavGroupId = "general" | "advanced"
-
-interface SettingsNavGroup {
-  id: SettingsNavGroupId
-  titleKey: "groupGeneral" | "groupAdvanced"
-  /** Expanded by default when no path-based override applies. */
-  defaultOpen: boolean
-  items: SettingsNavItem[]
-}
-
-/** General settings — expanded by default. */
-const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
-  {
-    href: "/settings/appearance",
-    labelKey: "appearance",
-    icon: Palette,
-  },
+/** Flat settings nav — no grouping. General settings first. */
+const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   {
     href: "/settings/general",
     labelKey: "general",
     icon: SlidersHorizontal,
+  },
+  {
+    href: "/settings/appearance",
+    labelKey: "appearance",
+    icon: Palette,
   },
   {
     href: "/settings/model-providers",
@@ -100,14 +83,6 @@ const GENERAL_NAV_ITEMS: SettingsNavItem[] = [
     labelKey: "chat_channels",
     icon: SendHorizontal,
   },
-]
-
-/**
- * Advanced / expert settings — collapsed by default.
- * `mcp` and `shortcuts` were not named in the regroup request; they
- * stay available under advanced so no existing route is dropped from the nav.
- */
-const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
   {
     href: "/settings/mcp",
     labelKey: "mcp",
@@ -135,21 +110,6 @@ const ADVANCED_NAV_ITEMS: SettingsNavItem[] = [
   },
 ]
 
-const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
-  {
-    id: "general",
-    titleKey: "groupGeneral",
-    defaultOpen: true,
-    items: GENERAL_NAV_ITEMS,
-  },
-  {
-    id: "advanced",
-    titleKey: "groupAdvanced",
-    defaultOpen: false,
-    items: ADVANCED_NAV_ITEMS,
-  },
-]
-
 interface SettingsShellProps {
   children: ReactNode
 }
@@ -171,13 +131,6 @@ function itemIsActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function groupContainsPath(
-  items: SettingsNavItem[],
-  pathname: string
-): boolean {
-  return items.some((item) => itemIsActive(pathname, item.href))
-}
-
 export function SettingsShell({ children }: SettingsShellProps) {
   const t = useTranslations("SettingsShell")
   const pathname = usePathname()
@@ -186,39 +139,9 @@ export function SettingsShell({ children }: SettingsShellProps) {
   const isMobile = useIsMobile()
   const [navOpen, setNavOpen] = useState(false)
 
-  // Track open state per group. When the current route lives in a group that
-  // starts collapsed (advanced), force that group open so the active item is
-  // visible without an extra click.
-  const [openGroups, setOpenGroups] = useState<
-    Record<SettingsNavGroupId, boolean>
-  >(() => {
-    const initial = {} as Record<SettingsNavGroupId, boolean>
-    for (const group of SETTINGS_NAV_GROUPS) {
-      initial[group.id] = group.defaultOpen
-    }
-    return initial
-  })
-
   useEffect(() => {
     document.title = `${t("title")} - veryAgent`
   }, [t])
-
-  useEffect(() => {
-    setOpenGroups((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const group of SETTINGS_NAV_GROUPS) {
-        if (
-          groupContainsPath(group.items, normalizedPathname) &&
-          !next[group.id]
-        ) {
-          next[group.id] = true
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [normalizedPathname])
 
   const navigateTo = useCallback(
     (href: string) => {
@@ -249,14 +172,11 @@ export function SettingsShell({ children }: SettingsShellProps) {
     [router]
   )
 
-  const groups = useMemo(() => {
-    return SETTINGS_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) =>
-          !(item.labelKey === "web_service" && detectEnvironment() === "web")
-      ),
-    })).filter((group) => group.items.length > 0)
+  const navItems = useMemo(() => {
+    return SETTINGS_NAV_ITEMS.filter(
+      (item) =>
+        !(item.labelKey === "web_service" && detectEnvironment() === "web")
+    )
   }, [])
 
   const renderNavItem = (item: SettingsNavItem) => {
@@ -284,46 +204,7 @@ export function SettingsShell({ children }: SettingsShellProps) {
   const navContent = (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1">
-        <nav className="space-y-3">
-          {groups.map((group) => {
-            const open = openGroups[group.id] ?? group.defaultOpen
-            return (
-              <Collapsible
-                key={group.id}
-                open={open}
-                onOpenChange={(next) =>
-                  setOpenGroups((prev) => ({ ...prev, [group.id]: next }))
-                }
-              >
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center gap-1 rounded-md px-2 py-1.5",
-                      "text-[11px] font-medium text-muted-foreground",
-                      "hover:bg-muted/60 hover:text-foreground",
-                      "outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    )}
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "h-3.5 w-3.5 shrink-0 transition-transform duration-150",
-                        !open && "-rotate-90"
-                      )}
-                      aria-hidden
-                    />
-                    <span className="truncate">{t(group.titleKey)}</span>
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="mt-1 space-y-1 pl-0.5">
-                    {group.items.map(renderNavItem)}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            )
-          })}
-        </nav>
+        <nav className="space-y-1 p-0.5">{navItems.map(renderNavItem)}</nav>
       </ScrollArea>
     </div>
   )
@@ -374,7 +255,7 @@ export function SettingsShell({ children }: SettingsShellProps) {
           {children}
         </section>
       </div>
-      <AppToaster position="bottom-right" closeButton duration={4000} />
+      <AppToaster />
     </div>
   )
 }

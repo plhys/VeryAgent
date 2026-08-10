@@ -125,3 +125,54 @@ pub(crate) fn write_codebuddy_managed_provider(
     write_json_object_pretty(&path, &doc)?;
     Ok(())
 }
+
+/// CodeBuddy global settings file path (`~/.codebuddy/settings.json`).
+pub(crate) fn codebuddy_settings_path() -> PathBuf {
+    crate::parsers::codebuddy::resolve_codebuddy_config_dir().join("settings.json")
+}
+
+/// Merge the shared-provider API key into CodeBuddy's global
+/// `~/.codebuddy/settings.json` `env` block.
+///
+/// CodeBuddy authenticates purely via environment:
+/// - `CODEBUDDY_API_KEY` — the credential the CLI sends (either the Tencent
+///   native key or the shared-provider key)
+/// - `CODEBUDDY_BASE_URL` — left untouched: it owns the Tencent built-in
+///   catalog (China/overseas) and hijacking it breaks native models.
+///
+/// A计划 custom models get their own `apiKey` inside `models.json`, but
+/// CodeBuddy's ACP startup also performs a global auth check; without a
+/// `CODEBUDDY_API_KEY` in `settings.json` env (or `auth.json` /
+/// `credentials.json`) it reports `Authentication required`. This is the
+/// missing write that makes the bound shared provider count as authenticated.
+/// The key is merged (not replaced) so unrelated env entries survive.
+pub(crate) fn persist_codebuddy_settings_env(api_key: &str) -> Result<(), AcpError> {
+    let path = codebuddy_settings_path();
+    let mut doc = read_json_object_or_empty(&path);
+
+    let env = doc
+        .entry("env".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !env.is_object() {
+        *env = serde_json::json!({});
+    }
+    let env_obj = env
+        .as_object_mut()
+        .ok_or_else(|| AcpError::protocol("codebuddy settings env must be an object"))?;
+
+    if api_key.trim().is_empty() {
+        env_obj.remove("CODEBUDDY_API_KEY");
+    } else {
+        env_obj.insert(
+            "CODEBUDDY_API_KEY".to_string(),
+            serde_json::Value::String(api_key.trim().to_string()),
+        );
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| AcpError::protocol(format!("create codebuddy dir failed: {e}")))?;
+    }
+    write_json_object_pretty(&path, &doc)?;
+    Ok(())
+}

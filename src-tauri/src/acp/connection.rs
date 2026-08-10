@@ -148,6 +148,13 @@ pub enum ConnectionCommand {
 /// by the outer `.map_err(...)` in `run_connection`.
 const INIT_TIMEOUT_SENTINEL: &str = "__veryagent_init_timeout__";
 
+/// Timeout for the session/resume → load → new chain. A healthy agent answers
+/// in well under a second; a stuck agent (hung npx cold start, wedged
+/// adapter) must fail this fast and surface an error instead of leaving the
+/// frontend on "Connecting…" indefinitely.
+const SESSION_CREATE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(30);
+
 /// RAII guard that removes the `AgentConnection` entry from the manager
 /// map when dropped. Runs on both normal task exit AND task panic, so a
 /// panic inside `run_connection` can't leak a stale map entry.
@@ -995,7 +1002,24 @@ async fn send_resume_session(
         sacp::util::internal_error(format!("Failed to build resume request: {e}"))
     })?;
 
-    let raw_response = cx.send_request_to(Agent, untyped_req).block_task().await?;
+    // Bound the resume handshake: a stuck agent (cold start, hung npx, broken
+    // session state) must not leave the connection spinning on "Connecting…"
+    // forever. On timeout we return an error that the resume→load→new chain
+    // treats as a recoverable resume failure and falls through.
+    let raw_response = match tokio::time::timeout(
+        SESSION_CREATE_TIMEOUT,
+        cx.send_request_to(Agent, untyped_req).block_task(),
+    )
+    .await
+    {
+        Ok(Ok(resp)) => resp,
+        Ok(Err(e)) => return Err(e),
+        Err(_) => {
+            return Err(sacp::util::internal_error(
+                "session/resume timed out; falling back to load/new",
+            ))
+        }
+    };
     serde_json::from_value(raw_response).map_err(|e| {
         sacp::util::internal_error(format!("Failed to parse resume response: {e}"))
     })
@@ -1928,7 +1952,16 @@ async fn run_connection(
                     &cwd,
                     mcp_servers.clone(),
                 );
-                let load_result = cx.send_request_to(Agent, load_req).block_task().await;
+                let load_result = tokio::time::timeout(
+                    SESSION_CREATE_TIMEOUT,
+                    cx.send_request_to(Agent, load_req).block_task(),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    Err(sacp::util::internal_error(
+                        "session/load timed out; falling back to session/new",
+                    ))
+                });
 
                 match load_result {
                     Ok(load_resp) => {
@@ -2120,8 +2153,9 @@ async fn run_connection(
                             )
                             .await;
                         }
-                        let new_resp = cx
-                            .send_request_to(
+                        let new_resp = tokio::time::timeout(
+                            SESSION_CREATE_TIMEOUT,
+                            cx.send_request_to(
                                 Agent,
                                 build_new_session_request(
                                     agent_type,
@@ -2129,8 +2163,14 @@ async fn run_connection(
                                     mcp_servers.clone(),
                                 ),
                             )
-                            .block_task()
-                            .await?;
+                            .block_task(),
+                        )
+                        .await
+                        .unwrap_or_else(|_| {
+                            Err(sacp::util::internal_error(
+                                "session/new timed out; the agent did not start a session",
+                            ))
+                        })?;
                         let fallback_sid = new_resp.session_id.0.to_string();
                         let initial_config_options = new_resp.config_options.clone();
                         let mut session = cx.attach_session(new_resp, Default::default())?;
@@ -3336,7 +3376,20 @@ fn is_agent_output_update(update: &SessionUpdate) -> bool {
 /// <https://shashikantjagtap.net/openclaw-acp-what-coding-agent-users-need-to-know-about-protocol-gaps/>.
 /// `empty` is a synthesized reason emitted by `run_conversation_loop` when
 /// the agent reports `EndTurn` without producing any agent output.
+///
+/// For Claude Code, an `empty` end is usually NOT a failure: the Claude Code
+/// SDK auto-continues a reply that produced no visible text (e.g. a
+/// thinking-only turn from a non-Claude model behind a Claude-compatible
+/// gateway) by injecting "[Your previous response had no visible output…]"
+/// and re-running the turn — the user then sees the real reply a moment
+/// later. Surfacing a red error + system notification for that intermediate
+/// empty turn is pure noise and makes the follow-up reply look like a
+/// duplicate. Suppress `empty` for Claude Code only; other agents have no
+/// such auto-continuation and an empty turn there is a genuine failure.
 fn turn_failure_error_event(reason_str: &str, agent_type: AgentType) -> Option<AcpEvent> {
+    if reason_str == "empty" && agent_type == AgentType::ClaudeCode {
+        return None;
+    }
     let (code, message) = match reason_str {
         "refusal" => (
             "turn_failed_refusal",

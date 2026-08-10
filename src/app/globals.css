@@ -1853,3 +1853,42 @@ pointer-events: auto !important;
 body {
   /* No-op in browsers that support it; actual suppression is JS-driven */
 }
+
+/* ── Sonner toaster: centered + smooth fade ───────────────────────────
+ * AppToaster renders with className="veryagent-toaster" and per-toast
+ * className="veryagent-toast". We override sonner's default slide/fade so
+ * toasts fade in/out softly and stack vertically centered in the viewport.
+ *
+ * Transform must stay under sonner's control (`--y` drives the vertical
+ * stack of multiple toasts), so we only shape the opacity transition —
+ * that, plus sonner's own height/transform transitions, reads as a smooth
+ * fade in/out without overlapping toasts.
+ */
+.veryagent-toaster[data-sonner-toaster] {
+  /* Sonner positions the container with `top: var(--offset-top)` +
+     `transform: translateX(-50%)` (inline) for the centered x position.
+     We override the vertical placement: pin the container's top edge to the
+     viewport center and translate it up by half its own height, so the whole
+     stack of toasts sits exactly centered vertically. Horizontal centering
+     stays as sonner's translateX(-50%) (its inline transform), which we must
+     not clobber — so only override the offset, not the transform. */
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%) !important;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(90vw, 420px);
+}
+
+.veryagent-toaster[data-sonner-toaster] [data-sonner-toast] {
+  pointer-events: auto;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    0 1px 4px rgba(0, 0, 0, 0.08);
+  /* Sonner's default transition is 400ms on transform/opacity; tighten to a
+     softer 300ms ease so entrances/exits feel smooth instead of snappy. */
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease,
+    height 0.3s ease;
+}

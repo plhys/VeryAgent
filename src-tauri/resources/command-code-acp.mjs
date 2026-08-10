@@ -41,9 +41,9 @@
 // Responses and notifications go to stdout; diagnostics go to stderr. Set
 // VERYAGENT_ACP_DEBUG=1 to log the JSON-RPC traffic on stderr.
 
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 
@@ -476,6 +476,27 @@ function resolveCmdcLaunch() {
       // Fall back to the shim itself; requires a shell (unusual).
       const shim = join(npmDir, "cmdc.cmd");
       if (existsSync(shim)) return { command: shim, args: [] };
+    }
+    // nvm / fnm / pnpm users keep the npm global root somewhere other than
+    // %APPDATA%\npm. Resolve it via `npm prefix -g` before giving up on PATH.
+    try {
+      const prefix = execFileSync("npm", ["prefix", "-g"], {
+        encoding: "utf8",
+        windowsHide: true,
+        timeout: 5000,
+      })
+        .split("\n")[0]
+        .trim();
+      if (prefix) {
+        const entry = join(prefix, "node_modules", "command-code", "dist", "index.mjs");
+        if (existsSync(entry)) {
+          return { command: process.execPath, args: [entry] };
+        }
+        const shim = join(prefix, "cmdc.cmd");
+        if (existsSync(shim)) return { command: shim, args: [] };
+      }
+    } catch {
+      // npm unavailable — fall through to bare `cmdc` on PATH.
     }
   }
 

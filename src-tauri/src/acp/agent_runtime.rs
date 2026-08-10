@@ -450,7 +450,53 @@ impl AgentRuntime {
     }
 
     /// 检查现有配置文件内容是否有效
-    fn is_config_content_valid(&self, content: &str, _config_file: &ConfigFile) -> bool {
+    fn is_config_content_valid(&self, content: &str, config_file: &ConfigFile) -> bool {
+        // Codex: the modern layout references the API key by env var name
+        // (`env_key = "OPENAI_API_KEY"`) instead of inlining it, so the generic
+        // "content contains the api key" check below would always fail and
+        // force a rewrite on every launch — clobbering any user customization
+        // (sandbox / approval policies / MCP servers). Validate the structural
+        // markers of the veryagent-managed layout instead.
+        if self.descriptor.agent_type == AgentType::Codex {
+            let is_toml = matches!(config_file.format, ConfigFormat::Toml { .. });
+            if is_toml {
+                let has_provider_key = content.contains("model_provider = \"veryagent\"");
+                let has_provider_table = content.contains("[model_providers.veryagent]");
+                let has_env_key = content.contains("env_key = \"OPENAI_API_KEY\"");
+                return has_provider_key && has_provider_table && has_env_key;
+            }
+        }
+        // Claude Code: the cascade path writes credentials into the `env`
+        // section of `~/.claude/settings.json` (`env.ANTHROPIC_AUTH_TOKEN` /
+        // `env.ANTHROPIC_BASE_URL`), which Claude Code reads natively. The
+        // legacy template wrote a `providers.anthropic` block that current
+        // Claude Code versions no longer honor — and the generic "content
+        // contains the api key" check below would clobber user settings on
+        // every launch for configs that reference the key by env var. Validate
+        // the `env`-section markers instead, matching what the cascade writes.
+        if self.descriptor.agent_type == AgentType::ClaudeCode {
+            let is_json = matches!(config_file.format, ConfigFormat::Json { .. });
+            if is_json {
+                let has_env_section = content.contains("\"env\"");
+                let has_auth_token_key = content.contains("ANTHROPIC_AUTH_TOKEN");
+                let has_base_url_key = content.contains("ANTHROPIC_BASE_URL");
+                return has_env_section && has_auth_token_key && has_base_url_key;
+            }
+        }
+        // Gemini: same story as Claude — credentials live in the `env` section
+        // (`GEMINI_API_KEY` / `GOOGLE_GEMINI_BASE_URL`), which gemini-cli reads
+        // natively. The legacy template's top-level `apiKey`/`model` fields are
+        // not the current settings schema; the generic contains-the-key check
+        // would rewrite user settings on every launch.
+        if self.descriptor.agent_type == AgentType::Gemini {
+            let is_json = matches!(config_file.format, ConfigFormat::Json { .. });
+            if is_json {
+                let has_env_section = content.contains("\"env\"");
+                let has_api_key = content.contains("GEMINI_API_KEY");
+                let has_base_url = content.contains("GOOGLE_GEMINI_BASE_URL");
+                return has_env_section && has_api_key && has_base_url;
+            }
+        }
         // 简单的有效性检查：配置文件存在且包含必要的环境变量
         // 更复杂的检查可以按 Agent 类型定制
         let api_key = self.runtime_env.get(self.descriptor.env_mapping.api_key_key);
@@ -488,15 +534,28 @@ impl AgentRuntime {
         let env = &self.runtime_env;
         let mapping = &self.descriptor.env_mapping;
 
+        // JSON 字符串转义：值可能含引号/反斜杠/控制字符（尤其 API key），
+        // 裸替换会生成非法 JSON 导致 agent 启动即失败。模板里占位符位于
+        // JSON 字符串值内（`"key": "{{api_key}}"`），所以只需转义内容、
+        // 不包含 serde_json 输出的外层引号。
+        let escape_json = |v: &str| {
+            let encoded = serde_json::to_string(v).unwrap_or_else(|_| "\"\"".to_string());
+            // 去掉 serde_json 输出固定的一对外层引号（模板占位符已带引号）。
+            if encoded.len() >= 2 {
+                encoded[1..encoded.len() - 1].to_string()
+            } else {
+                encoded
+            }
+        };
         // 替换占位符
         if let Some(val) = env.get(mapping.api_key_key) {
-            result = result.replace("{{api_key}}", val);
+            result = result.replace("{{api_key}}", &escape_json(val));
         }
         if let Some(val) = env.get(mapping.base_url_key) {
-            result = result.replace("{{base_url}}", val);
+            result = result.replace("{{base_url}}", &escape_json(val));
         }
         if let Some(val) = env.get(mapping.model_key) {
-            result = result.replace("{{model}}", val);
+            result = result.replace("{{model}}", &escape_json(val));
         }
 
         Ok(result)
@@ -711,15 +770,16 @@ fn build_descriptor_for(agent_type: AgentType) -> (
             &[ConfigFile {
                 relative_path: ".claude/settings.json",
                 format: ConfigFormat::Json {
+                    // Claude Code reads credentials from the `env` section of
+                    // settings.json (`ANTHROPIC_AUTH_TOKEN` /
+                    // `ANTHROPIC_BASE_URL`). The legacy `providers.anthropic`
+                    // block is no longer honored and would be a dead config
+                    // that also clobbers user settings on rewrite.
                     template: r#"{
-  "models": {
-    "default": "{{model}}"
-  },
-  "providers": {
-    "anthropic": {
-      "apiKey": "{{api_key}}",
-      "baseUrl": "{{base_url}}"
-    }
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "{{api_key}}",
+    "ANTHROPIC_BASE_URL": "{{base_url}}",
+    "ANTHROPIC_MODEL": "{{model}}"
   }
 }"#,
                 },
@@ -738,11 +798,22 @@ fn build_descriptor_for(agent_type: AgentType) -> (
             &[ConfigFile {
                 relative_path: ".codex/config.toml",
                 format: ConfigFormat::Toml {
-                    template: r#"[provider]
-type = "openai"
-base_url = "{{base_url}}"
-api_key = "{{api_key}}"
+                    // Codex 2026+ config layout. The top-level `model_provider`
+                    // key must point at a `[model_providers.<id>]` table; the
+                    // legacy `[provider]` table is no longer read by Codex and
+                    // caused a silent fallback to the built-in `openai`
+                    // provider (→ requests to api.openai.com with a gateway
+                    // key → 401). The API key is referenced by env var name
+                    // (`env_key`), not inlined; VeryAgent injects
+                    // `OPENAI_API_KEY` into the codex-acp process env.
+                    template: r#"model_provider = "veryagent"
 model = "{{model}}"
+
+[model_providers.veryagent]
+name = "veryagent"
+base_url = "{{base_url}}"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
 "#,
                 },
             }],
@@ -760,9 +831,20 @@ model = "{{model}}"
             &[ConfigFile {
                 relative_path: ".gemini/settings.json",
                 format: ConfigFormat::Json {
+                    // gemini-cli reads credentials from the `env` section and
+                    // selects auth via `security.auth.selectedType`. The legacy
+                    // top-level `apiKey`/`model` fields are not the current
+                    // settings schema and would leave the CLI unauthenticated.
                     template: r#"{
-  "apiKey": "{{api_key}}",
-  "model": "{{model}}"
+  "env": {
+    "GEMINI_API_KEY": "{{api_key}}",
+    "GOOGLE_GEMINI_BASE_URL": "{{base_url}}"
+  },
+  "security": {
+    "auth": {
+      "selectedType": "gemini-api-key"
+    }
+  }
 }"#,
                 },
             }],
@@ -988,6 +1070,15 @@ async fn build_npx_agent(
 
     // 处理 Agent 特定的 CLI 参数翻译
     handle_agent_specific_args(descriptor.agent_type, runtime_env, &mut parts);
+
+    if descriptor.agent_type == AgentType::Gemini {
+        tracing::info!(
+            "[ACP][Gemini CLI] spawn args: {:?} | GEMINI_MODEL={:?} | GEMINI_API_KEY set={}",
+            parts,
+            runtime_env.get("GEMINI_MODEL"),
+            runtime_env.get("GEMINI_API_KEY").is_some(),
+        );
+    }
 
     let refs: Vec<&str> = parts.iter().map(|s| s.as_str()).collect();
     let agent_name = descriptor.name.to_string();

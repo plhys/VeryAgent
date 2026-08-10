@@ -610,10 +610,16 @@ pub(crate) async fn cascade_update_agent_config(
                     "wire_api".to_string(),
                     toml::Value::String("responses".to_string()),
                 );
+                // Codex reads the API key from the env var named here. The key
+                // itself lives in auth.json / the process env, not config.toml
+                // (Codex ignores inlined keys and would treat
+                // `requires_openai_auth = true` as an OpenAI-login provider,
+                // sending the gateway key to api.openai.com → 401).
                 provider_table.insert(
-                    "requires_openai_auth".to_string(),
-                    toml::Value::Boolean(true),
+                    "env_key".to_string(),
+                    toml::Value::String(key_key.to_string()),
                 );
+                provider_table.remove("requires_openai_auth");
             }
             match codex_model {
                 CodexModelAction::Set(model) => {
@@ -676,6 +682,15 @@ pub(crate) async fn cascade_update_agent_config(
                 .map(String::as_str)
                 .unwrap_or("");
             write_codebuddy_managed_provider(api_url, api_key, model_name, &[])?;
+            // CodeBuddy's ACP startup also checks GLOBAL auth (env), not just
+            // the per-model apiKey in models.json. Without a CODEBUDDY_API_KEY
+            // in ~/.codebuddy/settings.json env it reports
+            // "Authentication required" even though the custom model carries
+            // its own key. Mirror the key into settings.json env (BASE_URL is
+            // deliberately left alone — it owns the native Tencent catalog).
+            if !api_key.trim().is_empty() {
+                persist_codebuddy_settings_env(api_key)?;
+            }
         }
         AgentType::KimiCode => {
             // When a model_provider_id is set, the cascade injects provider

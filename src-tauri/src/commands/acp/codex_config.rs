@@ -420,23 +420,83 @@ pub(crate) fn rewrite_codex_provider_base_url(proxy_url: &str) {
         Some(t) => t,
         None => return,
     };
-    // Navigate to model_providers.veryagent.base_url
-    let providers = match table
+    let normalized = normalize_openai_compatible_base_url(proxy_url);
+    let (_, key_key, _) = crate::commands::acp::agent_env_keys(AgentType::Codex);
+
+    // Two supported config layouts:
+    //
+    // 1. `model_providers.veryagent.base_url` — written by the settings
+    //    cascade path (cascade_update_agent_config). This is the layout Codex
+    //    prefers; when present, keep it in sync.
+    //
+    // 2. Top-level `[provider]` — legacy layout from older agent-runtime
+    //    templates. Codex 2026+ no longer reads it, but keep it in sync so a
+    //    config written by an older VeryAgent build doesn't keep a stale URL
+    //    that Codex might pick up through other tooling.
+    //
+    // If neither exists, create `model_providers.veryagent` (the canonical
+    // shape) so the proxy URL always lands somewhere Codex will read it.
+    let mut updated_any = false;
+    if let Some(providers) = table
         .get_mut("model_providers")
         .and_then(|v| v.as_table_mut())
     {
-        Some(p) => p,
-        None => return,
-    };
-    let veryagent = match providers.get_mut("veryagent").and_then(|v| v.as_table_mut()) {
-        Some(v) => v,
-        None => return,
-    };
-    let normalized = normalize_openai_compatible_base_url(proxy_url);
-    veryagent.insert(
-        "base_url".to_string(),
-        toml::Value::String(normalized),
-    );
+        if let Some(veryagent) = providers.get_mut("veryagent").and_then(|v| v.as_table_mut()) {
+            veryagent.insert(
+                "base_url".to_string(),
+                toml::Value::String(normalized.clone()),
+            );
+            // Ensure the auth wiring matches the custom-provider contract:
+            // key from process env, not OpenAI login.
+            veryagent.insert(
+                "env_key".to_string(),
+                toml::Value::String(key_key.to_string()),
+            );
+            veryagent.remove("requires_openai_auth");
+            updated_any = true;
+        }
+    }
+    if let Some(provider_section) = table.get_mut("provider").and_then(|v| v.as_table_mut()) {
+        // Keep the legacy `[provider]` block in sync (it is not read by Codex
+        // 2026+, but older tooling may reference it).
+        provider_section.insert(
+            "base_url".to_string(),
+            toml::Value::String(normalized.clone()),
+        );
+        provider_section.insert(
+            "wire_api".to_string(),
+            toml::Value::String("responses".to_string()),
+        );
+        updated_any = true;
+    }
+    if !updated_any {
+        let providers = table
+            .entry("model_providers".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+        if let Some(providers) = providers.as_table_mut() {
+            let veryagent = providers
+                .entry("veryagent".to_string())
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()));
+            if let Some(veryagent) = veryagent.as_table_mut() {
+                veryagent.insert(
+                    "name".to_string(),
+                    toml::Value::String("veryagent".to_string()),
+                );
+                veryagent.insert(
+                    "wire_api".to_string(),
+                    toml::Value::String("responses".to_string()),
+                );
+                veryagent.insert(
+                    "env_key".to_string(),
+                    toml::Value::String(key_key.to_string()),
+                );
+                veryagent.insert(
+                    "base_url".to_string(),
+                    toml::Value::String(normalized.clone()),
+                );
+            }
+        }
+    }
 
     // Also add model metadata to suppress Codex's "Model metadata for ... not
     // found" warning. Read the model name first, then modify the table.
@@ -482,4 +542,194 @@ pub struct CodexDeviceCodeResponse {
     pub verification_url: String,
     pub device_auth_id: String,
     pub interval: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct CodexHomeGuard(PathBuf);
+
+    impl CodexHomeGuard {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "veryagent-codex-config-test-{}",
+                uuid::Uuid::new_v4()
+            ));
+            std::fs::create_dir_all(&dir).expect("create test codex home");
+            std::env::set_var("CODEX_HOME", &dir);
+            Self { 0: dir }
+        }
+    }
+
+    impl Drop for CodexHomeGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("CODEX_HOME");
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn write_config(toml: &str) {
+        std::fs::write(codex_config_toml_path(), toml).expect("write test config.toml");
+    }
+
+    fn read_config() -> toml::Value {
+        let raw = std::fs::read_to_string(codex_config_toml_path()).expect("read test config.toml");
+        raw.parse::<toml::Value>().expect("parse test config.toml")
+    }
+
+    #[test]
+    fn rewrite_updates_template_provider_section() {
+        // The layout written by agent_runtime's config template: top-level
+        // `[provider]` with no `model_providers` table. Regression test — the
+        // old code returned early here and left a dead proxy port in place.
+        let _guard = CodexHomeGuard::new();
+        write_config(
+            "model = \"deepseek-v4-flash\"\n\n\
+             [provider]\n\
+             type = \"openai\"\n\
+             base_url = \"http://127.0.0.1:61744/v1\"\n\
+             api_key = \"k\"\n\
+             model = \"deepseek-v4-flash\"\n",
+        );
+
+        rewrite_codex_provider_base_url("http://127.0.0.1:61745/v1");
+
+        let cfg = read_config();
+        let provider = cfg
+            .get("provider")
+            .expect("provider section preserved")
+            .as_table()
+            .expect("provider is a table");
+        assert_eq!(
+            provider.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:61745/v1")
+        );
+        // wire_api must stay consistent so Codex actually uses the URL.
+        assert_eq!(
+            provider.get("wire_api").and_then(|v| v.as_str()),
+            Some("responses")
+        );
+    }
+
+    #[test]
+    fn rewrite_updates_model_providers_veryagent_section() {
+        // The layout written by the settings cascade path.
+        let _guard = CodexHomeGuard::new();
+        write_config(
+            "model = \"gpt-5-codex\"\n\n\
+             [model_providers.veryagent]\n\
+             name = \"veryagent\"\n\
+             base_url = \"http://127.0.0.1:11111/v1\"\n\
+             wire_api = \"responses\"\n\
+             requires_openai_auth = true\n",
+        );
+
+        rewrite_codex_provider_base_url("http://127.0.0.1:22222/v1");
+
+        let cfg = read_config();
+        let veryagent = cfg
+            .get("model_providers")
+            .and_then(|v| v.get("veryagent"))
+            .expect("veryagent provider preserved");
+        assert_eq!(
+            veryagent.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:22222/v1")
+        );
+        // The rewrite must repair the auth wiring: env_key set, and the
+        // OpenAI-login flag removed (it made Codex send the gateway key to
+        // api.openai.com → 401).
+        assert_eq!(
+            veryagent.get("env_key").and_then(|v| v.as_str()),
+            Some("OPENAI_API_KEY")
+        );
+        assert!(veryagent.get("requires_openai_auth").is_none());
+    }
+
+    #[test]
+    fn rewrite_creates_managed_provider_when_no_section_exists() {
+        let _guard = CodexHomeGuard::new();
+        write_config("model = \"gpt-5-codex\"\n");
+
+        rewrite_codex_provider_base_url("http://127.0.0.1:33333/v1");
+
+        let cfg = read_config();
+        let veryagent = cfg
+            .get("model_providers")
+            .and_then(|v| v.get("veryagent"))
+            .expect("veryagent provider created");
+        assert_eq!(
+            veryagent.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:33333/v1")
+        );
+        assert_eq!(
+            veryagent.get("wire_api").and_then(|v| v.as_str()),
+            Some("responses")
+        );
+        assert_eq!(
+            veryagent.get("env_key").and_then(|v| v.as_str()),
+            Some("OPENAI_API_KEY")
+        );
+    }
+
+    #[test]
+    fn rewrite_normalizes_proxy_url() {
+        let _guard = CodexHomeGuard::new();
+        write_config(
+            "[provider]\n\
+             type = \"openai\"\n\
+             base_url = \"http://127.0.0.1:61744/v1\"\n\
+             api_key = \"k\"\n",
+        );
+
+        // Callers may pass the bare proxy URL without the /v1 suffix.
+        rewrite_codex_provider_base_url("http://127.0.0.1:44444");
+
+        let cfg = read_config();
+        let provider = cfg.get("provider").expect("provider section");
+        assert_eq!(
+            provider.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:44444/v1")
+        );
+    }
+
+    #[test]
+    fn rewrite_updates_both_sections_when_present() {
+        // Belt and braces: if both layouts exist, keep them in sync.
+        let _guard = CodexHomeGuard::new();
+        write_config(
+            "model = \"gpt-5-codex\"\n\n\
+             [provider]\n\
+             type = \"openai\"\n\
+             base_url = \"http://127.0.0.1:11111/v1\"\n\
+             api_key = \"k\"\n\n\
+             [model_providers.veryagent]\n\
+             name = \"veryagent\"\n\
+             base_url = \"http://127.0.0.1:11111/v1\"\n\
+             wire_api = \"responses\"\n\
+             requires_openai_auth = true\n",
+        );
+
+        rewrite_codex_provider_base_url("http://127.0.0.1:55555/v1");
+
+        let cfg = read_config();
+        let provider = cfg.get("provider").expect("provider section");
+        assert_eq!(
+            provider.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:55555/v1")
+        );
+        let veryagent = cfg
+            .get("model_providers")
+            .and_then(|v| v.get("veryagent"))
+            .expect("veryagent provider");
+        assert_eq!(
+            veryagent.get("base_url").and_then(|v| v.as_str()),
+            Some("http://127.0.0.1:55555/v1")
+        );
+        assert_eq!(
+            veryagent.get("env_key").and_then(|v| v.as_str()),
+            Some("OPENAI_API_KEY")
+        );
+        assert!(veryagent.get("requires_openai_auth").is_none());
+    }
 }

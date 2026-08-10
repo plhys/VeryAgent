@@ -85,7 +85,6 @@ function WorkspaceDocumentTitle() {
   return null
 }
 
-const TOAST_DURATION_MS = 15000
 const WORKSPACE_PANEL_GROUP_ID = "workspace-panel-group"
 const WORKSPACE_CONVERSATION_PANEL_ID = "workspace-conversation-panel"
 const WORKSPACE_FILES_PANEL_ID = "workspace-files-panel"
@@ -844,11 +843,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
       )}
       <StatusBar />
       <PetFloating />
-      <AppToaster
-        position="bottom-right"
-        duration={TOAST_DURATION_MS}
-        closeButton
-      />
+      <AppToaster />
     </div>
   )
 }

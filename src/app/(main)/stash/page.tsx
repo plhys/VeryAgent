@@ -11,8 +11,6 @@ import { getFolder } from "@/lib/api"
 import type { FolderDetail } from "@/lib/types"
 import { RemoteConnectionGate } from "@/contexts/remote-connection-context"
 
-const TOAST_DURATION_MS = 6000
-
 interface FolderLoadState {
   loadedId: number | null
   folder: FolderDetail | null
@@ -100,11 +98,7 @@ function StashPageInner() {
         ) : null}
       </main>
 
-      <AppToaster
-        position="bottom-right"
-        duration={TOAST_DURATION_MS}
-        closeButton
-      />
+      <AppToaster />
     </div>
   )
 }

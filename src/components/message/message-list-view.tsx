@@ -850,7 +850,16 @@ export function MessageListView({
 
   const hasRenderableContent = threadItems.length > 0 || Boolean(liveMessage)
 
-  if (detailLoading && !hasRenderableContent) {
+  // Switching tabs re-attaches the ACP connection, whose snapshot/replay
+  // carries the in-flight turn's raw content (startup banner, shell echoes,
+  // tool output) BEFORE the DB detail for this conversation has loaded. If we
+  // render that replay while `detailLoading` and no detail has landed yet,
+  // the user sees a flash of raw terminal/command text that is then replaced
+  // by the persisted history once the detail fetch resolves. Treat that
+  // window as "loading": the replay is not real persisted content yet.
+  const waitingForInitialDetail = detailLoading && session?.detail == null
+
+  if (detailLoading && (!hasRenderableContent || waitingForInitialDetail)) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

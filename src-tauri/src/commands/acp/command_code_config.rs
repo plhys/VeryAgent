@@ -50,9 +50,73 @@ pub(crate) fn resolve_cmdc_launch() -> (PathBuf, Vec<String>) {
                 return (shim, Vec::new());
             }
         }
+        // nvm / fnm / pnpm users keep the npm global root elsewhere; resolve it
+        // via `npm prefix -g` (mirrors the ACP adapter's resolveCmdcLaunch).
+        if let Some(prefix) = npm_global_prefix_sync() {
+            let entry = prefix.join("node_modules").join("command-code").join("dist").join("index.mjs");
+            if entry.is_file() {
+                if let Some(node) = crate::process::normalized_program("node").to_str().map(PathBuf::from) {
+                    return (node, vec![entry.to_string_lossy().into_owned()]);
+                }
+            }
+            let shim = prefix.join("cmdc.cmd");
+            if shim.is_file() {
+                return (shim, Vec::new());
+            }
+        }
     }
 
     (PathBuf::from("cmdc"), Vec::new())
+}
+
+/// Resolve the npm global prefix synchronously via `npm prefix -g`.
+/// Best-effort: returns `None` when npm is missing or the probe times out.
+#[cfg(windows)]
+fn npm_global_prefix_sync() -> Option<PathBuf> {
+    use std::process::Command;
+    use std::time::Duration;
+
+    let npm = which::which("npm").ok()?;
+    let mut child = Command::new(npm)
+        .arg("prefix")
+        .arg("-g")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    // `npm prefix -g` is near-instant; a 3s wall-clock guard prevents a hung
+    // npm (e.g. a global config file error) from blocking login/connect.
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let mut stdout = String::new();
+                use std::io::Read;
+                child
+                    .stdout
+                    .as_mut()?
+                    .read_to_string(&mut stdout)
+                    .ok()?;
+                let prefix = stdout.lines().next()?.trim().to_string();
+                return if prefix.is_empty() {
+                    None
+                } else {
+                    Some(PathBuf::from(prefix))
+                };
+            }
+            Ok(None) => {
+                if start.elapsed() > Duration::from_secs(3) {
+                    let _ = child.kill();
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => return None,
+        }
+    }
 }
 
 /// Spawn `cmdc login` in the background (no terminal window). Command Code

@@ -43,6 +43,7 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "approval mode": "approvalPreset",
   approval: "approvalPreset",
   "default thinking mode": "defaultThinkingMode",
+  "thinking mode": "defaultThinkingMode",
   "thinking level": "thinkingLevel",
   "thought level": "thoughtLevel",
   thought: "thoughtLevel",
@@ -60,6 +61,23 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   reasoning: "reasoningEffort",
   "model strength": "reasoningEffort",
   mode: "modeLabel",
+  // ── Sandbox / environment options (CodeBuddy & friends) ──
+  sandbox: "sandbox",
+  "sandbox mode": "sandbox",
+  sandboxed: "sandbox",
+  "sandbox mode (experimental)": "sandboxExperimental",
+  "strict sandbox": "sandboxStrict",
+  environment: "environment",
+  "run in sandbox": "sandbox",
+  // ── Codex / reasoning config ──
+  "service tier": "serviceTier",
+  "approval policy": "approvalPreset",
+  "fast mode (exp)": "fastMode",
+  "reasoning effort (exp)": "reasoningEffort",
+  // ── Agent / sub-agent options ──
+  "subagent model": "subagentModel",
+  "subagent provider": "subagentProvider",
+  "allow subagent": "allowSubagent",
   // Protocol ids as option names (some agents ship the bare id):
   effortlevel: "reasoningEffort",
   reasoningeffort: "reasoningEffort",
@@ -67,6 +85,9 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "model reasoning effort": "reasoningEffort",
   thinkinglevel: "thinkingLevel",
   thoughtlevel: "thoughtLevel",
+  sandboxmode: "sandbox",
+  service_tier: "serviceTier",
+  service_tier_override: "serviceTier",
 
   // ── Command Code config options ──
   model: "modelLabel",
@@ -128,11 +149,41 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   ask: "elevatedAsk",
   adaptive: "thinkingAdaptive",
 
-  // ── Mode / preset option values ──
-  "read only": "readOnly",
-  readonly: "readOnly",
-  agent: "agentMode",
-  "agent (full access)": "agentFullAccess",
+  // ── Sandbox values ──
+  "ask every time": "sandboxAsk",
+  "always ask": "alwaysAsk",
+  "allow all": "sandboxAllowAll",
+  "strict": "sandboxStrict",
+  "not sandboxed": "sandboxNotSandboxed",
+  "sandboxed (non destructive)": "sandboxNonDestructive",
+  "local environment": "sandboxLocalEnv",
+  "local env": "sandboxLocalEnv",
+  "sandbox environment": "sandboxEnvironment",
+  docker: "sandboxDocker",
+  container: "sandboxDocker",
+  "docker container": "sandboxDocker",
+  "background container": "sandboxDocker",
+  vm: "sandboxVM",
+  "virtual machine": "sandboxVM",
+
+  // ── Thinking / reasoning values ──
+  none: "thinkingOff",
+  "no thinking": "thinkingOff",
+  "no reasoning": "thinkingOff",
+  "extra": "thinkingExtraHigh",
+  balanced: "thinkingMedium",
+
+  // ── Approval preset values ──
+  "on failure": "approvalOnFailure",
+  "on-failure": "approvalOnFailure",
+  never: "approvalNever",
+  "never approve": "approvalNever",
+  "always approve": "approvalAlways",
+  "untrusted": "approvalUntrusted",
+
+  // ── Service tier values ──
+  "standard": "serviceTierStandard",
+  "priority": "serviceTierPriority",
 
   // ── Thinking level values ──
   low: "thinkingLow",
@@ -140,6 +191,21 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   high: "thinkingHigh",
   "extra high": "thinkingExtraHigh",
   xhigh: "thinkingExtraHigh",
+  "x-high": "thinkingExtraHigh",
+  max: "thinkingMax",
+  minimal: "thinkingMinimal",
+  "on (default)": "thinkingOnDefault",
+  "model default": "thinkingOnDefault",
+  "use model default": "thinkingOnDefault",
+  "off (default)": "thinkingOffDefault",
+  "auto (default)": "thinkingAutoDefault",
+
+  // ── Mode / preset option values ──
+  "read only": "readOnly",
+  readonly: "readOnly",
+  agent: "agentMode",
+  "agent (full access)": "agentFullAccess",
+  plan: "modePlanMode",
 
   // ── Mode / preset descriptions ──
   "ask before edits.": "modeDefaultDesc",
@@ -153,6 +219,41 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "auto-accept file edit operations": "modeAcceptEditsBehaviorDesc",
   "planning mode, no actual tool execution": "modePlanModeDesc",
   "bypass all permission checks": "modeBypassPermissionsDesc",
+
+  // ── CodeBuddy sandbox value descriptions ──
+  "run shell commands inside the sandbox-cli isolation layer":
+    "sandboxEnvSandboxCliDesc",
+  "bash/powershell commands run inside the sandbox and require escalation to touch the host":
+    "sandboxEnvBashDesc",
+  "commands run with full user permissions (no sandbox isolation)":
+    "sandboxLocalEnvDesc",
+  // CodeBuddy joins both lines with a newline into one description.
+  "run shell commands inside the sandbox-cli isolation layer bash/powershell commands run inside the sandbox and require escalation to touch the host":
+    "sandboxEnvCombinedDesc",
+
+  // ── CodeBuddy reasoning value descriptions ──
+  "standard response without extended thinking": "reasoningStandardDesc",
+  "briefest reasoning": "reasoningMinimalDesc",
+  "light reasoning": "reasoningLowDesc",
+  "balanced reasoning": "reasoningMediumDesc",
+  "deep reasoning": "reasoningHighDesc",
+  "very deep reasoning": "reasoningExtraHighDesc",
+  "maximum reasoning effort": "reasoningMaxDesc",
+  "use the model default effort": "reasoningOnDefaultDesc",
+
+  // ── CodeBuddy permission value descriptions ──
+  "controls how the agent requests permission before making changes":
+    "permissionModeDesc",
+  "prompts for permission on first use": "permissionAskFirstUseDesc",
+  "prompts for permission on first use of each tool":
+    "permissionAskFirstUseDesc",
+  "of each tool": "permissionOfEachToolDesc",
+  "automatically accepts file edit permissions for the session":
+    "permissionAcceptEditsDesc",
+  "agent can analyze but not modify files or execute commands":
+    "permissionPlanDesc",
+  "an ai classifier reviews actions that would normally prompt: safe ones are auto-approved, risky ones are denied. if the classifier is unavailable, the action falls back to a prompt (or is denied when prompts cannot be shown)":
+    "permissionAutoDesc",
 
   // ── OpenClaw session setting descriptions (exact agent strings) ──
   "controls how much deliberate reasoning openclaw requests from the gateway model.":
@@ -194,8 +295,16 @@ const PERMISSION_KIND_MAP: Record<string, string> = {
  * is not available (e.g. server components, utility functions).
  */
 export function localizeConfigOptionName(name: string): string {
-  const key = CONFIG_NAME_MAP[normalizeName(name)]
-  return key ?? name
+  const directKey = CONFIG_NAME_MAP[normalizeName(name)]
+  if (directKey) return directKey
+  // CodeBuddy joins some descriptions with newlines; collapse whitespace and
+  // retry so the single-line mapping still matches.
+  const collapsed = name.replace(/\s+/g, " ").trim()
+  if (collapsed !== name) {
+    const foldedKey = CONFIG_NAME_MAP[normalizeName(collapsed)]
+    if (foldedKey) return foldedKey
+  }
+  return name
 }
 
 /**
@@ -231,10 +340,24 @@ export function useConfigOptionLocalizer() {
   const t = useTranslations("Folder.chat.configOptions")
 
   function localize(raw: string): string {
-    const key = CONFIG_NAME_MAP[normalizeName(raw)]
-    if (!key) return raw
-    // @ts-expect-error — key comes from the known mapping table, guaranteed valid
-    return t(key)
+    // Direct hit first (exact whitespace, including embedded newlines).
+    const directKey = CONFIG_NAME_MAP[normalizeName(raw)]
+    if (directKey) {
+      // @ts-expect-error — key comes from the known mapping table, guaranteed valid
+      return t(directKey)
+    }
+    // Fallback: some agents (CodeBuddy) join a value's description with
+    // newlines ("Run … layer\nBash … host"). Collapse all whitespace runs to
+    // single spaces and retry so the single-line mapping still matches.
+    const collapsed = raw.replace(/\s+/g, " ").trim()
+    if (collapsed !== raw) {
+      const foldedKey = CONFIG_NAME_MAP[normalizeName(collapsed)]
+      if (foldedKey) {
+        // @ts-expect-error — key comes from the known mapping table, guaranteed valid
+        return t(foldedKey)
+      }
+    }
+    return raw
   }
 
   function localizePermissionKind(kind: string, fallbackName: string): string {

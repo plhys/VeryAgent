@@ -17,18 +17,25 @@ export function AppToaster(props: ToasterProps) {
     <Toaster
       {...props}
       theme={theme}
-      duration={1500}
-      visibleToasts={1}
+      duration={2200}
+      // expand=true makes every toast render at full height, stacked
+      // vertically with `gap`, instead of collapsing later toasts behind the
+      // front one (the default). visibleToasts caps how many are shown.
+      expand
+      visibleToasts={4}
+      gap={10}
       position="top-center"
-      offset="50vh"
+      // Positioning is delegated to CSS (.veryagent-toaster centers the
+      // container in the viewport with a fixed flexbox overlay); leaving
+      // offset unset lets sonner's inline transform stay predictable.
+      className="veryagent-toaster"
       toastOptions={{
+        className: "veryagent-toast",
         style: {
           fontSize: "13px",
-          padding: "8px 12px",
-          transition: "opacity 0.15s ease, transform 0.15s ease",
+          padding: "10px 16px",
         },
       }}
-      closeButton
     />
   )
 }

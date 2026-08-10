@@ -427,8 +427,12 @@ pub(crate) async fn probe_openclaw_gateway_reachable(discovery: &OpenClawGateway
     let Some((host, port)) = openclaw_probe_target(discovery) else {
         return false;
     };
+    // 400ms was too tight for cold gateway starts / slow machines — a
+    // TCP connect on loopback is normally <10ms, but a just-spawned gateway
+    // process may still be binding. 1.5s gives it headroom without making
+    // the callers' retry loops sluggish.
     match tokio::time::timeout(
-        std::time::Duration::from_millis(400),
+        std::time::Duration::from_millis(1500),
         tokio::net::TcpStream::connect((host.as_str(), port)),
     )
     .await
