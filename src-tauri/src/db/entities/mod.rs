@@ -15,3 +15,6 @@ pub mod prelude;
 pub mod remote_workspace_connection;
 pub mod image_generation;
 pub mod vision_bridge;
+pub mod team;
+pub mod team_slot;
+pub mod team_task;

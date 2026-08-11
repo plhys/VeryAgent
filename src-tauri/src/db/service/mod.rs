@@ -14,3 +14,4 @@ pub mod sender_context_service;
 pub mod tab_service;
 pub mod image_generation_service;
 pub mod vision_bridge_service;
+pub mod team_service;

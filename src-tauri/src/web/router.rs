@@ -1151,6 +1151,22 @@ pub fn build_router(
             "/automation_cancel_run",
             post(handlers::automation::automation_cancel_run),
         )
+        // ─── Teams ───
+        .route("/team_list", post(handlers::team::team_list))
+        .route("/team_get", post(handlers::team::team_get))
+        .route("/team_create", post(handlers::team::team_create))
+        .route("/team_delete", post(handlers::team::team_delete))
+        .route(
+            "/team_set_leader_conversation",
+            post(handlers::team::team_set_leader_conversation),
+        )
+        .route("/team_list_slots", post(handlers::team::team_list_slots))
+        .route("/team_list_tasks", post(handlers::team::team_list_tasks))
+        .route("/team_assign_task", post(handlers::team::team_assign_task))
+        .route(
+            "/team_set_task_status",
+            post(handlers::team::team_set_task_status),
+        )
         // ─── Pet ───
         .route("/pet_list", post(handlers::pet::pet_list))
         .route("/pet_get", post(handlers::pet::pet_get))

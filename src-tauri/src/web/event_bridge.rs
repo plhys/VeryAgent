@@ -291,6 +291,20 @@ pub enum AutomationChange {
     },
 }
 
+/// Global side-channel for team list / detail sync. Clients refetch on receipt —
+/// same id-only convention as [`AUTOMATION_CHANGED_EVENT`].
+pub const TEAM_CHANGED_EVENT: &str = "team://changed";
+
+/// Payload for [`TEAM_CHANGED_EVENT`]. Team ids are UUID strings.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TeamChange {
+    /// Insert-or-replace by id (create, task/slot update).
+    Upsert { id: String },
+    /// Deleted by id.
+    Deleted { id: String },
+}
+
 /// Unified event emission: serializes the payload exactly once and dispatches
 /// the shared `Arc<Value>` to both the Tauri webview and the web broadcaster.
 pub fn emit_event(emitter: &EventEmitter, event: &str, payload: impl Serialize) {

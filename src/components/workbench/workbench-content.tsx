@@ -7,6 +7,7 @@ import {
 } from "@/contexts/workbench-route-context"
 import { AutomationsPage } from "@/components/automations/automations-page"
 import { SkillsAndToolsPage } from "@/components/skills-and-tools/skills-and-tools-page"
+import { TeamPage } from "@/components/team/team-page"
 
 /**
  * Registry of full-page routes that take over the main content region. The
@@ -18,6 +19,7 @@ import { SkillsAndToolsPage } from "@/components/skills-and-tools/skills-and-too
 const WORKBENCH_ROUTES: Partial<Record<WorkbenchRouteId, ComponentType>> = {
   automations: AutomationsPage,
   skillsAndTools: SkillsAndToolsPage,
+  team: TeamPage,
 }
 
 /**

@@ -8,6 +8,7 @@ pub mod model_provider;
 pub mod pet;
 pub mod remote_workspace_connection;
 pub mod system;
+pub mod team;
 
 pub use agent::AgentType;
 pub use automation::{
@@ -30,6 +31,10 @@ pub use message::{
     TurnRole, TurnUsage, UnifiedMessage,
 };
 pub use remote_workspace_connection::RemoteWorkspaceConnectionInfo;
+pub use team::{
+    TeamDraft, TeamInfo, TeamSlotDraft, TeamSlotInfo, TeamSummaryInfo, TeamTaskInfo,
+};
+pub use team::{TeamSlotStatus, TeamTaskStatus};
 #[cfg(feature = "tauri-runtime")]
 pub use system::SystemRenderingSettings;
 pub use system::{

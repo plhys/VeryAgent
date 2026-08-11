@@ -123,7 +123,10 @@ const KEY_LABELS: Record<string, string> = {
   delete: "Delete",
 }
 
-function normalizeKeyToken(rawKey: string): string | null {
+function normalizeKeyToken(rawKey: string | null | undefined): string | null {
+  // `KeyboardEvent.key` can be undefined for some synthetic/IME-composed events;
+  // treat those as "no key" rather than crashing on `.toLowerCase()`.
+  if (!rawKey) return null
   const key = rawKey.toLowerCase()
   if (!key) return null
 

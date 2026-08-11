@@ -19,7 +19,7 @@ import {
  * `setRoute("<id>")`. Nothing else needs to change.
  */
 export type WorkbenchRouteId =
-  "conversations" | "automations" | "skillsAndTools"
+  "conversations" | "automations" | "skillsAndTools" | "team"
 
 interface WorkbenchRouteContextValue {
   routeId: WorkbenchRouteId

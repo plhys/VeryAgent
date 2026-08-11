@@ -6,6 +6,7 @@ import {
   Folder as FolderIcon,
   Search,
   SquarePen,
+  Users,
   Zap,
   Wrench,
   type LucideIcon,
@@ -17,6 +18,7 @@ import { useTabActions } from "@/contexts/tab-context"
 import { useSearchDialog } from "@/contexts/search-dialog-context"
 import { useAutomationsView } from "@/contexts/automations-view-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
+import { Separator } from "@/components/ui/separator"
 import {
   SidebarConversationList,
   type SidebarConversationListHandle,
@@ -189,6 +191,16 @@ export function Sidebar() {
           active={routeId === "skillsAndTools"}
           onClick={() => setRoute("skillsAndTools")}
         />
+
+        {/* 团队协作：独立入口，与「技能和连接器」用分割线隔开 */}
+        <Separator className="my-1 bg-sidebar-border" />
+        <SidebarNavButton
+          icon={Users}
+          label={t("teamCollaboration")}
+          active={routeId === "team"}
+          onClick={() => setRoute("team")}
+        />
+        <Separator className="my-1 bg-sidebar-border" />
       </div>
 
       {/* Tab 切换：聊天 / 文件夹 + 右侧打开文件夹按钮 */}

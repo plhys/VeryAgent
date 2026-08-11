@@ -1761,7 +1761,13 @@ export function AcpAgentSettings() {
       })
       .catch((error) => {
         if (cancelled) return
-        console.error("[Settings] fetch provider models failed:", error)
+        // `toErrorMessage` carries the real backend detail; the raw rejected
+        // value can render as a bare `{}` in the WebView console, so log only
+        // the human-readable form.
+        console.error(
+          "[Settings] fetch provider models failed:",
+          toErrorMessage(error)
+        )
         setProviderModels([])
         setProviderModelsError(toErrorMessage(error))
       })

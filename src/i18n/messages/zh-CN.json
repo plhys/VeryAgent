@@ -1144,12 +1144,12 @@
       "trustTitle": "自动信任打开的工作区",
       "trustDescription": "veryagent 连接 pi 到某个目录时，将该目录标记为受信任，使 pi 无需单独确认即可加载该项目的本地配置与技能。",
       "trustHint": "仅信任你在此打开的目录，绝不涉及整台机器；且只影响配置加载，不影响 pi 能执行什么。",
-"configDirSkillsNote": "设置了自定义配置目录后，设置页中管理的技能、专家与办公工具将不会作用于该 pi；请直接在该目录中管理其技能。"
-	    },
-	    "installTab": "安装",
-	    "configTab": "配置",
-	    "configTabDisabledHint": "请先安装智能体"
-	  },
+      "configDirSkillsNote": "设置了自定义配置目录后，设置页中管理的技能、专家与办公工具将不会作用于该 pi；请直接在该目录中管理其技能。"
+    },
+    "installTab": "安装",
+    "configTab": "配置",
+    "configTabDisabledHint": "请先安装智能体"
+  },
   "SettingsPages": {
     "agentsLoading": "加载 Agent 设置中..."
   },
@@ -1368,7 +1368,8 @@
       "renameWorkspaceTitle": "重命名工作区",
       "openWorkspace": "打开工作区",
       "removeFromWorkspace": "删除工作区",
-      "untitledConversation": "未命名会话"
+      "untitledConversation": "未命名会话",
+      "teamCollaboration": "团队协作"
     },
     "conversation": {
       "reloadFailed": "会话重新加载失败：{message}",
@@ -3256,54 +3257,54 @@
     },
     "copyModeHint": "已复制（非链接）——更新后请重新启用以获取最新版本"
   },
-"ExpertsSettings": {
-	    "title": "专家技能",
-	    "description": "为 AI 编码代理启用精心挑选、经过实战验证的技能工作流。",
-	    "loading": "正在加载专家列表…",
-	    "loadingContent": "正在加载内容…",
-	    "emptyExperts": "当前没有可用的专家，请查看应用日志。",
-	    "emptySelection": "从左侧选择一个专家以查看内容并管理启用状态。",
-	    "emptySearch": "没有匹配当前搜索条件的专家。",
-	    "searchPlaceholder": "按名称、ID 或描述搜索专家",
-	    "enableForAgents": "为代理启用",
-	    "noAgents": "未检测到 ACP 代理。",
-	    "previewTitle": "SKILL.md 预览",
-	    "categories": {
-	      "development": "编程",
-	      "office": "办公",
-	      "academic": "学术",
-	      "creative": "创意",
-	      "help": "帮助"
-	    },
-	    "states": {
-	      "not_linked": "未启用",
-	      "linked_to_veryagent": "已启用"
-	    },
-	    "badges": {
-	      "userModified": "用户修改过"
-	    },
-	    "actions": {
-	      "openCentralDir": "打开中央目录",
-	      "refresh": "刷新"
-	    },
-	    "toasts": {
-	      "loadFailed": "加载专家详情失败",
-	      "enabled": "已为该代理启用专家",
-	      "disabled": "已为该代理禁用专家",
-	      "enableFailed": "启用专家失败",
-	      "disableFailed": "禁用专家失败",
-	      "openFolderFailed": "打开目录失败"
-	    }
-	  },
-"ScienceSettings": {
-	    "title": "学术技能",
-	    "description": "为 AI 编程代理启用学术科研技能 — 假设生成、实验设计、统计分析、可视化、文献检索等。",
-	    "loading": "加载学术技能…",
-	    "emptySkills": "暂无学术技能。请检查应用日志。",
-	    "searchPlaceholder": "按名称、ID 或描述搜索学术技能",
-	    "categories": {
-	      "academic": "学术"
-},
+  "ExpertsSettings": {
+    "title": "专家技能",
+    "description": "为 AI 编码代理启用精心挑选、经过实战验证的技能工作流。",
+    "loading": "正在加载专家列表…",
+    "loadingContent": "正在加载内容…",
+    "emptyExperts": "当前没有可用的专家，请查看应用日志。",
+    "emptySelection": "从左侧选择一个专家以查看内容并管理启用状态。",
+    "emptySearch": "没有匹配当前搜索条件的专家。",
+    "searchPlaceholder": "按名称、ID 或描述搜索专家",
+    "enableForAgents": "为代理启用",
+    "noAgents": "未检测到 ACP 代理。",
+    "previewTitle": "SKILL.md 预览",
+    "categories": {
+      "development": "编程",
+      "office": "办公",
+      "academic": "学术",
+      "creative": "创意",
+      "help": "帮助"
+    },
+    "states": {
+      "not_linked": "未启用",
+      "linked_to_veryagent": "已启用"
+    },
+    "badges": {
+      "userModified": "用户修改过"
+    },
+    "actions": {
+      "openCentralDir": "打开中央目录",
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "loadFailed": "加载专家详情失败",
+      "enabled": "已为该代理启用专家",
+      "disabled": "已为该代理禁用专家",
+      "enableFailed": "启用专家失败",
+      "disableFailed": "禁用专家失败",
+      "openFolderFailed": "打开目录失败"
+    }
+  },
+  "ScienceSettings": {
+    "title": "学术技能",
+    "description": "为 AI 编程代理启用学术科研技能 — 假设生成、实验设计、统计分析、可视化、文献检索等。",
+    "loading": "加载学术技能…",
+    "emptySkills": "暂无学术技能。请检查应用日志。",
+    "searchPlaceholder": "按名称、ID 或描述搜索学术技能",
+    "categories": {
+      "academic": "学术"
+    },
     "states": {
       "not_linked": "未启用",
       "linked_to_veryagent": "已启用"
@@ -3321,14 +3322,14 @@
       "openFolderFailed": "打开文件夹失败"
     }
   },
-"SkillPacksSettings": {
-	    "title": "技能包",
-	    "description": "浏览和管理所有技能。启用后可在工作台「技能和连接器」中为智能体开启。",
-	    "tabs": {
-	      "experts": "编程",
-	      "science": "学术",
-	      "office": "办公"
-	    },
+  "SkillPacksSettings": {
+    "title": "技能包",
+    "description": "浏览和管理所有技能。启用后可在工作台「技能和连接器」中为智能体开启。",
+    "tabs": {
+      "experts": "编程",
+      "science": "学术",
+      "office": "办公"
+    },
     "actions": {
       "openCentralDir": "打开中央文件夹",
       "refresh": "刷新"
@@ -4038,5 +4039,56 @@
     "downloadImage": "下载图片",
     "downloadDialogTitle": "保存图片",
     "downloadFilterAll": "所有文件"
+  },
+  "Team": {
+    "title": "团队协作",
+    "subtitle": "一个领班带领多个智能体并行协作，共同完成任务。",
+    "createTeam": "创建团队",
+    "chooseTemplate": "选择团队规模",
+    "template3": "3 人组",
+    "template3Desc": "领班 + 开发 + 测试",
+    "template4": "4 人组",
+    "template4Desc": "领班 + 开发 + 测试 + 文档",
+    "template5": "5 人组",
+    "template5Desc": "领班 + 双开发 + 测试 + 审查",
+    "roles": "角色",
+    "roleLeader": "领班",
+    "roleDev": "开发",
+    "roleTest": "测试",
+    "roleDoc": "文档",
+    "roleReview": "审查",
+    "roleLeaderHint": "团队的项目经理：接收目标、拆分任务、分派成员、汇总汇报",
+    "roleDevHint": "负责编写代码，实现功能",
+    "roleTestHint": "负责验证功能，发现并报告问题",
+    "roleDocHint": "负责编写文档与使用说明",
+    "roleReviewHint": "负责审查代码质量，提出改进建议",
+    "assignHint": "点击角色标签 → 再点击智能体完成分配（或直接把标签拖到智能体上）",
+    "agents": "选择智能体",
+    "agentDisabled": "不可用",
+    "teamName": "团队名称",
+    "teamNamePlaceholder": "例如：前端重构团队",
+    "workspace": "工作目录",
+    "workspacePlaceholder": "选择工作目录",
+    "noWorkspace": "暂无工作目录",
+    "rolesCount": "角色 {count}/{total}",
+    "membersCount": "智能体 {count}",
+    "needMoreMembers": "至少需要 2 个智能体（当前 {count}）",
+    "needLeader": "领班是必选的",
+    "tooManyRoles": "一个智能体最多承担 3 个角色",
+    "assignFirst": "先点击一个角色标签，再点击智能体",
+    "creating": "创建中…",
+    "createSuccess": "团队已创建",
+    "createFailed": "创建失败：{message}",
+    "emptyTitle": "还没有团队",
+    "emptyHint": "选一个团队规模，把角色分给智能体，就能创建你的第一个团队。",
+    "workspaceHint": "团队成员智能体在这里执行任务（读取代码、写文件）。列表为空时，请先在侧边栏「工作区」添加一个项目文件夹。",
+    "browseWorkspace": "选择文件夹…",
+    "loadingMembers": "正在加载成员…",
+    "expandHint": "点击放大查看",
+    "idleHint": "待命 · 等待派发任务",
+    "workingHint": "工作中…",
+    "memberDetailPlaceholder": "成员的完整对话将在这里显示（派发任务后开始实时更新）。",
+    "workspaceMissing": "未找到工作目录，请重新选择",
+    "leaderChatFailed": "领班对话创建失败，请重试或手动打开"
   }
 }

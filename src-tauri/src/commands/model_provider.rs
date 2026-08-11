@@ -476,7 +476,11 @@ pub async fn fetch_openai_compatible_models(
             let body = resp.text().await.unwrap_or_default();
 
             if !status.is_success() {
-                let snippet = body.chars().take(300).collect::<String>();
+                // Third-party response bodies are untrusted text: strip control
+                // chars / JS line separators so the message survives the IPC
+                // path (a raw snippet with `\u2028` etc. can corrupt the
+                // webview eval and surface as an opaque `{}` on the client).
+                let snippet = sanitize_error_snippet(&body, 300);
                 last_error = format!(
                     "Provider returned HTTP {} for {} ({}): {}",
                     status.as_u16(),
@@ -500,7 +504,7 @@ pub async fn fetch_openai_compatible_models(
                 Ok(_) => {
                     // 200 + empty list is common on NewAPI when the token has
                     // no models enabled / model scope is empty — not a routing bug.
-                    let snippet = body.chars().take(180).collect::<String>();
+                    let snippet = sanitize_error_snippet(&body, 180);
                     last_error = format!(
                         "网关返回空模型列表（{url}, {via}）。\
 常见原因：1) 令牌未勾选/开通任何模型 2) 令牌模型范围为空 3) 该 Key 无权列出模型。\
@@ -512,7 +516,7 @@ pub async fn fetch_openai_compatible_models(
                     return Err(AppCommandError::invalid_input(last_error));
                 }
                 Err(e) => {
-                    let snippet = body.chars().take(160).collect::<String>();
+                    let snippet = sanitize_error_snippet(&body, 160);
                     last_error = format!("{e} (url: {url}, {via}; body: {snippet})");
                     continue;
                 }
@@ -523,6 +527,37 @@ pub async fn fetch_openai_compatible_models(
     Err(AppCommandError::invalid_input(humanize_models_fetch_error(
         &last_error,
     )))
+}
+
+/// Strip characters that can corrupt the IPC error path (webview `eval` of the
+/// serialized message): control chars and JS line/paragraph separators. Also
+/// collapses whitespace runs so a huge/unformatted body can't bloat the error.
+fn sanitize_error_snippet(raw: &str, max_chars: usize) -> String {
+    let mut out = String::with_capacity(raw.len().min(max_chars));
+    let mut last_was_space = false;
+    for ch in raw.chars() {
+        let c = ch as u32;
+        let is_ws = ch.is_whitespace();
+        // Drop control chars and U+2028/U+2029 (JS line separators); keep
+        // ordinary whitespace but collapse runs to a single space.
+        if (c < 0x20 && !is_ws) || c == 0x2028 || c == 0x2029 {
+            continue;
+        }
+        if is_ws {
+            if last_was_space {
+                continue;
+            }
+            out.push(' ');
+            last_was_space = true;
+        } else {
+            out.push(ch);
+            last_was_space = false;
+        }
+        if out.chars().count() >= max_chars {
+            break;
+        }
+    }
+    out
 }
 
 /// Fetch available models from a model provider's OpenAI-compatible `/models` endpoint.

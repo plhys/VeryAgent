@@ -97,6 +97,12 @@ export function toErrorMessage(error: unknown): string {
 
   try {
     const serialized = JSON.stringify(error)
+    // An object with no recognizable fields (e.g. `{}` — a transport-layer
+    // error whose payload was lost) carries no useful detail; surface a
+    // generic message instead of a meaningless `{}`.
+    if (serialized === "{}" || serialized === "[]" || serialized === "null") {
+      return "Request failed. Check your network / configuration and try again."
+    }
     return serialized ? serialized.trim() : String(error)
   } catch {
     return String(error)

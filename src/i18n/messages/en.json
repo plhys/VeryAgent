@@ -1144,12 +1144,12 @@
       "trustTitle": "Auto-trust opened workspaces",
       "trustDescription": "When veryagent connects pi to a folder, mark that folder trusted so pi loads the project's local config and skills without a separate prompt.",
       "trustHint": "Only folders you open here are trusted, never your whole machine — and this affects config loading only, not what pi is allowed to run.",
-"configDirSkillsNote": "With a custom config directory, the Skills, Experts, and Office tools managed in Settings won't apply to this pi — manage its skills in that folder directly."
-	    },
-	    "installTab": "Install",
-	    "configTab": "Configure",
-	    "configTabDisabledHint": "Install the agent first"
-	  },
+      "configDirSkillsNote": "With a custom config directory, the Skills, Experts, and Office tools managed in Settings won't apply to this pi — manage its skills in that folder directly."
+    },
+    "installTab": "Install",
+    "configTab": "Configure",
+    "configTabDisabledHint": "Install the agent first"
+  },
   "SettingsPages": {
     "agentsLoading": "Loading agent settings..."
   },
@@ -1368,7 +1368,8 @@
       "renameWorkspaceTitle": "Rename workspace",
       "openWorkspace": "Open workspace",
       "removeFromWorkspace": "Delete workspace",
-      "untitledConversation": "Untitled conversation"
+      "untitledConversation": "Untitled conversation",
+      "teamCollaboration": "Team Collaboration"
     },
     "conversation": {
       "reloadFailed": "Failed to reload conversation: {message}",
@@ -4038,5 +4039,56 @@
     "downloadImage": "Download Image",
     "downloadDialogTitle": "Save Image",
     "downloadFilterAll": "All Files"
+  },
+  "Team": {
+    "title": "Team Collaboration",
+    "subtitle": "One leader orchestrating multiple agents working in parallel toward a shared goal.",
+    "createTeam": "Create team",
+    "chooseTemplate": "Choose team size",
+    "template3": "3-person",
+    "template3Desc": "Leader + Dev + Test",
+    "template4": "4-person",
+    "template4Desc": "Leader + Dev + Test + Docs",
+    "template5": "5-person",
+    "template5Desc": "Leader + 2×Dev + Test + Review",
+    "roles": "Roles",
+    "roleLeader": "Leader",
+    "roleDev": "Dev",
+    "roleTest": "Test",
+    "roleDoc": "Docs",
+    "roleReview": "Review",
+    "roleLeaderHint": "The team's project manager: takes goals, breaks down tasks, assigns members, summarizes results",
+    "roleDevHint": "Writes code and implements features",
+    "roleTestHint": "Verifies features and reports issues",
+    "roleDocHint": "Writes documentation and usage guides",
+    "roleReviewHint": "Reviews code quality and suggests improvements",
+    "assignHint": "Click a role tag, then click an agent to assign it (or drag the tag onto an agent)",
+    "agents": "Select agents",
+    "agentDisabled": "Unavailable",
+    "teamName": "Team name",
+    "teamNamePlaceholder": "e.g. Frontend Refactor Team",
+    "workspace": "Working directory",
+    "workspacePlaceholder": "Choose working directory",
+    "noWorkspace": "No working directory",
+    "rolesCount": "Roles {count}/{total}",
+    "membersCount": "Agents {count}",
+    "needMoreMembers": "At least 2 agents required (currently {count})",
+    "needLeader": "A leader is required",
+    "tooManyRoles": "An agent can carry at most 3 roles",
+    "assignFirst": "Click a role tag first, then click an agent",
+    "creating": "Creating…",
+    "createSuccess": "Team created",
+    "createFailed": "Create failed: {message}",
+    "emptyTitle": "No teams yet",
+    "emptyHint": "Pick a team size, assign roles to agents, and create your first team.",
+    "workspaceHint": "Team members run their tasks here (read code, write files). If the list is empty, add a project folder in the sidebar Workspaces first.",
+    "browseWorkspace": "Browse…",
+    "loadingMembers": "Loading members…",
+    "expandHint": "Click to expand",
+    "idleHint": "Idle · awaiting a task",
+    "workingHint": "Working…",
+    "memberDetailPlaceholder": "The member's full conversation will appear here once a task is assigned.",
+    "workspaceMissing": "Workspace not found — please pick it again",
+    "leaderChatFailed": "Failed to open the leader chat — retry or open it manually"
   }
 }

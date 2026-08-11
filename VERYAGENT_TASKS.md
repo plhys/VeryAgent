@@ -1,6 +1,56 @@
 # VeryAgent 开发任务追踪
 
-> 最后更新：2026-08-11
+> 最后更新：2026-08-12
+
+---
+
+## 当前进行中：团队协作 Step 1（2026-08-12）
+
+### ✅ 已完成
+- **侧边栏「团队协作」入口**：独立入口 + 上下分割线（`sidebar.tsx`、workbench route `"team"`）
+- **创建团队 UI**（`src/components/team/team-page.tsx`）：
+  - 预设模板：3人组(领班+开发+测试) / 4人组(+文档) / 5人组(双开发+审查)
+  - 角色标签 → 点击/拖拽分配到智能体（一人最多 3 角色，领班唯一必选）
+  - 团队名 + 工作目录选择（「选择文件夹…」按钮直接弹系统选择器，空态友好提示）
+  - 实时校验（角色数 3~5 / 智能体 2~5 / 领班 / 名称 / 目录）
+- **后端**（`src-tauri/src/db/` + `commands/team.rs`）：
+  - 三表 `team` / `team_slot` / `team_task` + 迁移 `m20260811_000001_team`
+  - `team_service.rs`：CRUD + 任务生命周期；9 个 Tauri 命令；`team://changed` 事件；Axum handler + 路由
+  - **踩坑记录**：SQLite 下 String 主键用 `Entity::insert().exec()`（`.insert()` 会因 last_insert_rowid 反查报 `RecordNotFound`）
+- **领班对话 + 右侧成员面板**（`team-side-panel.tsx` + `team-context.tsx`）：
+  - 创建成功 → 自动打开领班对话，右侧垂直等大成员小窗（头像/角色徽章/状态/小字内容区）
+  - 点击小窗 → 放大 Dialog
+  - **修复**：面板"时灵时不灵" = 后端 `team://changed` 异步刷新时序 → 前端乐观绑定 `bindLeaderConversation`
+  - **修复**：Mobile 布局分支（≤767px）漏挂 TeamSidePanel
+- **顺带修复**：`toErrorMessage` 空对象兜底；`normalizeKeyToken` 空值保护；错误消息 sanitize（防特殊字符破坏 IPC）
+
+### ⏳ 未完成（明天继续）
+- [ ] **派活功能**：选成员 → 填任务 → 拉起成员会话（成员小窗开始实时滚动）
+- [ ] 成员小窗实时流（复用现有 liveMessage / acp-connections 机制）
+- [ ] 团队列表/详情页（当前只有创建 + 领班对话）
+- [ ] 删除团队、工作区团队标识（图标/颜色）
+
+---
+
+## ⚠️ 已知问题：智能体全部连不上（待诊断，优先级高）
+
+**现象**：任何对话发消息即报
+```
+ACP protocol error: Internal error: Not Found: 404 page not found: { "errorName": "APIError", "service": "session" }
+```
+（另见：claude 报 `422 model not found: claude-opus-4-8`）
+
+**已排除**：
+- ✅ veryagent ↔ agent 的 ACP 协议层兼容（`session/prompt` 方法正确；`turn/prompt` 是旧名）
+- ✅ claude-agent-acp 0.55.0、opencode `acp` 的 initialize / session/new 握手正常
+- ✅ claude / opencode CLI 均可用（claude 2.1.220 / opencode 1.18.4）
+
+**嫌疑 / 下一步**：
+- ❓ `404 service: session` 来自运行时某内部环节 —— **读 `veryagent-run.log`**（已用日志模式启动：`cmd /c "veryagent.exe > veryagent-run.log 2>&1"`）
+- ❓ veryagent-mcp sidecar 注入（session/new.mcpServers）是否失败
+- ❓ 模型供应商 `AxonHub`(10.10.100.10:18080) 非标准 API（`/models` 返回 HTML），模型映射 `claude-opus-4-8` 不存在 → 422
+- ⚠️ `~/.claude/settings.json` 被 Orca 注入 hooks，可能干扰
+- ⚠️ 绑定了模型供应商时，provider 模型字段权威覆盖用户 env（`acp_update_agent_env_core`），"保存不了模型变量"是此逻辑所致（取消绑定即可恢复用户控制）
 
 ---
 

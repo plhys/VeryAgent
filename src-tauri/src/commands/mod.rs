@@ -43,3 +43,4 @@ pub mod image_proxy;
 pub mod ppt_generation;
 #[cfg(feature = "tauri-runtime")]
 pub mod summary;
+pub mod team;

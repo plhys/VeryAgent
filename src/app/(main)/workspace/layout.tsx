@@ -31,6 +31,8 @@ import { SessionStatsProvider } from "@/contexts/session-stats-context"
 import { SidebarProvider, useSidebarContext } from "@/contexts/sidebar-context"
 import { SearchDialogProvider } from "@/contexts/search-dialog-context"
 import { AutomationsViewProvider } from "@/contexts/automations-view-context"
+import { TeamProvider } from "@/contexts/team-context"
+import { TeamSidePanel } from "@/components/team/team-side-panel"
 import {
   WorkbenchRouteProvider,
   useWorkbenchRoute,
@@ -251,7 +253,13 @@ function WorkspaceContent({ children }: { children: React.ReactNode }) {
               {/* TabBar 已移除：会话标签页与左侧侧边栏会话列表功能重复。
                   平铺显示功能保留在侧边栏会话卡片右键菜单中。 */}
               <div className="relative flex-1 min-h-0 overflow-hidden">
-                {children}
+                <div className="flex h-full min-h-0">
+                  <div className="min-w-0 flex-1">{children}</div>
+                  {/* Team member strip — appears when the active conversation
+                      is a team's leader chat (TeamSidePanel renders null
+                      otherwise). */}
+                  <TeamSidePanel />
+                </div>
               </div>
             </section>
           </ResizablePanel>
@@ -323,7 +331,11 @@ function MobileWorkspaceContent({ children }: { children: React.ReactNode }) {
             {/* TabBar 已移除：会话标签页与左侧侧边栏会话列表功能重复。
                 平铺显示功能保留在侧边栏会话卡片右键菜单中。 */}
             <div className="relative flex-1 min-h-0 overflow-hidden">
-              {children}
+              <div className="flex h-full min-h-0">
+                <div className="min-w-0 flex-1">{children}</div>
+                {/* Team member strip — same mount as the desktop shell. */}
+                <TeamSidePanel />
+              </div>
             </div>
           </section>
         ) : (
@@ -899,7 +911,8 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
                             <TerminalProvider>
                               <SearchDialogProvider>
                                 <AutomationsViewProvider>
-                                  <WorkbenchRouteProvider>
+                                  <TeamProvider>
+                                    <WorkbenchRouteProvider>
                                     <WorkbenchRouteConversationSync />
                                     {/* Inside WorkbenchRouteProvider: the
                                           listener calls openConversations() to
@@ -909,6 +922,7 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
                                       {children}
                                     </FolderLayoutShell>
                                   </WorkbenchRouteProvider>
+                                  </TeamProvider>
                                 </AutomationsViewProvider>
                               </SearchDialogProvider>
                             </TerminalProvider>

@@ -1088,6 +1088,72 @@ export interface AutomationDraft {
   config: AutomationConfig
 }
 
+// ─── Teams ───────────────────────────────────────────────────────────────
+// Mirrors src-tauri/src/models/team.rs. Role ids: leader/dev/test/doc/review.
+
+export type TeamSlotStatus = "idle" | "working" | "stuck" | "error"
+export type TeamTaskStatus = "pending" | "in_progress" | "completed" | "failed"
+export type TeamRole = "leader" | "dev" | "test" | "doc" | "review"
+
+/** Team list row — sidebar/team-list needs name + leader + member count. */
+export interface TeamSummary {
+  id: string
+  name: string
+  leader_slot_id: string
+  workspace: string
+  leader_conversation_id: number | null
+  member_count: number
+  created_at: string
+}
+
+export interface TeamSlot {
+  id: string
+  team_id: string
+  agent_type: AgentType
+  roles: string[]
+  display_name: string
+  status: TeamSlotStatus
+  created_at: string
+}
+
+export interface TeamTask {
+  id: string
+  team_id: string
+  subject: string
+  description: string | null
+  status: TeamTaskStatus
+  owner_slot_id: string
+  result: string | null
+  conversation_id: number | null
+  created_at: string
+}
+
+/** Full team detail: the team row plus its slots and tasks. */
+export interface Team {
+  id: string
+  name: string
+  leader_slot_id: string
+  workspace: string
+  leader_conversation_id: number | null
+  slots: TeamSlot[]
+  tasks: TeamTask[]
+  created_at: string
+}
+
+/** One member slot in a create-team payload. */
+export interface TeamSlotDraft {
+  agent_type: AgentType
+  display_name: string
+  roles: string[]
+}
+
+/** Create-team payload. The leader is the slot whose roles contain "leader". */
+export interface TeamDraft {
+  name: string
+  workspace: string
+  slots: TeamSlotDraft[]
+}
+
 export interface PlanEntryInfo {
   content: string
   priority: string
