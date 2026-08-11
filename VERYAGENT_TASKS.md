@@ -38,7 +38,7 @@
 
 ### 🔴 发版前必须完成
 
-- [ ] 手动验收矩阵（Claude / Pi / OpenCode / CodeBuddy 原生+A计划；Codex 告警）
+- [x] 手动验收矩阵（Claude / Pi / OpenCode / CodeBuddy 原生+A计划；Codex 告警）— 2026-08-11 验证完毕，所有智能体 OK
 - [ ] 正式包构建与冒烟测试
 - [ ] AI 总结后端对接（当前只有提取式摘要）
 - [ ] OpenClaw 模型鉴权流程完善
