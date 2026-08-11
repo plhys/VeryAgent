@@ -2182,7 +2182,7 @@
           "turnFailedMaxTokens": "{agent} 已达到本轮回复的最大 Token 限制。",
           "turnFailedMaxTurnRequests": "{agent} 已达到本轮回复允许的最大请求次数。",
           "turnFailedUnknown": "{agent} 以未知的停止原因结束了本轮回复。",
-          "turnFailedEmpty": "{agent} 本轮没有产生任何回复就结束了，请检查代理配置。"
+          "turnFailedEmpty": "{agent} 本轮没有产生任何回复就结束了。常见原因：模型鉴权失败（请检查模型供应商的 API Key 与 OpenClaw 网关配置）；确认鉴权正常后再排查代理/网络。"
         },
         "unableReadAgentConfig": "无法读取 Agent 配置：{message}",
         "connectFailedTitle": "{agent} 连接失败",

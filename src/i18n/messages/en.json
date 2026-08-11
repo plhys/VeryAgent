@@ -2182,7 +2182,7 @@
           "turnFailedMaxTokens": "{agent} reached the maximum token limit for this turn.",
           "turnFailedMaxTurnRequests": "{agent} reached the maximum number of allowed requests for this turn.",
           "turnFailedUnknown": "{agent} ended the turn with an unrecognized stop reason.",
-          "turnFailedEmpty": "{agent} ended the turn without producing any response. Please check the agent's configuration."
+          "turnFailedEmpty": "{agent} ended the turn without producing any response. Common causes: model authentication failure (check the model provider API key and the OpenClaw gateway configuration); if auth is fine, then check proxy/network."
         },
         "unableReadAgentConfig": "Unable to read Agent config: {message}",
         "connectFailedTitle": "{agent} connection failed",
