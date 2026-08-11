@@ -64,8 +64,23 @@ echo       Rust 编译完成 ✓
 echo.
 
 :: ── 第四步：打包安装程序 ──────────────────────
-echo [5/5] 打包安装程序 ...
-call pnpm tauri build --no-build
+:: 自动加载 updater 签名私钥（发版机路径，见 docs/updater-signing-keys.zh-CN.md）
+:: 密钥存在时设置环境变量，让 tauri build 能生成签名 + .sig；不存在则提示并继续
+echo [5/5] 打包安装程序 (NSIS) ...
+set "KEYS_DIR=%USERPROFILE%\.veryagent\keys"
+if exist "%KEYS_DIR%\veryagent-updater.key" (
+    if exist "%KEYS_DIR%\veryagent-updater.password" (
+        echo       已找到签名密钥，将对安装包签名
+        set /p TAURI_SIGNING_PRIVATE_KEY=<"%KEYS_DIR%\veryagent-updater.key"
+        set /p TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<"%KEYS_DIR%\veryagent-updater.password"
+    ) else (
+        echo       [提示] 找到私钥但缺密码文件 veryagent-updater.password，将不签名
+    )
+) else (
+    echo       [提示] 未找到签名私钥（%KEYS_DIR%\veryagent-updater.key），
+    echo             将按无私钥打包；正式发版需配好密钥（见 docs/updater-signing-keys.zh-CN.md）
+)
+call pnpm tauri build --bundles nsis
 if %ERRORLEVEL% neq 0 (
     echo.
     echo [警告] 打包失败，但 exe 已经编译好了，可以直接运行

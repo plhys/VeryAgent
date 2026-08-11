@@ -55,6 +55,8 @@ set /p TAURI_SIGNING_PRIVATE_KEY_PASSWORD=<%USERPROFILE%\.veryagent\keys\veryage
 
 **2026-07-19：** 已换新钥（minisign id `5282E2A963FB139A`），自 **v0.9.5** 起生效。≤0.9.4 用户不能在线更到 0.9.5，须下载安装包重装。
 
+**2026-08-11：** 前正式钥私钥丢失，重新生成密钥对并换钥（minisign id `48E87990D9E79ED5`），自 **v1.0.0** 起生效（当前仅开发者自用）。≤v0.9.9.1 用户不能在线更到 1.0.0，须下载安装包重装。
+
 ## 双仓发布步骤
 
 1. 打 tag / 构建 release 产物（桌面 installer + `.sig` + `latest.json`，以及需要的 server 包）

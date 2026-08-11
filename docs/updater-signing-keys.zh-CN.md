@@ -31,10 +31,12 @@
 当前主任机示例：
 
 ```text
-C:\Users\EVAN\.veryagent\keys\veryagent-updater.key
-C:\Users\EVAN\.veryagent\keys\veryagent-updater.key.pub
-C:\Users\EVAN\.veryagent\keys\veryagent-updater.password
+C:\Users\Administrator\.veryagent\keys\veryagent-updater.key
+C:\Users\Administrator\.veryagent\keys\veryagent-updater.key.pub
+C:\Users\Administrator\.veryagent\keys\veryagent-updater.password
 ```
+
+> 旧钥文件会保留 `.old-backup` 后缀备份，确认不再需要后可删除。
 
 **备份建议（二选一或都做）：**
 
@@ -54,13 +56,13 @@ C:\Users\EVAN\.veryagent\keys\veryagent-updater.password
 
 内容 = `veryagent-updater.key.pub` 整文件去掉换行后的 **一行 base64**。
 
-### 当前正式公钥（2026-07-19 换新钥）
+### 当前正式公钥（2026-08-11 换新钥）
 
-- minisign 注释 id：`5282E2A963FB139A`
-- 写入版本起：**v0.9.5**（含启动闪窗修复 + 出图网关）
+- minisign 注释 id：`48E87990D9E79ED5`
+- 写入版本起：**v1.0.0**（正式 1.0 发版，同步统一版本号）
 
 ```text
-dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUyODJFMkE5NjNGQjEzOUEKUldTYUUvdGpxZUtDVWs0UVpFVVVZdHUva0UvL1RPbHVHYndiV1RGNzhOcFlpL2FGcXQ0UVpuczYK
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4RTg3OTkwRDlFNzlFRDUKUldUVm51ZlprSG5vU0MvS1N2QzJzYldpWjM3WFhGcjhMYTFCaUt4V2JUSDdqdDlVbG5pZTU2N0YK
 ```
 
 ### 已作废的旧公钥（勿再使用）
@@ -68,9 +70,10 @@ dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUyODJFMkE5NjNGQjEzOUEKUldT
 | 时期 | minisign id | 说明 |
 | --- | --- | --- |
 | ≤ v0.9.4 | `A6C790B84D04DA0D` | 旧正式钥；私钥已不可用，**无法再签** |
+| v0.9.5 ~ v0.9.9.1 | `5282E2A963FB139A` | 前正式钥；**私钥已丢失**（2026-08-11 换新钥），无法再签 |
 | 本机误生成 | `40469ACB1BE6698F` | 仅 `C:\Users\EVAN\.tauri\veryagent.key`，**从未**写入正式客户端 |
 
-**换钥后果：** 仍在跑 0.9.3 / 0.9.4 的用户**不能**再靠「检查更新」升到新钥版本，必须**手动下载安装包重装**。从 **0.9.5 起**装过的用户，之后可用同一私钥在线更新。
+**换钥后果：** 仍在跑 ≤v0.9.9.1 的用户**不能**再靠「检查更新」升到 1.0.0，必须**手动下载安装包重装**。从 **1.0.0 起**装过的用户，之后可用同一私钥在线更新（当前仅开发者自用，无此负担）。
 
 ---
 

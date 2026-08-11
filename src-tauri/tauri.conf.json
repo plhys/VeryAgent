@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "veryAgent",
-  "version": "0.9.9",
+  "version": "1.0.0",
   "identifier": "app.veryagent",
   "build": {
     "beforeDevCommand": "pnpm tauri:before-dev",
@@ -19,7 +19,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -43,7 +43,7 @@
     "updater": {
       "active": true,
       "dangerousInsecureTransportProtocol": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUyODJFMkE5NjNGQjEzOUEKUldTYUUvdGpxZUtDVWs0UVpFVVVZdHUva0UvL1RPbHVHYndiV1RGNzhOcFlpL2FGcXQ0UVpuczYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4RTg3OTkwRDlFNzlFRDUKUldUVm51ZlprSG5vU0MvS1N2QzJzYldpWjM3WFhGcjhMYTFCaUt4V2JUSDdqdDlVbG5pZTU2N0YK",
       "endpoints": [
         "https://github.com/plhys/VeryAgent/releases/latest/download/latest.json"
       ],

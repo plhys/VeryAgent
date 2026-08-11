@@ -3,11 +3,17 @@
 本仓库的版本更新说明。每次有实质功能合入 `main` 时更新本文件。  
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **0.9.9.1**）。
+当前产品版本号见：`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`（现为 **1.0.0**）。
 
 ---
 
 ## [Unreleased]
+
+（暂无未发布改动）
+
+---
+
+## [1.0.0] — 2026-08-11
 
 ### 重构
 
@@ -144,6 +150,17 @@
 ### 其他
 
 - **移除云桥（yunqiao）临时脚本**：删除已跟踪的 `find_yunqiao.py` 及工作区未跟踪的 `start-ez.py` / `start-gui.py` / `start-gui2.py`（云桥组网脚本，不属于 VeryAgent；仅本会话提交，不含工作区其他改动）。
+
+### 构建
+
+- **版本号统一为 1.0.0**：`package.json` / `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` 四文件版本同步（此前 package.json 0.9.9.1 与其余 0.9.9 不一致）。
+- **打包目标收敛为 NSIS**：`tauri.conf.json` 的 `bundle.targets` 从 `"all"` 改为 `["nsis"]`。修复 MSI(WiX) 打包失败导致构建卡死的问题（MSI 链路历史遗留：WiX UI 扩展缺失 + sidecar 组件 ICE30，且项目发版始终只用 NSIS）。
+- **`build-release.bat` 修复**：`pnpm tauri build --no-build` 参数在 tauri CLI 2.11 已移除（导致打包步骤必失败），改为 `pnpm tauri build --bundles nsis`；新增自动加载签名私钥逻辑（`%USERPROFILE%\.veryagent\keys\`，存在即签名）。
+- **updater 换新签名密钥**：旧正式钥私钥丢失，重新生成密钥对（minisign id `48E87990D9E79ED5`），更新 `tauri.conf.json` / `verify.rs` 公钥并同步文档；自 v1.0.0 起生效（当前仅开发者自用）。
+
+### 安全
+
+- **脱敏核查**：全仓库 + git 历史扫描确认无真实凭据/私钥残留（云桥脚本网络密钥已随历史重写清除）；确认 `.gitignore` 忽略 `.env` / `*.key`；签名密钥文档更新为当前主机路径。
 
 ---
 
