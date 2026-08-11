@@ -14,7 +14,6 @@ import {
   FolderSearch,
   GitFork,
   MessageSquarePlus,
-  MessageSquareText,
   Paperclip,
   Plus,
   Puzzle,
@@ -44,10 +43,6 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { ImagePreviewDialog } from "@/components/ui/image-preview-dialog"
@@ -94,7 +89,6 @@ import type {
   PromptCapabilitiesInfo,
   PromptDraft,
   PromptInputBlock,
-  PlanEntry,
   SessionConfigOptionInfo,
   SessionModeInfo,
 } from "@/lib/types"
@@ -3707,7 +3701,7 @@ export function MessageInput({
               <TextSelect className="size-4" />
               {t("selectAll")}
             </ContextMenuItem>
-            </ContextMenuContent>
+          </ContextMenuContent>
         </ContextMenu>
         {hasFolderBranchPicker && (
           // `pl-2` mirrors the action bar's `px-2` so this row lines up with the

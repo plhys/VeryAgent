@@ -1672,6 +1672,10 @@ export interface ExpertMetadata {
   display_name: Record<string, string>
   description: Record<string, string>
   bundled_hash: string
+  /** Optional: primary workflow requires an external API key (science skills). */
+  needs_key?: boolean
+  /** Optional: ships scripts that may need a Python/uv environment. */
+  needs_env?: boolean
 }
 
 export interface ExpertListItem {
@@ -1713,9 +1717,7 @@ export interface ScienceListItem {
   central_path: string
 }
 
-export type ExpertLinkState =
-  | "not_linked"
-  | "linked"
+export type ExpertLinkState = "not_linked" | "linked"
 
 export interface ExpertInstallStatus {
   expertId: string

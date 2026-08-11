@@ -1,13 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import {
-  Loader2,
-  MonitorCog,
-  Pin,
-  Power,
-  RefreshCw,
-} from "lucide-react"
+import { Loader2, MonitorCog, Pin, Power, RefreshCw } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 

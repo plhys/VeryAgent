@@ -104,6 +104,8 @@ export function SkillsBody({ source, onRegisterRefresh }: SkillsBodyProps) {
 
   const translatedCategory = useCallback(
     (category: string): string => {
+      // Dynamic next-intl key; the template string can't be typed as MessageKeys.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return t(`categories.${category}` as any) || category
     },
     [t]
@@ -125,7 +127,7 @@ export function SkillsBody({ source, onRegisterRefresh }: SkillsBodyProps) {
 
   const matrixSkills = useMemo<MatrixSkill[]>(
     () =>
-      skills.map((s: any) => {
+      skills.map((s: ExpertListItem) => {
         const badge: MatrixSkill["badge"] = s.user_modified
           ? { label: t("badges.userModified"), tone: "amber" }
           : !isExperts && s.metadata?.needs_key
@@ -204,10 +206,7 @@ export function SkillsBody({ source, onRegisterRefresh }: SkillsBodyProps) {
               variant="outline"
               onClick={() => {
                 refresh().catch((err) => {
-                  console.error(
-                    `[SkillsBody/${source}] refresh failed:`,
-                    err
-                  )
+                  console.error(`[SkillsBody/${source}] refresh failed:`, err)
                 })
               }}
             >
