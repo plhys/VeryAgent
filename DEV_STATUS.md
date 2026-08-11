@@ -1,6 +1,22 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-08-08
+> 更新日期：2026-08-11
+
+---
+
+## 近期（2026-08-11）
+
+### 发版
+
+- [x] **v1.0.0 正式发布**：GitHub Release（安装包 + `.sig` + `latest.json`）；版本号四文件统一 1.0.0；打包目标收敛为 NSIS（修复 MSI(WiX) 打包失败卡死构建）；`build-release.bat` 修复过时 `--no-build` 参数并自动加载签名密钥
+- [x] **updater 换新签名密钥**：旧正式钥私钥丢失，重新生成密钥对（minisign id `48E87990D9E79ED5`），更新 `tauri.conf.json` / `verify.rs` 公钥并同步文档（当前仅开发者自用）
+- [x] **脱敏核查**：全仓库 + git 历史扫描无凭据/私钥残留（云桥脚本密钥已随历史重写清除）
+
+### 复核确认（此前标记待跟进，实为已完成）
+
+- [x] **Hermes 开机自启（常驻智能体自动连接）**：`acp/resident.rs` `bootstrap_resident_agents` 应用启动即拉起 Hermes/OpenClaw（`registry.rs` resident: true），环境变量 `VERYAGENT_RESIDENT_AGENTS=0` 可关（无 UI 开关，保持现状）
+- [x] **OpenClaw 模型鉴权**：`write_openclaw_managed_provider`（model provider 写入 openclaw.json）+ gateway auth token
+- [x] **技能 & 连接器重构 Phase 1+2**：后端合并 + 前端统一能力中心（`skills-and-tools-page.tsx`）
 
 ---
 
@@ -48,7 +64,7 @@
 
 - [x] ~~Hermes 权限切换真实生效~~（后端拦截 `set_config_option` + 写入 `HERMES_PERMISSION_MODE` 到 `~/.hermes/.env`，session 重启生效）
 - [ ] 命名统一（跨智能体的配置选项名称）
-- [ ] Hermes 开机自启（常驻智能体自动连接）
+- [x] ~~Hermes 开机自启（常驻智能体自动连接）~~（`acp/resident.rs` 已实现，见 2026-08-11 复核）
 - [ ] 多智能体协同功能完善（`delegate_to_agent` 工具暴露与使用）
 
 ---
@@ -170,7 +186,7 @@
 ### 发版前
 
 - [x] 手动验收矩阵（Claude/Pi/OpenCode/CodeBuddy 原生+A计划；Codex 告警；项目侧栏；新库默认关智能体）— 2026-08-11 验证完毕，所有智能体 OK
-- [ ] 正式包构建与安装/升级冒烟
+- [x] 正式包构建与安装/升级冒烟 — v1.0.0 构建 + 运行冒烟通过（2026-08-11）
 - [x] 提交并推送工作区改动（当前会话仅含 9 个测试文件修复，无未跟踪文件）
 
 ### 对话总结
@@ -179,8 +195,8 @@
 
 ### OpenClaw 模型鉴权
 
-- [ ] Gateway 可用后，真实对话仍需配置模型供应商 / API Key
-- [ ] 空回复「请检查代理配置」多为模型鉴权，不是 HTTP 代理
+- [x] ~~Gateway 可用后，真实对话仍需配置模型供应商 / API Key~~ — `write_openclaw_managed_provider` 已实现（模型供应商写入 openclaw.json），gateway auth token 支持（2026-08-11 复核）
+- [ ] 空回复「请检查代理配置」多为模型鉴权，不是 HTTP 代理（如需可加更明确的错误提示）
 
 ### 通用模式会话设置密度
 
