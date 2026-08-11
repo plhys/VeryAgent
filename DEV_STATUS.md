@@ -19,6 +19,16 @@
 - [x] **OpenClaw 模型鉴权**：`write_openclaw_managed_provider`（model provider 写入 openclaw.json）+ gateway auth token
 - [x] **技能 & 连接器重构 Phase 1+2**：后端合并 + 前端统一能力中心（`skills-and-tools-page.tsx`）
 
+### 代码质量
+
+- [x] **ESLint errors 清零**：`(s: any)` → `ExpertListItem`（补 `ExpertMetadata.needs_key/needs_env` 可选字段）、`selectValueLabel` 加 `kind.type` 收窄（修 pre-existing 类型缺陷）、全量 prettier 规范化（32 文件）
+- [x] **空回复提示优化**：`turnFailedEmpty` 文案改为鉴权优先引导（模型供应商 API Key / OpenClaw 网关），zh/en 同步
+
+### 已知技术债（未处理）
+
+- eslint 63 条 unused-vars warnings（多为重构遗留 handle* 回调）
+- 81 处 pre-existing TS 错误（被 `next.config` `ignoreBuildErrors` 掩盖）：含 `message-input.tsx` 半成品 quickMessages（`loadQuickMessages` 引用未声明 state、`handleQuickMessageSelect` unused）、`conversation-detail-panel.tsx` 4 个 unused 等
+
 ---
 
 ## 近期（2026-08-08）
@@ -64,7 +74,7 @@
 ### 待跟进
 
 - [x] ~~Hermes 权限切换真实生效~~（后端拦截 `set_config_option` + 写入 `HERMES_PERMISSION_MODE` 到 `~/.hermes/.env`，session 重启生效）
-- [ ] 命名统一（跨智能体的配置选项名称）
+- [x] ~~命名统一（跨智能体的配置选项名称）~~（`lib/config-option-labels.ts` 映射表已覆盖全部智能体，6 个组件消费，2026-08-11 复核确认）
 - [x] ~~Hermes 开机自启（常驻智能体自动连接）~~（`acp/resident.rs` 已实现，见 2026-08-11 复核）
 - [ ] 多智能体协同功能完善（`delegate_to_agent` 工具暴露与使用）
 
@@ -197,7 +207,7 @@
 ### OpenClaw 模型鉴权
 
 - [x] ~~Gateway 可用后，真实对话仍需配置模型供应商 / API Key~~ — `write_openclaw_managed_provider` 已实现（模型供应商写入 openclaw.json），gateway auth token 支持（2026-08-11 复核）
-- [ ] 空回复「请检查代理配置」多为模型鉴权，不是 HTTP 代理（如需可加更明确的错误提示）
+- [x] ~~空回复「请检查代理配置」多为模型鉴权，不是 HTTP 代理~~ — 已优化 `turnFailedEmpty` 文案为鉴权优先引导（2026-08-11）
 
 ### 通用模式会话设置密度
 

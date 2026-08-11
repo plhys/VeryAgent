@@ -13,9 +13,17 @@
 
 - **清理 message-input 死代码**：删除 slash 菜单遗留的 3 个未使用变量/回调及整组未使用的 dropdown 状态（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect` / `slashDropdownOpen` 组）。
 
+### 修复
+
+- **空回复错误提示优化**：`turnFailedEmpty` 文案从「请检查代理配置」改为鉴权优先引导（模型供应商 API Key / OpenClaw 网关配置），zh-CN / en 同步。
+
+### 变更
+
+- **ESLint errors 清零**：`skills-tab` 的 `(s: any)` → `ExpertListItem`（补 `ExpertMetadata` 可选字段）、`selectValueLabel` 加 `kind.type` 类型收窄，并全量 prettier 格式规范化。
+
 ### 文档
 
-- **状态文档复核同步**：VERYAGENT_TASKS / DEV_STATUS 确认 AI 总结后端、Hermes 常驻自启、OpenClaw 鉴权、技能重构 Phase 1+2 均已完成（此前标记待跟进已过时）。
+- **状态文档复核同步**：VERYAGENT_TASKS / DEV_STATUS 确认 AI 总结后端、Hermes 常驻自启、OpenClaw 鉴权、技能重构 Phase 1+2、配置命名统一均已完成（此前标记待跟进已过时）。
 
 ---
 
