@@ -40,7 +40,7 @@
 
 - [x] 手动验收矩阵（Claude / Pi / OpenCode / CodeBuddy 原生+A计划；Codex 告警）— 2026-08-11 验证完毕，所有智能体 OK
 - [x] 正式包构建与冒烟测试 — v1.0.0 构建通过（前端/sidecar/Rust release/NSIS 打包/运行冒烟）
-- [ ] AI 总结后端对接（当前只有提取式摘要）
+- [x] AI 总结后端对接 — `summary.rs` `generate_conversation_summary`（LLM 调用 + 存库）+ 前端 `sidebar-conversation-card` 已接入（394dc05 引入）
 - [x] OpenClaw 模型鉴权流程完善 — `write_openclaw_managed_provider` + gateway auth 已实现
 
 > ✅ **v1.0.0 已于 2026-08-11 正式发布**（GitHub Release + 新签名钥 48E87990D9E79ED5）。

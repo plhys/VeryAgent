@@ -14,6 +14,7 @@
 
 ### 复核确认（此前标记待跟进，实为已完成）
 
+- [x] **AI 总结后端对接**：`commands/summary.rs` `generate_conversation_summary`（读 turns → 匹配模型供应商 → 调 OpenAI 兼容 API → 存库）+ 前端 `sidebar-conversation-card.tsx` 已接入（缓存 + 失败回退时间范围）；提取式摘要已被 AI 总结取代
 - [x] **Hermes 开机自启（常驻智能体自动连接）**：`acp/resident.rs` `bootstrap_resident_agents` 应用启动即拉起 Hermes/OpenClaw（`registry.rs` resident: true），环境变量 `VERYAGENT_RESIDENT_AGENTS=0` 可关（无 UI 开关，保持现状）
 - [x] **OpenClaw 模型鉴权**：`write_openclaw_managed_provider`（model provider 写入 openclaw.json）+ gateway auth token
 - [x] **技能 & 连接器重构 Phase 1+2**：后端合并 + 前端统一能力中心（`skills-and-tools-page.tsx`）
@@ -86,7 +87,7 @@
 
 ### 待跟进
 
-- [ ] `message-input.tsx` slash 菜单遗留 3 个未使用变量（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect`），等 slash 菜单重构收尾时清理
+- [ ] `message-input.tsx` slash 菜单遗留未使用变量已清理（2026-08-11）；其余 lint 技术债：`ContextMenuSubTrigger` / `PlanEntry` unused imports、`handleQuickMessageSelect` unused（8 处 pre-existing，见技术债）
 - [ ] 模型 chip 的模型名为模型 ID（如 gpt-4o），保持英文不翻译
 
 ---

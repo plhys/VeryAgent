@@ -1109,38 +1109,6 @@ export function MessageInput({
     }
     return cmds
   }, [availableCommands, availableSkills])
-  const [slashDropdownOpen, setSlashDropdownOpen] = useState(false)
-  const [slashDropdownSearch, setSlashDropdownSearch] = useState("")
-  const slashDropdownInputRef = useRef<HTMLInputElement>(null)
-  const filteredSlashDropdownCommands = useMemo(() => {
-    const q = slashDropdownSearch.toLowerCase().trim()
-    if (!q) return slashCommands
-    const nameMatches: typeof slashCommands = []
-    const descOnlyMatches: typeof slashCommands = []
-    for (const cmd of slashCommands) {
-      if (cmd.name.toLowerCase().includes(q)) {
-        nameMatches.push(cmd)
-      } else if (cmd.description?.toLowerCase().includes(q)) {
-        descOnlyMatches.push(cmd)
-      }
-    }
-    return [...nameMatches, ...descOnlyMatches]
-  }, [slashCommands, slashDropdownSearch])
-  const handleSlashDropdownOpenChange = useCallback((open: boolean) => {
-    setSlashDropdownOpen(open)
-    if (!open) setSlashDropdownSearch("")
-  }, [])
-  // Radix's MenuSubContent hardcodes its own onOpenAutoFocus that overwrites
-  // any prop we pass in (see @radix-ui/react-menu MenuSubContent). To put the
-  // search input in focus when the slash submenu opens, defer focus to a
-  // microtask after Radix finishes its own focus dance.
-  useEffect(() => {
-    if (!slashDropdownOpen) return
-    const id = requestAnimationFrame(() => {
-      slashDropdownInputRef.current?.focus()
-    })
-    return () => cancelAnimationFrame(id)
-  }, [slashDropdownOpen])
   const filteredSlashCommands = useMemo(() => {
     if (!slashMenuOpen || slashCommands.length === 0) return []
     if (slashTriggerChar !== "/") return []
@@ -1933,28 +1901,6 @@ export function MessageInput({
     },
     [replaceTriggerWithReference, skillPrefix]
   )
-
-  // The "+" → Slash commands picker inserts a command badge at the current caret
-  // (no trigger token to replace), adding a leading space if the caret isn't at
-  // a boundary, and a trailing space after.
-  const handleSlashPopoverSelect = useCallback((cmd: AvailableCommandInfo) => {
-    const editor = editorRef.current?.getEditor()
-    if (!editor) return
-    const { $from } = editor.state.selection
-    const charBefore =
-      $from.parentOffset > 0
-        ? $from.parent.textBetween(
-            $from.parentOffset - 1,
-            $from.parentOffset,
-            undefined,
-            " "
-          )
-        : ""
-    const needsSpace = charBefore !== "" && !/\s/.test(charBefore)
-    let chain = editor.chain().focus()
-    if (needsSpace) chain = chain.insertContent(" ")
-    chain.insertReference(commandToReference(cmd)).insertContent(" ").run()
-  }, [])
 
   // ── "+" menu skill shortcuts (experts / daily office) ──
   //

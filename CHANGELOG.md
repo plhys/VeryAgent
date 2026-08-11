@@ -9,7 +9,13 @@
 
 ## [Unreleased]
 
-（暂无未发布改动）
+### 重构
+
+- **清理 message-input 死代码**：删除 slash 菜单遗留的 3 个未使用变量/回调及整组未使用的 dropdown 状态（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect` / `slashDropdownOpen` 组）。
+
+### 文档
+
+- **状态文档复核同步**：VERYAGENT_TASKS / DEV_STATUS 确认 AI 总结后端、Hermes 常驻自启、OpenClaw 鉴权、技能重构 Phase 1+2 均已完成（此前标记待跟进已过时）。
 
 ---
 
