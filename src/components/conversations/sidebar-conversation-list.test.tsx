@@ -77,12 +77,22 @@ const stableTerminal = vi.hoisted(() => ({
   createTerminalInDirectory: () => {},
 }))
 
-vi.mock("@/components/agent-icon", () => ({
-  AgentIcon: () => {
+vi.mock("./sidebar-conversation-card", async () => {
+  const { memo, createElement } = await import("react")
+  const MockCard = memo(function MockCard({
+    conversation,
+  }: {
+    conversation: { title?: string; id: number }
+  }) {
     probes.card++
-    return null
-  },
-}))
+    return createElement(
+      "div",
+      { "data-testid": `conv-card-${conversation.id}` },
+      conversation.title
+    )
+  })
+  return { SidebarConversationCard: MockCard }
+})
 
 // Controllable virtua geometry for the sticky-overlay tests. All rows are 32px
 // (h-[2rem]), so offsets are index*32 and findItemIndex is floor(offset/32).
