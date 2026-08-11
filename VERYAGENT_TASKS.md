@@ -75,37 +75,9 @@ Leader 拆解任务、派活、实时监控/汇报，用户只跟 Leader 对话�
 
 ---
 
-## 待定：宠物系统去重（独立窗口 vs 内嵌）
+## 待定：宠物系统去重
 
-**问题**：现在有两套宠物呈现 —— 界面内嵌宠物（`PetFloating`，工作区右下角）和
-独立桌宠窗口（`/pet` 路由，可"召唤宠物窗口"）。用户希望**去掉独立的宠物系统**，
-只保留界面内嵌的。
-
-**现状**（2026-08-10 排查）：
-- 内嵌宠物 `PetFloating`（`src/components/layout/pet-floating.tsx`）复用了 `/app/pet/_components`
-  下的 `PetSprite` / `PetBadge` / `usePetState` 等组件
-- `PetBadge` 点击会 `togglePetPanel()` → 打开 **pet-panel 独立窗口**（会话面板/处理权限）
-- 独立窗口一套：`/pet`（桌宠）+ `/pet-bubble`（气泡）+ `/pet-panel`（会话面板），
-  后端在 `src-tauri/src/commands/windows.rs`（`open_pet_window` / `close_pet_window` /
-  `pet_window_record_position` / `reposition_pet_bubble` / hover watcher / context menu）
-- 内嵌宠物和独立窗口**共用**渲染组件与会话面板，不是两个独立系统
-
-**关键决策点（待用户确认）**：
-- A. **彻底删干净**：连 pet-panel 会话面板也删，内嵌宠物只保留纯展示
-  （看状态，点不了详情）
-- B. **只删"召唤宠物窗口"**：保留 pet-panel 会话面板（从内嵌宠物角标打开），
-  只删 `/pet` 独立桌宠窗口 + summon 按钮
-
-**删除范围（若执行）**：
-- 前端：`/pet` 路由、`/pet-bubble` 路由、`pet-manager-section` 的 summon 按钮、
-  `lib/pet/api.ts` 的 `openPetWindow`/`closePetWindow`/`pet_window_record_position`
-- 后端：`windows.rs` 的 `open_pet_window`/`close_pet_window`/`pet_window_record_position`/
-  hover watcher/context menu + `tauri_setup.rs` 注册
-- 注意保留内嵌宠物依赖的：`PetSprite` / `PetBadge`（去掉 togglePetPanel）/
-  `usePetState` / `usePetSessions` / `session-display`
-
----
-
+**已执行：** 保留内嵌宠物（PetFloating），删除独立桌宠系统（/pet 路由、/pet-bubble 路由、召唤按钮、后端 open_pet_window/close_pet_window/pet_window_record_position/hover watcher/context menu/bubble）。pet-panel 会话面板保留（从内嵌宠物角标打开）。
 ## 可选优化（低优先级，不影响功能）
 
 ### 大型文件拆分

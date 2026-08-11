@@ -772,36 +772,6 @@ use crate::commands::git;
                 // Disabled: standalone pet window removed in favor of embedded PetFloating
                 // See src/components/layout/pet-floating.tsx for the embedded pet implementation
 
-                // Listen for bubble window visibility requests from the
-                // pet-bubble frontend. The bubble page emits
-                // `pet://set-bubble-visible` to show/hide itself based on
-                // whether it has content to display. Positioning is delegated
-                // to `reposition_pet_bubble` which shares the same anchoring
-                // logic used by the `Moved` event handler, so the bubble stays
-                // attached regardless of how it becomes visible.
-                {
-                    use tauri::Listener;
-                    let bubble_app = app.handle().clone();
-                    let _ = app.listen("pet://set-bubble-visible", move |event| {
-                        let visible = serde_json::from_str::<bool>(event.payload()).ok().unwrap_or(false);
-                        if let Some(bubble) = bubble_app.get_webview_window("pet-bubble") {
-                            if visible {
-                                let _ = bubble.show();
-                                windows::reposition_pet_bubble(&bubble_app);
-                            } else {
-                                let _ = bubble.hide();
-                            }
-                        }
-                    });
-
-                    // The bubble frontend resizes its window to match content height
-                    // and emits this event so Rust can re-anchor it to the pet.
-                    let resize_app = app.handle().clone();
-                    let _ = app.listen("pet://bubble-resized", move |_event| {
-                        windows::reposition_pet_bubble(&resize_app);
-                    });
-                }
-
                 // Listen for the frontend's "ready" signal. The main window
                 // is created as hidden to avoid a white flash while the page
                 // loads; this event makes it visible once the React shell
@@ -834,25 +804,6 @@ use crate::commands::git;
                     return;
                 }
 
-                // Dispatch native pet context-menu actions.
-                // "Quit" is handled entirely in Rust (same as tray quit).
-                // "Hide pet" is re-emitted as a webview event so the
-                // frontend can call the existing `closePetWindow` command,
-                // which persists `enabled = false` to the database.
-                if id.starts_with(windows::PET_MENU_ID_PREFIX) {
-                    match id.as_str() {
-                        windows::PET_MENU_ID_QUIT => app.exit(0),
-                        windows::PET_MENU_ID_HIDE => {
-                            use tauri::Emitter;
-                            let _ = app.emit_to(
-                                "pet",
-                                "pet://menu-action",
-                                serde_json::json!({ "type": "hide" }),
-                            );
-                        }
-                        _ => {}
-                    }
-                }
             })
             .on_window_event(|window, event| {
                 let label = window.label().to_string();
@@ -867,15 +818,6 @@ use crate::commands::git;
                     if let Some(state) = app.try_state::<windows::SettingsWindowState>() {
                         windows::restore_windows_after_settings(app, &state, &label);
                     }
-                }
-
-                // Reposition the pet-bubble when the pet window moves so the
-                // bubble follows the pet during drag (and any other position
-                // change). The `Moved` event fires after every `setPosition`
-                // call from the JS drag hook, so this hooks into the existing
-                // drag cycle without any frontend changes.
-                if label == "pet" && matches!(event, tauri::WindowEvent::Moved(_)) {
-                    windows::reposition_pet_bubble(window.app_handle());
                 }
 
                 if (label.starts_with("commit-") || label.starts_with("remote-commit-"))
@@ -1126,10 +1068,6 @@ use crate::commands::git;
                 remote_proxy_commands::remote_ws_subscribe,
                 remote_proxy_commands::remote_ws_unsubscribe,
                 remote_proxy_commands::remote_ws_send_text,
-                windows::open_pet_window,
-                windows::close_pet_window,
-                windows::pet_window_record_position,
-                windows::pet_show_context_menu,
                 windows::toggle_pet_panel,
                 windows::close_pet_panel,
                 windows::resize_pet_panel,

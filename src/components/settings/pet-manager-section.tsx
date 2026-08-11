@@ -36,10 +36,8 @@ import {
   readPetSpritesheet,
   setActivePet,
   deletePet,
-  openPetWindow,
   getPetSettings,
 } from "@/lib/pet/api"
-import { isDesktop } from "@/lib/transport"
 import type { PetSummary } from "@/lib/pet/types"
 import {
   createPetSpriteObjectUrl,
@@ -165,17 +163,6 @@ export function PetManagerSection() {
     setEditorOpen(true)
   }, [])
 
-  const handleSummon = useCallback(async () => {
-    if (!isDesktop()) return
-    try {
-      await openPetWindow()
-    } catch (err) {
-      toast.error(t("errors.summonFailed"), { description: toMessage(err) })
-    }
-  }, [t])
-
-  const summonDisabled = !isDesktop() || (!activeId && pets.length === 0)
-
   return (
     <Collapsible
       open={expanded}
@@ -211,19 +198,6 @@ export function PetManagerSection() {
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
-              {isDesktop() ? (
-                <Button
-                  type="button"
-                  variant="default"
-                  size="xs"
-                  onClick={handleSummon}
-                  disabled={summonDisabled}
-                  title={!activeId ? t("noPets") : undefined}
-                >
-                  <PawPrint className="mr-1 h-3.5 w-3.5" />
-                  {t("summon")}
-                </Button>
-              ) : null}
               <Button
                 type="button"
                 variant="outline"

@@ -129,24 +129,6 @@ export async function listActivePetSessions(): Promise<PetSessionsPayload> {
   return getTransport().call("pet_list_active_sessions")
 }
 
-// Tauri-only — these are noops in web mode (the standalone server cannot
-// open native windows on the user's machine). Callers should branch on
-// `isDesktop()` before invoking them.
-export async function openPetWindow(): Promise<void> {
-  return getTransport().call("open_pet_window")
-}
-
-export async function closePetWindow(): Promise<void> {
-  return getTransport().call("close_pet_window")
-}
-
-export async function recordPetWindowPosition(
-  x: number,
-  y: number
-): Promise<void> {
-  return getTransport().call("pet_window_record_position", { x, y })
-}
-
 // Toggle the session panel anchored next to the sprite (open if closed, close
 // if open). Tauri-only. The backend guards the toggle-vs-blur race so a tap
 // that dismissed the panel via click-away doesn't immediately reopen it.
@@ -179,23 +161,6 @@ export async function focusConversation(
     conversationId,
     agent,
   })
-}
-
-export interface PetMenuLabels {
-  quit: string
-  hidePet: string
-}
-
-/** Pop up the native right-click context menu. Tauri-only; in web mode the
- * pet route doesn't render a context menu at all (no window to manage).
- * Menu items: "Quit" (exit app, handled in Rust) and "Hide pet" (close
- * pet window, handled in JS via closePetWindow). */
-export async function showPetContextMenu(
-  labels: PetMenuLabels,
-  x: number,
-  y: number
-): Promise<void> {
-  return getTransport().call("pet_show_context_menu", { labels, x, y })
 }
 
 // Slug a free-form display name into a pet id. Mirrors the backend's

@@ -289,20 +289,11 @@ fn emit_oneshot(emitter: &EventEmitter, kind: PetState) {
 
 /// Forward AI stream events to the bubble window. These are higher-frequency
 /// events (text deltas, tool calls) that the bubble card needs but the ambient
-/// state mapper deliberately filters out. Uses `emit_to` so only the bubble
-/// window receives them — the pet sprite window doesn't need them.
+/// Forward bubble-relevant events to the pet-bubble window. No-op since
+/// the standalone pet-bubble window was removed (pet now floats in-workspace).
 fn emit_bubble_event(emitter: &EventEmitter, event_type: &str, payload: serde_json::Value) {
-    match emitter {
-        #[cfg(feature = "tauri-runtime")]
-        EventEmitter::Tauri(app) => {
-            use tauri::Emitter;
-            let _ = app.emit_to("pet-bubble", event_type, payload);
-        }
-        EventEmitter::WebOnly { broadcaster, .. } => {
-            broadcaster.send(event_type, &payload);
-        }
-        EventEmitter::Noop => {}
-    }
+    // pet-bubble window removed — no forwarding needed
+    let _ = (emitter, event_type, payload);
 }
 
 /// Schedule (or restart) the auto-recovery timer that will clear the
