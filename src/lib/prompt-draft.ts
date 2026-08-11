@@ -50,13 +50,16 @@ export function getPromptDraftDisplayText(
   // Build a human-readable summary of attached images: name + size.
   const imageParts: string[] = []
   for (const image of extractUserImagesFromDraft(draft)) {
-    const sizeBytes = image.data ? (image.data.length * 3) / 4 - 
-      (image.data.endsWith("==") ? 2 : image.data.endsWith("=") ? 1 : 0) : 0
-    const sizeStr = sizeBytes > 1024 * 1024
-      ? `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
-      : sizeBytes > 1024
-        ? `${(sizeBytes / 1024).toFixed(0)} KB`
-        : `${sizeBytes} B`
+    const sizeBytes = image.data
+      ? (image.data.length * 3) / 4 -
+        (image.data.endsWith("==") ? 2 : image.data.endsWith("=") ? 1 : 0)
+      : 0
+    const sizeStr =
+      sizeBytes > 1024 * 1024
+        ? `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
+        : sizeBytes > 1024
+          ? `${(sizeBytes / 1024).toFixed(0)} KB`
+          : `${sizeBytes} B`
     imageParts.push(`${image.name} (${sizeStr})`)
   }
   if (imageParts.length > 0) {

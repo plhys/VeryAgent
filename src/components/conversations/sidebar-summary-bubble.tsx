@@ -88,7 +88,11 @@ export function SidebarSummaryBubble({ hostRef, isHovered, summary }: Props) {
   return createPortal(
     <div
       className="pointer-events-none fixed z-[9999]"
-      style={{ top: pos.top, left: pos.left, transform: "translate(-50%, -50%)" }}
+      style={{
+        top: pos.top,
+        left: pos.left,
+        transform: "translate(-50%, -50%)",
+      }}
     >
       {/* 滑入动画层：从左侧平移 + 淡入 */}
       <div

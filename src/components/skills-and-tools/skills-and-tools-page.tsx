@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Cpu,
   Puzzle,
@@ -82,7 +82,6 @@ import {
   acpSaveAgentSkill,
   acpDeleteAgentSkill,
   acpReadAgentSkill,
-  acpEnableCustomSkill,
   acpDisableCustomSkill,
 } from "@/lib/api"
 import type {
@@ -118,7 +117,9 @@ interface DisabledSkillData {
   layout: string | null
 }
 
-function getDisabledSkills(agentType: AgentType): Map<string, DisabledSkillData> {
+function getDisabledSkills(
+  agentType: AgentType
+): Map<string, DisabledSkillData> {
   const map = new Map<string, DisabledSkillData>()
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -244,9 +245,7 @@ async function fetchSkillIndex(): Promise<{
   return { index: getCachedIndex(), online: false }
 }
 
-async function fetchSkillContent(
-  skillPath: string
-): Promise<string | null> {
+async function fetchSkillContent(skillPath: string): Promise<string | null> {
   // Try GitHub first, then Gitee
   for (const base of Object.values(SKILL_RAW_URLS)) {
     try {
@@ -304,7 +303,8 @@ function removeCreatedSkillId(agentType: AgentType, skillId: string) {
 
 // Top-level filter groups shown in the Skills warehouse:
 // 编程 / 办公 / 学术 / 创意 / 帮助 / 自制
-type SkillDisplayGroup = "expert" | "creative" | "science" | "office" | "help" | "custom"
+type SkillDisplayGroup =
+  "expert" | "creative" | "science" | "office" | "help" | "custom"
 
 const SOURCE_ORDER: Record<SkillDisplayGroup, number> = {
   expert: 1,
@@ -395,7 +395,14 @@ interface UnifiedSkillItem {
 }
 
 /** Visible warehouse group for a skill. */
-const OLD_SCIENCE_CATEGORIES = new Set(["ideation", "design", "analysis", "visualization", "evaluation", "literature"])
+const OLD_SCIENCE_CATEGORIES = new Set([
+  "ideation",
+  "design",
+  "analysis",
+  "visualization",
+  "evaluation",
+  "literature",
+])
 
 function skillDisplayGroup(
   skill: Pick<UnifiedSkillItem, "source" | "category">
@@ -405,7 +412,13 @@ function skillDisplayGroup(
   if (cat === "creative") return "creative"
   if (cat === "office") return "office"
   if (cat === "help") return "help"
-  if (cat === "presentations" || cat === "general" || cat === "documents" || cat === "spreadsheets") return "office"
+  if (
+    cat === "presentations" ||
+    cat === "general" ||
+    cat === "documents" ||
+    cat === "spreadsheets"
+  )
+    return "office"
   // Map old science categories to academic
   if (OLD_SCIENCE_CATEGORIES.has(cat)) return "science"
   if (skill.source === "science") return "science"
@@ -573,8 +586,7 @@ function SkillCard({
           <Badge variant="outline" className="text-[0.625rem]">
             {(() => {
               const group = skillDisplayGroup(skill)
-              if (group === "creative")
-                return isZh ? "创意" : "Creative"
+              if (group === "creative") return isZh ? "创意" : "Creative"
               if (group === "expert") return isZh ? "编程" : "Development"
               if (group === "science") return isZh ? "学术" : "Academic"
               if (group === "office") return isZh ? "办公" : "Office"
@@ -688,9 +700,7 @@ function CustomSkillEditor({
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : null}
+            {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
             {t("customSkillSave")}
           </Button>
         </div>
@@ -752,7 +762,9 @@ function CustomSkillEditor({
           <ScrollArea className="flex-1 rounded-lg border bg-muted/30 p-4">
             <article className="prose prose-sm max-w-none dark:prose-invert">
               {draftContent ? (
-                <pre className="whitespace-pre-wrap text-sm">{draftContent}</pre>
+                <pre className="whitespace-pre-wrap text-sm">
+                  {draftContent}
+                </pre>
               ) : (
                 <p className="text-muted-foreground text-sm">
                   {isZh ? "暂无内容" : "No content"}
@@ -872,69 +884,76 @@ function EnabledTab({
   // Custom skills state
   const [customSkillItems, setCustomSkillItems] = useState<AgentSkillItem[]>([])
   const [loadingCustomSkills, setLoadingCustomSkills] = useState(true)
-  const [deletingCustomSkillId, setDeletingCustomSkillId] = useState<string | null>(null)
+  const [deletingCustomSkillId, setDeletingCustomSkillId] = useState<
+    string | null
+  >(null)
   const [deleteCustomOpen, setDeleteCustomOpen] = useState(false)
-  const [deleteCustomTarget, setDeleteCustomTarget] = useState<string | null>(null)
+  const [deleteCustomTarget, setDeleteCustomTarget] = useState<string | null>(
+    null
+  )
 
-  const fetchSkills = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoadingSkills(true)
-    try {
-      // Isolate sources: one failing API (e.g. unregistered science_list)
-      // must not wipe the whole warehouse.
-      const [expertsResult, scienceResult, officeResult, customResult] =
-        await Promise.allSettled([
-          expertsList(),
-          scienceList(),
-          officecliListSkills(),
-          lockedAgentType
-            ? acpListAgentSkills({ agentType: lockedAgentType })
-            : Promise.resolve(null),
-        ])
-      const experts =
-        expertsResult.status === "fulfilled" ? expertsResult.value : []
-      const science =
-        scienceResult.status === "fulfilled" ? scienceResult.value : []
-      const officeSkills =
-        officeResult.status === "fulfilled" ? officeResult.value : []
-      const customSkillsResult =
-        customResult.status === "fulfilled" ? customResult.value : null
-      if (expertsResult.status === "rejected") {
-        console.warn(
-          "[SkillsAndTools] expertsList failed:",
-          expertsResult.reason
-        )
-      }
-      if (scienceResult.status === "rejected") {
-        console.warn(
-          "[SkillsAndTools] scienceList failed:",
-          scienceResult.reason
-        )
-      }
-      if (officeResult.status === "rejected") {
-        console.warn(
-          "[SkillsAndTools] officecliListSkills failed:",
-          officeResult.reason
-        )
-      }
+  const fetchSkills = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoadingSkills(true)
+      try {
+        // Isolate sources: one failing API (e.g. unregistered science_list)
+        // must not wipe the whole warehouse.
+        const [expertsResult, scienceResult, officeResult, customResult] =
+          await Promise.allSettled([
+            expertsList(),
+            scienceList(),
+            officecliListSkills(),
+            lockedAgentType
+              ? acpListAgentSkills({ agentType: lockedAgentType })
+              : Promise.resolve(null),
+          ])
+        const experts =
+          expertsResult.status === "fulfilled" ? expertsResult.value : []
+        const science =
+          scienceResult.status === "fulfilled" ? scienceResult.value : []
+        const officeSkills =
+          officeResult.status === "fulfilled" ? officeResult.value : []
+        const customSkillsResult =
+          customResult.status === "fulfilled" ? customResult.value : null
+        if (expertsResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] expertsList failed:",
+            expertsResult.reason
+          )
+        }
+        if (scienceResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] scienceList failed:",
+            scienceResult.reason
+          )
+        }
+        if (officeResult.status === "rejected") {
+          console.warn(
+            "[SkillsAndTools] officecliListSkills failed:",
+            officeResult.reason
+          )
+        }
 
-      const customItems =
-        customSkillsResult?.skills.filter((s) => s.scope === "global") ?? []
-      setCustomSkillItems(customItems)
-      setLoadingCustomSkills(false)
+        const customItems =
+          customSkillsResult?.skills.filter((s) => s.scope === "global") ?? []
+        setCustomSkillItems(customItems)
+        setLoadingCustomSkills(false)
 
-      const unified: UnifiedSkillItem[] = [
-        ...experts.map(expertToUnified),
-        ...science.map(scienceToUnified),
-        ...officeSkills.map(officeSkillToUnified),
-        ...customItems.map(customToUnified),
-      ]
-      setAllSkills(unified)
-    } catch (err) {
-      console.warn("[SkillsAndTools] fetchSkills failed:", err)
-    } finally {
-      if (!opts?.silent) setLoadingSkills(false)
-    }
-  }, [lockedAgentType])
+        const unified: UnifiedSkillItem[] = [
+          ...experts.map(expertToUnified),
+          ...science.map(scienceToUnified),
+          ...officeSkills.map(officeSkillToUnified),
+          ...customItems.map(customToUnified),
+        ]
+        setAllSkills(unified)
+      } catch (err) {
+        console.warn("[SkillsAndTools] fetchSkills failed:", err)
+      } finally {
+        if (!opts?.silent) setLoadingSkills(false)
+      }
+    },
+    [lockedAgentType]
+  )
 
   useEffect(() => {
     void fetchSkills({ silent: allSkills.length > 0 })
@@ -1126,37 +1145,39 @@ function EnabledTab({
     currentAgent?.name ?? AGENT_LABELS[lockedAgentType ?? "codex"]
 
   // Custom skill disable handler — removes from agent dir, keeps in central store
-  const handleDisableCustomSkill = useCallback(
-    async () => {
-      if (!lockedAgentType || !deleteCustomTarget) return
-      setDeletingCustomSkillId(deleteCustomTarget)
-      try {
-        await acpDisableCustomSkill({
-          agentType: lockedAgentType,
-          skillId: deleteCustomTarget,
-        })
-        invalidateAgentSkillsCache(lockedAgentType)
-        toast.success(
-          navigatorLocale.toLowerCase().startsWith("zh")
-            ? `已对${currentAgent?.name ?? AGENT_LABELS[lockedAgentType]}禁用`
-            : `Disabled for ${currentAgent?.name ?? AGENT_LABELS[lockedAgentType]}`
-        )
-        setDeleteCustomOpen(false)
-        setDeleteCustomTarget(null)
-        // Refresh the custom skills list
-        const result = await acpListAgentSkills({ agentType: lockedAgentType })
-        setCustomSkillItems(
-          result.skills.filter((s) => s.scope === "global")
-        )
-        onToggled()
-      } catch (err) {
-        toast.error(t("installFailed", { error: String(err) }))
-      } finally {
-        setDeletingCustomSkillId(null)
-      }
-    },
-    [lockedAgentType, deleteCustomTarget, currentAgent?.name, navigatorLocale, t, onToggled]
-  )
+  const handleDisableCustomSkill = useCallback(async () => {
+    if (!lockedAgentType || !deleteCustomTarget) return
+    setDeletingCustomSkillId(deleteCustomTarget)
+    try {
+      await acpDisableCustomSkill({
+        agentType: lockedAgentType,
+        skillId: deleteCustomTarget,
+      })
+      invalidateAgentSkillsCache(lockedAgentType)
+      toast.success(
+        navigatorLocale.toLowerCase().startsWith("zh")
+          ? `已对${currentAgent?.name ?? AGENT_LABELS[lockedAgentType]}禁用`
+          : `Disabled for ${currentAgent?.name ?? AGENT_LABELS[lockedAgentType]}`
+      )
+      setDeleteCustomOpen(false)
+      setDeleteCustomTarget(null)
+      // Refresh the custom skills list
+      const result = await acpListAgentSkills({ agentType: lockedAgentType })
+      setCustomSkillItems(result.skills.filter((s) => s.scope === "global"))
+      onToggled()
+    } catch (err) {
+      toast.error(t("installFailed", { error: String(err) }))
+    } finally {
+      setDeletingCustomSkillId(null)
+    }
+  }, [
+    lockedAgentType,
+    deleteCustomTarget,
+    currentAgent?.name,
+    navigatorLocale,
+    t,
+    onToggled,
+  ])
 
   if (!fresh) {
     return (
@@ -1248,67 +1269,81 @@ function EnabledTab({
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {uniqueCustom.map((item) => {
-                  const unified = customToUnified(item)
-                  const cName = pickLocalizedText(unified.name, navigatorLocale, unified.id)
-                  const cDesc = pickLocalizedText(unified.description, navigatorLocale, "")
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                          <Pencil className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{cName}</p>
-                              {cDesc && (
-                                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                                  {cDesc}
+                    const unified = customToUnified(item)
+                    const cName = pickLocalizedText(
+                      unified.name,
+                      navigatorLocale,
+                      unified.id
+                    )
+                    const cDesc = pickLocalizedText(
+                      unified.description,
+                      navigatorLocale,
+                      ""
+                    )
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/30"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <Pencil className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">
+                                  {cName}
                                 </p>
-                              )}
+                                {cDesc && (
+                                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                    {cDesc}
+                                  </p>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 px-2.5 text-xs"
+                                disabled={deletingCustomSkillId === item.id}
+                                onClick={() => {
+                                  setDeleteCustomTarget(item.id)
+                                  setDeleteCustomOpen(true)
+                                }}
+                                aria-label={
+                                  navigatorLocale.toLowerCase().startsWith("zh")
+                                    ? `对当前智能体禁用${cName}`
+                                    : `Disable ${cName} for current agent`
+                                }
+                              >
+                                {deletingCustomSkillId === item.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : navigatorLocale
+                                    .toLowerCase()
+                                    .startsWith("zh") ? (
+                                  "禁用"
+                                ) : (
+                                  "Disable"
+                                )}
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              className="h-7 px-2.5 text-xs"
-                              disabled={deletingCustomSkillId === item.id}
-                              onClick={() => {
-                                setDeleteCustomTarget(item.id)
-                                setDeleteCustomOpen(true)
-                              }}
-                              aria-label={
-                                navigatorLocale.toLowerCase().startsWith("zh")
-                                  ? `对当前智能体禁用${cName}`
-                                  : `Disable ${cName} for current agent`
-                              }
-                            >
-                              {deletingCustomSkillId === item.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : navigatorLocale.toLowerCase().startsWith("zh") ? (
-                                "禁用"
-                              ) : (
-                                "Disable"
-                              )}
-                            </Button>
                           </div>
                         </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[0.625rem]">
+                            {navigatorLocale.toLowerCase().startsWith("zh")
+                              ? "自制技能"
+                              : "Custom"}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[0.625rem]">
-                          {navigatorLocale.toLowerCase().startsWith("zh") ? "自制技能" : "Custom"}
-                        </Badge>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        ) : null
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null
         })()}
 
         {/* Enabled Connectors sub-section */}
@@ -1349,14 +1384,13 @@ function EnabledTab({
       </div>
 
       {/* Delete confirmation dialog for custom skills */}
-      <AlertDialog
-        open={deleteCustomOpen}
-        onOpenChange={setDeleteCustomOpen}
-      >
+      <AlertDialog open={deleteCustomOpen} onOpenChange={setDeleteCustomOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {locale.toLowerCase().startsWith("zh") ? "禁用技能" : "Disable Skill"}
+              {locale.toLowerCase().startsWith("zh")
+                ? "禁用技能"
+                : "Disable Skill"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {locale.toLowerCase().startsWith("zh")
@@ -1472,7 +1506,9 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
         } else {
           // Enable: download SKILL.md from warehouse and install
           const { index: warehouseIndex } = await fetchSkillIndex()
-          const warehouseSkill = warehouseIndex?.skills.find((s) => s.id === skillId)
+          const warehouseSkill = warehouseIndex?.skills.find(
+            (s) => s.id === skillId
+          )
           if (!warehouseSkill) {
             toast.error(
               navigatorLocale.toLowerCase().startsWith("zh")
@@ -1492,19 +1528,30 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
           }
           // Inject the locale-specific name and category into the SKILL.md frontmatter
           // so skills display with Chinese names and category grouping in the + menu.
-          const localizedName = pickLocalizedText(warehouseSkill.name, locale, skillId)
-          let patchedContent = localizedName !== skillId
-            ? content.replace(/^name:.*$/m, `name: ${localizedName}`)
-            : content
+          const localizedName = pickLocalizedText(
+            warehouseSkill.name,
+            locale,
+            skillId
+          )
+          let patchedContent =
+            localizedName !== skillId
+              ? content.replace(/^name:.*$/m, `name: ${localizedName}`)
+              : content
           // Also inject the category from the warehouse index (SKILL.md files
           // in the repo only have name + description, not category).
           if (warehouseSkill.category) {
             const categoryLine = `category: ${warehouseSkill.category}`
             if (/^category:.*$/m.test(patchedContent)) {
-              patchedContent = patchedContent.replace(/^category:.*$/m, categoryLine)
+              patchedContent = patchedContent.replace(
+                /^category:.*$/m,
+                categoryLine
+              )
             } else {
               // Insert after the name line in the frontmatter block
-              patchedContent = patchedContent.replace(/^name:.*$/m, (m) => `${m}\n${categoryLine}`)
+              patchedContent = patchedContent.replace(
+                /^name:.*$/m,
+                (m) => `${m}\n${categoryLine}`
+              )
             }
           }
           await acpSaveAgentSkill({
@@ -1561,29 +1608,47 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
   )
 
   // Coarse filter: all | expert | creative | science | office | help
-  type SourceFilter = "all" | "expert" | "creative" | "science" | "office" | "help"
+  type SourceFilter =
+    "all" | "expert" | "creative" | "science" | "office" | "help"
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
 
   const filterCounts = useMemo(() => {
     const total = skills.length
-    const expert = skills.filter((s) => skillDisplayGroup(s) === "expert").length
-    const creative = skills.filter((s) => skillDisplayGroup(s) === "creative").length
-    const science = skills.filter((s) => skillDisplayGroup(s) === "science").length
-    const office = skills.filter((s) => skillDisplayGroup(s) === "office").length
+    const expert = skills.filter(
+      (s) => skillDisplayGroup(s) === "expert"
+    ).length
+    const creative = skills.filter(
+      (s) => skillDisplayGroup(s) === "creative"
+    ).length
+    const science = skills.filter(
+      (s) => skillDisplayGroup(s) === "science"
+    ).length
+    const office = skills.filter(
+      (s) => skillDisplayGroup(s) === "office"
+    ).length
     const help = skills.filter((s) => skillDisplayGroup(s) === "help").length
     return { total, expert, creative, science, office, help }
   }, [skills])
 
-  const sourceFilters: { id: SourceFilter; label: string; count: number }[] = useMemo(
-    () => [
-      { id: "all", label: t("filterAll"), count: filterCounts.total },
-      { id: "expert", label: t("filterExpert"), count: filterCounts.expert },
-      { id: "creative", label: t("filterCreative"), count: filterCounts.creative },
-      { id: "science", label: t("filterScience"), count: filterCounts.science },
-      { id: "office", label: t("filterOffice"), count: filterCounts.office },
-    ],
-    [t, filterCounts]
-  )
+  const sourceFilters: { id: SourceFilter; label: string; count: number }[] =
+    useMemo(
+      () => [
+        { id: "all", label: t("filterAll"), count: filterCounts.total },
+        { id: "expert", label: t("filterExpert"), count: filterCounts.expert },
+        {
+          id: "creative",
+          label: t("filterCreative"),
+          count: filterCounts.creative,
+        },
+        {
+          id: "science",
+          label: t("filterScience"),
+          count: filterCounts.science,
+        },
+        { id: "office", label: t("filterOffice"), count: filterCounts.office },
+      ],
+      [t, filterCounts]
+    )
 
   const displayedSkills = useMemo(() => {
     if (sourceFilter === "all") return skills
@@ -1643,9 +1708,23 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
           ))}
           <div className="ml-auto flex items-center gap-1">
             {warehouseOnline ? (
-              <Wifi className="h-3.5 w-3.5 text-emerald-500" title={locale.toLowerCase().startsWith("zh") ? "仓库在线" : "Warehouse online"} />
+              <Wifi
+                className="h-3.5 w-3.5 text-emerald-500"
+                title={
+                  locale.toLowerCase().startsWith("zh")
+                    ? "仓库在线"
+                    : "Warehouse online"
+                }
+              />
             ) : (
-              <WifiOff className="h-3.5 w-3.5 text-muted-foreground" title={locale.toLowerCase().startsWith("zh") ? "仓库离线，使用缓存" : "Warehouse offline, using cache"} />
+              <WifiOff
+                className="h-3.5 w-3.5 text-muted-foreground"
+                title={
+                  locale.toLowerCase().startsWith("zh")
+                    ? "仓库离线，使用缓存"
+                    : "Warehouse offline, using cache"
+                }
+              />
             )}
           </div>
         </div>
@@ -1754,7 +1833,8 @@ function CustomTab({ onToggled }: { onToggled: () => void }) {
     setAiCreateLoading(true)
     try {
       // Generate skill name from prompt: lowercase, hyphenated, max 30 chars
-      const nameFromPrompt = aiCreatePrompt.trim()
+      const nameFromPrompt = aiCreatePrompt
+        .trim()
         .toLowerCase()
         .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
         .replace(/^-+|-+$/g, "")
@@ -1849,7 +1929,9 @@ ${aiCreatePrompt.trim()}
         const disabled = getDisabledSkills(lockedAgentType)
         const data = disabled.get(skillId)
         if (!data) {
-          toast.error(t("installFailed", { error: "Disabled skill data not found" }))
+          toast.error(
+            t("installFailed", { error: "Disabled skill data not found" })
+          )
           return
         }
         await acpSaveAgentSkill({
@@ -1884,19 +1966,22 @@ ${aiCreatePrompt.trim()}
     setIsNewSkill(false)
   }, [])
 
-  const handleEditorSaved = useCallback(async (savedId?: string) => {
-    if (!lockedAgentType) return
-    // Track the skill so it appears in the Custom tab
-    if (savedId) {
-      addCreatedSkillId(lockedAgentType, savedId)
-    }
-    setEditorMode("browse")
-    setEditingSkillId(null)
-    setEditingContent("")
-    setIsNewSkill(false)
-    await fetchCustomSkills()
-    onToggled()
-  }, [lockedAgentType, fetchCustomSkills, onToggled])
+  const handleEditorSaved = useCallback(
+    async (savedId?: string) => {
+      if (!lockedAgentType) return
+      // Track the skill so it appears in the Custom tab
+      if (savedId) {
+        addCreatedSkillId(lockedAgentType, savedId)
+      }
+      setEditorMode("browse")
+      setEditingSkillId(null)
+      setEditingContent("")
+      setIsNewSkill(false)
+      await fetchCustomSkills()
+      onToggled()
+    },
+    [lockedAgentType, fetchCustomSkills, onToggled]
+  )
 
   // AI skill creation dialog
   const aiCreateDialog = (
@@ -1949,13 +2034,13 @@ ${aiCreatePrompt.trim()}
       <>
         {aiCreateDialog}
         <CustomSkillEditor
-        agentType={lockedAgentType}
-        skillId={isNewSkill ? "" : (editingSkillId ?? "")}
-        initialContent={editingContent}
-        isNew={isNewSkill}
-        onBack={handleEditorBack}
-        onSaved={handleEditorSaved}
-      />
+          agentType={lockedAgentType}
+          skillId={isNewSkill ? "" : (editingSkillId ?? "")}
+          initialContent={editingContent}
+          isNew={isNewSkill}
+          onBack={handleEditorBack}
+          onSaved={handleEditorSaved}
+        />
       </>
     )
   }
@@ -2020,7 +2105,7 @@ ${aiCreatePrompt.trim()}
                   <p className="text-sm">
                     {locale.toLowerCase().startsWith("zh")
                       ? "暂无自制技能，点击上方「新建自制技能」创建"
-                      : "No custom skills yet. Click \"New Custom Skill\" to create one."}
+                      : 'No custom skills yet. Click "New Custom Skill" to create one.'}
                   </p>
                 </div>
               )
@@ -2030,15 +2115,25 @@ ${aiCreatePrompt.trim()}
               <div className="flex flex-col gap-6">
                 {/* Enabled skills (in agent directory) */}
                 {userSkills.length > 0 && (
-                    <div>
-                      <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        {locale.toLowerCase().startsWith("zh") ? "自制技能" : "Custom Skills"}
-                      </h4>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {userSkills.map((item) => {
+                  <div>
+                    <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {locale.toLowerCase().startsWith("zh")
+                        ? "自制技能"
+                        : "Custom Skills"}
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {userSkills.map((item) => {
                         const unified = customToUnified(item)
-                        const cName = pickLocalizedText(unified.name, locale, unified.id)
-                        const cDesc = pickLocalizedText(unified.description, locale, "")
+                        const cName = pickLocalizedText(
+                          unified.name,
+                          locale,
+                          unified.id
+                        )
+                        const cDesc = pickLocalizedText(
+                          unified.description,
+                          locale,
+                          ""
+                        )
                         const isDisabled = deletingSkillId === item.id
                         return (
                           <div
@@ -2052,7 +2147,9 @@ ${aiCreatePrompt.trim()}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start gap-2">
                                   <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{cName}</p>
+                                    <p className="truncate text-sm font-medium">
+                                      {cName}
+                                    </p>
                                     {cDesc && (
                                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                                         {cDesc}
@@ -2068,7 +2165,9 @@ ${aiCreatePrompt.trim()}
                                       onClick={() => handleEdit(item.id)}
                                     >
                                       <Eye className="mr-1 h-3.5 w-3.5" />
-                                      {locale.toLowerCase().startsWith("zh") ? "编辑" : "Edit"}
+                                      {locale.toLowerCase().startsWith("zh")
+                                        ? "编辑"
+                                        : "Edit"}
                                     </Button>
                                     <Button
                                       type="button"
@@ -2076,11 +2175,15 @@ ${aiCreatePrompt.trim()}
                                       variant="destructive"
                                       className="h-7 px-2 text-xs"
                                       disabled={isDisabled}
-                                      onClick={() => handleDeleteRequest(item.id)}
+                                      onClick={() =>
+                                        handleDeleteRequest(item.id)
+                                      }
                                     >
                                       {isDisabled ? (
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : locale.toLowerCase().startsWith("zh") ? (
+                                      ) : locale
+                                          .toLowerCase()
+                                          .startsWith("zh") ? (
                                         "删除"
                                       ) : (
                                         "Delete"
@@ -2091,8 +2194,13 @@ ${aiCreatePrompt.trim()}
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[0.625rem]">
-                                {locale.toLowerCase().startsWith("zh") ? "自制技能" : "Custom"}
+                              <Badge
+                                variant="outline"
+                                className="text-[0.625rem]"
+                              >
+                                {locale.toLowerCase().startsWith("zh")
+                                  ? "自制技能"
+                                  : "Custom"}
                               </Badge>
                             </div>
                           </div>
@@ -2106,7 +2214,9 @@ ${aiCreatePrompt.trim()}
                 {userDisabled.length > 0 && (
                   <div>
                     <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      {locale.toLowerCase().startsWith("zh") ? "已禁用" : "Disabled"}
+                      {locale.toLowerCase().startsWith("zh")
+                        ? "已禁用"
+                        : "Disabled"}
                     </h4>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {userDisabled.map((skillId) => {
@@ -2145,7 +2255,9 @@ ${aiCreatePrompt.trim()}
                                     >
                                       {enableInProgress === skillId ? (
                                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                      ) : locale.toLowerCase().startsWith("zh") ? (
+                                      ) : locale
+                                          .toLowerCase()
+                                          .startsWith("zh") ? (
                                         "启用"
                                       ) : (
                                         "Enable"
@@ -2173,8 +2285,13 @@ ${aiCreatePrompt.trim()}
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[0.625rem]">
-                                {locale.toLowerCase().startsWith("zh") ? "已禁用" : "Disabled"}
+                              <Badge
+                                variant="outline"
+                                className="text-[0.625rem]"
+                              >
+                                {locale.toLowerCase().startsWith("zh")
+                                  ? "已禁用"
+                                  : "Disabled"}
                               </Badge>
                             </div>
                           </div>
@@ -2190,14 +2307,13 @@ ${aiCreatePrompt.trim()}
       </ScrollArea>
 
       {/* Delete confirmation dialog */}
-      <AlertDialog
-        open={deleteConfirmOpen}
-        onOpenChange={setDeleteConfirmOpen}
-      >
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {locale.toLowerCase().startsWith("zh") ? "删除技能" : "Delete Skill"}
+              {locale.toLowerCase().startsWith("zh")
+                ? "删除技能"
+                : "Delete Skill"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("confirmDeleteCustomSkill")}

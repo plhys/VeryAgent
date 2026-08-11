@@ -203,12 +203,16 @@ export async function acpStartNativeLogin(agentType: AgentType): Promise<void> {
 }
 
 /** Cancel a pending background native login, if any. */
-export async function acpCancelNativeLogin(agentType: AgentType): Promise<void> {
+export async function acpCancelNativeLogin(
+  agentType: AgentType
+): Promise<void> {
   return getTransport().call("acp_cancel_native_login", { agentType })
 }
 
 /** Log out of the agent's native credential. */
-export async function acpLogoutNativeLogin(agentType: AgentType): Promise<void> {
+export async function acpLogoutNativeLogin(
+  agentType: AgentType
+): Promise<void> {
   return getTransport().call("acp_logout_native_login", { agentType })
 }
 

@@ -1,13 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import {
-  Check,
-  ChevronDown,
-  Loader2,
-  Lock,
-  MoreHorizontal,
-} from "lucide-react"
+import { Check, ChevronDown, Loader2, Lock, MoreHorizontal } from "lucide-react"
 import { useTranslations } from "next-intl"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"

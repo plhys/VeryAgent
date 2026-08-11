@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { FolderGit2, FolderOpenDot, FolderPlus, Rocket } from "lucide-react"
+import { FolderGit2, FolderOpenDot, FolderPlus } from "lucide-react"
 import { useTranslations } from "next-intl"
 import {
   DropdownMenu,

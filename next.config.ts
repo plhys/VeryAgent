@@ -13,10 +13,7 @@ const withNextIntl = createNextIntlPlugin({
     messages: {
       path: "./src/i18n/messages",
       format: "json",
-      locales: [
-        "en",
-        "zh-CN",
-      ],
+      locales: ["en", "zh-CN"],
       precompile: true,
     },
   },

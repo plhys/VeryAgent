@@ -28,7 +28,6 @@ import {
   Loader2,
   MoreHorizontal,
   Palette,
-  Rocket,
   SquarePen,
   XCircle,
 } from "lucide-react"

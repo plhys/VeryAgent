@@ -79,7 +79,9 @@ export function InlineSessionConfigSelector({
   // "effortLevel"); fall back to localizing the id when the name isn't mapped.
   const localizedName = localizer.localize(option.name)
   const optionName =
-    localizedName !== option.name ? localizedName : localizer.localize(option.id)
+    localizedName !== option.name
+      ? localizedName
+      : localizer.localize(option.id)
   // Always show "Setting · Value" on the chip so a row of bare "Off/On"
   // values doesn't look like anonymous permission denies.
   const triggerLabel =

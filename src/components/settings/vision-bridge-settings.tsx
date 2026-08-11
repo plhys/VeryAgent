@@ -284,11 +284,7 @@ export function VisionBridgeSettingsBody({
               <Server className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold">{t("modelConfig")}</h3>
               <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto h-6 w-6"
-                >
+                <Button variant="ghost" size="icon" className="ml-auto h-6 w-6">
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${
                       configOpen ? "rotate-0" : "-rotate-90"
@@ -315,7 +311,9 @@ export function VisionBridgeSettingsBody({
                     setValidationErrors((prev) => ({ ...prev, apiUrl: "" }))
                   }}
                   disabled={loading || saving}
-                  className={validationErrors.apiUrl ? "border-destructive" : ""}
+                  className={
+                    validationErrors.apiUrl ? "border-destructive" : ""
+                  }
                 />
                 {validationErrors.apiUrl && (
                   <p className="text-xs text-destructive">
@@ -344,7 +342,9 @@ export function VisionBridgeSettingsBody({
                     setValidationErrors((prev) => ({ ...prev, apiKey: "" }))
                   }}
                   disabled={loading || saving}
-                  className={validationErrors.apiKey ? "border-destructive" : ""}
+                  className={
+                    validationErrors.apiKey ? "border-destructive" : ""
+                  }
                 />
                 {validationErrors.apiKey && (
                   <p className="text-xs text-destructive">
@@ -375,9 +375,7 @@ export function VisionBridgeSettingsBody({
                     >
                       <SelectTrigger
                         className={
-                          validationErrors.modelName
-                            ? "border-destructive"
-                            : ""
+                          validationErrors.modelName ? "border-destructive" : ""
                         }
                       >
                         <SelectValue
@@ -402,7 +400,9 @@ export function VisionBridgeSettingsBody({
                     size="icon"
                     className="h-9 w-9 shrink-0"
                     onClick={handleFetchModels}
-                    disabled={fetchingModels || !apiUrl.trim() || !apiKey.trim()}
+                    disabled={
+                      fetchingModels || !apiUrl.trim() || !apiKey.trim()
+                    }
                     title={t("fetchModels")}
                   >
                     <RefreshCw
@@ -425,7 +425,9 @@ export function VisionBridgeSettingsBody({
               {/* Agent selection — inside the collapsible vision model config */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-semibold">{t("agentSelection")}</h4>
+                  <h4 className="text-xs font-semibold">
+                    {t("agentSelection")}
+                  </h4>
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
                   {t("agentSelectionHint")}

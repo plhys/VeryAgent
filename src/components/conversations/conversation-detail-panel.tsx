@@ -9,17 +9,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react"
-import {
-  Copy,
-  Download,
-  FileCode,
-  FileImage,
-  FileText,
-  Info,
-  RefreshCw,
-  SquarePen,
-  X,
-} from "lucide-react"
+import { Copy, Download, FileCode, FileImage, FileText } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { useAcpActions, useAcpEvent } from "@/contexts/acp-connections-context"
@@ -741,7 +731,12 @@ const ConversationTabView = memo(function ConversationTabView({
         // any lingering background turns are now stale.
         clearBackgroundTurns(effectiveConversationId)
       },
-      [conn.connectionId, effectiveConversationId, appendViewerUserTurn, clearBackgroundTurns]
+      [
+        conn.connectionId,
+        effectiveConversationId,
+        appendViewerUserTurn,
+        clearBackgroundTurns,
+      ]
     )
   )
 
@@ -1550,9 +1545,7 @@ const ConversationTabView = memo(function ConversationTabView({
             />
           </div>
           <div className="flex-1" />
-          <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-6">
-            
-          </div>
+          <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-6"></div>
         </div>
       ) : showDraftHeader ? (
         <div className="flex h-full min-h-0 flex-col">

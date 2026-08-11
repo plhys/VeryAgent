@@ -17,7 +17,9 @@ function run(command, args) {
 }
 
 if (skipFrontend) {
-  console.log("[tauri-before-build] VERYAGENT_SKIP_FRONTEND_BUILD=1 -> skip pnpm build")
+  console.log(
+    "[tauri-before-build] VERYAGENT_SKIP_FRONTEND_BUILD=1 -> skip pnpm build"
+  )
 } else {
   console.log("[tauri-before-build] building frontend via pnpm build")
   run("pnpm", ["build"])

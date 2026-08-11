@@ -2478,7 +2478,10 @@ const ToolCallPart = memo(function ToolCallPart({
     )
   }
 
-  const open = (isRunning && (isCommandTool || hasLiveOutput)) || (!isRunning && (part.output != null || part.errorText != null)) || manualOpen
+  const open =
+    (isRunning && (isCommandTool || hasLiveOutput)) ||
+    (!isRunning && (part.output != null || part.errorText != null)) ||
+    manualOpen
 
   return (
     <Tool open={open} onOpenChange={setManualOpen}>
@@ -2753,37 +2756,42 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
 
   // Group reasoning and tool parts after turn is complete.
   // During streaming, render parts as-is for live feedback.
-  const { reasoningParts, toolParts, otherParts, isStreaming, hasGroupedContent } =
-    useMemo(() => {
-      const reasoning: (Extract<AdaptedContentPart, { type: "reasoning" }> & {
-        _index: number
-      })[] = []
-      const tools: (AdaptedContentPart & { _index: number })[] = []
-      const other: (AdaptedContentPart & { _index: number })[] = []
-      let streaming = false
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i]
-        if (p.type === "reasoning") {
-          if (p.isStreaming) streaming = true
-          reasoning.push({ ...p, _index: i })
-        } else if (
-          p.type === "tool-call" ||
-          p.type === "tool-result" ||
-          p.type === "tool-group"
-        ) {
-          tools.push({ ...p, _index: i })
-        } else {
-          other.push({ ...p, _index: i })
-        }
+  const {
+    reasoningParts,
+    toolParts,
+    otherParts,
+    isStreaming,
+    hasGroupedContent,
+  } = useMemo(() => {
+    const reasoning: (Extract<AdaptedContentPart, { type: "reasoning" }> & {
+      _index: number
+    })[] = []
+    const tools: (AdaptedContentPart & { _index: number })[] = []
+    const other: (AdaptedContentPart & { _index: number })[] = []
+    let streaming = false
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i]
+      if (p.type === "reasoning") {
+        if (p.isStreaming) streaming = true
+        reasoning.push({ ...p, _index: i })
+      } else if (
+        p.type === "tool-call" ||
+        p.type === "tool-result" ||
+        p.type === "tool-group"
+      ) {
+        tools.push({ ...p, _index: i })
+      } else {
+        other.push({ ...p, _index: i })
       }
-      return {
-        reasoningParts: reasoning,
-        toolParts: tools,
-        otherParts: other,
-        isStreaming: streaming,
-        hasGroupedContent: reasoning.length > 0 || tools.length > 0,
-      }
-    }, [parts])
+    }
+    return {
+      reasoningParts: reasoning,
+      toolParts: tools,
+      otherParts: other,
+      isStreaming: streaming,
+      hasGroupedContent: reasoning.length > 0 || tools.length > 0,
+    }
+  }, [parts])
 
   // During streaming: show a real-time status header + the live parts.
   // Reasoning and tool parts are still rendered inline for live feedback,
@@ -2831,19 +2839,30 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
   }
 
   // For grouped view, render reasoning content without the nested Reasoning
-// wrapper (which adds its own collapsible) to avoid redundant nesting.
-const renderGroupedPart = (part: AdaptedContentPart, keyId: string): ReactNode => {
-  if (part.type === "reasoning") {
-    return (
-      <div key={`reasoning-${keyId}`} className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
-        {part.content}
-      </div>
-    )
+  // wrapper (which adds its own collapsible) to avoid redundant nesting.
+  const renderGroupedPart = (
+    part: AdaptedContentPart,
+    keyId: string
+  ): ReactNode => {
+    if (part.type === "reasoning") {
+      return (
+        <div
+          key={`reasoning-${keyId}`}
+          className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap"
+        >
+          {part.content}
+        </div>
+      )
+    }
+    return renderPart(part, keyId)
   }
-  return renderPart(part, keyId)
-}
   // preserving their original logical order (thinking → tool → thinking → tool).
-  const collapsiblePartIds = new Set(["reasoning", "tool-call", "tool-result", "tool-group"])
+  const collapsiblePartIds = new Set([
+    "reasoning",
+    "tool-call",
+    "tool-result",
+    "tool-group",
+  ])
   const collapsibleParts = parts.filter((p) => collapsiblePartIds.has(p.type))
   const remainingParts = parts.filter((p) => !collapsiblePartIds.has(p.type))
 
@@ -2851,10 +2870,7 @@ const renderGroupedPart = (part: AdaptedContentPart, keyId: string): ReactNode =
     <div className="space-y-4">
       {/* Collapsible container for reasoning + tools */}
       {/* During streaming: expanded so user sees live feedback. After completion: collapsed with summary. */}
-      <Collapsible
-        className="rounded-lg border"
-        defaultOpen={isStreaming}
-      >
+      <Collapsible className="rounded-lg border" defaultOpen={isStreaming}>
         <CollapsibleTrigger asChild>
           <div
             className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 cursor-pointer"
@@ -2874,8 +2890,11 @@ const renderGroupedPart = (part: AdaptedContentPart, keyId: string): ReactNode =
                   : t("toolCount", { count: toolParts.length })}
               {usage && (
                 <span className="ml-2 text-muted-foreground/60">
-                  · {t("tokenUsage", {
-                    tokens: (usage.input_tokens + usage.output_tokens).toLocaleString(),
+                  ·{" "}
+                  {t("tokenUsage", {
+                    tokens: (
+                      usage.input_tokens + usage.output_tokens
+                    ).toLocaleString(),
                   })}
                 </span>
               )}

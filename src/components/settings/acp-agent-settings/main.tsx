@@ -11,8 +11,6 @@ import {
   ChevronRight,
   Copy,
   Download,
-  
-  
   GripVertical,
   Loader2,
   LogOut,
@@ -38,16 +36,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
+
 import { Textarea } from "@/components/ui/textarea"
 import { cn, copyTextToClipboard, randomUUID } from "@/lib/utils"
 import {
@@ -90,10 +80,7 @@ import {
   isReadinessPilotAgent,
   readinessToneClass,
 } from "@/lib/agent-readiness"
-import {
-  OpenCodeConnectDialog,
-  OpenCodeCustomProviderDialog,
-} from "@/components/settings/opencode-connect-dialog"
+
 import {
   buildConnectedModelOptions,
   buildConnectedProviders,
@@ -106,9 +93,6 @@ import { toErrorMessage } from "@/lib/app-error"
 import { getInstallErrorHintKey } from "@/lib/agent-install-error"
 import { useAgentInstallStream } from "@/hooks/use-agent-install-stream"
 import { OpencodePluginsModal } from "../opencode-plugins-modal"
-import { CodeBuddyConfigPanel } from "../codebuddy-config-panel"
-import { PiConfigPanel } from "../pi-config-panel"
-import { NativeLoginCard } from "./native-login-card"
 
 import type {
   AgentCheckState,
@@ -121,7 +105,6 @@ import type {
   AgentDraft,
   GeminiAuthMode,
   CodexAuthMode,
-  OpenClawAuthMode,
   ClineAuthMode,
   OpenCodeAuthMode,
   PiAuthMode,
@@ -129,21 +112,15 @@ import type {
 } from "./types"
 import {
   CLAUDE_EFFORT_LEVEL_CONFIG_KEY,
-  CLAUDE_EFFORT_LEVEL_VALUES,
-  GEMINI_AUTH_MODES,
   OPENCLAW_ENV_KEYS,
-  CLINE_PROVIDERS,
   CODEX_DEFAULT_MODEL_PROVIDER,
-  CODEX_AUTH_MODES,
   CODEX_REASONING_EFFORT_OPTIONS,
   CODEX_DEFAULT_REASONING_EFFORT,
-  OPENCODE_PROVIDER_NPM_OPTIONS,
 } from "./types"
 import {
   setAcpTranslator,
   statusTone,
   summarizeChecks,
-  envMapToText,
   parseEnvText,
   patchEnvText,
   parseConfigJsonText,
@@ -155,17 +132,13 @@ import {
   patchGeminiConfigText,
   patchGeminiEnvText,
   patchGeminiAuthMode,
-  geminiAuthModeLabel,
-  geminiAuthModeHint,
   markRemovedKeysNull,
   normalizeConfigText,
   buildOpenCodeModelOptions,
   extractOpenCodeConfigValues,
   patchOpenCodeConfigText,
   ensureOpenCodeProviderNpm,
-  buildOpenCodeNpmOptions,
   parseCodexAuthJsonText,
-  hasCodexChatgptTokens,
   extractCodexImportantValues,
   updateTomlRootStringKey,
   removeTomlSection,
@@ -178,14 +151,8 @@ import {
   applyImportantFieldToDraft,
   buildImportantPatchFromDraft,
 } from "./shared"
-import {
-  patchImportantConfigText,
-  configTextForClaudeSave,
-  getAgentChecks,
-} from "./checks"
-import { OpenCodeModelCombobox } from "./opencode-model-combobox"
+import { patchImportantConfigText, getAgentChecks } from "./checks"
 import { AgentReorderItem } from "./agent-reorder-item"
-import { KimiCodeConfigPanel } from "./kimi-code-config"
 
 /** 智能体能识别的目标模型列表（用于模型提供商映射） */
 const CLAUDE_TARGET_MODELS = [
@@ -204,7 +171,9 @@ const CODEX_TARGET_MODELS = [
   { id: "gpt-4.1", name: "GPT-4.1" },
 ]
 
-function getTargetModelOptions(agentType: string): { id: string; name: string }[] {
+function getTargetModelOptions(
+  agentType: string
+): { id: string; name: string }[] {
   switch (agentType) {
     case "claude_code":
       return CLAUDE_TARGET_MODELS
@@ -717,8 +686,7 @@ export function AcpAgentSettings() {
         reportAffectedSessions(affected)
         toast.success(t("toasts.configSaved"))
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error)
+        const message = error instanceof Error ? error.message : String(error)
         toast.error(t("toasts.saveEnvFailed"))
         console.error(`[persistEnv] save failed for ${agentType}:`, error)
       } finally {
@@ -2535,7 +2503,6 @@ export function AcpAgentSettings() {
     if (selectedAgent?.agent_type === "command_code") {
       refreshCommandCodeLogin()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAgent?.agent_type])
 
   // `cmdc login` runs in the background: Command Code opens the browser itself
@@ -4089,8 +4056,7 @@ export function AcpAgentSettings() {
                         )}
                         title={
                           !usable
-                            ? t("configTabDisabledHint") ??
-                              "请先安装智能体"
+                            ? (t("configTabDisabledHint") ?? "请先安装智能体")
                             : undefined
                         }
                       >
@@ -4103,7 +4069,8 @@ export function AcpAgentSettings() {
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {(() => {
-                  const usable = selectedAgent.available && selectedDraft?.enabled
+                  const usable =
+                    selectedAgent.available && selectedDraft?.enabled
 
                   // ── 安装选项卡 ──
                   if (activeTab === "install") {
@@ -4112,7 +4079,9 @@ export function AcpAgentSettings() {
                         {selectedCurrent?.error && (
                           <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-start gap-2">
                             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                            <span className="break-all">{selectedCurrent.error}</span>
+                            <span className="break-all">
+                              {selectedCurrent.error}
+                            </span>
                           </div>
                         )}
                         {selectedReadiness && (
@@ -4161,7 +4130,9 @@ export function AcpAgentSettings() {
                                         err
                                       )
                                     })
-                                    if (selectedAgent.agent_type === "open_claw") {
+                                    if (
+                                      selectedAgent.agent_type === "open_claw"
+                                    ) {
                                       openClawDiscoveryAppliedRef.current = false
                                       acpDiscoverOpenClawGateway()
                                         .then(setOpenClawDiscovery)
@@ -4183,7 +4154,8 @@ export function AcpAgentSettings() {
                                 {t("readiness.hint.installFirst")}
                               </p>
                             )}
-                            {selectedReadiness.kind === "dependency_blocked" && (
+                            {selectedReadiness.kind ===
+                              "dependency_blocked" && (
                               <p className="text-[11px] opacity-80">
                                 {t("readiness.hint.fixDependency")}
                               </p>
@@ -4211,7 +4183,9 @@ export function AcpAgentSettings() {
                                     className="h-7 text-[11px]"
                                     disabled={ensuringOpenClawGateway}
                                     onClick={() => {
-                                      handleEnsureOpenClawGateway().catch(() => {})
+                                      handleEnsureOpenClawGateway().catch(
+                                        () => {}
+                                      )
                                     }}
                                   >
                                     {ensuringOpenClawGateway ? (
@@ -4229,7 +4203,9 @@ export function AcpAgentSettings() {
                         )}
                         <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                           <CheckCircle2 className="h-3 w-3" />
-                          {t("preflight.count", { count: selectedChecks.length })}
+                          {t("preflight.count", {
+                            count: selectedChecks.length,
+                          })}
                         </div>
                         {selectedChecks.length > 0 ? (
                           selectedChecks.map((check) =>
@@ -4266,7 +4242,9 @@ export function AcpAgentSettings() {
                   return (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-medium">{t("envVars")}</label>
+                        <label className="text-xs font-medium">
+                          {t("envVars")}
+                        </label>
                         <p className="text-[11px] text-muted-foreground">
                           {t("envVarsHint")}
                         </p>
@@ -4297,7 +4275,10 @@ export function AcpAgentSettings() {
                                   })
                                 })
                                 .catch((err) => {
-                                  console.error("[Settings] save env failed:", err)
+                                  console.error(
+                                    "[Settings] save env failed:",
+                                    err
+                                  )
                                   const message = toErrorMessage(err)
                                   toast.error(t("toasts.saveEnvFailed"), {
                                     description: message,
@@ -4365,220 +4346,271 @@ export function AcpAgentSettings() {
                             ) : (
                               <>
                                 <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-                          <span className="text-amber-600 dark:text-amber-400">
-                            {t("commandCode.loginStatusNotLoggedIn")}
-                          </span>
-                        </>
+                                <span className="text-amber-600 dark:text-amber-400">
+                                  {t("commandCode.loginStatusNotLoggedIn")}
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-medium text-foreground">
+                              {t("commandCode.loginMethod1Title")}
+                            </span>
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("commandCode.loginMethod1Hint")}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant={
+                                  commandCodeLogin?.loggedIn
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                onClick={
+                                  commandCodeLogin?.running
+                                    ? cancelCommandCodeLogin
+                                    : commandCodeLogin?.loggedIn
+                                      ? handleLogoutCommandCode
+                                      : runCommandCodeLogin
+                                }
+                              >
+                                {commandCodeLogin?.running ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    {t("commandCode.loginCancel")}
+                                  </>
+                                ) : commandCodeLogin?.loggedIn ? (
+                                  <>
+                                    <LogOut className="h-3.5 w-3.5" />
+                                    {t("commandCode.logoutButton")}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Wrench className="h-3.5 w-3.5" />
+                                    {t("commandCode.loginButton")}
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={async () => {
+                                  const ok =
+                                    await copyTextToClipboard("cmdc login")
+                                  if (ok)
+                                    toast.success(
+                                      t("commandCode.commandCopied")
+                                    )
+                                }}
+                                title={t("commandCode.copyCommand")}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-medium text-foreground">
+                              {t("commandCode.loginMethod2Title")}
+                            </span>
+                            <p className="text-[11px] text-muted-foreground">
+                              {t("commandCode.loginMethod2Hint")}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="password"
+                                value={commandCodeApiKey}
+                                onChange={(event) =>
+                                  setCommandCodeApiKey(event.target.value)
+                                }
+                                placeholder={t("commandCode.apiKeyPlaceholder")}
+                                className="h-8 flex-1"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={saveCommandCodeApiKey}
+                                disabled={
+                                  commandCodeSavingKey ||
+                                  !commandCodeApiKey.trim()
+                                }
+                              >
+                                {commandCodeSavingKey ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Save className="h-3.5 w-3.5" />
+                                )}
+                                {t("commandCode.saveApiKey")}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedAgent && (
+                        <AgentSettingsForm
+                          key={selectedAgent.agent_type}
+                          agent={selectedAgent}
+                          modelProviders={modelProviders}
+                          targetModelOptions={getTargetModelOptions(
+                            selectedAgent.agent_type
+                          )}
+                          onModelProviderChange={async (providerId) => {
+                            // 保存 model_provider_id 到后端
+                            const envText = Object.entries(selectedAgent.env)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join("\n")
+                            try {
+                              await persistEnv(
+                                selectedAgent.agent_type,
+                                selectedAgent.enabled,
+                                envText,
+                                providerId
+                              )
+                              // 同步更新 draft 状态，让父组件知道当前处于 model_provider 模式，
+                              // 从而触发 selectedNeedsModelProvider → fetchModelProviderModels
+                              if (providerId != null) {
+                                const at = selectedAgent.agent_type
+                                updateSelectedDraft((current) => {
+                                  const patch: Partial<AgentDraft> = {
+                                    modelProviderId: providerId,
+                                  }
+                                  if (at === "claude_code")
+                                    patch.claudeAuthMode = "model_provider"
+                                  else if (at === "codex")
+                                    patch.codexAuthMode = "model_provider"
+                                  else if (at === "gemini")
+                                    patch.geminiAuthMode = "model_provider"
+                                  else if (at === "hermes")
+                                    patch.hermesAuthMode = "model_provider"
+                                  else if (at === "open_claw")
+                                    patch.openClawAuthMode = "model_provider"
+                                  else if (at === "cline")
+                                    patch.clineAuthMode = "model_provider"
+                                  else if (at === "open_code")
+                                    patch.openCodeAuthMode = "model_provider"
+                                  else if (at === "pi")
+                                    patch.piAuthMode = "model_provider"
+                                  else if (at === "code_buddy")
+                                    patch.codeBuddyAuthMode = "model_provider"
+                                  return { ...current, ...patch }
+                                })
+                                // 调用 handleModelProviderSelect 更新智能体专用配置
+                                //（如 Codex 的 auth.json / config.toml），否则凭据和 base_url 不会生效
+                                handleModelProviderSelect(String(providerId))
+                                // 持久化智能体专用配置文件（如 Codex 的 auth.json / config.toml），
+                                // 否则仅更新 draft 不落盘，启动时仍读旧文件
+                                if (at === "codex") {
+                                  const provider = modelProviders.find(
+                                    (p) => p.id === providerId
+                                  )
+                                  const apiUrl = provider?.api_url ?? ""
+                                  const apiKey = provider?.api_key ?? ""
+                                  const keepModel = selectedDraft.model
+                                  const nextAuthPatch = patchCodexAuthJsonText(
+                                    selectedDraft.codexAuthJsonText,
+                                    { apiKey, authMode: null }
+                                  )
+                                  const nextConfigTomlText =
+                                    patchCodexConfigTomlText(
+                                      selectedDraft.codexConfigTomlText,
+                                      {
+                                        modelProvider:
+                                          CODEX_DEFAULT_MODEL_PROVIDER,
+                                        apiBaseUrl: apiUrl,
+                                        model: keepModel,
+                                      }
+                                    )
+                                  await persistConfig(
+                                    selectedAgent.agent_type,
+                                    selectedDraft.configText,
+                                    {
+                                      codexAuthJsonText:
+                                        nextAuthPatch.authJsonText,
+                                      codexConfigTomlText: nextConfigTomlText,
+                                    }
+                                  )
+                                }
+                              }
+                            } catch (e) {
+                              console.error(
+                                "[AgentSettings] save model provider failed:",
+                                e
+                              )
+                            }
+                          }}
+                          onFetchModels={() =>
+                            setProviderModelsRefreshKey((n) => n + 1)
+                          }
+                          fetchingModels={providerModelsLoading}
+                          availableModels={providerModels}
+                          onSave={async (values, authMode) => {
+                            const env = { ...selectedAgent.env }
+                            let modelProviderId: number | null =
+                              selectedAgent.model_provider_id
+
+                            if (authMode === "apikey") {
+                              // 手动 API Key 模式：更新 env 中的键值
+                              const desc = getAgentDescriptor(
+                                selectedAgent.agent_type
+                              )
+                              if (desc) {
+                                const { apiKeyKey, baseUrlKey, modelKey } =
+                                  desc.envMapping
+                                if (values[apiKeyKey])
+                                  env[apiKeyKey] = values[apiKeyKey]
+                                else delete env[apiKeyKey]
+                                if (values[baseUrlKey])
+                                  env[baseUrlKey] = values[baseUrlKey]
+                                else delete env[baseUrlKey]
+                                if (values[modelKey])
+                                  env[modelKey] = values[modelKey]
+                                else delete env[modelKey]
+                              }
+                              modelProviderId = null // 手动模式清除模型提供商绑定
+                            } else if (authMode === "model_provider") {
+                              const desc = getAgentDescriptor(
+                                selectedAgent.agent_type
+                              )
+                              if (desc) {
+                                const { modelKey } = desc.envMapping
+                                // 始终保存提供商模型到 env[modelKey]（API 实际能识别的模型名）
+                                if (values["provider_model"]) {
+                                  env[modelKey] = values["provider_model"]
+                                }
+                                // 目标模型映射仅用作视觉参考（存到 PROVIDER_MAPPED_MODEL）
+                                if (values["model"]) {
+                                  env["PROVIDER_MAPPED_MODEL"] = values["model"]
+                                }
+                              }
+                            }
+
+                            const envText = Object.entries(env)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join("\n")
+
+                            try {
+                              await persistEnv(
+                                selectedAgent.agent_type,
+                                selectedAgent.enabled,
+                                envText,
+                                modelProviderId
+                              )
+                            } catch (error) {
+                              console.error(
+                                "[AgentSettings] save failed:",
+                                error
+                              )
+                            }
+                          }}
+                        />
                       )}
                     </div>
-
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-medium text-foreground">
-                        {t("commandCode.loginMethod1Title")}
-                      </span>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("commandCode.loginMethod1Hint")}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={
-                            commandCodeLogin?.loggedIn ? "secondary" : "outline"
-                          }
-                          onClick={
-                            commandCodeLogin?.running
-                              ? cancelCommandCodeLogin
-                              : commandCodeLogin?.loggedIn
-                                ? handleLogoutCommandCode
-                                : runCommandCodeLogin
-                          }
-                        >
-                          {commandCodeLogin?.running ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              {t("commandCode.loginCancel")}
-                            </>
-                          ) : commandCodeLogin?.loggedIn ? (
-                            <>
-                              <LogOut className="h-3.5 w-3.5" />
-                              {t("commandCode.logoutButton")}
-                            </>
-                          ) : (
-                            <>
-                              <Wrench className="h-3.5 w-3.5" />
-                              {t("commandCode.loginButton")}
-                            </>
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2"
-                          onClick={async () => {
-                            const ok = await copyTextToClipboard("cmdc login")
-                            if (ok)
-                              toast.success(t("commandCode.commandCopied"))
-                          }}
-                          title={t("commandCode.copyCommand")}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-medium text-foreground">
-                        {t("commandCode.loginMethod2Title")}
-                      </span>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t("commandCode.loginMethod2Hint")}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="password"
-                          value={commandCodeApiKey}
-                          onChange={(event) =>
-                            setCommandCodeApiKey(event.target.value)
-                          }
-                          placeholder={t("commandCode.apiKeyPlaceholder")}
-                          className="h-8 flex-1"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={saveCommandCodeApiKey}
-                          disabled={
-                            commandCodeSavingKey || !commandCodeApiKey.trim()
-                          }
-                        >
-                          {commandCodeSavingKey ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Save className="h-3.5 w-3.5" />
-                          )}
-                          {t("commandCode.saveApiKey")}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {selectedAgent && (
-                  <AgentSettingsForm
-                    key={selectedAgent.agent_type}
-                    agent={selectedAgent}
-                    modelProviders={modelProviders}
-                    targetModelOptions={getTargetModelOptions(selectedAgent.agent_type)}
-                    onModelProviderChange={async (providerId) => {
-                      // 保存 model_provider_id 到后端
-                      const envText = Object.entries(selectedAgent.env)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join("\n")
-                      try {
-                        await persistEnv(selectedAgent.agent_type, selectedAgent.enabled, envText, providerId)
-                        // 同步更新 draft 状态，让父组件知道当前处于 model_provider 模式，
-                        // 从而触发 selectedNeedsModelProvider → fetchModelProviderModels
-                        if (providerId != null) {
-                          const at = selectedAgent.agent_type
-                          updateSelectedDraft((current) => {
-                            const patch: Partial<AgentDraft> = { modelProviderId: providerId }
-                            if (at === "claude_code") patch.claudeAuthMode = "model_provider"
-                            else if (at === "codex") patch.codexAuthMode = "model_provider"
-                            else if (at === "gemini") patch.geminiAuthMode = "model_provider"
-                            else if (at === "hermes") patch.hermesAuthMode = "model_provider"
-                            else if (at === "open_claw") patch.openClawAuthMode = "model_provider"
-                            else if (at === "cline") patch.clineAuthMode = "model_provider"
-                            else if (at === "open_code") patch.openCodeAuthMode = "model_provider"
-                            else if (at === "pi") patch.piAuthMode = "model_provider"
-                            else if (at === "code_buddy") patch.codeBuddyAuthMode = "model_provider"
-                            return { ...current, ...patch }
-                          })
-                          // 调用 handleModelProviderSelect 更新智能体专用配置
-                          //（如 Codex 的 auth.json / config.toml），否则凭据和 base_url 不会生效
-                          handleModelProviderSelect(String(providerId))
-                          // 持久化智能体专用配置文件（如 Codex 的 auth.json / config.toml），
-                          // 否则仅更新 draft 不落盘，启动时仍读旧文件
-                          if (at === "codex") {
-                            const provider = modelProviders.find((p) => p.id === providerId)
-                            const apiUrl = provider?.api_url ?? ""
-                            const apiKey = provider?.api_key ?? ""
-                            const keepModel = selectedDraft.model
-                            const nextAuthPatch = patchCodexAuthJsonText(
-                              selectedDraft.codexAuthJsonText,
-                              { apiKey, authMode: null }
-                            )
-                            const nextConfigTomlText = patchCodexConfigTomlText(
-                              selectedDraft.codexConfigTomlText,
-                              {
-                                modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
-                                apiBaseUrl: apiUrl,
-                                model: keepModel,
-                              }
-                            )
-                            await persistConfig(selectedAgent.agent_type, selectedDraft.configText, {
-                              codexAuthJsonText: nextAuthPatch.authJsonText,
-                              codexConfigTomlText: nextConfigTomlText,
-                            })
-                          }
-                        }
-                      } catch (e) {
-                        console.error("[AgentSettings] save model provider failed:", e)
-                      }
-                    }}
-                    onFetchModels={() => setProviderModelsRefreshKey((n) => n + 1)}
-                    fetchingModels={providerModelsLoading}
-                    availableModels={providerModels}
-                    onSave={async (values, authMode) => {
-                      const env = { ...selectedAgent.env }
-                      let modelProviderId: number | null = selectedAgent.model_provider_id
-
-                      if (authMode === "apikey") {
-                        // 手动 API Key 模式：更新 env 中的键值
-                        const desc = getAgentDescriptor(selectedAgent.agent_type)
-                        if (desc) {
-                          const { apiKeyKey, baseUrlKey, modelKey } = desc.envMapping
-                          if (values[apiKeyKey]) env[apiKeyKey] = values[apiKeyKey]
-                          else delete env[apiKeyKey]
-                          if (values[baseUrlKey]) env[baseUrlKey] = values[baseUrlKey]
-                          else delete env[baseUrlKey]
-                          if (values[modelKey]) env[modelKey] = values[modelKey]
-                          else delete env[modelKey]
-                        }
-                        modelProviderId = null // 手动模式清除模型提供商绑定
-                      } else if (authMode === "model_provider") {
-                        const desc = getAgentDescriptor(selectedAgent.agent_type)
-                        if (desc) {
-                          const { modelKey } = desc.envMapping
-                          // 始终保存提供商模型到 env[modelKey]（API 实际能识别的模型名）
-                          if (values["provider_model"]) {
-                            env[modelKey] = values["provider_model"]
-                          }
-                          // 目标模型映射仅用作视觉参考（存到 PROVIDER_MAPPED_MODEL）
-                          if (values["model"]) {
-                            env["PROVIDER_MAPPED_MODEL"] = values["model"]
-                          }
-                        }
-                      }
-
-                      const envText = Object.entries(env)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join("\n")
-
-                      try {
-                        await persistEnv(
-                          selectedAgent.agent_type,
-                          selectedAgent.enabled,
-                          envText,
-                          modelProviderId
-                        )
-                      } catch (error) {
-                        console.error("[AgentSettings] save failed:", error)
-                      }
-                    }}
-                  />
-                )}
+                  )
+                })()}
               </div>
-            )})()}
-            </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">

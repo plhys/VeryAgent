@@ -30,7 +30,11 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": "off",
       "unused-imports/no-unused-vars": [
         "warn",
-        { args: "after-used", argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+        {
+          args: "after-used",
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
       ],
       // eslint-config-next 16 ships React-Compiler-era react-hooks rules that
       // flag widely-accepted patterns in this codebase (e.g. setState inside an

@@ -165,11 +165,7 @@ function renderMatrix(overrides: Partial<SkillAgentMatrixProps> = {}) {
         expertId: "brainstorming",
         agentType: "claude_code",
         ok: true,
-        status: makeStatus(
-          "brainstorming",
-          "claude_code",
-          "linked"
-        ),
+        status: makeStatus("brainstorming", "claude_code", "linked"),
         error: null,
       },
     ]),
@@ -249,11 +245,7 @@ describe("SkillAgentMatrix", () => {
       loadAllStatuses: vi
         .fn()
         .mockResolvedValue([
-          makeStatus(
-            "brainstorming",
-            "claude_code",
-            "not_linked"
-          ),
+          makeStatus("brainstorming", "claude_code", "not_linked"),
           makeStatus("brainstorming", "codex", "not_linked"),
         ]),
     })

@@ -1,5 +1,4 @@
 import { getTransport } from "../transport"
-import type { AgentType } from "../types"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

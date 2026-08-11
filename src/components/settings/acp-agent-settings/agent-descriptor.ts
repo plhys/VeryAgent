@@ -5,51 +5,52 @@
  * 目的是消除 per-agent if-else 分支，让设置页根据描述符自动渲染。
  */
 
-import type { AgentType } from "@/lib/types";
+import type { AgentType } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
 // 配置字段描述
 // ---------------------------------------------------------------------------
 
 /** 配置字段的类型 */
-export type FieldType = "text" | "password" | "select" | "number" | "textarea" | "json";
+export type FieldType =
+  "text" | "password" | "select" | "number" | "textarea" | "json"
 
 /** 单个配置字段的描述 */
 export interface ConfigField {
   /** 字段键名（对应环境变量或配置键） */
-  key: string;
+  key: string
   /** 显示标签 */
-  label: string;
+  label: string
   /** 字段类型 */
-  type: FieldType;
+  type: FieldType
   /** 占位符 */
-  placeholder?: string;
+  placeholder?: string
   /** 帮助文本 */
-  helpText?: string;
+  helpText?: string
   /** 是否必填 */
-  required?: boolean;
+  required?: boolean
   /** 下拉选项（当 type=select 时） */
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string }[]
   /** 默认值 */
-  defaultValue?: string;
+  defaultValue?: string
 }
 
 /** 认证模式 */
 export interface AuthMode {
   /** 模式标识 */
-  id: string;
+  id: string
   /** 显示名称 */
-  label: string;
+  label: string
   /** 该模式下显示的配置字段 */
-  fields: ConfigField[];
+  fields: ConfigField[]
 }
 
 /** 原生配置文件描述 */
 export interface ConfigFileDescriptor {
   /** 相对路径，如 ".claude/settings.json" */
-  relativePath: string;
+  relativePath: string
   /** 文件格式 */
-  format: "json" | "toml" | "yaml" | "dotenv";
+  format: "json" | "toml" | "yaml" | "dotenv"
 }
 
 // ---------------------------------------------------------------------------
@@ -59,34 +60,34 @@ export interface ConfigFileDescriptor {
 /** 前端 Agent 描述符，与后端的 `AgentDescriptor` 对应 */
 export interface AgentDescriptor {
   /** 智能体类型 */
-  agentType: AgentType;
+  agentType: AgentType
   /** 显示名称 */
-  name: string;
+  name: string
   /** 描述 */
-  description: string;
+  description: string
   /** 是否支持 MCP */
-  supportsMcp: boolean;
+  supportsMcp: boolean
   /** 是否常驻 */
-  resident: boolean;
+  resident: boolean
 
   /** 环境变量映射 */
   envMapping: {
-    baseUrlKey: string;
-    apiKeyKey: string;
-    modelKey: string;
-  };
+    baseUrlKey: string
+    apiKeyKey: string
+    modelKey: string
+  }
 
   /** 支持的认证模式 */
-  authModes: AuthMode[];
+  authModes: AuthMode[]
 
   /** 原生配置文件列表 */
-  configFiles: ConfigFileDescriptor[];
+  configFiles: ConfigFileDescriptor[]
 
   /** 运行时依赖 */
-  runtimeDeps: string[];
+  runtimeDeps: string[]
 
   /** 图标颜色 */
-  color: string;
+  color: string
 }
 
 // ---------------------------------------------------------------------------
@@ -116,10 +117,14 @@ const modelProviderAuthMode: AuthMode = {
       options: [], // 运行时动态填充
     },
   ],
-};
+}
 
 /** API Key 手动配置模式（通用） */
-const apiKeyAuthMode = (baseUrlKey: string, apiKeyKey: string, modelKey: string): AuthMode => ({
+const apiKeyAuthMode = (
+  baseUrlKey: string,
+  apiKeyKey: string,
+  modelKey: string
+): AuthMode => ({
   id: "apikey",
   label: "API Key",
   fields: [
@@ -147,7 +152,7 @@ const apiKeyAuthMode = (baseUrlKey: string, apiKeyKey: string, modelKey: string)
       helpText: "使用的模型名称",
     },
   ],
-});
+})
 
 // ---------------------------------------------------------------------------
 // Agent 描述符注册表
@@ -258,7 +263,11 @@ const AGENT_DESCRIPTORS: Record<string, AgentDescriptor> = {
     },
     authModes: [
       modelProviderAuthMode,
-      apiKeyAuthMode("GOOGLE_GEMINI_BASE_URL", "GEMINI_API_KEY", "GEMINI_MODEL"),
+      apiKeyAuthMode(
+        "GOOGLE_GEMINI_BASE_URL",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL"
+      ),
     ],
     configFiles: [{ relativePath: ".gemini/settings.json", format: "json" }],
     runtimeDeps: ["node"],
@@ -338,7 +347,11 @@ const AGENT_DESCRIPTORS: Record<string, AgentDescriptor> = {
     },
     authModes: [
       modelProviderAuthMode,
-      apiKeyAuthMode("CODEBUDDY_BASE_URL", "CODEBUDDY_API_KEY", "CODEBUDDY_MODEL"),
+      apiKeyAuthMode(
+        "CODEBUDDY_BASE_URL",
+        "CODEBUDDY_API_KEY",
+        "CODEBUDDY_MODEL"
+      ),
     ],
     configFiles: [],
     runtimeDeps: ["node"],
@@ -358,7 +371,11 @@ const AGENT_DESCRIPTORS: Record<string, AgentDescriptor> = {
     },
     authModes: [
       modelProviderAuthMode,
-      apiKeyAuthMode("KIMI_MODEL_BASE_URL", "KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME"),
+      apiKeyAuthMode(
+        "KIMI_MODEL_BASE_URL",
+        "KIMI_MODEL_API_KEY",
+        "KIMI_MODEL_NAME"
+      ),
     ],
     configFiles: [],
     runtimeDeps: ["node"],
@@ -424,20 +441,22 @@ const AGENT_DESCRIPTORS: Record<string, AgentDescriptor> = {
     runtimeDeps: ["node"],
     color: "#64748b",
   },
-};
+}
 
 // ---------------------------------------------------------------------------
 // 工具函数
 // ---------------------------------------------------------------------------
 
 /** 获取指定 Agent 的描述符 */
-export function getAgentDescriptor(agentType: AgentType): AgentDescriptor | undefined {
-  return AGENT_DESCRIPTORS[agentType];
+export function getAgentDescriptor(
+  agentType: AgentType
+): AgentDescriptor | undefined {
+  return AGENT_DESCRIPTORS[agentType]
 }
 
 /** 获取所有 Agent 描述符 */
 export function getAllAgentDescriptors(): AgentDescriptor[] {
-  return Object.values(AGENT_DESCRIPTORS);
+  return Object.values(AGENT_DESCRIPTORS)
 }
 
 /** 根据环境变量名推断认证模式 */
@@ -446,9 +465,9 @@ export function detectAuthMode(
   env: Record<string, string>,
   modelProviderId: number | null
 ): string {
-  if (modelProviderId != null) return "model_provider";
-  if (env[descriptor.envMapping.apiKeyKey]) return "apikey";
-  return "apikey"; // 默认
+  if (modelProviderId != null) return "model_provider"
+  if (env[descriptor.envMapping.apiKeyKey]) return "apikey"
+  return "apikey" // 默认
 }
 
 /** 从环境变量中提取配置值 */
@@ -456,12 +475,13 @@ export function extractConfigFromEnv(
   descriptor: AgentDescriptor,
   env: Record<string, string>
 ): Record<string, string> {
-  const result: Record<string, string> = {};
-  const mapping = descriptor.envMapping;
+  const result: Record<string, string> = {}
+  const mapping = descriptor.envMapping
 
-  if (env[mapping.apiKeyKey]) result[mapping.apiKeyKey] = env[mapping.apiKeyKey];
-  if (env[mapping.baseUrlKey]) result[mapping.baseUrlKey] = env[mapping.baseUrlKey];
-  if (env[mapping.modelKey]) result[mapping.modelKey] = env[mapping.modelKey];
+  if (env[mapping.apiKeyKey]) result[mapping.apiKeyKey] = env[mapping.apiKeyKey]
+  if (env[mapping.baseUrlKey])
+    result[mapping.baseUrlKey] = env[mapping.baseUrlKey]
+  if (env[mapping.modelKey]) result[mapping.modelKey] = env[mapping.modelKey]
 
-  return result;
+  return result
 }

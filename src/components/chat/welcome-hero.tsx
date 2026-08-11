@@ -77,9 +77,7 @@ const TIPS: TipDef[] = [
 ]
 
 const highlightTitle = (chunks: ReactNode) => (
-  <span className="text-foreground">
-    {chunks}
-  </span>
+  <span className="text-foreground">{chunks}</span>
 )
 
 const highlightTip = (chunks: ReactNode) => (

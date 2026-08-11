@@ -153,7 +153,7 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   "ask every time": "sandboxAsk",
   "always ask": "alwaysAsk",
   "allow all": "sandboxAllowAll",
-  "strict": "sandboxStrict",
+  strict: "sandboxStrict",
   "not sandboxed": "sandboxNotSandboxed",
   "sandboxed (non destructive)": "sandboxNonDestructive",
   "local environment": "sandboxLocalEnv",
@@ -170,7 +170,7 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   none: "thinkingOff",
   "no thinking": "thinkingOff",
   "no reasoning": "thinkingOff",
-  "extra": "thinkingExtraHigh",
+  extra: "thinkingExtraHigh",
   balanced: "thinkingMedium",
 
   // ── Approval preset values ──
@@ -179,11 +179,11 @@ const CONFIG_NAME_MAP: Record<string, string> = {
   never: "approvalNever",
   "never approve": "approvalNever",
   "always approve": "approvalAlways",
-  "untrusted": "approvalUntrusted",
+  untrusted: "approvalUntrusted",
 
   // ── Service tier values ──
-  "standard": "serviceTierStandard",
-  "priority": "serviceTierPriority",
+  standard: "serviceTierStandard",
+  priority: "serviceTierPriority",
 
   // ── Thinking level values ──
   low: "thinkingLow",
