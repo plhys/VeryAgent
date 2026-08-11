@@ -150,9 +150,9 @@ describe("SessionSelectorsPanel", () => {
     // Initially the Model pane is shown; Effort's options are not.
     expect(screen.queryByRole("button", { name: /High/ })).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: /Effort/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Reasoning effort/i }))
 
-    const group = screen.getByRole("group", { name: "Effort" })
+    const group = screen.getByRole("group", { name: "Reasoning effort" })
     fireEvent.click(within(group).getByRole("button", { name: /High/ }))
     expect(effortOnSelect).toHaveBeenCalledWith("high")
     // Switching panes must not fire the previous setting's handler.

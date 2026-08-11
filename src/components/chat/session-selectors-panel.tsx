@@ -156,7 +156,7 @@ export function SessionSelectorsPanel({
       ) : (
         <div
           role="group"
-          aria-label={active.title}
+          aria-label={localizer.localize(active.title)}
           className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto pl-1"
         >
           {active.description ? (
