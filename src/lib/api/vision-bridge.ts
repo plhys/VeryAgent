@@ -27,6 +27,6 @@ export async function visionBridgeGetConfig(): Promise<VisionBridgeConfig> {
 
 export async function visionBridgeSaveConfig(
   settings: VisionBridgeConfigUpdate
-): Promise<void> {
+): Promise<VisionBridgeConfig> {
   return getTransport().call("vision_bridge_save_config", { settings })
 }

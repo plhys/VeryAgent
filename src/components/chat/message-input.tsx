@@ -2065,18 +2065,6 @@ export function MessageInput({
     [appendResourceAttachments]
   )
 
-  const loadQuickMessages = useCallback(async () => {
-    setQuickMessagesLoading(true)
-    try {
-      const list = await quickMessagesList()
-      setQuickMessages(list)
-    } catch (error) {
-      console.error("[MessageInput] load quick messages failed:", error)
-    } finally {
-      setQuickMessagesLoading(false)
-    }
-  }, [])
-
   const [enabledPlugins, setEnabledPlugins] = useState<{
     mcp: LocalMcpServer[]
   }>({ mcp: [] })
@@ -2117,14 +2105,9 @@ export function MessageInput({
   const handleAddMenuOpenChange = useCallback(
     (open: boolean) => {
       if (!open) return
-      // The editor keeps its selection while the menu is open, so a quick
-      // message inserts back at the same caret without tracking an offset.
-      loadQuickMessages().catch((error) => {
-        console.error("[MessageInput] quick messages refresh failed:", error)
-      })
       void loadEnabledPlugins()
     },
-    [loadEnabledPlugins, loadQuickMessages]
+    [loadEnabledPlugins]
   )
 
   const handleMcpPluginHint = useCallback(
@@ -2135,11 +2118,6 @@ export function MessageInput({
     },
     [t]
   )
-
-  const handleQuickMessageSelect = useCallback((message: QuickMessage) => {
-    if (!message.content) return
-    editorRef.current?.insertMarkdownAtCursor(message.content)
-  }, [])
 
   // Plain-text rendering of the editor's current selection, for the right-click
   // Cut/Copy. Read straight from ProseMirror state (stable while the radix menu
@@ -2197,20 +2175,13 @@ export function MessageInput({
   }, [disabled])
 
   // Opening the custom right-click menu: snapshot whether there's a selection
-  // (gates Cut/Copy) and refresh the quick-messages list. The editor keeps its
-  // selection while the menu is open, so Paste / a quick message lands back at
-  // the same caret.
-  const handleContextMenuOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) return
-      const editor = editorRef.current?.getEditor()
-      setContextSelectionActive(editor ? !editor.state.selection.empty : false)
-      loadQuickMessages().catch((error) => {
-        console.error("[MessageInput] quick messages refresh failed:", error)
-      })
-    },
-    [loadQuickMessages]
-  )
+  // (gates Cut/Copy). The editor keeps its selection while the menu is open,
+  // so Paste lands back at the same caret.
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    if (!open) return
+    const editor = editorRef.current?.getEditor()
+    setContextSelectionActive(editor ? !editor.state.selection.empty : false)
+  }, [])
 
   // Plain-text ("paste without formatting") paste, shared by the custom
   // right-click menu item and the Ctrl/⌘+Shift+V shortcut. Reads only the

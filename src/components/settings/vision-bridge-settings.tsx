@@ -35,8 +35,8 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  type VisionBridgeSettings,
   type VisionBridgeConfig,
+  type VisionBridgeConfigUpdate,
   visionBridgeGetConfig,
   visionBridgeSaveConfig,
 } from "@/lib/api"
@@ -206,7 +206,7 @@ export function VisionBridgeSettingsBody({
 
     // Filter out open_claw (doesn't support MCP) before saving
     const filteredAgents = selectedAgents.filter((x) => x !== "open_claw")
-    const payload: VisionBridgeSettings = {
+    const payload: VisionBridgeConfigUpdate = {
       enabled,
       api_url: apiUrl,
       api_key: apiKey,

@@ -1603,7 +1603,6 @@ export function ConversationDetailPanel() {
   const t = useTranslations("Folder.conversation")
   const tStatus = useTranslations("Folder.statusLabels")
   const tExport = useTranslations("Folder.conversation.exportLabels")
-  const tDetails = useTranslations("Folder.sessionDetails")
   const {
     completeTurn: runtimeCompleteTurn,
     removeConversation: runtimeRemoveConversation,
@@ -1614,7 +1613,7 @@ export function ConversationDetailPanel() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const isTileMode = useTabStore((s) => s.isTileMode)
-  const { openNewConversationTab, closeTab, switchTab, onPreviewTabReplaced } =
+  const { openNewConversationTab, switchTab, onPreviewTabReplaced } =
     useTabActions()
   const newConversation = useMemo(() => {
     const activeTab = tabs.find((tab) => tab.id === activeTabId)
@@ -1625,7 +1624,7 @@ export function ConversationDetailPanel() {
   }, [tabs, activeTabId, folder?.path])
   const { disconnect: disconnectByKey } = useAcpActions()
   const { addTask, updateTask } = useTaskContext()
-  const [reloadByTabId, setReloadByTabId] = useState<Record<string, number>>({})
+  const [reloadByTabId] = useState<Record<string, number>>({})
   const [detailsOpen, setDetailsOpen] = useState(false)
 
   const exportLabels = useMemo<ExportLabels>(
@@ -1733,15 +1732,6 @@ export function ConversationDetailPanel() {
       ) ?? null,
     [tabs, activeTabId]
   )
-  const canReloadActiveConversation = activeConversationTab != null
-  const handleReloadActiveConversation = useCallback(() => {
-    if (!activeConversationTab) return
-    setReloadByTabId((prev) => ({
-      ...prev,
-      [activeConversationTab.id]: (prev[activeConversationTab.id] ?? 0) + 1,
-    }))
-  }, [activeConversationTab])
-
   const [contextMenuSelectedText, setContextMenuSelectedText] = useState("")
   const savedSelectionRangeRef = useRef<Range | null>(null)
   const isContextMenuOpenRef = useRef(false)
@@ -1803,18 +1793,6 @@ export function ConversationDetailPanel() {
       toast.error(t("copyTextFailed"))
     }
   }, [contextMenuSelectedText, t])
-
-  const handleNewConversation = useCallback(() => {
-    if (!folder) return
-    // Right-click "new conversation" inside a conversation tab: keep the
-    // active agent when the target folder has no pinned default.
-    openNewConversationTab(folder.id, folder.path, { inheritFromActive: true })
-  }, [folder, openNewConversationTab])
-
-  const handleCloseActiveTab = useCallback(() => {
-    if (!activeTabId) return
-    closeTab(activeTabId)
-  }, [activeTabId, closeTab])
 
   // Narrow reactive reads for the ACTIVE conversation only — a background
   // conversation's streaming token no longer re-renders this panel. `canExport`

@@ -2681,7 +2681,6 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
   parts,
   role,
   usage,
-  duration_ms,
 }: ContentPartsRendererProps) {
   const t = useTranslations("Folder.chat.contentParts")
   const [fullScreenOpen, setFullScreenOpen] = useState(false)
@@ -2756,42 +2755,37 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
 
   // Group reasoning and tool parts after turn is complete.
   // During streaming, render parts as-is for live feedback.
-  const {
-    reasoningParts,
-    toolParts,
-    otherParts,
-    isStreaming,
-    hasGroupedContent,
-  } = useMemo(() => {
-    const reasoning: (Extract<AdaptedContentPart, { type: "reasoning" }> & {
-      _index: number
-    })[] = []
-    const tools: (AdaptedContentPart & { _index: number })[] = []
-    const other: (AdaptedContentPart & { _index: number })[] = []
-    let streaming = false
-    for (let i = 0; i < parts.length; i++) {
-      const p = parts[i]
-      if (p.type === "reasoning") {
-        if (p.isStreaming) streaming = true
-        reasoning.push({ ...p, _index: i })
-      } else if (
-        p.type === "tool-call" ||
-        p.type === "tool-result" ||
-        p.type === "tool-group"
-      ) {
-        tools.push({ ...p, _index: i })
-      } else {
-        other.push({ ...p, _index: i })
+  const { reasoningParts, toolParts, isStreaming, hasGroupedContent } =
+    useMemo(() => {
+      const reasoning: (Extract<AdaptedContentPart, { type: "reasoning" }> & {
+        _index: number
+      })[] = []
+      const tools: (AdaptedContentPart & { _index: number })[] = []
+      const other: (AdaptedContentPart & { _index: number })[] = []
+      let streaming = false
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i]
+        if (p.type === "reasoning") {
+          if (p.isStreaming) streaming = true
+          reasoning.push({ ...p, _index: i })
+        } else if (
+          p.type === "tool-call" ||
+          p.type === "tool-result" ||
+          p.type === "tool-group"
+        ) {
+          tools.push({ ...p, _index: i })
+        } else {
+          other.push({ ...p, _index: i })
+        }
       }
-    }
-    return {
-      reasoningParts: reasoning,
-      toolParts: tools,
-      otherParts: other,
-      isStreaming: streaming,
-      hasGroupedContent: reasoning.length > 0 || tools.length > 0,
-    }
-  }, [parts])
+      return {
+        reasoningParts: reasoning,
+        toolParts: tools,
+        otherParts: other,
+        isStreaming: streaming,
+        hasGroupedContent: reasoning.length > 0 || tools.length > 0,
+      }
+    }, [parts])
 
   // During streaming: show a real-time status header + the live parts.
   // Reasoning and tool parts are still rendered inline for live feedback,

@@ -12,6 +12,7 @@
 ### 重构
 
 - **清理 message-input 死代码**：删除 slash 菜单遗留的 3 个未使用变量/回调及整组未使用的 dropdown 状态（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect` / `slashDropdownOpen` 组）。
+- **修复 81 处 pre-existing TS 错误（约 -1700 行死代码）**：智能体设置页（main.tsx）重构遗留的 51 处 unused 声明及级联 import 清理；删除从未接线的 quickMessages 半成品（后端无对应命令）；修复 vision-bridge（`visionBridgeSaveConfig` 返回类型 void→`VisionBridgeConfig`、`VisionBridgeSettings`→`VisionBridgeConfigUpdate`）、image-generation（`usedFallback`→`used_fallback`）、`selectValueLabel` 与测试的 `kind.groups` 类型收窄、Icon `title`→`aria-label` 等类型错误。`tsc --noEmit` 源码零错误。
 
 ### 修复
 

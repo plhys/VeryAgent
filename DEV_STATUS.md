@@ -26,8 +26,9 @@
 
 ### 已知技术债（未处理）
 
-- eslint 63 条 unused-vars warnings（多为重构遗留 handle* 回调）
-- 81 处 pre-existing TS 错误（被 `next.config` `ignoreBuildErrors` 掩盖）：含 `message-input.tsx` 半成品 quickMessages（`loadQuickMessages` 引用未声明 state、`handleQuickMessageSelect` unused）、`conversation-detail-panel.tsx` 4 个 unused 等
+- eslint 63 条 unused-vars warnings（多为重构遗留 handle* 回调）→ **已清零**（2026-08-11 清理 81 处 TS 错误时一并处理）
+- 81 处 pre-existing TS 错误（被 `next.config` `ignoreBuildErrors` 掩盖）→ **已清零**（2026-08-11）：含 quickMessages 半成品（后端无命令，前端残留删除）、vision-bridge 返回类型、image-gen snake_case 等
+- 剩余：`message-input.test.tsx` 4 个 collapsed-selectors-popover 用例失败（pre-existing，与本次改动无关）
 
 ---
 

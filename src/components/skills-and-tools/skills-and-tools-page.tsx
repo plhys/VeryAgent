@@ -138,21 +138,6 @@ function getDisabledSkills(
   return map
 }
 
-function saveDisabledSkill(
-  agentType: AgentType,
-  skillId: string,
-  data: DisabledSkillData
-) {
-  try {
-    localStorage.setItem(
-      disabledSkillKey(agentType, skillId),
-      JSON.stringify(data)
-    )
-  } catch {
-    // localStorage may be full or unavailable
-  }
-}
-
 function removeDisabledSkill(agentType: AgentType, skillId: string) {
   try {
     localStorage.removeItem(disabledSkillKey(agentType, skillId))
@@ -641,7 +626,7 @@ function CustomSkillEditor({
 
   const [draftId, setDraftId] = useState(skillId)
   const [draftContent, setDraftContent] = useState(initialContent)
-  const [isEditing, setIsEditing] = useState(isNew || !isNew)
+  const [isEditing, setIsEditing] = useState<boolean>(true)
   const [saving, setSaving] = useState(false)
 
   const handleSave = useCallback(async () => {
@@ -1459,7 +1444,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
                 unified.push(officeSkillToUnified(os))
               }
             }
-          } catch (_) {
+          } catch {
             // OfficeCLI not installed — skip silently
           }
           setSkills(unified)
@@ -1710,7 +1695,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             {warehouseOnline ? (
               <Wifi
                 className="h-3.5 w-3.5 text-emerald-500"
-                title={
+                aria-label={
                   locale.toLowerCase().startsWith("zh")
                     ? "仓库在线"
                     : "Warehouse online"
@@ -1719,7 +1704,7 @@ function SkillsTab({ onToggled }: { onToggled: () => void }) {
             ) : (
               <WifiOff
                 className="h-3.5 w-3.5 text-muted-foreground"
-                title={
+                aria-label={
                   locale.toLowerCase().startsWith("zh")
                     ? "仓库离线，使用缓存"
                     : "Warehouse offline, using cache"

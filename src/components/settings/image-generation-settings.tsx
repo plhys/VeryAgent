@@ -260,7 +260,7 @@ export function ImageGenerationSettingsBody({
         setModelsByGw((prev) => ({ ...prev, [gw.id]: result.models }))
         setFallbackByGw((prev) => ({
           ...prev,
-          [gw.id]: !!result.usedFallback,
+          [gw.id]: !!result.used_fallback,
         }))
         if (result.models.length === 0) {
           toast.message(t("fetchModelsEmpty"))
@@ -272,7 +272,7 @@ export function ImageGenerationSettingsBody({
           updateGateway(gw.id, { model_name: result.models[0].id })
         }
         toast.success(
-          result.usedFallback
+          result.used_fallback
             ? t("fetchModelsOkFallback", { count: result.models.length })
             : t("fetchModelsOk", { count: result.models.length })
         )

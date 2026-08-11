@@ -29,7 +29,7 @@ export function AppearanceSettings() {
   const { showWelcomeQuickActions, setShowWelcomeQuickActions } =
     useWelcomeQuickActions()
 
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
+  const [theme] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") return "system"
     return (localStorage.getItem("theme") as ThemeMode | null) ?? "system"
   })
