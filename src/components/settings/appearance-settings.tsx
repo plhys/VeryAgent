@@ -5,6 +5,13 @@ import { LayoutGrid, Type } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useZoomLevel, useWelcomeQuickActions } from "@/hooks/use-appearance"
 import {
   DEFAULT_ZOOM_LEVEL,

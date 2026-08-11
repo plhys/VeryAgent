@@ -9,7 +9,7 @@
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { AcpAgentInfo } from "@/lib/types";
 import {
   getAgentDescriptor,
@@ -171,6 +171,9 @@ export function AgentSettingsForm({
     return initial;
   });
 
+  // 切换认证模式时保存/恢复模型提供商字段值，避免两套模式互相污染
+  const savedModelProviderValues = useRef<Record<string, string>>({});
+
   // Sync auth mode when the agent prop changes (e.g. after a provider
   // is saved, the parent re-renders with an updated model_provider_id).
   // Do NOT overwrite values — the user may have typed custom config.
@@ -189,16 +192,19 @@ export function AgentSettingsForm({
   const handleAuthModeChange = useCallback(
     (modeId: string) => {
       setAuthMode(modeId);
-      if (modeId !== "model_provider" && onModelProviderChange) {
-        // 切换到非模型提供商模式时，清空共享提供商绑定
-        onModelProviderChange(null);
-      }
       if (modeId !== "model_provider") {
-        // 切换到手动模式时，清空字段值，让用户自己填写
-        setValues({});
+        // 切换到 API Key 等非提供商模式：保存当前提供商字段值后清空，
+        // 让用户从空白开始填写，不受提供商信息干扰。
+        setValues((prev) => {
+          savedModelProviderValues.current = prev;
+          return {};
+        });
+      } else {
+        // 切换回模型提供商模式：恢复之前保存的提供商字段值
+        setValues(savedModelProviderValues.current);
       }
     },
-    [onModelProviderChange]
+    []
   );
 
   const currentAuthMode = descriptor?.authModes.find((m) => m.id === authMode);

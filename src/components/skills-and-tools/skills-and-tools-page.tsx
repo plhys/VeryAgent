@@ -1946,8 +1946,9 @@ ${aiCreatePrompt.trim()}
   // If in editor mode, render the inline editor
   if (editorMode === "edit" && lockedAgentType) {
     return (
-      {aiCreateDialog}
-      <CustomSkillEditor
+      <>
+        {aiCreateDialog}
+        <CustomSkillEditor
         agentType={lockedAgentType}
         skillId={isNewSkill ? "" : (editingSkillId ?? "")}
         initialContent={editingContent}
@@ -1955,6 +1956,7 @@ ${aiCreatePrompt.trim()}
         onBack={handleEditorBack}
         onSaved={handleEditorSaved}
       />
+      </>
     )
   }
 

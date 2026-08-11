@@ -268,6 +268,9 @@ export function AcpAgentSettings() {
     useState<OpenClawGatewayDiscovery | null>(null)
   const openClawDiscoveryAppliedRef = useRef(false)
   const [ensuringOpenClawGateway, setEnsuringOpenClawGateway] = useState(false)
+  // 安装/配置选项卡状态，切换智能体时重置
+  const [activeTab, setActiveTab] = useState<"install" | "config">("install")
+  const prevUsableRef = useRef(false)
   const [drafts, setDrafts] = useState<Partial<Record<AgentType, AgentDraft>>>(
     {}
   )
@@ -497,6 +500,18 @@ export function AcpAgentSettings() {
       }
     }
   }, [installStream.status])
+
+  // 切换智能体或可用状态变化时同步选项卡
+  useEffect(() => {
+    if (!selectedAgent || !selectedDraft) return
+    const usable = selectedAgent.available && selectedDraft.enabled
+    if (usable && !prevUsableRef.current) {
+      setActiveTab("config")
+    } else if (!usable) {
+      setActiveTab("install")
+    }
+    prevUsableRef.current = usable
+  }, [selectedAgent, selectedAgent?.available])
 
   useEffect(() => {
     refreshAgents().catch((err) => {
@@ -4042,259 +4057,314 @@ export function AcpAgentSettings() {
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                <div className="space-y-2">
-                  {selectedCurrent?.error && (
-                    <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-start gap-2">
-                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      <span className="break-all">{selectedCurrent.error}</span>
+              {/* Tab bar: 安装 | 配置 */}
+              {(() => {
+                const usable = selectedAgent.available && selectedDraft?.enabled
+                return (
+                  <div className="border-b px-4">
+                    <div className="flex gap-0 -mb-px">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("install")}
+                        className={cn(
+                          "px-4 py-2 text-xs font-medium border-b-2 transition-colors",
+                          activeTab === "install"
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {t("installTab") ?? "安装"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (usable) setActiveTab("config")
+                        }}
+                        className={cn(
+                          "px-4 py-2 text-xs font-medium border-b-2 transition-colors",
+                          activeTab === "config" && usable
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground",
+                          !usable && "cursor-not-allowed opacity-40"
+                        )}
+                        title={
+                          !usable
+                            ? t("configTabDisabledHint") ??
+                              "请先安装智能体"
+                            : undefined
+                        }
+                      >
+                        {t("configTab") ?? "配置"}
+                      </button>
                     </div>
-                  )}
-                  {selectedReadiness && (
-                    <div
-                      className={cn(
-                        "rounded-md border px-3 py-2.5 space-y-1.5",
-                        readinessToneClass(selectedReadiness.kind)
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="text-xs font-semibold leading-snug">
-                            {selectedReadiness.title}
+                  </div>
+                )
+              })()}
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {(() => {
+                  const usable = selectedAgent.available && selectedDraft?.enabled
+
+                  // ── 安装选项卡 ──
+                  if (activeTab === "install") {
+                    return (
+                      <div className="space-y-2">
+                        {selectedCurrent?.error && (
+                          <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-start gap-2">
+                            <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            <span className="break-all">{selectedCurrent.error}</span>
                           </div>
-                          <p className="text-[11px] leading-relaxed opacity-90">
-                            {selectedReadiness.detail}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {selectedReadiness.kind === "checking" && (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          )}
-                          <Badge
-                            variant="outline"
+                        )}
+                        {selectedReadiness && (
+                          <div
                             className={cn(
-                              "h-6 px-2 text-[11px]",
+                              "rounded-md border px-3 py-2.5 space-y-1.5",
                               readinessToneClass(selectedReadiness.kind)
                             )}
                           >
-                            {selectedReadiness.badge}
-                          </Badge>
-                          <button
-                            type="button"
-                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-current/20 hover:bg-black/5 dark:hover:bg-white/10"
-                            title={t("actions.refreshCheck")}
-                            aria-label={t("actions.refreshCheckAgent", {
-                              name: selectedAgent.name,
-                            })}
-                            onClick={() => {
-                              runPreflight(
-                                selectedAgent.agent_type,
-                                true
-                              ).catch((err) => {
-                                console.error(
-                                  "[Settings] readiness recheck failed:",
-                                  err
-                                )
-                              })
-                              if (selectedAgent.agent_type === "open_claw") {
-                                openClawDiscoveryAppliedRef.current = false
-                                acpDiscoverOpenClawGateway()
-                                  .then(setOpenClawDiscovery)
-                                  .catch((err) => {
-                                    console.warn(
-                                      "[Settings] openclaw rediscovery failed:",
-                                      err
-                                    )
-                                  })
-                              }
-                            }}
-                          >
-                            <RefreshCw className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                      {selectedReadiness.kind === "not_installed" && (
-                        <p className="text-[11px] opacity-80">
-                          {t("readiness.hint.installFirst")}
-                        </p>
-                      )}
-                      {selectedReadiness.kind === "dependency_blocked" && (
-                        <p className="text-[11px] opacity-80">
-                          {t("readiness.hint.fixDependency")}
-                        </p>
-                      )}
-                      {selectedReadiness.kind === "config_needed" && (
-                        <p className="text-[11px] opacity-80">
-                          {selectedAgent.agent_type === "open_claw" &&
-                          selectedDraft.openClawAuthMode === "gateway"
-                            ? t("readiness.hint.openClawStartGateway")
-                            : t("readiness.hint.configureBelow")}
-                        </p>
-                      )}
-                      {selectedReadiness.kind === "ready" && (
-                        <p className="text-[11px] opacity-80">
-                          {t("readiness.hint.readyToChat")}
-                        </p>
-                      )}
-                      {selectedAgent.agent_type === "open_claw" &&
-                        selectedDraft.openClawAuthMode === "gateway" &&
-                        selectedReadiness.kind === "config_needed" && (
-                          <div className="pt-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-7 text-[11px]"
-                              disabled={ensuringOpenClawGateway}
-                              onClick={() => {
-                                handleEnsureOpenClawGateway().catch(() => {})
-                              }}
-                            >
-                              {ensuringOpenClawGateway ? (
-                                <>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="text-xs font-semibold leading-snug">
+                                  {selectedReadiness.title}
+                                </div>
+                                <p className="text-[11px] leading-relaxed opacity-90">
+                                  {selectedReadiness.detail}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {selectedReadiness.kind === "checking" && (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  {t("openClaw.ensureGatewayRunning")}
-                                </>
-                              ) : (
-                                t("openClaw.ensureGateway")
+                                )}
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "h-6 px-2 text-[11px]",
+                                    readinessToneClass(selectedReadiness.kind)
+                                  )}
+                                >
+                                  {selectedReadiness.badge}
+                                </Badge>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded border border-current/20 hover:bg-black/5 dark:hover:bg-white/10"
+                                  title={t("actions.refreshCheck")}
+                                  aria-label={t("actions.refreshCheckAgent", {
+                                    name: selectedAgent.name,
+                                  })}
+                                  onClick={() => {
+                                    runPreflight(
+                                      selectedAgent.agent_type,
+                                      true
+                                    ).catch((err) => {
+                                      console.error(
+                                        "[Settings] readiness recheck failed:",
+                                        err
+                                      )
+                                    })
+                                    if (selectedAgent.agent_type === "open_claw") {
+                                      openClawDiscoveryAppliedRef.current = false
+                                      acpDiscoverOpenClawGateway()
+                                        .then(setOpenClawDiscovery)
+                                        .catch((err) => {
+                                          console.warn(
+                                            "[Settings] openclaw rediscovery failed:",
+                                            err
+                                          )
+                                        })
+                                    }
+                                  }}
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            {selectedReadiness.kind === "not_installed" && (
+                              <p className="text-[11px] opacity-80">
+                                {t("readiness.hint.installFirst")}
+                              </p>
+                            )}
+                            {selectedReadiness.kind === "dependency_blocked" && (
+                              <p className="text-[11px] opacity-80">
+                                {t("readiness.hint.fixDependency")}
+                              </p>
+                            )}
+                            {selectedReadiness.kind === "config_needed" && (
+                              <p className="text-[11px] opacity-80">
+                                {selectedAgent.agent_type === "open_claw" &&
+                                selectedDraft.openClawAuthMode === "gateway"
+                                  ? t("readiness.hint.openClawStartGateway")
+                                  : t("readiness.hint.configureBelow")}
+                              </p>
+                            )}
+                            {selectedReadiness.kind === "ready" && (
+                              <p className="text-[11px] opacity-80">
+                                {t("readiness.hint.readyToChat")}
+                              </p>
+                            )}
+                            {selectedAgent.agent_type === "open_claw" &&
+                              selectedDraft.openClawAuthMode === "gateway" &&
+                              selectedReadiness.kind === "config_needed" && (
+                                <div className="pt-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 text-[11px]"
+                                    disabled={ensuringOpenClawGateway}
+                                    onClick={() => {
+                                      handleEnsureOpenClawGateway().catch(() => {})
+                                    }}
+                                  >
+                                    {ensuringOpenClawGateway ? (
+                                      <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        {t("openClaw.ensureGatewayRunning")}
+                                      </>
+                                    ) : (
+                                      t("openClaw.ensureGateway")
+                                    )}
+                                  </Button>
+                                </div>
                               )}
-                            </Button>
                           </div>
                         )}
-                    </div>
-                  )}
-                  <div className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    {t("preflight.count", { count: selectedChecks.length })}
-                  </div>
-                  {selectedChecks.length > 0 ? (
-                    selectedChecks.map((check) =>
-                      renderCheck(selectedAgent, check)
-                    )
-                  ) : (
-                    <div className="text-xs text-muted-foreground">
-                      {t("preflight.notRun")}
-                    </div>
-                  )}
-                  {installStream.status !== "idle" &&
-                    streamAgentType === selectedAgent.agent_type && (
-                      <div className="mt-2 rounded-md border bg-muted/50 text-muted-foreground p-3 max-h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed">
-                        {installStream.logs.map((line, i) => (
-                          <div
-                            key={i}
-                            className={
-                              line.startsWith("ERROR:")
-                                ? "text-destructive"
-                                : ""
-                            }
-                          >
-                            {line}
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" />
+                          {t("preflight.count", { count: selectedChecks.length })}
+                        </div>
+                        {selectedChecks.length > 0 ? (
+                          selectedChecks.map((check) =>
+                            renderCheck(selectedAgent, check)
+                          )
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            {t("preflight.notRun")}
                           </div>
-                        ))}
-                        <div ref={installLogEndRef} />
-                      </div>
-                    )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-medium">{t("envVars")}</label>
-                  <p className="text-[11px] text-muted-foreground">
-                    {t("envVarsHint")}
-                  </p>
-                  <Textarea
-                    value={selectedDraft.envText}
-                    onChange={(event) => {
-                      updateSelectedDraft((current) => ({
-                        ...current,
-                        envText: event.target.value,
-                      }))
-                    }}
-                    placeholder={"KEY1=VALUE1\nKEY2=VALUE2"}
-                    className="min-h-24 font-mono text-xs"
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        persistEnv(
-                          selectedAgent.agent_type,
-                          selectedDraft.enabled,
-                          selectedDraft.envText,
-                          selectedDraft.modelProviderId
-                        )
-                          .then(() => {
-                            toast.success(t("toasts.configSaved"), {
-                              description: t("toasts.configSavedHint"),
-                            })
-                          })
-                          .catch((err) => {
-                            console.error("[Settings] save env failed:", err)
-                            const message = toErrorMessage(err)
-                            toast.error(t("toasts.saveEnvFailed"), {
-                              description: message,
-                            })
-                          })
-                      }}
-                      disabled={selectedIsSavingEnv}
-                    >
-                      {selectedIsSavingEnv ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          {t("actions.saving")}
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-3.5 w-3.5" />
-                          {t("actions.saveEnvVars")}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {selectedAgent.agent_type === "command_code" && (
-                  <div className="space-y-3 rounded-md border bg-muted/10 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium">
-                        {t("commandCode.loginStatusTitle")}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2"
-                        onClick={refreshCommandCodeLogin}
-                      >
-                        <RefreshCw className="h-3 w-3" />
-                        {t("commandCode.refresh")}
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs">
-                      {commandCodeLogin?.running ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                          <span className="text-muted-foreground">
-                            {t("commandCode.loginInProgress")}
-                          </span>
-                        </>
-                      ) : commandCodeLogin?.loggedIn ? (
-                        <>
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                          <span className="text-green-600">
-                            {commandCodeLogin.accountName
-                              ? t("commandCode.loggedInAs", {
-                                  name: commandCodeLogin.accountName,
-                                })
-                              : t("commandCode.loginStatusLoggedIn")}
-                          </span>
-                          {commandCodeLogin.source === "env_key" && (
-                            <span className="text-muted-foreground">
-                              (API Key)
-                            </span>
+                        )}
+                        {installStream.status !== "idle" &&
+                          streamAgentType === selectedAgent.agent_type && (
+                            <div className="mt-2 rounded-md border bg-muted/50 text-muted-foreground p-3 max-h-[200px] overflow-y-auto font-mono text-[11px] leading-relaxed">
+                              {installStream.logs.map((line, i) => (
+                                <div
+                                  key={i}
+                                  className={
+                                    line.startsWith("ERROR:")
+                                      ? "text-destructive"
+                                      : ""
+                                  }
+                                >
+                                  {line}
+                                </div>
+                              ))}
+                              <div ref={installLogEndRef} />
+                            </div>
                           )}
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                      </div>
+                    )
+                  }
+
+                  // ── 配置选项卡 ──
+                  return (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium">{t("envVars")}</label>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("envVarsHint")}
+                        </p>
+                        <Textarea
+                          value={selectedDraft.envText}
+                          onChange={(event) => {
+                            updateSelectedDraft((current) => ({
+                              ...current,
+                              envText: event.target.value,
+                            }))
+                          }}
+                          placeholder={"KEY1=VALUE1\nKEY2=VALUE2"}
+                          className="min-h-24 font-mono text-xs"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              persistEnv(
+                                selectedAgent.agent_type,
+                                selectedDraft.enabled,
+                                selectedDraft.envText,
+                                selectedDraft.modelProviderId
+                              )
+                                .then(() => {
+                                  toast.success(t("toasts.configSaved"), {
+                                    description: t("toasts.configSavedHint"),
+                                  })
+                                })
+                                .catch((err) => {
+                                  console.error("[Settings] save env failed:", err)
+                                  const message = toErrorMessage(err)
+                                  toast.error(t("toasts.saveEnvFailed"), {
+                                    description: message,
+                                  })
+                                })
+                            }}
+                            disabled={selectedIsSavingEnv}
+                          >
+                            {selectedIsSavingEnv ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("actions.saving")}
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-3.5 w-3.5" />
+                                {t("actions.saveEnvVars")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {selectedAgent.agent_type === "command_code" && (
+                        <div className="space-y-3 rounded-md border bg-muted/10 p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">
+                              {t("commandCode.loginStatusTitle")}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={refreshCommandCodeLogin}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              {t("commandCode.refresh")}
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-xs">
+                            {commandCodeLogin?.running ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                <span className="text-muted-foreground">
+                                  {t("commandCode.loginInProgress")}
+                                </span>
+                              </>
+                            ) : commandCodeLogin?.loggedIn ? (
+                              <>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                <span className="text-green-600">
+                                  {commandCodeLogin.accountName
+                                    ? t("commandCode.loggedInAs", {
+                                        name: commandCodeLogin.accountName,
+                                      })
+                                    : t("commandCode.loginStatusLoggedIn")}
+                                </span>
+                                {commandCodeLogin.source === "env_key" && (
+                                  <span className="text-muted-foreground">
+                                    (API Key)
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
                           <span className="text-amber-600 dark:text-amber-400">
                             {t("commandCode.loginStatusNotLoggedIn")}
                           </span>
@@ -4405,6 +4475,51 @@ export function AcpAgentSettings() {
                         .join("\n")
                       try {
                         await persistEnv(selectedAgent.agent_type, selectedAgent.enabled, envText, providerId)
+                        // 同步更新 draft 状态，让父组件知道当前处于 model_provider 模式，
+                        // 从而触发 selectedNeedsModelProvider → fetchModelProviderModels
+                        if (providerId != null) {
+                          const at = selectedAgent.agent_type
+                          updateSelectedDraft((current) => {
+                            const patch: Partial<AgentDraft> = { modelProviderId: providerId }
+                            if (at === "claude_code") patch.claudeAuthMode = "model_provider"
+                            else if (at === "codex") patch.codexAuthMode = "model_provider"
+                            else if (at === "gemini") patch.geminiAuthMode = "model_provider"
+                            else if (at === "hermes") patch.hermesAuthMode = "model_provider"
+                            else if (at === "open_claw") patch.openClawAuthMode = "model_provider"
+                            else if (at === "cline") patch.clineAuthMode = "model_provider"
+                            else if (at === "open_code") patch.openCodeAuthMode = "model_provider"
+                            else if (at === "pi") patch.piAuthMode = "model_provider"
+                            else if (at === "code_buddy") patch.codeBuddyAuthMode = "model_provider"
+                            return { ...current, ...patch }
+                          })
+                          // 调用 handleModelProviderSelect 更新智能体专用配置
+                          //（如 Codex 的 auth.json / config.toml），否则凭据和 base_url 不会生效
+                          handleModelProviderSelect(String(providerId))
+                          // 持久化智能体专用配置文件（如 Codex 的 auth.json / config.toml），
+                          // 否则仅更新 draft 不落盘，启动时仍读旧文件
+                          if (at === "codex") {
+                            const provider = modelProviders.find((p) => p.id === providerId)
+                            const apiUrl = provider?.api_url ?? ""
+                            const apiKey = provider?.api_key ?? ""
+                            const keepModel = selectedDraft.model
+                            const nextAuthPatch = patchCodexAuthJsonText(
+                              selectedDraft.codexAuthJsonText,
+                              { apiKey, authMode: null }
+                            )
+                            const nextConfigTomlText = patchCodexConfigTomlText(
+                              selectedDraft.codexConfigTomlText,
+                              {
+                                modelProvider: CODEX_DEFAULT_MODEL_PROVIDER,
+                                apiBaseUrl: apiUrl,
+                                model: keepModel,
+                              }
+                            )
+                            await persistConfig(selectedAgent.agent_type, selectedDraft.configText, {
+                              codexAuthJsonText: nextAuthPatch.authJsonText,
+                              codexConfigTomlText: nextConfigTomlText,
+                            })
+                          }
+                        }
                       } catch (e) {
                         console.error("[AgentSettings] save model provider failed:", e)
                       }
@@ -4462,6 +4577,8 @@ export function AcpAgentSettings() {
                   />
                 )}
               </div>
+            )})()}
+            </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
