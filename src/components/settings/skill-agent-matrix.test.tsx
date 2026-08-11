@@ -250,11 +250,11 @@ describe("SkillAgentMatrix", () => {
         ]),
     })
     const cell = await screen.findByRole("switch", {
-      name: "Brainstorming, Claude Code: Not enabled",
+      name: "Brainstorming, Claude Code: not_linked",
     })
     expect(cell).not.toBeDisabled()
     fireEvent.click(cell)
-    expect(applyLinks).toHaveBeenCalled()
+    await waitFor(() => expect(applyLinks).toHaveBeenCalled())
   })
 
   it("disables cells for a not-ready (un-synced) skill", async () => {
