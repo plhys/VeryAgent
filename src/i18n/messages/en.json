@@ -1255,6 +1255,7 @@
       "all": "All",
       "cancel": "Cancel",
       "close": "Close",
+      "teamWorkspace": "Team workspace",
       "closeOthers": "Close Others",
       "closeAll": "Close All",
       "confirm": "Confirm",
@@ -1278,6 +1279,7 @@
     },
     "sidebar": {
       "title": "Conversations",
+      "cancel": "Cancel",
       "locateActiveConversation": "Locate Active Conversation",
       "expandAllGroups": "Expand All Groups",
       "collapseAllGroups": "Collapse All Groups",
@@ -1380,7 +1382,11 @@
       "openWorkspace": "Open workspace",
       "removeFromWorkspace": "Delete workspace",
       "untitledConversation": "Untitled conversation",
-      "teamCollaboration": "Team Collaboration"
+      "teamCollaboration": "Team Collaboration",
+      "teamDelete": "Delete team",
+      "teamDeleteConfirm": "Delete team \"{name}\"?",
+      "teamDeleteConfirmDesc": "The team and its member/task records will be deleted; member conversations are kept. This cannot be undone.",
+      "deleting": "Deleting…"
     },
     "conversation": {
       "reloadFailed": "Failed to reload conversation: {message}",
@@ -4100,6 +4106,23 @@
     "workingHint": "Working…",
     "memberDetailPlaceholder": "The member's full conversation will appear here once a task is assigned.",
     "workspaceMissing": "Workspace not found — please pick it again",
-    "leaderChatFailed": "Failed to open the leader chat — retry or open it manually"
+    "leaderChatFailed": "Failed to open the leader chat — retry or open it manually",
+    "slotIdle": "Idle",
+    "slotReady": "Ready",
+    "slotError": "Connection error",
+    "taskSubject": "Task",
+    "taskSubjectPlaceholder": "What should the member do, e.g. implement the login module",
+    "taskDescription": "Details",
+    "taskDescriptionPlaceholder": "Optional: extra context / constraints",
+    "assignTask": "Assign task",
+    "assigning": "Assigning…",
+    "taskAssigned": "Task assigned — the member is working",
+    "taskAssignFailed": "Assignment failed: {message}",
+    "noConversationYet": "No conversation yet — assign a task to this member",
+    "memberTasks": "Task history",
+    "taskPending": "Pending",
+    "taskInProgress": "In progress",
+    "taskCompleted": "Completed",
+    "taskFailed": "Failed"
   }
 }

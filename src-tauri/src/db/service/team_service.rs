@@ -51,6 +51,7 @@ fn to_slot(m: team_slot::Model) -> TeamSlotInfo {
         roles: parse_roles(&m.roles),
         display_name: m.display_name,
         status: m.status,
+        conversation_id: m.conversation_id,
         created_at: m.created_at,
     }
 }
@@ -224,6 +225,7 @@ pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInf
             roles: Set(serde_json::to_string(&s.roles).unwrap_or_else(|_| "[]".into())),
             display_name: Set(s.display_name.clone()),
             status: Set(TeamSlotStatus::Idle),
+            conversation_id: Set(None),
             created_at: Set(now),
         })
         .exec(db)
@@ -274,6 +276,22 @@ pub async fn set_slot_status(
     Ok(to_slot(updated))
 }
 
+/// Attach a working conversation to a member slot (minted on task assign).
+pub async fn set_slot_conversation(
+    db: &DatabaseConnection,
+    slot_id: &str,
+    conversation_id: i32,
+) -> Result<TeamSlotInfo, DbError> {
+    let s = slot_entity::Entity::find_by_id(slot_id)
+        .one(db)
+        .await?
+        .ok_or_else(|| DbError::NotFound(format!("team slot {slot_id}")))?;
+    let mut active: slot_entity::ActiveModel = s.into();
+    active.conversation_id = Set(Some(conversation_id));
+    let updated = active.update(db).await?;
+    Ok(to_slot(updated))
+}
+
 // ── tasks ──────────────────────────────────────────────────────────────────
 
 pub async fn list_tasks(db: &DatabaseConnection, team_id: &str) -> Result<Vec<TeamTaskInfo>, DbError> {
@@ -294,6 +312,7 @@ pub async fn assign_task(
     owner_slot_id: &str,
     subject: &str,
     description: Option<&str>,
+    conversation_id: Option<i32>,
 ) -> Result<TeamTaskInfo, DbError> {
     // The slot must belong to this team (guards against cross-team assignment).
     let slot = slot_entity::Entity::find_by_id(owner_slot_id)
@@ -318,11 +337,22 @@ pub async fn assign_task(
         status: Set(TeamTaskStatus::Pending),
         owner_slot_id: Set(owner_slot_id.to_string()),
         result: Set(None),
-        conversation_id: Set(None),
+        conversation_id: Set(conversation_id),
         created_at: Set(Utc::now()),
     })
     .exec(db)
     .await?;
+
+    // The member's working conversation is minted together with the task: hang
+    // it on the slot (the mini-window streams it) and flip the member to
+    // "working" in the same assign call.
+    if let Some(conv_id) = conversation_id {
+        let mut active_slot: slot_entity::ActiveModel = slot.into();
+        active_slot.conversation_id = Set(Some(conv_id));
+        active_slot.status = Set(TeamSlotStatus::Working);
+        active_slot.update(db).await?;
+    }
+
     // `exec` returns no model; re-fetch the row (id is our own UUID).
     let m = task_entity::Entity::find_by_id(id)
         .one(db)

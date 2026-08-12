@@ -235,5 +235,125 @@ async fn feedback_settings_round_trip_defaults_off() {
 }
 
 // The submit gate is per-connection (the agent's actual `check_user_feedback`
-// capability), unit-tested in `ConnectionManager::submit_feedback`
+// capability, unit-tested in `ConnectionManager::submit_feedback`
 // (`submit_feedback_rejected_when_tool_unavailable`), not via the global setting.
+
+// ────────────────────────────────────────────────────────────────────────────
+// Team collaboration Step 1: assign-task w/ conversation + slot status
+// ────────────────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn team_assign_task_with_conversation_then_set_slot_status() {
+    let (server, _data, _static) = build_test_server().await;
+    let auth = format!("Bearer {TEST_TOKEN}");
+
+    // Create a team with a leader + one dev member.
+    let create_resp = server
+        .post("/api/team_create")
+        .add_header("authorization", &auth)
+        .json(&json!({
+            "draft": {
+                "name": "E2E Team",
+                "workspace": "/tmp/veryagent-team-workspace",
+                "slots": [
+                    {
+                        "agentType": "claude_code",
+                        "displayName": "Lead",
+                        "roles": ["leader", "dev"]
+                    },
+                    {
+                        "agentType": "codex",
+                        "displayName": "Dev",
+                        "roles": ["dev"]
+                    }
+                ]
+            }
+        }))
+        .await;
+    assert_eq!(create_resp.status_code(), 200, "create: {}", create_resp.text());
+    let team: Value = create_resp.json();
+    let team_id = team["id"].as_str().expect("team id").to_string();
+    assert_eq!(team["slots"].as_array().map(|a| a.len()), Some(2));
+
+    // Grab the dev (non-leader) slot id.
+    let slots = team["slots"].as_array().expect("slots array");
+    let dev_slot = slots
+        .iter()
+        .find(|s| !s["roles"].as_array().unwrap().iter().any(|r| r == "leader"))
+        .expect("dev slot");
+    let dev_slot_id = dev_slot["id"].as_str().expect("dev slot id").to_string();
+    assert_eq!(
+        dev_slot["conversation_id"],
+        Value::Null,
+        "no conversation yet"
+    );
+
+    // Assign a task with a conversation_id — slot should flip to working and
+    // carry the conversation; the task records it too.
+    let assign_resp = server
+        .post("/api/team_assign_task")
+        .add_header("authorization", &auth)
+        .json(&json!({
+            "teamId": team_id,
+            "ownerSlotId": dev_slot_id,
+            "subject": "Build the landing page",
+            "description": "Use the existing design tokens.",
+            "conversationId": 42
+        }))
+        .await;
+    assert_eq!(
+        assign_resp.status_code(),
+        200,
+        "assign: {}",
+        assign_resp.text()
+    );
+    let task: Value = assign_resp.json();
+    assert_eq!(task["subject"], "Build the landing page");
+    assert_eq!(task["owner_slot_id"], dev_slot_id);
+    assert_eq!(task["conversation_id"], 42);
+    assert_eq!(task["status"], "pending");
+
+    // Re-fetch the team: the slot now points at the conversation and is working.
+    let get_resp = server
+        .post("/api/team_get")
+        .add_header("authorization", &auth)
+        .json(&json!({ "id": team_id }))
+        .await;
+    assert_eq!(get_resp.status_code(), 200, "get: {}", get_resp.text());
+    let refreshed: Value = get_resp.json();
+    let refreshed_dev = refreshed["slots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"].as_str() == Some(dev_slot_id.as_str()))
+        .expect("dev slot in team_get");
+    assert_eq!(refreshed_dev["conversation_id"], 42);
+    assert_eq!(refreshed_dev["status"], "working");
+    assert_eq!(
+        refreshed["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"].as_str() == task["id"].as_str())
+            .map(|t| t["conversation_id"].as_i64()),
+        Some(Some(42))
+    );
+
+    // team_set_slot_status: flip the member back to idle.
+    let status_resp = server
+        .post("/api/team_set_slot_status")
+        .add_header("authorization", &auth)
+        .json(&json!({ "slotId": dev_slot_id, "status": "idle" }))
+        .await;
+    assert_eq!(
+        status_resp.status_code(),
+        200,
+        "set slot status: {}",
+        status_resp.text()
+    );
+    let slot: Value = status_resp.json();
+    assert_eq!(slot["id"].as_str(), Some(dev_slot_id.as_str()));
+    assert_eq!(slot["status"], "idle");
+    // conversation_id survives a status flip (it's only cleared by re-assign).
+    assert_eq!(slot["conversation_id"], 42);
+}

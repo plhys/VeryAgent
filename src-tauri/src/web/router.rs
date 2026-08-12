@@ -1174,6 +1174,10 @@ pub fn build_router(
         .route("/team_list_tasks", post(handlers::team::team_list_tasks))
         .route("/team_assign_task", post(handlers::team::team_assign_task))
         .route(
+            "/team_set_slot_status",
+            post(handlers::team::team_set_slot_status),
+        )
+        .route(
             "/team_set_task_status",
             post(handlers::team::team_set_task_status),
         )

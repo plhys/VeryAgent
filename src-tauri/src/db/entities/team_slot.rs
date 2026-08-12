@@ -34,6 +34,9 @@ pub struct Model {
     pub roles: String,
     pub display_name: String,
     pub status: TeamSlotStatus,
+    /// The member's current working conversation (minted on task assign). The
+    /// member mini-window streams it. None before the first task is assigned.
+    pub conversation_id: Option<i32>,
     pub created_at: DateTimeUtc,
 }
 

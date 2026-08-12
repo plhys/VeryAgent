@@ -93,9 +93,7 @@ async function download(url) {
 }
 
 function shasumFor(archiveName, shasums) {
-  const line = shasums
-    .split(/\r?\n/)
-    .find((l) => l.includes(archiveName))
+  const line = shasums.split(/\r?\n/).find((l) => l.includes(archiveName))
   if (!line) return null
   return line.split(/\s+/)[0]
 }

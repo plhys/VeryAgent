@@ -48,6 +48,14 @@ vi.mock("@/contexts/automations-view-context", () => ({
     refetch: async () => {},
   }),
 }))
+vi.mock("@/contexts/team-context", () => ({
+  useTeams: () => ({
+    teams: [],
+    refetch: async () => {},
+    bindLeaderConversation: vi.fn(),
+    teamByLeaderConversation: () => undefined,
+  }),
+}))
 vi.mock("@/contexts/workbench-route-context", () => ({
   useWorkbenchRoute: () => ({
     routeId: "conversations",

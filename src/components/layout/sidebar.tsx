@@ -6,6 +6,7 @@ import {
   Folder as FolderIcon,
   Search,
   SquarePen,
+  Trash2,
   Users,
   Zap,
   Wrench,
@@ -18,7 +19,21 @@ import { useTabActions } from "@/contexts/tab-context"
 import { useSearchDialog } from "@/contexts/search-dialog-context"
 import { useAutomationsView } from "@/contexts/automations-view-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
+import { useTeams } from "@/contexts/team-context"
+import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { Separator } from "@/components/ui/separator"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { teamDelete, teamGet } from "@/lib/api"
+import type { TeamSummary } from "@/lib/types"
 import {
   SidebarConversationList,
   type SidebarConversationListHandle,
@@ -99,10 +114,11 @@ export function Sidebar() {
   const t = useTranslations("Folder.sidebar")
   const { isOpen, toggle } = useSidebarContext()
   const { activeFolder } = useActiveFolder()
-  const { openNewConversationTab, openChatModeTab } = useTabActions()
+  const { openNewConversationTab, openChatModeTab, openTab } = useTabActions()
   const { setOpen: setSearchOpen } = useSearchDialog()
   const { unseenFailures } = useAutomationsView()
   const { routeId, setRoute, openConversations } = useWorkbenchRoute()
+  const { teams } = useTeams()
   const isMac = useIsMac()
   const { shortcuts } = useShortcutSettings()
   const isMobile = useIsMobile()
@@ -115,6 +131,8 @@ export function Sidebar() {
   const [sortMode, setSortMode] = useState<SidebarSortMode>("created")
   const [sectionOrder, setSectionOrder] =
     useState<SidebarSectionOrder>("folders-first")
+  const [deleteTeam, setDeleteTeam] = useState<TeamSummary | null>(null)
+  const [deletingTeam, setDeletingTeam] = useState(false)
   const searchShortcutLabel = formatShortcutLabel(
     shortcuts.toggle_search,
     isMac
@@ -129,6 +147,49 @@ export function Sidebar() {
     setSortMode(loadSortMode())
     setSectionOrder(loadSectionOrder())
   }, [])
+
+  const handleOpenTeam = useCallback(
+    async (team: TeamSummary) => {
+      // No leader chat yet → land on the team page.
+      if (team.leader_conversation_id == null) {
+        setRoute("team")
+        return
+      }
+      try {
+        const detail = await teamGet(team.id)
+        const leaderSlot = detail.slots.find((s) => s.roles.includes("leader"))
+        if (!leaderSlot) {
+          setRoute("team")
+          return
+        }
+        const folder = useAppWorkspaceStore
+          .getState()
+          .folders.find((f) => f.path === detail.workspace && f.kind !== "chat")
+        if (!folder) {
+          setRoute("team")
+          return
+        }
+        openTab(folder.id, team.leader_conversation_id, leaderSlot.agent_type)
+        openConversations()
+      } catch {
+        setRoute("team")
+      }
+    },
+    [openTab, openConversations, setRoute]
+  )
+
+  const confirmDeleteTeam = useCallback(async () => {
+    if (!deleteTeam) return
+    setDeletingTeam(true)
+    try {
+      await teamDelete(deleteTeam.id)
+      setDeleteTeam(null)
+    } catch (err) {
+      console.error("[Sidebar] delete team failed:", err)
+    } finally {
+      setDeletingTeam(false)
+    }
+  }, [deleteTeam])
 
   const handleNewConversation = useCallback(() => {
     // Starting a conversation always returns to the conversation workspace (in
@@ -200,6 +261,38 @@ export function Sidebar() {
           active={routeId === "team"}
           onClick={() => setRoute("team")}
         />
+        {teams.length > 0 ? (
+          <div className="mt-1 flex flex-col gap-px px-1.5">
+            {teams.map((team) => (
+              <div
+                key={team.id}
+                className="group flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent/50"
+              >
+                <button
+                  type="button"
+                  onClick={() => void handleOpenTeam(team)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                  title={team.name}
+                >
+                  <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-xs">{team.name}</span>
+                  <span className="ml-auto shrink-0 text-[0.625rem] tabular-nums text-muted-foreground">
+                    {team.member_count}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTeam(team)}
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                  title={t("teamDelete")}
+                  aria-label={t("teamDelete")}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <Separator className="my-1 bg-sidebar-border" />
       </div>
 
@@ -265,6 +358,35 @@ export function Sidebar() {
           <SidebarProjectList />
         )}
       </div>
+
+      {/* Team delete confirmation */}
+      <AlertDialog
+        open={deleteTeam != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTeam(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("teamDeleteConfirm", { name: deleteTeam?.name ?? "" })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("teamDeleteConfirmDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void confirmDeleteTeam()}
+              disabled={deletingTeam}
+            >
+              {deletingTeam ? t("deleting") : t("teamDelete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   )
 }

@@ -1113,6 +1113,8 @@ export interface TeamSlot {
   roles: string[]
   display_name: string
   status: TeamSlotStatus
+  /** The member's current working conversation id (None before first task). */
+  conversation_id: number | null
   created_at: string
 }
 

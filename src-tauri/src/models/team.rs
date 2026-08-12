@@ -46,6 +46,8 @@ pub struct TeamSlotInfo {
     pub roles: Vec<String>,
     pub display_name: String,
     pub status: TeamSlotStatus,
+    /// The member's current working conversation id (None before first task).
+    pub conversation_id: Option<i32>,
     pub created_at: DateTime<Utc>,
 }
 

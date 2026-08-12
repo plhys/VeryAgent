@@ -913,15 +913,15 @@ function WorkspaceLayoutInner({ children }: { children: React.ReactNode }) {
                                 <AutomationsViewProvider>
                                   <TeamProvider>
                                     <WorkbenchRouteProvider>
-                                    <WorkbenchRouteConversationSync />
-                                    {/* Inside WorkbenchRouteProvider: the
+                                      <WorkbenchRouteConversationSync />
+                                      {/* Inside WorkbenchRouteProvider: the
                                           listener calls openConversations() to
                                           surface a launcher-opened folder. */}
-                                    <WorkspaceOpenFolderListener />
-                                    <FolderLayoutShell>
-                                      {children}
-                                    </FolderLayoutShell>
-                                  </WorkbenchRouteProvider>
+                                      <WorkspaceOpenFolderListener />
+                                      <FolderLayoutShell>
+                                        {children}
+                                      </FolderLayoutShell>
+                                    </WorkbenchRouteProvider>
                                   </TeamProvider>
                                 </AutomationsViewProvider>
                               </SearchDialogProvider>

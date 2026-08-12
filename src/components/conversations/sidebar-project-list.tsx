@@ -19,9 +19,11 @@ import {
   PinOff,
   Trash2,
   Archive,
+  Users,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useShallow } from "zustand/react/shallow"
+import { useTeams } from "@/contexts/team-context"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabActions, useTabStore } from "@/contexts/tab-context"
 import { useActiveFolder } from "@/contexts/active-folder-context"
@@ -429,6 +431,9 @@ function ProjectFolderHeader({
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState(folder.name)
   const [renameSaving, setRenameSaving] = useState(false)
+  // 工作区团队标识：该文件夹是某团队的 workspace 时显示小型团队图标。
+  const { teams } = useTeams()
+  const isTeamWorkspace = teams.some((team) => team.workspace === folder.path)
 
   const handleRenameOpen = () => {
     setRenameValue(folder.name)
@@ -503,6 +508,15 @@ function ProjectFolderHeader({
               >
                 {folder.name}
               </span>
+              {isTeamWorkspace ? (
+                <span
+                  className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded-sm bg-sidebar-border/60 px-1 py-px text-[0.5625rem] font-medium text-muted-foreground"
+                  title={tCommon("teamWorkspace")}
+                >
+                  <Users className="h-2 w-2" aria-hidden="true" />
+                  {tCommon("teamWorkspace")}
+                </span>
+              ) : null}
               {folder.git_branch && (
                 <span className="flex items-center gap-0.5 text-[0.6875rem] leading-tight text-muted-foreground/70">
                   <GitBranch className="h-2.5 w-2.5 shrink-0" />

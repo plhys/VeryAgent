@@ -11,6 +11,16 @@
 
 ### 新增
 
+- **团队协作 Step 1 收尾闭环（派活 → 成员实时流 → 团队列表/删除）**：
+  - **派活带工作会话**：`team_assign_task` 新增 `conversation_id` 参数——一次调用完成「建任务 + 任务挂会话 + 成员 slot 挂会话 + slot 置 working」；`team_slot` 表新增 `conversation_id` 列（迁移 `m20260812_000001_team_slot_conversation`）。
+  - **成员小窗实时流**：领班对话右侧新增成员条（`TeamSidePanel`），每个成员一个小窗实时滚动其工作会话（复用 `useConversationRuntimeStore` + `selectTimelineTurns` + `useMemberLiveBridge`）；点开成员弹窗可查看完整会话并**派活**（填任务 → 自动建成员会话 → 连接智能体 → 任务作为首条消息下发），下方展示该成员任务历史（状态徽章）。
+  - **新增 `team_set_slot_status`** 命令（Tauri + Web 双通道），用于任务流转时同步成员 slot 状态。
+  - **侧边栏团队列表**：「团队协作」入口下列出全部团队（名称 + 成员数 + 领班图标），点击跳转领班对话或团队页，hover 显示删除（带确认框）；删除后 `team://changed` 实时刷新。
+  - **工作区团队标识**：工作区文件夹列表中命中团队 workspace 的文件夹显示「团队工作区」徽章（只读映射）。
+  - **端到端验证**：`api_integration.rs` 新增团队流程集成测试（建团队 → 带 conversation_id 派活 → 校验 slot 状态/会话 → 状态流转）。
+
+### 新增
+
 - **智能体环境完全隔离（自带运行时）**：
   - **内置 Node.js v22.19.0**：打包脚本 `prepare-node.mjs` 下载完整 Node 发行版（含 npm/npx）到 `resources/node/` 打进安装包；dev/便携模式回退下载到 `~/.veryagent/runtime/node/`。`process.rs` 的 `resolve_bundled_node_dir` / `ensure_node_in_path` 让 agent 进程的 node/npm/npx 全部从自带运行时解析（含 macOS `Contents/Resources` 布局）。
   - **npm 安装全隔离**：所有 agent 的 npm 安装/卸载/版本检测一律走 `~/.veryagent/npm-global/` 用户前缀，不再碰系统全局目录；系统全局安装只做 best-effort 清理。命令解析（`resolve_npx_command` / `resolve_uvx_command` / OpenClaw CLI）改为隔离优先。

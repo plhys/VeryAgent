@@ -25,7 +25,11 @@ import { getActiveRemoteConnectionId } from "@/lib/transport"
 import { useTabActions } from "@/contexts/tab-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useTeams } from "@/contexts/team-context"
-import { createConversation, teamCreate, teamSetLeaderConversation } from "@/lib/api"
+import {
+  createConversation,
+  teamCreate,
+  teamSetLeaderConversation,
+} from "@/lib/api"
 import { AGENT_LABELS, type AgentType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -35,11 +39,9 @@ type TemplateId = "3" | "4" | "5"
 /** i18n keys live in the `Team` namespace; the unions keep `t(...)` type-checked
  *  against the typed message catalog (same idiom as automation-templates.ts). */
 type TemplateLabelKey = "template3" | "template4" | "template5"
-type TemplateDescKey =
-  | "template3Desc"
-  | "template4Desc"
-  | "template5Desc"
-type RoleLabelKey = "roleLeader" | "roleDev" | "roleTest" | "roleDoc" | "roleReview"
+type TemplateDescKey = "template3Desc" | "template4Desc" | "template5Desc"
+type RoleLabelKey =
+  "roleLeader" | "roleDev" | "roleTest" | "roleDoc" | "roleReview"
 type RoleHintKey =
   | "roleLeaderHint"
   | "roleDevHint"
@@ -56,7 +58,12 @@ interface TemplateDef {
 
 /** Preset team lineups — new users pick a size instead of designing roles. */
 const TEMPLATES: TemplateDef[] = [
-  { id: "3", labelKey: "template3", descKey: "template3Desc", roles: ["leader", "dev", "test"] },
+  {
+    id: "3",
+    labelKey: "template3",
+    descKey: "template3Desc",
+    roles: ["leader", "dev", "test"],
+  },
   {
     id: "4",
     labelKey: "template4",
@@ -71,7 +78,10 @@ const TEMPLATES: TemplateDef[] = [
   },
 ]
 
-const ROLE_META: Record<RoleId, { labelKey: RoleLabelKey; hintKey: RoleHintKey }> = {
+const ROLE_META: Record<
+  RoleId,
+  { labelKey: RoleLabelKey; hintKey: RoleHintKey }
+> = {
   leader: { labelKey: "roleLeader", hintKey: "roleLeaderHint" },
   dev: { labelKey: "roleDev", hintKey: "roleDevHint" },
   test: { labelKey: "roleTest", hintKey: "roleTestHint" },
@@ -165,7 +175,10 @@ export function TeamPage() {
 
   const handlePickWorkspace = async () => {
     if (isDesktop() && getActiveRemoteConnectionId() === null) {
-      const selected = await openFileDialog({ directory: true, multiple: false })
+      const selected = await openFileDialog({
+        directory: true,
+        multiple: false,
+      })
       if (selected) {
         const path = Array.isArray(selected) ? selected[0] : selected
         await pickWorkspaceFolder(path)
@@ -241,10 +254,15 @@ export function TeamPage() {
       <div className="mx-auto flex min-h-full max-w-3xl flex-col gap-7 px-6 py-7">
         <header>
           <h1 className="flex items-center gap-2 text-lg font-semibold">
-            <Users className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <Users
+              className="h-5 w-5 text-muted-foreground"
+              aria-hidden="true"
+            />
             {t("title")}
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">{t("subtitle")}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {t("subtitle")}
+          </p>
         </header>
 
         {/* 1. Template picker */}
@@ -311,7 +329,10 @@ export function TeamPage() {
                   )}
                 >
                   {role === "leader" ? (
-                    <Crown className="h-3 w-3 text-amber-500" aria-hidden="true" />
+                    <Crown
+                      className="h-3 w-3 text-amber-500"
+                      aria-hidden="true"
+                    />
                   ) : null}
                   {t(ROLE_META[role].labelKey)}
                   {assignedTo ? (
@@ -326,7 +347,9 @@ export function TeamPage() {
               )
             })}
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">{t("assignHint")}</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {t("assignHint")}
+          </p>
         </section>
 
         {/* 3. Agent cards */}
@@ -354,7 +377,8 @@ export function TeamPage() {
                     role="button"
                     tabIndex={0}
                     onClick={() => {
-                      if (activeRole != null) assign(activeRole, agent.agent_type)
+                      if (activeRole != null)
+                        assign(activeRole, agent.agent_type)
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && activeRole != null) {
@@ -364,7 +388,8 @@ export function TeamPage() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       const idx = Number(e.dataTransfer.getData("text/plain"))
-                      if (!Number.isNaN(idx) && idx >= 0) assign(idx, agent.agent_type)
+                      if (!Number.isNaN(idx) && idx >= 0)
+                        assign(idx, agent.agent_type)
                     }}
                     className={cn(
                       "flex cursor-pointer flex-col gap-1.5 rounded-lg border p-3 transition-colors",

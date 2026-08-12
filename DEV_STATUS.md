@@ -11,6 +11,7 @@
 - [x] **智能体「检测全部 / 修复全部」**（Agent SDK 管理页顶部）：后端 `commands/acp/diagnose.rs`（`acp_diagnose_agent` / `acp_diagnose_all_agents` / `acp_repair_agent_config` / `acp_ensure_npm_path`，Tauri+Web 双通道）；preflight 新增安装态 `package_installed` + 配置解析 `config_parse` 检查；鉴权缺失 warn + OpenClaw gateway 探活；修复全部自动顺序执行非破坏性修复
 - [x] **智能体环境完全隔离（自带运行时）**：内置 Node.js v22.19.0（`prepare-node.mjs` 打包完整发行版进安装包，dev 回退 `~/.veryagent/runtime/node/`）；npm 安装/卸载/检测全走 `~/.veryagent/npm-global/` 隔离前缀；`build_agent_env` 为所有 agent 子进程前置隔离 PATH；命令解析（npx/uvx/OpenClaw）隔离优先；preflight 新增 `legacy_system_install` 迁移检测
 - [x] **本机迁移完成**：8 个智能体（claude/codex/codebuddy/kimi/pi/mimo/hermes/opencode）已迁入隔离环境，ACP 握手探活 8/8 通过；cline 按要求排除；npm 代理配置从失效的 7897 改为 Hiddify 12334
+- [x] **团队协作 Step 1 收尾**：派活（`team_assign_task` 带 `conversation_id`，一次调用建任务+挂会话+slot 置 working）；`team_slot` 新增 `conversation_id` 列 + 迁移；新增 `team_set_slot_status`（Tauri+Web 双通道）；领班对话右侧成员小窗实时流（`TeamSidePanel`，复用 runtime store + live bridge）+ 成员弹窗派活表单 + 任务历史；侧边栏团队列表（点击跳转/删除确认/`team://changed` 实时刷新）；工作区团队「团队工作区」徽章；`api_integration.rs` 团队 e2e 集成测试（HTTP 实测全绿）
 
 ### 待跟进
 

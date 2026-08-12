@@ -7,7 +7,8 @@ use crate::app_error::AppCommandError;
 use crate::app_state::AppState;
 use crate::commands::team as core;
 use crate::models::{
-    TeamDraft, TeamInfo, TeamSlotInfo, TeamSummaryInfo, TeamTaskInfo, TeamTaskStatus,
+    TeamDraft, TeamInfo, TeamSlotInfo, TeamSlotStatus, TeamSummaryInfo, TeamTaskInfo,
+    TeamTaskStatus,
 };
 
 #[derive(Deserialize)]
@@ -54,6 +55,8 @@ pub struct AssignTaskParams {
     pub owner_slot_id: String,
     pub subject: String,
     pub description: Option<String>,
+    #[serde(default)]
+    pub conversation_id: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -61,6 +64,13 @@ pub struct AssignTaskParams {
 pub struct SetTaskStatusParams {
     pub task_id: String,
     pub status: TeamTaskStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSlotStatusParams {
+    pub slot_id: String,
+    pub status: TeamSlotStatus,
 }
 
 pub async fn team_list(
@@ -143,6 +153,22 @@ pub async fn team_assign_task(
         params.owner_slot_id,
         params.subject,
         params.description,
+        params.conversation_id,
+    )
+    .await
+    .map_err(AppCommandError::from)?;
+    Ok(Json(result))
+}
+
+pub async fn team_set_slot_status(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<SetSlotStatusParams>,
+) -> Result<Json<TeamSlotInfo>, AppCommandError> {
+    let result = core::team_set_slot_status_core(
+        &state.emitter,
+        &state.db,
+        params.slot_id,
+        params.status,
     )
     .await
     .map_err(AppCommandError::from)?;

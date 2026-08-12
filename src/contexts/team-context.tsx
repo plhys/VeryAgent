@@ -89,9 +89,7 @@ export function TeamProvider({ children }: { children: ReactNode }) {
     (teamId: string, conversationId: number) => {
       setTeams((prev) =>
         prev.map((t) =>
-          t.id === teamId
-            ? { ...t, leader_conversation_id: conversationId }
-            : t
+          t.id === teamId ? { ...t, leader_conversation_id: conversationId } : t
         )
       )
     },
@@ -107,7 +105,12 @@ export function TeamProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo<TeamContextValue>(
-    () => ({ teams, refetch, bindLeaderConversation, teamByLeaderConversation }),
+    () => ({
+      teams,
+      refetch,
+      bindLeaderConversation,
+      teamByLeaderConversation,
+    }),
     [teams, refetch, bindLeaderConversation, teamByLeaderConversation]
   )
 

@@ -8,7 +8,8 @@ use crate::db::error::DbError;
 use crate::db::service::team_service;
 use crate::db::AppDatabase;
 use crate::models::{
-    TeamDraft, TeamInfo, TeamSlotInfo, TeamSummaryInfo, TeamTaskInfo, TeamTaskStatus,
+    TeamDraft, TeamInfo, TeamSlotInfo, TeamSlotStatus, TeamSummaryInfo, TeamTaskInfo,
+    TeamTaskStatus,
 };
 use crate::web::event_bridge::{emit_event, EventEmitter, TEAM_CHANGED_EVENT, TeamChange};
 
@@ -69,6 +70,7 @@ pub async fn team_assign_task_core(
     owner_slot_id: String,
     subject: String,
     description: Option<String>,
+    conversation_id: Option<i32>,
 ) -> Result<TeamTaskInfo, DbError> {
     let task = team_service::assign_task(
         &db.conn,
@@ -76,10 +78,22 @@ pub async fn team_assign_task_core(
         &owner_slot_id,
         &subject,
         description.as_deref(),
+        conversation_id,
     )
     .await?;
     emit_team(emitter, &team_id);
     Ok(task)
+}
+
+pub async fn team_set_slot_status_core(
+    emitter: &EventEmitter,
+    db: &AppDatabase,
+    slot_id: String,
+    status: TeamSlotStatus,
+) -> Result<TeamSlotInfo, DbError> {
+    let slot = team_service::set_slot_status(&db.conn, &slot_id, status).await?;
+    emit_team(emitter, &slot.team_id);
+    Ok(slot)
 }
 
 pub async fn team_set_task_status_core(
@@ -164,6 +178,7 @@ pub async fn team_assign_task(
     owner_slot_id: String,
     subject: String,
     description: Option<String>,
+    conversation_id: Option<i32>,
 ) -> Result<TeamTaskInfo, DbError> {
     team_assign_task_core(
         &EventEmitter::Tauri(app),
@@ -172,8 +187,20 @@ pub async fn team_assign_task(
         owner_slot_id,
         subject,
         description,
+        conversation_id,
     )
     .await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn team_set_slot_status(
+    app: tauri::AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    slot_id: String,
+    status: TeamSlotStatus,
+) -> Result<TeamSlotInfo, DbError> {
+    team_set_slot_status_core(&EventEmitter::Tauri(app), &db, slot_id, status).await
 }
 
 #[cfg(feature = "tauri-runtime")]

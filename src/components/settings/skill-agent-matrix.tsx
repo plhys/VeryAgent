@@ -340,8 +340,10 @@ export function SkillAgentMatrix({
           description: toErrorMessage(applyError),
         })
       } else {
-        const okCount = results.filter((r) => r.ok).length
-        const failCount = results.length - okCount
+        // The transport may resolve undefined; treat as "nothing applied".
+        const applied = results ?? []
+        const okCount = applied.filter((r) => r.ok).length
+        const failCount = applied.length - okCount
         if (failCount === 0) {
           toast.success(
             enable
@@ -349,7 +351,7 @@ export function SkillAgentMatrix({
               : t("toasts.disabled", { count: okCount })
           )
         } else {
-          const firstErr = results.find((r) => !r.ok)?.error ?? undefined
+          const firstErr = applied.find((r) => !r.ok)?.error ?? undefined
           toast.warning(
             enable
               ? t("toasts.enabledPartial", { ok: okCount, failed: failCount })
