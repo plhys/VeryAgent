@@ -1,6 +1,21 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-08-11
+> 更新日期：2026-08-12
+
+---
+
+## 近期（2026-08-12）
+
+### 新增
+
+- [x] **智能体「检测全部 / 修复全部」**（Agent SDK 管理页顶部）：后端 `commands/acp/diagnose.rs`（`acp_diagnose_agent` / `acp_diagnose_all_agents` / `acp_repair_agent_config` / `acp_ensure_npm_path`，Tauri+Web 双通道）；preflight 新增安装态 `package_installed` + 配置解析 `config_parse` 检查；鉴权缺失 warn + OpenClaw gateway 探活；修复全部自动顺序执行非破坏性修复
+- [x] **智能体环境完全隔离（自带运行时）**：内置 Node.js v22.19.0（`prepare-node.mjs` 打包完整发行版进安装包，dev 回退 `~/.veryagent/runtime/node/`）；npm 安装/卸载/检测全走 `~/.veryagent/npm-global/` 隔离前缀；`build_agent_env` 为所有 agent 子进程前置隔离 PATH；命令解析（npx/uvx/OpenClaw）隔离优先；preflight 新增 `legacy_system_install` 迁移检测
+- [x] **本机迁移完成**：8 个智能体（claude/codex/codebuddy/kimi/pi/mimo/hermes/opencode）已迁入隔离环境，ACP 握手探活 8/8 通过；cline 按要求排除；npm 代理配置从失效的 7897 改为 Hiddify 12334
+
+### 待跟进
+
+- [ ] 正式发版前跑一次完整 `tauri build` 验证安装包内 node 资源
+- [ ] npm 注册表/代理可配置化（当前固定 npmjs + 读用户 `~/.npmrc`）
 
 ---
 

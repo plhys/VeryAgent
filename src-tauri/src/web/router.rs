@@ -615,6 +615,16 @@ pub fn build_router(
         )
         .route("/acp_prompt", post(handlers::acp::acp_prompt))
         .route("/acp_preflight", post(handlers::acp::acp_preflight))
+        .route("/acp_diagnose_agent", post(handlers::acp::acp_diagnose_agent))
+        .route(
+            "/acp_diagnose_all_agents",
+            post(handlers::acp::acp_diagnose_all_agents),
+        )
+        .route(
+            "/acp_repair_agent_config",
+            post(handlers::acp::acp_repair_agent_config),
+        )
+        .route("/acp_ensure_npm_path", post(handlers::acp::acp_ensure_npm_path))
         .route("/acp_set_mode", post(handlers::acp::acp_set_mode))
         .route(
             "/acp_set_config_option",

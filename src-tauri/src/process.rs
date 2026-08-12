@@ -142,131 +142,260 @@ where
 ///
 /// Resolution order:
 /// 1. `VERYAGENT_BUNDLED_NODE_DIR` env var (development override)
-/// 2. `<resource_dir>/node/node.exe` (production bundle)
+/// 2. `~/.veryagent/runtime/node/` (managed download — dev / portable fallback)
+/// 3. `<resource_dir>/node/` (production bundle, Windows: next to the exe)
+/// 4. macOS `Contents/Resources/node/` (Tauri bundle layout)
 ///
 /// Returns `None` when no bundled Node.js is found.
 pub fn resolve_bundled_node() -> Option<PathBuf> {
+    resolve_bundled_node_dir().map(|dir| node_exe_path_in_dir(&dir))
+}
+
+/// Resolve the directory containing the bundled/managed Node.js distribution
+/// (the dir that holds `node.exe`/`npm.cmd` on Windows, or `bin/node` on Unix).
+///
+/// Order matches [`resolve_bundled_node`]. The env override may point at a dir
+/// with a *full* distribution (node + npm + npx) — the flat bundle layout.
+pub fn resolve_bundled_node_dir() -> Option<PathBuf> {
     // Allow override via env var (useful in development)
     if let Ok(dir) = std::env::var("VERYAGENT_BUNDLED_NODE_DIR") {
         if !dir.is_empty() {
-            let node_exe = PathBuf::from(dir).join("node.exe");
-            if node_exe.exists() {
-                return Some(node_exe);
+            let dir = PathBuf::from(dir);
+            if node_exe_path_in_dir(&dir).exists() {
+                return Some(dir);
             }
         }
     }
 
+    // Managed download target: ~/.veryagent/runtime/node/
+    let isolated = crate::paths::isolated_runtime_node_dir();
+    if node_exe_path_in_dir(&isolated).exists() {
+        return Some(isolated);
+    }
+
     // Check for bundled node in the app's resource directory.
     // In production, this is next to the veryagent executable.
-    let exe_dir = std::env::current_exe().ok()?
-        .parent()?
-        .to_path_buf();
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
 
     // Check sibling `node/` directory (side-by-side with the exe)
-    let sibling = exe_dir.join("node").join("node.exe");
-    if sibling.exists() {
+    let sibling = exe_dir.join("node");
+    if node_exe_path_in_dir(&sibling).exists() {
         return Some(sibling);
     }
 
-    // Check `resources/node/` relative to the exe (Tauri bundle layout)
-    let resources = exe_dir.join("resources").join("node").join("node.exe");
-    if resources.exists() {
+    // Check `resources/node/` relative to the exe (Windows/Linux Tauri layout)
+    let resources = exe_dir.join("resources").join("node");
+    if node_exe_path_in_dir(&resources).exists() {
         return Some(resources);
+    }
+
+    // macOS Tauri bundle: <app>.app/Contents/MacOS/../Resources/node/
+    #[cfg(target_os = "macos")]
+    {
+        let mac_resources = exe_dir.join("..").join("Resources").join("node");
+        if node_exe_path_in_dir(&mac_resources).exists() {
+            return Some(mac_resources);
+        }
     }
 
     None
 }
 
-/// Download and cache a portable Node.js binary for the current platform.
-///
-/// This is called automatically when no bundled or system Node.js is found,
-/// making the first agent connection slightly slower (download time) but
-/// ensuring zero manual setup.
-pub async fn download_node() -> Result<PathBuf, AcpError> {
-    let cache_dir = match crate::acp::binary_cache::cache_dir() {
-        Ok(d) => d,
-        Err(e) => return Err(AcpError::DownloadFailed(format!(
-            "failed to resolve cache dir: {e}"
-        ))),
-    };
-    let node_dir = cache_dir.join("node");
-    let node_exe = node_dir.join("node.exe");
+/// The node executable path inside a node distribution dir.
+fn node_exe_path_in_dir(dir: &Path) -> PathBuf {
+    if cfg!(windows) {
+        dir.join("node.exe")
+    } else {
+        dir.join("bin").join("node")
+    }
+}
 
-    // Already cached
+/// Download and cache a portable Node.js distribution (node + npm + npx) for
+/// the current platform into `~/.veryagent/runtime/node/`.
+///
+/// This is the dev / portable fallback when the app has no bundled runtime
+/// (`resources/node/` in the installer) — the managed runtime keeps agents
+/// independent of any system Node.js install. Downloads the FULL distribution
+/// (not the single-file node.exe) because the isolated runtime also needs
+/// npm/npx to install agent packages.
+pub async fn download_node() -> Result<PathBuf, AcpError> {
+    let node_dir = crate::paths::isolated_runtime_node_dir();
+    let node_exe = node_exe_path_in_dir(&node_dir);
+
+    // Already provisioned
     if node_exe.exists() {
         return Ok(node_exe);
     }
 
-    tracing::info!("[Node] Node.js not found locally; downloading portable build...");
+    tracing::info!("[Node] Node.js not found locally; downloading portable distribution...");
 
-    // Download portable Node.js for Windows x64
-    // Using the official Node.js prebuilt binaries
-    #[cfg(target_os = "windows")]
-    let url = "https://nodejs.org/dist/v22.19.0/win-x64/node.exe";
+    let distro = current_node_distro();
+    let is_windows = cfg!(target_os = "windows");
+    let archive_name = format!(
+        "node-{NODE_DIST_VERSION}-{distro}.{}",
+        if is_windows { "zip" } else { "tar.gz" }
+    );
+    let url = format!("https://nodejs.org/dist/{NODE_DIST_VERSION}/{archive_name}");
 
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-x64.tar.gz";
-
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-linux-arm64.tar.gz";
-
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-darwin-arm64.tar.gz";
-
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let url = "https://nodejs.org/dist/v22.19.0/node-v22.19.0-darwin-x64.tar.gz";
-
-    std::fs::create_dir_all(&node_dir).map_err(|e| {
-        AcpError::DownloadFailed(format!("failed to create node cache dir: {e}"))
+    // Stage under the runtime root (sibling of the target dir) so a versioned
+    // top-level dir can be renamed into place without recursive copy.
+    let runtime_root = node_dir
+        .parent()
+        .ok_or_else(|| AcpError::DownloadFailed("cannot resolve runtime root".into()))?;
+    let staging = runtime_root.join(format!(".node-download-{}", std::process::id()));
+    let archive_tmp = staging.join(&archive_name);
+    let extract_tmp = staging.join("extracted");
+    std::fs::create_dir_all(&extract_tmp).map_err(|e| {
+        AcpError::DownloadFailed(format!("failed to create node staging dir: {e}"))
     })?;
 
-    let response = reqwest::get(url).await.map_err(|e| {
+    let response = reqwest::get(&url).await.map_err(|e| {
         AcpError::DownloadFailed(format!("failed to download Node.js: {e}"))
     })?;
-
     let bytes = response.bytes().await.map_err(|e| {
         AcpError::DownloadFailed(format!("failed to read Node.js download: {e}"))
     })?;
+    std::fs::write(&archive_tmp, &bytes).map_err(|e| {
+        AcpError::DownloadFailed(format!("failed to write node archive: {e}"))
+    })?;
 
-    #[cfg(target_os = "windows")]
-    {
-        // Windows: single exe file
-        std::fs::write(&node_exe, &bytes).map_err(|e| {
-            AcpError::DownloadFailed(format!("failed to write node.exe: {e}"))
+    // Extract the full distribution.
+    if is_windows {
+        let file = std::fs::File::open(&archive_tmp).map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to open node archive: {e}"))
+        })?;
+        let mut zip = zip::ZipArchive::new(file)
+            .map_err(|e| AcpError::DownloadFailed(format!("failed to read node zip: {e}")))?;
+        zip.extract(&extract_tmp)
+            .map_err(|e| AcpError::DownloadFailed(format!("failed to extract node zip: {e}")))?;
+    } else {
+        let file = std::fs::File::open(&archive_tmp).map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to open node archive: {e}"))
+        })?;
+        let gz = flate2::read::GzDecoder::new(file);
+        let mut tar = tar::Archive::new(gz);
+        tar.unpack(&extract_tmp).map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to extract node archive: {e}"))
         })?;
     }
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        // Unix: tar.gz archive, extract node binary
-        use std::io::Read;
-        let decoded = flate2::read::GzDecoder::new(&bytes[..]);
-        let mut archive = tar::Archive::new(decoded);
-        for entry in archive.entries().map_err(|e| {
-            AcpError::DownloadFailed(format!("failed to read node archive: {e}"))
-        })? {
-            let mut entry = entry.map_err(|e| {
-                AcpError::DownloadFailed(format!("failed to read node archive entry: {e}"))
-            })?;
-            if entry.path().ok().map_or(false, |p| {
-                p.ends_with("bin/node")
-            }) {
-                entry.unpack(&node_exe).map_err(|e| {
-                    AcpError::DownloadFailed(format!("failed to extract node: {e}"))
-                })?;
-                break;
-            }
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&node_exe, std::fs::Permissions::from_mode(0o755))
-                .ok();
+    // Flatten the versioned top dir (`node-v22.19.0-win-x64/…`) into node_dir.
+    let mut entries = std::fs::read_dir(&extract_tmp)
+        .map_err(|e| AcpError::DownloadFailed(format!("failed to list node staging: {e}")))?;
+    let mut top_dir: Option<PathBuf> = None;
+    while let Some(entry) = entries.next() {
+        let entry = entry.map_err(|e| {
+            AcpError::DownloadFailed(format!("failed to read node staging entry: {e}"))
+        })?;
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            top_dir = Some(entry.path());
+            break;
         }
     }
+    let top_dir = top_dir.ok_or_else(|| {
+        AcpError::DownloadFailed("node archive had no top-level directory".into())
+    })?;
+    std::fs::rename(&top_dir, &node_dir).map_err(|e| {
+        AcpError::DownloadFailed(format!(
+            "failed to move node distribution into place: {e}"
+        ))
+    })?;
+    let _ = std::fs::remove_dir_all(&staging);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&node_exe, std::fs::Permissions::from_mode(0o755)).ok();
+    }
+
+    // Refresh PATH so `node` / `npm` / `npx` resolve from the managed runtime
+    // even though the app already started (ensure_node_in_path ran at boot).
+    ensure_node_in_path();
 
     tracing::info!("[Node] Node.js downloaded to {:?}", node_exe);
     Ok(node_exe)
+}
+
+const NODE_DIST_VERSION: &str = "v22.19.0";
+
+/// The Node.js distro id for the current platform (`win-x64` / `linux-arm64` /
+/// `darwin-x64` …), matching the official nodejs.org distribution layout.
+fn current_node_distro() -> &'static str {
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        "win-x64"
+    }
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    {
+        "win-arm64"
+    }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    {
+        "linux-x64"
+    }
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        "linux-arm64"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        "darwin-arm64"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        "darwin-x64"
+    }
+    #[cfg(not(any(
+        all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "windows", target_arch = "aarch64"),
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "aarch64"),
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "macos", target_arch = "x86_64")
+    )))]
+    {
+        compile_error!("unsupported platform for bundled Node.js runtime");
+    }
+}
+
+/// Resolve the `node` executable to use: the bundled / managed runtime first
+/// (isolation — agents never depend on a system Node), then the system PATH.
+pub fn resolve_node_command() -> Option<PathBuf> {
+    if let Some(node) = resolve_bundled_node() {
+        return Some(node);
+    }
+    which::which("node").ok()
+}
+
+/// Resolve the `npm` executable to use: the bundled / managed runtime's npm
+/// first, then the isolated npm-global prefix shim, then the system PATH.
+pub fn resolve_npm_command() -> Option<PathBuf> {
+    if let Some(dir) = resolve_bundled_node_dir() {
+        let npm = if cfg!(windows) {
+            dir.join("npm.cmd")
+        } else {
+            dir.join("bin").join("npm")
+        };
+        if npm.exists() {
+            return Some(npm);
+        }
+    }
+    if let Some(prefix) = user_npm_prefix() {
+        let bin = if cfg!(windows) {
+            prefix
+        } else {
+            prefix.join("bin")
+        };
+        let npm = if cfg!(windows) {
+            bin.join("npm.cmd")
+        } else {
+            bin.join("npm")
+        };
+        if npm.exists() {
+            return Some(npm);
+        }
+    }
+    which::which("npm").ok()
 }
 
 /// If `node` is not already in PATH, detect common Node.js version manager
@@ -288,8 +417,17 @@ pub async fn download_node() -> Result<PathBuf, AcpError> {
 /// * In Docker / systemd services: typically a no-op — `which("node")`
 ///   succeeds because `node` is installed to a standard PATH directory.
 pub fn ensure_node_in_path() {
-    // Bundled Node.js takes priority — no need to search PATH further.
-    if resolve_bundled_node().is_some() {
+    // Bundled / managed Node.js takes priority: prepend its directory so
+    // `node` / `npm` / `npx` all resolve from the isolated runtime, making the
+    // whole agent stack independent of any system Node.js install.
+    if let Some(node_dir) = resolve_bundled_node_dir() {
+        let bin_dir = if cfg!(windows) {
+            node_dir
+        } else {
+            node_dir.join("bin")
+        };
+        prepend_dir_to_path_if_absent(&bin_dir);
+        tracing::info!("[PATH] prepended bundled Node runtime {}", bin_dir.display());
         return;
     }
 
@@ -306,6 +444,20 @@ pub fn ensure_node_in_path() {
     if let Some(bin_dir) = find_node_bin_dir(home.as_deref()) {
         prepend_to_path(&bin_dir);
         tracing::info!("[PATH] node not in PATH, prepended {}", bin_dir.display());
+    }
+}
+
+/// Prepend `dir` to the process PATH unless it is already present (dedup).
+fn prepend_dir_to_path_if_absent(dir: &Path) {
+    let current = std::env::var_os("PATH").unwrap_or_default();
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let dir_str = dir.to_string_lossy();
+    if !current
+        .to_string_lossy()
+        .split(sep)
+        .any(|p| p == dir_str.as_ref())
+    {
+        prepend_to_path(dir);
     }
 }
 
@@ -639,6 +791,44 @@ pub(crate) fn prepend_to_path(dir: &std::path::Path) {
 /// system global prefix (e.g. `/usr/local/lib/node_modules/`) is not writable.
 pub(crate) fn user_npm_prefix() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".veryagent").join("npm-global"))
+}
+
+/// Build a PATH string with VeryAgent's isolated runtime dirs prepended
+/// (managed Node distribution dir + the user npm-global bin dir), ahead of the
+/// current process PATH. Used when spawning subprocesses that must resolve
+/// `node` / `npm` / `npx` / agent shims from the isolated runtime regardless of
+/// the live process PATH state (e.g. OpenClaw gateway CLI runs).
+pub fn isolated_path_string() -> String {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(node_dir) = resolve_bundled_node_dir() {
+        dirs.push(if cfg!(windows) {
+            node_dir
+        } else {
+            node_dir.join("bin")
+        });
+    }
+    if let Some(prefix) = user_npm_prefix() {
+        dirs.push(if cfg!(windows) {
+            prefix
+        } else {
+            prefix.join("bin")
+        });
+    }
+    let current = std::env::var("PATH").unwrap_or_default();
+    if dirs.is_empty() {
+        return current;
+    }
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let prepended = dirs
+        .iter()
+        .map(|d| d.to_string_lossy())
+        .collect::<Vec<_>>()
+        .join(sep);
+    if current.is_empty() {
+        prepended
+    } else {
+        format!("{prepended}{sep}{current}")
+    }
 }
 
 /// Ensure the user-local npm prefix `bin/` directory is in `PATH` so that

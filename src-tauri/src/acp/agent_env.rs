@@ -93,12 +93,15 @@ pub(crate) fn build_agent_env(
         merged.insert(OsString::from(key), OsString::from(value));
     }
 
-    // 4. officecli 安装目录补进 PATH（可能不在用户 shell PATH 里）
+    // 4. PATH 注入：先 officecli，再隔离运行时（受管 Node + npm-global）——
+    //    隔离目录压过系统 PATH，agent 进程的 node/npm/npx 只认自带运行时，
+    //    与机器上的 Node 环境完全解耦。
     let mut merged_str: BTreeMap<String, String> = merged
         .into_iter()
         .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()))
         .collect();
     crate::acp::connection::prepend_officecli_path(&mut merged_str);
+    crate::acp::connection::prepend_isolated_runtime_path(&mut merged_str);
 
     merged_str
         .into_iter()

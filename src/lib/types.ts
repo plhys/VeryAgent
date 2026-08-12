@@ -2320,6 +2320,13 @@ export type FixActionKind =
   | "open_agents_settings"
   | "install_opencode_plugins"
   | "install_uv"
+  | "install_npx"
+  | "upgrade_npx"
+  | "download_binary"
+  | "reinstall_binary"
+  | "repair_config"
+  | "ensure_npm_path"
+  | "ensure_openclaw_gateway"
 
 export interface FixAction {
   label: string
@@ -2342,6 +2349,15 @@ export interface PreflightResult {
   agent_name: string
   passed: boolean
   checks: CheckItem[]
+}
+
+/** 单个智能体的完整诊断结果（preflight + 鉴权 + OpenClaw gateway 探活）。 */
+export interface AgentDiagnosis {
+  agent_type: AgentType
+  agent_name: string
+  passed: boolean
+  checks: CheckItem[]
+  summary: string
 }
 
 // ─── OpenCode Plugins ───

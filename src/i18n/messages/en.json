@@ -596,7 +596,9 @@
       "saveCodeBuddyConfig": "Save CodeBuddy Config",
       "saveKimiCodeConfig": "Save Kimi Code Config",
       "customInstall": "Custom install",
-      "saveKimiCodeRawConfig": "Save config.toml"
+      "saveKimiCodeRawConfig": "Save config.toml",
+      "diagnoseAll": "Diagnose All",
+      "repairAll": "Repair All"
     },
     "status": {
       "enabled": "Enabled",
@@ -1048,8 +1050,17 @@
       "piBinaryInstallFailed": "Failed to install pi",
       "piBinaryUninstalled": "pi uninstalled",
       "piBinaryUninstallFailed": "Failed to uninstall pi",
-      "savePiTrustFailed": "Failed to save workspace trust"
+      "savePiTrustFailed": "Failed to save workspace trust",
+      "diagnoseAllFailed": "Diagnose all failed, please retry",
+      "repairAllCompleted": "Auto-repair finished: {count} item(s) fixed",
+      "repairAllNothingToDo": "Nothing to auto-repair",
+      "repairAllFailed": "Auto-repair failed and was interrupted",
+      "configRepaired": "{name} config file has been repaired",
+      "configRepairFailed": "Failed to repair {name} config file",
+      "npmPathEnsured": "User-level npm prefix added to PATH",
+      "npmPathEnsureFailed": "Failed to add npm prefix to PATH"
     },
+    "repairingProgress": "Repairing {name}…",
     "version": {
       "statusLabel": "Version Status",
       "notInstalled": "Not installed",

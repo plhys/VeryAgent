@@ -6,6 +6,25 @@
 
 ## 当前进行中：团队协作 Step 1（2026-08-12）
 
+### ✅ 已完成（续）
+- **智能体环境完全隔离（自带运行时）**：
+  - 内置 Node.js v22.19.0（完整发行版含 npm/npx）：`prepare-node.mjs` 打包进安装包，
+    dev 回退下载 `~/.veryagent/runtime/node/`；`process.rs` 全套解析（含 macOS 布局）
+  - npm 安装/卸载/检测全部走 `~/.veryagent/npm-global/` 隔离前缀；命令解析隔离优先
+  - `build_agent_env` 为所有 agent 子进程前置隔离 PATH
+  - preflight 新增 `legacy_system_install` 迁移检测（系统全局 → 隔离重装），修复全部自动执行
+
+- **智能体「检测全部 / 修复全部」**（Agent SDK 管理页顶部）：
+  - 后端 `commands/acp/diagnose.rs`：`acp_diagnose_agent` / `acp_diagnose_all_agents` /
+    `acp_repair_agent_config` / `acp_ensure_npm_path`（Tauri + Web 双通道注册）
+  - preflight 新增 `package_installed`（与连接闸门一致，含 CommandCode 内嵌特判）+
+    `config_parse`（Claude/Gemini/OpenCode JSON 损坏检测 → RepairConfig）
+  - 诊断聚合：鉴权缺失 warn（不误报原生登录）+ OpenClaw gateway 探活
+  - 前端顶部「检测全部 / 修复全部」按钮；修复全部仅自动执行非破坏性动作，
+    逐项修复后重新检测实时变绿；卸载/自定义版本/外链保留手动入口
+  - 配置修复复用 `ConfigRenderer::render_for_agent`，覆写前备份到 `~/.veryagent/config-backups/`
+
+
 ### ✅ 已完成
 - **侧边栏「团队协作」入口**：独立入口 + 上下分割线（`sidebar.tsx`、workbench route `"team"`）
 - **创建团队 UI**（`src/components/team/team-page.tsx`）：

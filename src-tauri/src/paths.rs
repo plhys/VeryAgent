@@ -11,6 +11,8 @@ const VERYAGENT_DIR_NAME: &str = ".veryagent";
 const PETS_DIR_NAME: &str = "pets";
 const UPLOADS_DIR_NAME: &str = "uploads";
 const LOGS_DIR_NAME: &str = "logs";
+const RUNTIME_DIR_NAME: &str = "runtime";
+const NODE_RUNTIME_DIR_NAME: &str = "node";
 
 /// `$VERYAGENT_HOME` if set (and non-empty), else `~/.veryagent/`.
 ///
@@ -42,6 +44,18 @@ pub fn veryagent_pets_root() -> PathBuf {
     dirs::home_dir()
         .map(|h| h.join(VERYAGENT_DIR_NAME).join(PETS_DIR_NAME))
         .unwrap_or_else(|| PathBuf::from(VERYAGENT_DIR_NAME).join(PETS_DIR_NAME))
+}
+
+/// Isolated Node.js runtime directory (`~/.veryagent/runtime/node/`).
+///
+/// The full Node.js distribution (node + npm + npx) lives here in dev /
+/// portable mode; production prefers the bundle at `resources/node/` next to
+/// the executable (`process::resolve_bundled_node`). Agent processes get this
+/// directory prepended to their PATH so they never depend on a system Node.
+pub fn isolated_runtime_node_dir() -> PathBuf {
+    veryagent_home_dir()
+        .join(RUNTIME_DIR_NAME)
+        .join(NODE_RUNTIME_DIR_NAME)
 }
 
 /// Root directory for attachments uploaded from the web client.

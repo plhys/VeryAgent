@@ -89,6 +89,9 @@ src-tauri/target/
 # Slide generation runtime dependencies
 src-tauri/resources/slide_runtime/
 
+# Bundled Node.js runtime (downloaded by pnpm tauri:prepare-node at build time)
+src-tauri/resources/node/
+
 # Separate project cloned inside the repo by mistake
 veryagent-plus/
 

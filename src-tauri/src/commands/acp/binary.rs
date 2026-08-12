@@ -130,27 +130,12 @@ where
     }
 }
 
+/// The "global" npm prefix is ALWAYS the user-owned isolated prefix
+/// (`~/.veryagent/npm-global/`), never the system one. Agent packages are
+/// installed there, and command resolution / version detection look here
+/// first — so a machine's system npm state is irrelevant to VeryAgent.
 pub(crate) async fn resolve_current_npm_global_prefix() -> Option<PathBuf> {
-    let npm_path = which::which("npm").ok()?;
-    let mut cmd = crate::process::tokio_command(npm_path);
-    cmd.arg("prefix").arg("-g").kill_on_drop(true);
-    let output = tokio::time::timeout(NPM_PREFIX_TIMEOUT, cmd.output())
-        .await
-        .ok()?
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    npm_global_prefix_from_stdout(&output.stdout)
-}
-
-pub(crate) fn npm_global_prefix_from_stdout(stdout: &[u8]) -> Option<PathBuf> {
-    let stdout_text = String::from_utf8_lossy(stdout);
-    let prefix = stdout_text.lines().next()?.trim();
-    if prefix.is_empty() {
-        return None;
-    }
-    Some(PathBuf::from(prefix))
+    crate::process::user_npm_prefix()
 }
 
 pub(crate) fn npm_prefix_bin_dir(prefix: &Path) -> PathBuf {
@@ -204,19 +189,17 @@ pub(crate) fn is_npm_command_candidate(path: &Path) -> bool {
 pub(crate) async fn detect_npm_global_version(package_name: &str) -> Option<String> {
     let npm_path = which::which("npm").ok()?;
 
-    // Try the default global prefix first.
-    if let Some(v) = npm_list_version(&npm_path, package_name, None).await {
-        return Some(v);
-    }
-
-    // Fallback: check the user-local prefix.
+    // The isolated user prefix is authoritative — agent packages live there.
     if let Some(prefix) = crate::process::user_npm_prefix() {
         if prefix.exists() {
-            return npm_list_version(&npm_path, package_name, Some(&prefix)).await;
+            if let Some(v) = npm_list_version(&npm_path, package_name, Some(&prefix)).await {
+                return Some(v);
+            }
         }
     }
 
-    None
+    // Best-effort fallback: check the system global prefix for a legacy install.
+    npm_list_version(&npm_path, package_name, None).await
 }
 
 /// Run `npm list -g <package_name> --json [--prefix=<p>]` and extract the
@@ -363,98 +346,20 @@ pub(crate) async fn install_npm_global_package_streaming(
     task_id: &str,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
+    // Isolation: ALL agent npm installs target the user-owned prefix
+    // (~/.veryagent/npm-global/), never the system global prefix. This keeps
+    // VeryAgent's agents independent of the machine's Node/npm environment —
+    // installing or uninstalling anything globally on the system cannot affect
+    // them (and vice versa).
     let registry_arg = format!("--registry={NPM_OFFICIAL_REGISTRY}");
-
-    emit_agent_install_event(
-        emitter,
-        task_id,
-        AgentInstallEventKind::Log,
-        format!("$ npm install -g {NPM_INCLUDE_OPTIONAL} {package}"),
-    );
-
-    let (success, stderr) = run_npm_streaming(
-        &["install", "-g", NPM_INCLUDE_OPTIONAL, &registry_arg, package],
-        task_id,
-        emitter,
-    )
-    .await?;
-
-    if !success {
-        // EACCES: permission denied — retry with a user-local --prefix so
-        // we don't require root/sudo on macOS / Linux.
-        if stderr.contains("EACCES") {
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "Permission denied, retrying with user prefix...",
-            );
-            return install_npm_to_user_prefix_streaming(package, &registry_arg, task_id, emitter)
-                .await;
-        }
-
-        // EEXIST: file conflict — retry with --force to overwrite
-        if stderr.contains("EEXIST") {
-            emit_agent_install_event(
-                emitter,
-                task_id,
-                AgentInstallEventKind::Log,
-                "File conflict, retrying with --force...",
-            );
-            let (retry_success, retry_stderr) = run_npm_streaming(
-                &[
-                    "install",
-                    "-g",
-                    "--force",
-                    NPM_INCLUDE_OPTIONAL,
-                    &registry_arg,
-                    package,
-                ],
-                task_id,
-                emitter,
-            )
-            .await?;
-            if !retry_success {
-                if retry_stderr.contains("EACCES") {
-                    emit_agent_install_event(
-                        emitter,
-                        task_id,
-                        AgentInstallEventKind::Log,
-                        "Permission denied on --force retry, falling back to user prefix...",
-                    );
-                    return install_npm_to_user_prefix_streaming(
-                        package,
-                        &registry_arg,
-                        task_id,
-                        emitter,
-                    )
-                    .await;
-                }
-                let err = retry_stderr.trim().to_string();
-                let msg = if err.is_empty() {
-                    "failed to install npm package globally (with --force)".to_string()
-                } else {
-                    format!("failed to install npm package globally (with --force): {err}")
-                };
-                return Err(AcpError::protocol(msg));
-            }
-            return Ok(());
-        }
-
-        let err = stderr.trim().to_string();
-        let msg = if err.is_empty() {
-            "failed to install npm package globally".to_string()
-        } else {
-            format!("failed to install npm package globally: {err}")
-        };
-        return Err(AcpError::protocol(msg));
-    }
-
-    Ok(())
+    install_npm_to_user_prefix_streaming(package, &registry_arg, task_id, emitter).await
 }
 
-/// Fallback: install an npm package into a user-local prefix (`~/.veryagent/npm-global/`)
-/// when the system global prefix is not writable (EACCES).
+/// Install an npm package into the isolated user prefix (`~/.veryagent/npm-global/`).
+///
+/// This is the PRIMARY install path for all agent npm packages — VeryAgent
+/// never writes to the system global prefix, so its agents are independent of
+/// the machine's npm environment.
 pub(crate) async fn install_npm_to_user_prefix_streaming(
     package: &str,
     registry_arg: &str,
@@ -569,36 +474,37 @@ pub(crate) async fn uninstall_npm_global_package(package: &str) -> Result<(), Ac
     let package_name = package_name_from_spec(package);
 
     if !package_name.is_empty() {
-        // Try uninstalling from the default global prefix.
-        let output = crate::process::tokio_command("npm")
-            .arg("uninstall")
-            .arg("-g")
-            .arg(&package_name)
-            .output()
-            .await
-            .map_err(|e| AcpError::protocol(format!("failed to run npm uninstall -g: {e}")))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // EACCES: the package may have been installed to the user-local
-            // prefix via the EACCES fallback — try uninstalling from there.
-            if stderr.contains("EACCES") {
-                return uninstall_npm_from_user_prefix(&package_name).await;
-            }
-            let err = stderr.trim().to_string();
-            let msg = if err.is_empty() {
-                "failed to uninstall npm package globally".to_string()
-            } else {
-                format!("failed to uninstall npm package globally: {err}")
-            };
-            return Err(AcpError::protocol(msg));
-        }
-
-        // Also try removing from the user prefix (best-effort) in case the
-        // package was installed in both locations.
-        let _ = uninstall_npm_from_user_prefix(&package_name).await;
+        // The isolated user prefix is authoritative; a system-global copy is
+        // only cleaned up best-effort (VeryAgent never installs there anymore).
+        let user_result = uninstall_npm_from_user_prefix(&package_name).await;
+        let _ = uninstall_npm_from_system_prefix(&package_name).await;
+        user_result
+    } else {
+        Ok(())
     }
+}
 
+/// Uninstall from the system global prefix — legacy cleanup only.
+async fn uninstall_npm_from_system_prefix(package_name: &str) -> Result<(), AcpError> {
+    let output = crate::process::tokio_command("npm")
+        .arg("uninstall")
+        .arg("-g")
+        .arg(package_name)
+        .output()
+        .await
+        .map_err(|e| AcpError::protocol(format!("failed to run npm uninstall -g: {e}")))?;
+
+    if !output.status.success() {
+        // EACCES means it wasn't installed in the system prefix either — ignore.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("EACCES") {
+            return Ok(());
+        }
+        tracing::debug!(
+            "[npm] system-prefix uninstall of {package_name} failed (best-effort): {}",
+            stderr.trim()
+        );
+    }
     Ok(())
 }
 

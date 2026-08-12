@@ -197,6 +197,45 @@ pub async fn acp_clear_binary_cache(
     Ok(Json(()))
 }
 
+pub async fn acp_diagnose_agent(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AgentTypeParams>,
+) -> Result<Json<crate::commands::acp::diagnose::AgentDiagnosis>, AppCommandError> {
+    let result = acp_commands::diagnose_agent_core(&state.db, params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(result))
+}
+
+pub async fn acp_diagnose_all_agents(
+    Extension(state): Extension<Arc<AppState>>,
+) -> Result<Json<Vec<crate::commands::acp::diagnose::AgentDiagnosis>>, AppCommandError> {
+    let mut out = Vec::new();
+    for agent_type in crate::acp::registry::all_acp_agents() {
+        let result = acp_commands::diagnose_agent_core(&state.db, agent_type)
+            .await
+            .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+        out.push(result);
+    }
+    Ok(Json(out))
+}
+
+pub async fn acp_repair_agent_config(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<AgentTypeParams>,
+) -> Result<Json<()>, AppCommandError> {
+    acp_commands::repair_agent_config_core(&state.db, params.agent_type)
+        .await
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
+pub async fn acp_ensure_npm_path() -> Result<Json<()>, AppCommandError> {
+    acp_commands::ensure_npm_path_core()
+        .map_err(|e| AppCommandError::task_execution_failed(e.to_string()))?;
+    Ok(Json(()))
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpListAgentSkillsParams {

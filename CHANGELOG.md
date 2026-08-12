@@ -9,6 +9,22 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **智能体环境完全隔离（自带运行时）**：
+  - **内置 Node.js v22.19.0**：打包脚本 `prepare-node.mjs` 下载完整 Node 发行版（含 npm/npx）到 `resources/node/` 打进安装包；dev/便携模式回退下载到 `~/.veryagent/runtime/node/`。`process.rs` 的 `resolve_bundled_node_dir` / `ensure_node_in_path` 让 agent 进程的 node/npm/npx 全部从自带运行时解析（含 macOS `Contents/Resources` 布局）。
+  - **npm 安装全隔离**：所有 agent 的 npm 安装/卸载/版本检测一律走 `~/.veryagent/npm-global/` 用户前缀，不再碰系统全局目录；系统全局安装只做 best-effort 清理。命令解析（`resolve_npx_command` / `resolve_uvx_command` / OpenClaw CLI）改为隔离优先。
+  - **环境注入**：`build_agent_env` 为所有 agent 子进程前置隔离 PATH（自带 Node + npm-global），机器上装没装 Node、系统里卸没卸任何包都不影响。
+  - **迁移检测**：preflight 新增 `legacy_system_install` 检查——检测到系统全局有、隔离前缀没有 → warn + 「迁移到隔离环境」一键重装（「修复全部」自动执行）。preflight 的 node/npm 检查标注 `(bundled runtime)` 来源。
+
+### 新增
+
+- **智能体「检测全部 / 修复全部」**（Agent SDK 管理页顶部）：
+  - 后端新增 `acp_diagnose_agent` / `acp_diagnose_all_agents` / `acp_repair_agent_config` / `acp_ensure_npm_path` 命令（Tauri + Web 双通道）。
+  - 分层检测：preflight（运行时依赖/平台/插件）+ **安装态**（package_installed，与连接闸门一致）+ **配置解析**（config_parse，Claude/Gemini/OpenCode JSON 损坏检测）+ **鉴权缺失提示**（warn，不误报原生登录）+ **OpenClaw gateway 探活**。
+  - 「修复全部」自动顺序执行非破坏性修复（安装/升级/重建配置/补 PATH/拉起 OpenClaw gateway），逐项修复后重新检测实时变绿；卸载、自定义版本、打开外链保留手动入口。
+  - 配置修复复用 `ConfigRenderer` 渲染管线，覆写前自动备份到 `~/.veryagent/config-backups/`。
+
 ### 重构
 
 - **清理 message-input 死代码**：删除 slash 菜单遗留的 3 个未使用变量/回调及整组未使用的 dropdown 状态（`filteredSlashDropdownCommands` / `handleSlashDropdownOpenChange` / `handleSlashPopoverSelect` / `slashDropdownOpen` 组）。

@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use crate::acp::binary_cache;
 use crate::acp::registry::{self, AgentDistribution};
+use crate::commands::acp::general;
 use crate::models::agent::AgentType;
 
 /// Cache for npm environment check results.
@@ -16,6 +17,20 @@ pub enum FixActionKind {
     OpenUrl,
     InstallOpencodePlugins,
     InstallUv,
+    /// Install the agent package (npx install or uvx prepare). payload = agent_type.
+    InstallNpx,
+    /// Upgrade an already-installed npx/uvx agent. payload = agent_type.
+    UpgradeNpx,
+    /// Download/cache the binary distribution. payload = agent_type.
+    DownloadBinary,
+    /// Force redownload of the binary distribution. payload = agent_type.
+    ReinstallBinary,
+    /// Rebuild a corrupted native config file from app state. payload = agent_type.
+    RepairConfig,
+    /// Ensure the user-local npm prefix is on PATH. payload = empty.
+    EnsureNpmPath,
+    /// Bootstrap the OpenClaw local gateway (setup + start). payload = empty.
+    EnsureOpenClawGateway,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -57,7 +72,7 @@ pub fn clear_npm_env_cache() {
 pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
     let meta = registry::get_agent_meta(agent_type);
     debug_assert_eq!(meta.agent_type, agent_type);
-    let checks = match &meta.distribution {
+    let mut checks = match &meta.distribution {
         AgentDistribution::Npx { node_required, .. } => check_npm_environment(*node_required).await,
         AgentDistribution::Binary {
             version,
@@ -83,6 +98,15 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
             ..
         } => check_uv_environment(*uv_required, *system_cmd).await,
     };
+
+    // Distribution-agnostic checks: is the package/binary actually installed
+    // and launchable, and is the native config file parseable? These power the
+    // one-click 检测全部 / 修复全部 flow — the "installed" gate mirrors
+    // `verify_agent_installed`, and the config check catches a machine whose
+    // config file was corrupted/left in a bad state.
+    checks.extend(check_package_installed(agent_type).await);
+    checks.extend(check_config_parse(agent_type));
+    checks.extend(check_legacy_system_install(agent_type).await);
 
     let passed = checks
         .iter()
@@ -112,10 +136,22 @@ async fn check_npm_environment(node_required: Option<&str>) -> Vec<CheckItem> {
         return checks;
     }
 
-    // Resolve absolute paths via `which` crate to avoid GUI PATH issues,
-    // then run version checks in parallel.
-    let node_path = which::which("node").ok();
-    let npm_path = which::which("npm").ok();
+    // Resolve absolute paths — bundled / managed runtime first (isolation),
+    // then system PATH — and run version checks in parallel.
+    let node_path = crate::process::resolve_node_command();
+    let npm_path = crate::process::resolve_npm_command();
+    // Whether node/npm came from the isolated runtime (for the message).
+    let node_from_bundle = node_path.is_some()
+        && crate::process::resolve_bundled_node_dir()
+            .map(|dir| {
+                let dir_str = dir.to_string_lossy().into_owned();
+                node_path
+                    .as_ref()
+                    .map(|p| p.starts_with(&dir_str))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+    let node_source_hint = if node_from_bundle { " (bundled runtime)" } else { "" };
 
     let (node_result, npm_result) = tokio::join!(
         async {
@@ -159,7 +195,7 @@ async fn check_npm_environment(node_required: Option<&str>) -> Vec<CheckItem> {
                 check_id: "node_available".into(),
                 label: "Node.js".into(),
                 status: CheckStatus::Pass,
-                message: format!("Node.js {version} available"),
+                message: format!("Node.js {version} available{node_source_hint}"),
                 fixes: vec![],
             }
         }
@@ -431,8 +467,9 @@ async fn check_command_code_environment() -> Vec<CheckItem> {
     };
     checks.push(adapter_check);
 
-    // Node.js availability — the adapter's only runtime dependency.
-    let node_path = which::which("node").ok();
+    // Node.js availability — the adapter's only runtime dependency. Uses the
+    // bundled / managed runtime first (isolation), then system PATH.
+    let node_path = crate::process::resolve_node_command();
     let node_check = match node_path {
         Some(path) => {
             let output = crate::process::tokio_command(&path)
@@ -673,4 +710,210 @@ async fn check_binary_environment(
     }
 
     checks
+}
+
+/// Check that the agent's package/binary is actually installed and launchable
+/// on this machine — the same gate `verify_agent_installed` uses before connect.
+/// Exposing it as a preflight `CheckItem` lets the one-click 检测全部 / 修复全部
+/// flow drive installs from a single source of truth instead of duplicating the
+/// version-status logic in the UI.
+async fn check_package_installed(agent_type: AgentType) -> Vec<CheckItem> {
+    let meta = registry::get_agent_meta(agent_type);
+    let not_installed = |fix_kind: FixActionKind| {
+        CheckItem {
+            check_id: "package_installed".into(),
+            label: "Package".into(),
+            status: CheckStatus::Fail,
+            message: format!(
+                "{} is not installed or not launchable on this machine.",
+                meta.name
+            ),
+            fixes: vec![FixAction {
+                label: match fix_kind {
+                    FixActionKind::InstallNpx => "Install".into(),
+                    FixActionKind::UpgradeNpx => "Upgrade".into(),
+                    FixActionKind::DownloadBinary | FixActionKind::ReinstallBinary => {
+                        "Install".into()
+                    }
+                    _ => "Install".into(),
+                },
+                kind: fix_kind,
+                payload: agent_type_wire_id(agent_type),
+            }],
+        }
+    };
+    let pass = CheckItem {
+        check_id: "package_installed".into(),
+        label: "Package".into(),
+        status: CheckStatus::Pass,
+        message: format!("{} is installed and launchable.", meta.name),
+        fixes: vec![],
+    };
+
+    match &meta.distribution {
+        AgentDistribution::Npx { cmd, .. } => {
+            let cmd = cmd.to_string();
+            if crate::commands::acp::resolve_npx_command(&cmd).await.is_some() {
+                vec![pass]
+            } else {
+                vec![not_installed(FixActionKind::InstallNpx)]
+            }
+        }
+        // Command Code's adapter is embedded — nothing to install.
+        AgentDistribution::Binary { .. } if agent_type == AgentType::CommandCode => vec![pass],
+        AgentDistribution::Binary { cmd, .. } => {
+            let cached =
+                binary_cache::find_best_cached_binary_for_agent(agent_type, cmd).ok().flatten();
+            match cached {
+                Some(_) => vec![pass],
+                None => vec![not_installed(FixActionKind::DownloadBinary)],
+            }
+        }
+        AgentDistribution::Uvx { system_cmd, .. } => {
+            // Same launchability test as `verify_agent_installed`: uvx
+            // resolvable (auto-provisioned on install) or the agent's own CLI
+            // on PATH. The missing-runtime case (uv not installed) is reported
+            // by the `uv_available` check with its own Install uv fix.
+            if crate::commands::acp::binary::uvx_agent_launchable(*system_cmd) {
+                vec![pass]
+            } else {
+                vec![not_installed(FixActionKind::InstallNpx)]
+            }
+        }
+    }
+}
+
+/// Detect npm agents that are installed in the SYSTEM global npm directory but
+/// not (yet) in the isolated VeryAgent prefix (`~/.veryagent/npm-global/`).
+///
+/// Isolation is the target state: agents should run from the isolated prefix so
+/// the machine's npm state is irrelevant. A legacy system install still works
+/// (via the PATH fallback in `resolve_npx_command`), so this is a `Warn` with a
+/// one-click "migrate" fix (`InstallNpx` → reinstalls into the isolated prefix).
+/// 「修复全部」 picks this up automatically.
+async fn check_legacy_system_install(agent_type: AgentType) -> Vec<CheckItem> {
+    let meta = registry::get_agent_meta(agent_type);
+    let AgentDistribution::Npx { cmd, .. } = &meta.distribution else {
+        // Binary / uvx agents have no "system npm global" concept.
+        return vec![];
+    };
+    if agent_type == AgentType::CommandCode {
+        return vec![]; // embedded adapter, nothing to migrate
+    }
+    let cmd = cmd.to_string();
+
+    // Already resolvable from the isolated prefix → no migration needed.
+    if let Some(path) =
+        crate::commands::acp::resolve_npx_command_from_current_npm_prefix(&cmd).await
+    {
+        let inside_isolated = crate::process::user_npm_prefix()
+            .map(|p| path.starts_with(&p))
+            .unwrap_or(false);
+        if inside_isolated {
+            return vec![CheckItem {
+                check_id: "legacy_system_install".into(),
+                label: "Runtime isolation".into(),
+                status: CheckStatus::Pass,
+                message: format!("{} runs from the isolated VeryAgent npm prefix.", meta.name),
+                fixes: vec![],
+            }];
+        }
+    }
+
+    // Isolated missing, but a system-global copy is findable on PATH → migrate.
+    if let Some(path) = crate::commands::acp::resolve_command_on_path(&cmd) {
+        let inside_isolated = crate::process::user_npm_prefix()
+            .map(|p| path.starts_with(&p))
+            .unwrap_or(false);
+        if !inside_isolated {
+            return vec![CheckItem {
+                check_id: "legacy_system_install".into(),
+                label: "Runtime isolation".into(),
+                status: CheckStatus::Warn,
+                message: format!(
+                    "{} is installed in the system npm global directory ({}). Reinstall to move it into the isolated VeryAgent environment.",
+                    meta.name,
+                    path.display()
+                ),
+                fixes: vec![FixAction {
+                    label: "Migrate to isolated env".into(),
+                    kind: FixActionKind::InstallNpx,
+                    payload: agent_type_wire_id(agent_type),
+                }],
+            }];
+        }
+    }
+
+    // Neither isolated nor system — `package_installed` already reported it.
+    vec![]
+}
+
+/// Check that a JSON-native config file parses. Only applies to agents whose
+/// native config is a JSON file the app manages (Claude Code, Gemini,
+/// OpenCode); the rest are TOML/YAML/env and validated by their own modules at
+/// spawn. A corrupt config is repairable — offer the RepairConfig action.
+fn check_config_parse(agent_type: AgentType) -> Vec<CheckItem> {
+    if !matches!(
+        agent_type,
+        AgentType::ClaudeCode | AgentType::Gemini | AgentType::OpenCode
+    ) {
+        return vec![];
+    }
+    let Some(path) = general::agent_local_config_path(agent_type) else {
+        return vec![];
+    };
+    if !path.exists() {
+        // A missing config is normal — it is rendered on first spawn. Not an
+        // error, and nothing to repair yet.
+        return vec![];
+    }
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            return vec![CheckItem {
+                check_id: "config_parse".into(),
+                label: "Config file".into(),
+                status: CheckStatus::Fail,
+                message: format!("Cannot read {}: {e}", path.display()),
+                fixes: vec![repair_config_fix(agent_type)],
+            }];
+        }
+    };
+    match serde_json::from_str::<serde_json::Value>(&raw) {
+        Ok(value) if value.is_object() => vec![CheckItem {
+            check_id: "config_parse".into(),
+            label: "Config file".into(),
+            status: CheckStatus::Pass,
+            message: format!("{} is valid JSON.", path.display()),
+            fixes: vec![],
+        }],
+        _ => vec![CheckItem {
+            check_id: "config_parse".into(),
+            label: "Config file".into(),
+            status: CheckStatus::Fail,
+            message: format!(
+                "{} is corrupted or not valid JSON. The app can rebuild it from your settings (a backup is kept).",
+                path.display()
+            ),
+            fixes: vec![repair_config_fix(agent_type)],
+        }],
+    }
+}
+
+fn repair_config_fix(agent_type: AgentType) -> FixAction {
+    FixAction {
+        label: "Repair config".into(),
+        kind: FixActionKind::RepairConfig,
+        payload: agent_type_wire_id(agent_type),
+    }
+}
+
+/// The snake_case wire id for an agent type, matching the frontend's
+/// `agent.agent_type` (e.g. "claude_code"). `AgentType`'s `Display` impl is the
+/// human-readable name, not the wire id, so reuse serde's `rename_all`.
+pub(crate) fn agent_type_wire_id(agent_type: AgentType) -> String {
+    serde_json::to_value(agent_type)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
 }

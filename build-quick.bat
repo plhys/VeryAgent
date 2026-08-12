@@ -40,6 +40,18 @@ if exist "src-tauri\binaries\veryagent-mcp-x86_64-pc-windows-msvc.exe" (
 )
 echo.
 
+:: 内置 Node 运行时（如果已存在可跳过；打包安装程序才需要）
+if exist "src-tauri\resources\node\node.exe" (
+    echo [跳过] 内置 Node 运行时已存在
+) else (
+    echo [2.5/3] 准备内置 Node 运行时 ...
+    call pnpm tauri:prepare-node
+    if %ERRORLEVEL% neq 0 (
+        echo [提示] Node 运行时准备失败（不影响直接运行 exe，仅影响打包）
+    )
+)
+echo.
+
 :: 主程序
 echo [3/3] 编译 Rust 主程序 (release) ...
 echo       并行数: %CARGO_BUILD_JOBS%

@@ -445,6 +445,9 @@ pub(crate) async fn probe_openclaw_gateway_reachable(discovery: &OpenClawGateway
 pub(crate) async fn run_openclaw_cli(args: &[&str], timeout_secs: u64) -> Result<(bool, String), AcpError> {
     let cli = resolve_openclaw_cli().await?;
     let mut cmd = crate::process::tokio_command(&cli);
+    // The gateway CLI is a Node app — give it the isolated runtime PATH so it
+    // resolves `node`/`npm` from VeryAgent's managed runtime, not the system.
+    cmd.env("PATH", crate::process::isolated_path_string());
     cmd.args(args);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());

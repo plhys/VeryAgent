@@ -310,6 +310,9 @@ export type RunningActionKind =
   | "redownload_binary"
   | "custom_install"
   | "install_uv"
+  | "repair_config"
+  | "ensure_npm_path"
+  | "ensure_openclaw_gateway"
 
 export type UiFixAction =
   | FixAction
@@ -324,6 +327,9 @@ export type UiFixAction =
         | "uninstall_npx"
         | "install_opencode_plugins"
         | "custom_install"
+        | "repair_config"
+        | "ensure_npm_path"
+        | "ensure_openclaw_gateway"
       payload: string
       disabled?: boolean
     }

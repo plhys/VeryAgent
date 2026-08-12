@@ -501,8 +501,9 @@ async fn npm_install_package_global(
 // Core: uninstall from both prefixes + shim cleanup
 // ---------------------------------------------------------------------------
 
-/// Uninstall an npm package from both the default global prefix and the
-/// user-local prefix. Cleans up leftover Windows shims.
+/// Uninstall an npm package. The isolated user prefix (`~/.veryagent/npm-global/`)
+/// is authoritative (where VeryAgent installs); the system global prefix is
+/// cleaned up best-effort for legacy installs. Cleans up leftover Windows shims.
 pub async fn npm_uninstall_package(
     package_name: &str,
     binary_name: &str,
@@ -511,44 +512,7 @@ pub async fn npm_uninstall_package(
     let mut notes: Vec<String> = Vec::new();
     let mut removed_any = false;
 
-    // 1) Default global: `npm uninstall -g <package>`
-    {
-        let mut cmd = crate::process::tokio_command(&npm);
-        if let Some(home) = dirs::home_dir() {
-            cmd.current_dir(home);
-        }
-        let output = cmd
-            .args(["uninstall", "-g", package_name])
-            .output()
-            .await
-            .map_err(|e| {
-                AppCommandError::configuration_invalid(format!(
-                    "failed to run npm uninstall -g: {e}"
-                ))
-            })?;
-        let log = format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        if output.status.success() {
-            removed_any = true;
-            notes.push("removed from default global prefix".to_string());
-        } else {
-            let err = log.trim();
-            if err.contains("ENOENT")
-                || err.contains("not found")
-                || err.contains("No matching version")
-                || err.is_empty()
-            {
-                notes.push("default global prefix: not installed".to_string());
-            } else {
-                notes.push(format!("default global uninstall: {err}"));
-            }
-        }
-    }
-
-    // 2) User prefix: `npm uninstall -g --prefix=~/.veryagent/npm-global <package>`
+    // 1) Isolated user prefix (primary): `npm uninstall -g --prefix=~/.veryagent/npm-global <package>`
     if let Some(prefix) = crate::process::user_npm_prefix() {
         if prefix.exists() {
             let prefix_arg = format!("--prefix={}", prefix.display());
@@ -599,6 +563,45 @@ pub async fn npm_uninstall_package(
                     removed_any = true;
                     notes.push(format!("removed leftover {}", candidate.display()));
                 }
+            }
+        }
+    }
+
+    // 2) Default global (legacy cleanup only — VeryAgent never installs here):
+    //    `npm uninstall -g <package>`
+    {
+        let mut cmd = crate::process::tokio_command(&npm);
+        if let Some(home) = dirs::home_dir() {
+            cmd.current_dir(home);
+        }
+        let output = cmd
+            .args(["uninstall", "-g", package_name])
+            .output()
+            .await
+            .map_err(|e| {
+                AppCommandError::configuration_invalid(format!(
+                    "failed to run npm uninstall -g: {e}"
+                ))
+            })?;
+        let log = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if output.status.success() {
+            removed_any = true;
+            notes.push("removed from default global prefix".to_string());
+        } else {
+            let err = log.trim();
+            if err.contains("ENOENT")
+                || err.contains("not found")
+                || err.contains("No matching version")
+                || err.contains("EACCES")
+                || err.is_empty()
+            {
+                notes.push("default global prefix: not installed".to_string());
+            } else {
+                notes.push(format!("default global uninstall: {err}"));
             }
         }
     }

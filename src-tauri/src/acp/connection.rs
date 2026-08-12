@@ -111,6 +111,30 @@ pub(crate) fn prepend_officecli_path(env: &mut BTreeMap<String, String>) {
     }
 }
 
+/// Prepend VeryAgent's isolated runtime dirs (managed Node.js distribution +
+/// the user-owned npm-global prefix) to `env`'s PATH, ahead of the system
+/// PATH. Agent processes then resolve `node` / `npm` / `npx` / agent shims
+/// from the isolated runtime, making them independent of the machine's Node.js
+/// install — the core of the "isolated agent environment" design.
+pub(crate) fn prepend_isolated_runtime_path(env: &mut BTreeMap<String, String>) {
+    let fallback = std::env::var("PATH").unwrap_or_default();
+    let windows = cfg!(windows);
+    // Prepending is front-insertion; call in reverse priority so the managed
+    // Node dir ends up FIRST (it provides node/npm/npx), then the npm-global
+    // shims, then officecli, then the system PATH.
+    if let Some(prefix) = crate::process::user_npm_prefix() {
+        let bin_dir = if windows { prefix } else { prefix.join("bin") };
+        if bin_dir.exists() {
+            prepend_dir_to_path_env(env, &bin_dir.to_string_lossy(), &fallback, windows);
+        }
+    }
+    let node_dir = crate::paths::isolated_runtime_node_dir();
+    let node_bin = if windows { node_dir } else { node_dir.join("bin") };
+    if node_bin.exists() {
+        prepend_dir_to_path_env(env, &node_bin.to_string_lossy(), &fallback, windows);
+    }
+}
+
 /// Commands sent from Tauri command handlers to the ACP connection loop.
 pub enum ConnectionCommand {
     Prompt {

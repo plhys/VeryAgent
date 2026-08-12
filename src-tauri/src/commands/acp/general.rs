@@ -2,7 +2,6 @@ use super::*;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use serde::Serialize;
 
@@ -12,7 +11,6 @@ use crate::web::event_bridge::EventEmitter;
 
 
 pub(crate) const ACP_AGENTS_UPDATED_EVENT: &str = "app://acp-agents-updated";
-pub(crate) const NPM_PREFIX_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "snake_case")]

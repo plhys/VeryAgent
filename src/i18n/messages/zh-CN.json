@@ -596,7 +596,9 @@
       "saveCodeBuddyConfig": "保存 CodeBuddy 配置",
       "saveKimiCodeConfig": "保存 Kimi Code 配置",
       "customInstall": "自定义安装",
-      "saveKimiCodeRawConfig": "保存 config.toml"
+      "saveKimiCodeRawConfig": "保存 config.toml",
+      "diagnoseAll": "检测全部",
+      "repairAll": "修复全部"
     },
     "status": {
       "enabled": "启用",
@@ -1048,8 +1050,17 @@
       "piBinaryInstallFailed": "pi 安装失败",
       "piBinaryUninstalled": "pi 已卸载",
       "piBinaryUninstallFailed": "pi 卸载失败",
-      "savePiTrustFailed": "保存工作区信任失败"
+      "savePiTrustFailed": "保存工作区信任失败",
+      "diagnoseAllFailed": "检测全部失败，请重试",
+      "repairAllCompleted": "自动修复完成：{count} 项已修复",
+      "repairAllNothingToDo": "没有需要自动修复的问题",
+      "repairAllFailed": "自动修复过程中出错，已中断",
+      "configRepaired": "{name} 的配置文件已修复",
+      "configRepairFailed": "{name} 配置文件修复失败",
+      "npmPathEnsured": "用户级 npm 前缀已加入 PATH",
+      "npmPathEnsureFailed": "npm 前缀加入 PATH 失败"
     },
+    "repairingProgress": "正在修复 {name}…",
     "version": {
       "statusLabel": "版本状态",
       "notInstalled": "未安装",

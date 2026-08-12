@@ -45,6 +45,18 @@ if %ERRORLEVEL% neq 0 (
 echo       sidecar 编译完成 ✓
 echo.
 
+:: ── 第二步.5：准备内置 Node 运行时 ──────────────
+echo [3.5/5] 下载内置 Node 运行时 (v22.19.0) ...
+call pnpm tauri:prepare-node
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo [错误] Node 运行时准备失败！
+    pause
+    exit /b 1
+)
+echo       Node 运行时准备完成 ✓
+echo.
+
 :: ── 第三步：编译 Rust 主程序 ──────────────────
 echo [4/5] 编译 Rust 主程序 (release) ...
 echo       限制并行数: %CARGO_BUILD_JOBS%（防止内存不足）

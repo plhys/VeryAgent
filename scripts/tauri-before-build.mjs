@@ -27,3 +27,6 @@ if (skipFrontend) {
 
 console.log("[tauri-before-build] preparing sidecars")
 run("pnpm", ["tauri:prepare-sidecars"])
+
+console.log("[tauri-before-build] preparing bundled Node runtime")
+run("pnpm", ["tauri:prepare-node"])

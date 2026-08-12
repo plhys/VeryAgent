@@ -37,6 +37,20 @@ pub(crate) fn resolve_cmdc_launch() -> (PathBuf, Vec<String>) {
 
     #[cfg(windows)]
     {
+        // Isolation: the user-owned npm prefix (~/.veryagent/npm-global/) is
+        // authoritative for VeryAgent-managed installs.
+        if let Some(prefix) = npm_global_prefix_sync() {
+            let entry = prefix.join("node_modules").join("command-code").join("dist").join("index.mjs");
+            if entry.is_file() {
+                if let Some(node) = crate::process::normalized_program("node").to_str().map(PathBuf::from) {
+                    return (node, vec![entry.to_string_lossy().into_owned()]);
+                }
+            }
+            let shim = prefix.join("cmdc.cmd");
+            if shim.is_file() {
+                return (shim, Vec::new());
+            }
+        }
         if let Some(npm_dir) = std::env::var_os("APPDATA").map(PathBuf::from).map(|p| p.join("npm"))
         {
             let entry = npm_dir.join("node_modules").join("command-code").join("dist").join("index.mjs");
@@ -52,7 +66,7 @@ pub(crate) fn resolve_cmdc_launch() -> (PathBuf, Vec<String>) {
         }
         // nvm / fnm / pnpm users keep the npm global root elsewhere; resolve it
         // via `npm prefix -g` (mirrors the ACP adapter's resolveCmdcLaunch).
-        if let Some(prefix) = npm_global_prefix_sync() {
+        if let Some(prefix) = system_npm_global_prefix_sync() {
             let entry = prefix.join("node_modules").join("command-code").join("dist").join("index.mjs");
             if entry.is_file() {
                 if let Some(node) = crate::process::normalized_program("node").to_str().map(PathBuf::from) {
@@ -69,10 +83,18 @@ pub(crate) fn resolve_cmdc_launch() -> (PathBuf, Vec<String>) {
     (PathBuf::from("cmdc"), Vec::new())
 }
 
-/// Resolve the npm global prefix synchronously via `npm prefix -g`.
-/// Best-effort: returns `None` when npm is missing or the probe times out.
+/// The isolated npm prefix (`~/.veryagent/npm-global/`) — where VeryAgent
+/// installs agent packages.
 #[cfg(windows)]
 fn npm_global_prefix_sync() -> Option<PathBuf> {
+    crate::process::user_npm_prefix()
+}
+
+/// Resolve the SYSTEM npm global prefix synchronously via `npm prefix -g`.
+/// Best-effort legacy lookup: returns `None` when npm is missing or the probe
+/// times out.
+#[cfg(windows)]
+fn system_npm_global_prefix_sync() -> Option<PathBuf> {
     use std::process::Command;
     use std::time::Duration;
 

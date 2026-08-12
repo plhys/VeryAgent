@@ -43,13 +43,16 @@ import { cn, copyTextToClipboard, randomUUID } from "@/lib/utils"
 import {
   acpClearBinaryCache,
   acpDetectAgentLocalVersion,
+  acpDiagnoseAgent,
   acpDownloadAgentBinary,
+  acpEnsureNpmPath,
   acpInstallUvTool,
   acpGetAgentStatus,
   acpListAgents,
   acpPreflight,
   acpPrepareNpxAgent,
   acpReorderAgents,
+  acpRepairAgentConfig,
   acpUninstallAgent,
   acpUpdateAgentConfig,
   acpUpdateAgentEnv,
@@ -66,6 +69,7 @@ import {
 } from "@/lib/api"
 import type {
   AcpAgentInfo,
+  AgentDiagnosis,
   AgentType,
   CheckStatus,
   CommandCodeLoginStatus,
@@ -167,6 +171,9 @@ export function AcpAgentSettings() {
   const [checking, setChecking] = useState<Partial<Record<AgentType, boolean>>>(
     {}
   )
+  const [diagnosingAll, setDiagnosingAll] = useState(false)
+  const [repairingAll, setRepairingAll] = useState(false)
+  const [repairProgress, setRepairProgress] = useState("")
   const [busyBinaryAction, setBusyBinaryAction] = useState<
     Partial<Record<AgentType, boolean>>
   >({})
@@ -397,6 +404,89 @@ export function AcpAgentSettings() {
       await Promise.all(agentTypes.map((agentType) => runPreflight(agentType)))
     },
     [runPreflight]
+  )
+
+  // 深度检测：preflight + 鉴权缺失 + OpenClaw gateway 探活（后端一次聚合）。
+  // 返回诊断结果供「修复全部」使用（避免依赖异步 setState 的旧值）。
+  const runDiagnose = useCallback(
+    async (agentType: AgentType): Promise<AgentDiagnosis | null> => {
+      setChecking((prev) => ({ ...prev, [agentType]: true }))
+      try {
+        const [diagState, versionState, statusState] = await Promise.allSettled(
+          [
+            acpDiagnoseAgent(agentType),
+            acpDetectAgentLocalVersion(agentType),
+            acpGetAgentStatus(agentType),
+          ]
+        )
+
+        if (versionState.status === "fulfilled") {
+          setAgents((prev) => {
+            if (versionState.value === null) return prev
+            let changed = false
+            const next = prev.map((agent) => {
+              if (agent.agent_type !== agentType) return agent
+              if (agent.installed_version === versionState.value) return agent
+              changed = true
+              return { ...agent, installed_version: versionState.value }
+            })
+            return changed ? next : prev
+          })
+        }
+
+        if (statusState.status === "fulfilled") {
+          setAgents((prev) => {
+            let changed = false
+            const next = prev.map((agent) => {
+              if (agent.agent_type !== agentType) return agent
+              if (agent.available === statusState.value.available) return agent
+              changed = true
+              return { ...agent, available: statusState.value.available }
+            })
+            return changed ? next : prev
+          })
+        }
+
+        if (diagState.status === "fulfilled") {
+          setCheckState((prev) => ({
+            ...prev,
+            [agentType]: { result: diagState.value },
+          }))
+          return diagState.value
+        }
+        const message =
+          diagState.reason instanceof Error
+            ? diagState.reason.message
+            : String(diagState.reason)
+        setCheckState((prev) => ({ ...prev, [agentType]: { error: message } }))
+        return null
+      } catch (err) {
+        const message = toErrorMessage(err)
+        setCheckState((prev) => ({ ...prev, [agentType]: { error: message } }))
+        return null
+      } finally {
+        setChecking((prev) => ({ ...prev, [agentType]: false }))
+      }
+    },
+    []
+  )
+
+  const runAllDiagnose = useCallback(
+    async (agentTypes: AgentType[]): Promise<AgentDiagnosis[]> => {
+      if (agentTypes.length === 0) return []
+      setDiagnosingAll(true)
+      try {
+        const results = await Promise.all(
+          agentTypes.map((agentType) => runDiagnose(agentType))
+        )
+        return results.filter(
+          (result): result is AgentDiagnosis => result !== null
+        )
+      } finally {
+        setDiagnosingAll(false)
+      }
+    },
+    [runDiagnose]
   )
 
   useEffect(() => {
@@ -1056,6 +1146,60 @@ export function AcpAgentSettings() {
     [runPreflight, t, installStream.start]
   )
 
+  // 重建损坏的原生配置文件（后端覆写前自动备份到 ~/.veryagent/config-backups/）。
+  const runRepairConfig = useCallback(
+    async (agent: AcpAgentInfo) => {
+      setRunningActionKind((prev) => ({
+        ...prev,
+        [agent.agent_type]: "repair_config",
+      }))
+      try {
+        await acpRepairAgentConfig(agent.agent_type)
+        await runPreflight(agent.agent_type)
+        toast.success(t("toasts.configRepaired", { name: agent.name }))
+      } catch (err) {
+        const message = toErrorMessage(err)
+        toast.error(t("toasts.configRepairFailed", { name: agent.name }), {
+          description: message,
+        })
+        throw err
+      } finally {
+        setRunningActionKind((prev) => ({
+          ...prev,
+          [agent.agent_type]: undefined,
+        }))
+      }
+    },
+    [runPreflight, t]
+  )
+
+  // 把用户级 npm 前缀补进 PATH，让 npm 回退安装的二进制可被解析。
+  const runEnsureNpmPath = useCallback(
+    async (agent: AcpAgentInfo) => {
+      setRunningActionKind((prev) => ({
+        ...prev,
+        [agent.agent_type]: "ensure_npm_path",
+      }))
+      try {
+        await acpEnsureNpmPath()
+        await runPreflight(agent.agent_type)
+        toast.success(t("toasts.npmPathEnsured"))
+      } catch (err) {
+        const message = toErrorMessage(err)
+        toast.error(t("toasts.npmPathEnsureFailed"), {
+          description: message,
+        })
+        throw err
+      } finally {
+        setRunningActionKind((prev) => ({
+          ...prev,
+          [agent.agent_type]: undefined,
+        }))
+      }
+    },
+    [runPreflight, t]
+  )
+
   const handleFixAction = async (agent: AcpAgentInfo, action: UiFixAction) => {
     if (
       busyBinaryAction[agent.agent_type] ||
@@ -1100,6 +1244,18 @@ export function AcpAgentSettings() {
       await runUvInstall(agent)
       return
     }
+    if (action.kind === "repair_config") {
+      await runRepairConfig(agent)
+      return
+    }
+    if (action.kind === "ensure_npm_path") {
+      await runEnsureNpmPath(agent)
+      return
+    }
+    if (action.kind === "ensure_openclaw_gateway") {
+      await handleEnsureOpenClawGateway()
+      return
+    }
     if (action.kind === "custom_install") {
       setCustomVersionInput("")
       setCustomInstallAgent(agent)
@@ -1107,6 +1263,78 @@ export function AcpAgentSettings() {
     }
     await runPreflight(agent.agent_type)
   }
+
+  // 「修复全部」只跑非破坏性、无需用户输入的自动修复；卸载 / 自定义安装 /
+  // 打开外部链接类动作保留在单项检查的手动入口里。
+  const AUTO_REPAIR_KINDS: UiFixAction["kind"][] = [
+    "install_npx",
+    "upgrade_npx",
+    "download_binary",
+    "reinstall_binary",
+    "install_uv",
+    "repair_config",
+    "ensure_npm_path",
+    "ensure_openclaw_gateway",
+  ]
+
+  const runRepairAll = useCallback(async () => {
+    if (repairingAll || diagnosingAll) return
+    setRepairingAll(true)
+    try {
+      // 先刷新一遍检测，拿到最新诊断结果（返回值避免异步 setState 旧值）。
+      const agentTypes = sortedAgents.map((agent) => agent.agent_type)
+      const diagnoses = await runAllDiagnose(agentTypes)
+      const diagMap = new Map(
+        diagnoses.map((diagnosis) => [diagnosis.agent_type, diagnosis])
+      )
+
+      let repairedCount = 0
+      for (const agent of sortedAgents) {
+        const diagnosis = diagMap.get(agent.agent_type)
+        if (!diagnosis) continue
+        const fixables = diagnosis.checks
+          .filter((check) => check.status !== "pass" && check.fixes.length > 0)
+          .flatMap((check) => check.fixes)
+          .filter((fix) => AUTO_REPAIR_KINDS.includes(fix.kind))
+        if (fixables.length === 0) continue
+
+        setRepairProgress(t("repairingProgress", { name: agent.name }))
+        for (const fix of fixables) {
+          try {
+            await handleFixAction(agent, fix)
+            repairedCount += 1
+          } catch (err) {
+            console.error(
+              `[Settings] repair-all fix failed for ${agent.agent_type}:`,
+              err
+            )
+          }
+          // 每修完一个动作重新检测该智能体，界面上的检查项实时变绿。
+          await runPreflight(agent.agent_type)
+        }
+      }
+
+      if (repairedCount > 0) {
+        toast.success(t("toasts.repairAllCompleted", { count: repairedCount }))
+      } else {
+        toast.info(t("toasts.repairAllNothingToDo"))
+      }
+    } catch (err) {
+      const message = toErrorMessage(err)
+      toast.error(t("toasts.repairAllFailed"), { description: message })
+    } finally {
+      setRepairingAll(false)
+      setRepairProgress("")
+    }
+  }, [
+    repairingAll,
+    diagnosingAll,
+    sortedAgents,
+    runAllDiagnose,
+    handleFixAction,
+    runPreflight,
+    t,
+  ])
 
   const confirmUninstall = useCallback(() => {
     if (!uninstallConfirmAgent) return
@@ -1231,6 +1459,9 @@ export function AcpAgentSettings() {
                           "install_opencode_plugins",
                           "custom_install",
                           "install_uv",
+                          "repair_config",
+                          "ensure_npm_path",
+                          "ensure_openclaw_gateway",
                         ].includes(fix.kind))
                     }
                     onClick={() => {
@@ -1247,7 +1478,10 @@ export function AcpAgentSettings() {
                       <Download className="h-3 w-3" />
                     ) : fix.kind === "upgrade_binary" ||
                       fix.kind === "upgrade_npx" ||
-                      fix.kind === "redownload_binary" ? (
+                      fix.kind === "redownload_binary" ||
+                      fix.kind === "repair_config" ||
+                      fix.kind === "ensure_npm_path" ||
+                      fix.kind === "ensure_openclaw_gateway" ? (
                       <Wrench className="h-3 w-3" />
                     ) : fix.kind === "uninstall_binary" ||
                       fix.kind === "uninstall_npx" ? (
@@ -2215,11 +2449,53 @@ export function AcpAgentSettings() {
   return (
     <div className="h-full flex flex-col p-3 md:p-4">
       <div className="flex items-center justify-between gap-3 pb-4">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-base font-semibold">{t("title")}</h2>
           <p className="text-xs text-muted-foreground mt-1">
             {t("description")}
           </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {repairProgress && (
+            <span className="hidden md:inline text-xs text-muted-foreground max-w-[180px] truncate">
+              {repairProgress}
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={diagnosingAll || repairingAll}
+            onClick={() => {
+              runAllDiagnose(
+                sortedAgents.map((agent) => agent.agent_type)
+              ).catch((err) => {
+                console.error("[Settings] diagnose all failed:", err)
+              })
+            }}
+          >
+            {diagnosingAll ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t("actions.diagnoseAll")}
+          </Button>
+          <Button
+            size="sm"
+            disabled={diagnosingAll || repairingAll}
+            onClick={() => {
+              runRepairAll().catch((err) => {
+                console.error("[Settings] repair all failed:", err)
+              })
+            }}
+          >
+            {repairingAll ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Wrench className="h-3.5 w-3.5" />
+            )}
+            {t("actions.repairAll")}
+          </Button>
         </div>
       </div>
       {loadingError && (

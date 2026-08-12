@@ -20,6 +20,8 @@ pub mod codebuddy_config;
 pub(crate) use codebuddy_config::*;
 pub mod command_code_config;
 pub(crate) use command_code_config::*;
+pub mod diagnose;
+pub(crate) use diagnose::*;
 pub mod native_login;
 pub(crate) use native_login::*;
 pub mod skills;
@@ -79,14 +81,15 @@ pub(crate) fn resolve_command_on_path(cmd: &str) -> Option<PathBuf> {
 }
 
 /// Resolve the `uvx` (uv tool runner) executable used to launch Python ACP
-/// agents (e.g. Hermes). Checks PATH first (respecting a user's own `uv`),
-/// then veryagent's managed uv cache, then the common install locations the
-/// official `uv` installer / cargo use (`~/.local/bin`, `~/.cargo/bin`).
+/// agents (e.g. Hermes). Checks veryagent's managed uv cache FIRST (isolation:
+/// the managed tool is authoritative), then PATH (respecting a user's own
+/// `uv`), then the common install locations the official `uv` installer /
+/// cargo use (`~/.local/bin`, `~/.cargo/bin`).
 pub(crate) fn resolve_uvx_command() -> Option<PathBuf> {
-    if let Some(path) = resolve_command_on_path("uvx") {
+    if let Some(path) = crate::acp::binary_cache::find_cached_uv_tool("uvx") {
         return Some(path);
     }
-    if let Some(path) = crate::acp::binary_cache::find_cached_uv_tool("uvx") {
+    if let Some(path) = resolve_command_on_path("uvx") {
         return Some(path);
     }
     let exe = if cfg!(windows) { "uvx.exe" } else { "uvx" };
@@ -172,10 +175,13 @@ async fn prewarm_uvx_agent(
 }
 
 pub(crate) async fn resolve_npx_command(cmd: &str) -> Option<PathBuf> {
-    if let Some(path) = resolve_command_on_path(cmd) {
+    // Isolation: the user-owned npm prefix (~/.veryagent/npm-global/) is
+    // authoritative. The system PATH is only a fallback so legacy system
+    // installs still work until migrated.
+    if let Some(path) = resolve_npx_command_from_current_npm_prefix(cmd).await {
         return Some(path);
     }
-    resolve_npx_command_from_current_npm_prefix(cmd).await
+    resolve_command_on_path(cmd)
 }
 
 #[derive(Default)]
@@ -190,17 +196,19 @@ impl NpxCommandResolver {
             return cached.clone();
         }
 
-        let resolved = if let Some(path) = resolve_command_on_path(cmd) {
-            Some(path)
+        let resolved = if let Some(prefix) = if let Some(prefix) = &self.request_npm_prefix {
+            prefix.clone()
         } else {
-            let prefix = if let Some(prefix) = &self.request_npm_prefix {
-                prefix.clone()
-            } else {
-                let resolved_prefix = cached_npm_global_prefix().await;
-                self.request_npm_prefix = Some(resolved_prefix.clone());
-                resolved_prefix
-            };
-            prefix.and_then(|p| resolve_npx_command_from_npm_prefix(cmd, &p))
+            let resolved_prefix = cached_npm_global_prefix().await;
+            self.request_npm_prefix = Some(resolved_prefix.clone());
+            resolved_prefix
+        } {
+            // Isolated prefix first (authoritative), then system PATH fallback.
+            resolve_npx_command_from_npm_prefix(cmd, &prefix).or_else(|| {
+                resolve_command_on_path(cmd)
+            })
+        } else {
+            resolve_command_on_path(cmd)
         };
 
         self.per_cmd_cache.insert(cmd.to_string(), resolved.clone());
@@ -1148,6 +1156,9 @@ async fn resolve_openclaw_cli() -> Result<PathBuf, AcpError> {
 async fn spawn_openclaw_gateway_run(port: u16) -> Result<(), AcpError> {
     let cli = resolve_openclaw_cli().await?;
     let mut cmd = crate::process::tokio_command(&cli);
+    // The gateway run process is a Node app — give it the isolated runtime PATH
+    // so it resolves `node`/`npm` from VeryAgent's managed runtime.
+    cmd.env("PATH", crate::process::isolated_path_string());
     cmd.args([
         "gateway",
         "run",
@@ -6759,14 +6770,6 @@ wire_api = "chat"
             apply_custom_version_to_url(opencode, "1.15.12", "1.16.0"),
             "https://github.com/anomalyco/opencode/releases/download/v1.16.0/opencode-darwin-arm64.zip"
         );
-    }
-
-    #[test]
-    fn parses_npm_global_prefix_stdout() {
-        let prefix = npm_global_prefix_from_stdout(b"npm-prefix\n");
-        assert_eq!(prefix.as_deref(), Some(Path::new("npm-prefix")));
-
-        assert_eq!(npm_global_prefix_from_stdout(b"\n"), None);
     }
 
     #[test]

@@ -14,6 +14,7 @@ import type {
   LinkOpResult,
   ScienceListItem,
   PreflightResult,
+  AgentDiagnosis,
   PluginCheckSummary,
   OpenCodeCatalogProvider,
   OfficecliInfo,
@@ -250,6 +251,30 @@ export async function acpPreflight(
     agentType,
     forceRefresh: forceRefresh ?? null,
   })
+}
+
+/** 单智能体深度检测：preflight + 鉴权缺失 + OpenClaw gateway 探活。 */
+export async function acpDiagnoseAgent(
+  agentType: AgentType
+): Promise<AgentDiagnosis> {
+  return getTransport().call("acp_diagnose_agent", { agentType })
+}
+
+/** 全部智能体深度检测（顺序执行，聚合返回）。 */
+export async function acpDiagnoseAllAgents(): Promise<AgentDiagnosis[]> {
+  return getTransport().call("acp_diagnose_all_agents")
+}
+
+/** 重建损坏的原生配置文件（覆写前自动备份）。 */
+export async function acpRepairAgentConfig(
+  agentType: AgentType
+): Promise<void> {
+  return getTransport().call("acp_repair_agent_config", { agentType })
+}
+
+/** 把用户级 npm 前缀补进 PATH。 */
+export async function acpEnsureNpmPath(): Promise<void> {
+  return getTransport().call("acp_ensure_npm_path")
 }
 
 export async function opencodeListPlugins(): Promise<PluginCheckSummary> {

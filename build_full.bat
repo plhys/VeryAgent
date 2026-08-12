@@ -9,6 +9,8 @@ cd src-tauri
 cargo build --release --bin veryagent --features tauri-runtime > rust_build.log 2>&1
 if %ERRORLEVEL% neq 0 (echo RUST_FAILED >> ..\build_status.log) else (echo RUST_OK >> ..\build_status.log)
 cd ..
+echo [2.5/3] Preparing bundled Node runtime...
+call pnpm tauri:prepare-node > node_prep.log 2>&1
 echo [3/3] Packaging...
 call pnpm tauri build --no-build > package.log 2>&1
 if %ERRORLEVEL% neq 0 (echo PACKAGE_FAILED >> build_status.log) else (echo PACKAGE_OK >> build_status.log)

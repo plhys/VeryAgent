@@ -28,7 +28,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../out": "web/"
+      "../out": "web/",
+      "resources/node": "node/"
     },
     "externalBin": [
       "binaries/veryagent-mcp"
