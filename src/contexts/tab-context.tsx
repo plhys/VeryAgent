@@ -202,7 +202,8 @@ export interface TabContextValue {
     conversationId: number,
     agentType: TabItem["agentType"],
     pin?: boolean,
-    title?: string
+    title?: string,
+    workingDir?: string
   ) => void
   closeTab: (tabId: string) => void
   closeConversationTab: (

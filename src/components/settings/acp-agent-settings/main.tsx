@@ -726,6 +726,9 @@ export function AcpAgentSettings() {
         )
         reportAffectedSessions(affected)
         toast.success(t("toasts.configSaved"))
+        // 保存成功即重新诊断该智能体：让「未配置凭证」等警告实时消失，
+        // 用户无需再手动点一次「检测」。失败静默（下次打开/检测会刷新）。
+        runDiagnose(agentType).catch(() => {})
       } catch (error) {
         toast.error(t("toasts.saveEnvFailed"))
         console.error(`[persistEnv] save failed for ${agentType}:`, error)
@@ -733,7 +736,7 @@ export function AcpAgentSettings() {
         setSavingEnv((prev) => ({ ...prev, [agentType]: false }))
       }
     },
-    [reportAffectedSessions]
+    [reportAffectedSessions, runDiagnose]
   )
 
   const persistConfig = useCallback(
@@ -819,11 +822,13 @@ export function AcpAgentSettings() {
               : agent
           )
         )
+        // 保存配置成功后重新诊断该智能体，让凭证/鉴权警告实时刷新。
+        runDiagnose(agentType).catch(() => {})
       } finally {
         setSavingConfig((prev) => ({ ...prev, [agentType]: false }))
       }
     },
-    [agents, reportAffectedSessions]
+    [agents, reportAffectedSessions, runDiagnose]
   )
 
   const runBinaryAction = useCallback(
@@ -1282,14 +1287,19 @@ export function AcpAgentSettings() {
     setRepairingAll(true)
     try {
       // 先刷新一遍检测，拿到最新诊断结果（返回值避免异步 setState 旧值）。
-      const agentTypes = sortedAgents.map((agent) => agent.agent_type)
+      // 只诊断已开启的智能体，与下方修复范围保持一致。
+      const enabledAgentsForDiag = sortedAgents.filter((agent) => agent.enabled)
+      const agentTypes = enabledAgentsForDiag.map((agent) => agent.agent_type)
       const diagnoses = await runAllDiagnose(agentTypes)
       const diagMap = new Map(
         diagnoses.map((diagnosis) => [diagnosis.agent_type, diagnosis])
       )
 
       let repairedCount = 0
-      for (const agent of sortedAgents) {
+      // 只修复已开启的智能体：未开启的既不诊断也不安装/修复，
+      // 避免「修复全部」对用户不用的智能体浪费时间（如触发 npm 安装）。
+      const enabledAgents = sortedAgents.filter((agent) => agent.enabled)
+      for (const agent of enabledAgents) {
         const diagnosis = diagMap.get(agent.agent_type)
         if (!diagnosis) continue
         const fixables = diagnosis.checks
@@ -2466,9 +2476,11 @@ export function AcpAgentSettings() {
             variant="outline"
             disabled={diagnosingAll || repairingAll}
             onClick={() => {
-              runAllDiagnose(
-                sortedAgents.map((agent) => agent.agent_type)
-              ).catch((err) => {
+              // 只检测已开启的智能体：未开启的不凑热闹，避免浪费时间。
+              const enabledTypes = sortedAgents
+                .filter((agent) => agent.enabled)
+                .map((agent) => agent.agent_type)
+              runAllDiagnose(enabledTypes).catch((err) => {
                 console.error("[Settings] diagnose all failed:", err)
               })
             }}

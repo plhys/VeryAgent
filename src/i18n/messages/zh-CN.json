@@ -3216,12 +3216,13 @@
     "protocolModels": "模型列表",
     "deleteConfirmTitle": "删除供应商",
     "deleteConfirmMessage": "确定要永久删除供应商「{name}」吗？",
-    "deleteBlockedByAgent": "{agents} 正在使用该配置，请先解除关联后再删除。",
     "cancel": "取消",
     "delete": "删除",
     "create": "创建",
     "save": "保存",
-    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改"
+    "affectedRunningSessions": "{count} 个进行中的会话需重连以应用更改",
+    "deleteWillUnlink": "{agents} 正在使用该配置，删除后将自动解除关联，这些 agent 会回退到各自的 API 配置。",
+    "deleteUnlinkedSuccess": "已删除，并自动解除 {agents} 的关联。"
   },
   "SkillMatrix": {
     "loading": "加载中…",
@@ -4123,6 +4124,17 @@
     "taskPending": "待处理",
     "taskInProgress": "进行中",
     "taskCompleted": "已完成",
-    "taskFailed": "失败"
+    "taskFailed": "失败",
+    "hoverCard": {
+      "loading": "加载中…",
+      "members": "成员",
+      "loadingMembers": "正在加载成员…",
+      "projectSummary": "项目简介",
+      "summaryHint": "悬停查看成员与路径。点击「让领班总结」，由领班/项目经理生成这个工作区的项目简介。",
+      "summarizeAction": "让领班总结",
+      "summarizing": "总结中…",
+      "waitingSummary": "领班正在总结，回复会显示在领班对话中…",
+      "summarizePrompt": "请用一段话简要介绍这个工作区 {path} 里的项目：它是什么、主要做什么。如果目录里没有代码或项目文件，就说明当前工作区是空的。"
+    }
   }
 }

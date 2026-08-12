@@ -3216,12 +3216,13 @@
     "protocolModels": "Model list",
     "deleteConfirmTitle": "Delete Provider",
     "deleteConfirmMessage": "This will permanently delete the provider \"{name}\". Are you sure?",
-    "deleteBlockedByAgent": "{agents} is currently using this provider. Please unlink before deleting.",
     "cancel": "Cancel",
     "delete": "Delete",
     "create": "Create",
     "save": "Save",
-    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}"
+    "affectedRunningSessions": "{count, plural, one {# running session needs to reconnect to apply the change} other {# running sessions need to reconnect to apply the change}}",
+    "deleteWillUnlink": "{agents} is currently using this provider. It will be auto-detached on delete; those agents fall back to their own API config.",
+    "deleteUnlinkedSuccess": "Provider deleted and {agents} auto-detached."
   },
   "SkillMatrix": {
     "loading": "Loading…",
@@ -4123,6 +4124,17 @@
     "taskPending": "Pending",
     "taskInProgress": "In progress",
     "taskCompleted": "Completed",
-    "taskFailed": "Failed"
+    "taskFailed": "Failed",
+    "hoverCard": {
+      "loading": "Loading…",
+      "members": "Members",
+      "loadingMembers": "Loading members…",
+      "projectSummary": "Project summary",
+      "summaryHint": "Hover to see members and path. Click \"Summarize\" to have the leader/PM describe this workspace's project.",
+      "summarizeAction": "Have leader summarize",
+      "summarizing": "Summarizing…",
+      "waitingSummary": "Leader is summarizing; the reply will appear in the leader chat…",
+      "summarizePrompt": "Briefly describe in one paragraph what the project in this workspace {path} is about and what it does. If the directory has no code or project files, say the workspace is currently empty."
+    }
   }
 }

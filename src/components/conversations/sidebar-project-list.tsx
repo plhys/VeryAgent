@@ -34,6 +34,7 @@ import type {
   FolderDetail,
   DbConversationSummary,
   ConversationStatus,
+  TeamSummary,
 } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { isLocalDesktop, revealItemInDir } from "@/lib/platform"
@@ -54,6 +55,7 @@ import {
   updateConversationPinned,
 } from "@/lib/api"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
+import { TeamWorkspaceHoverCard } from "@/components/team/team-workspace-hover-card"
 import { ConversationContextMenu } from "./conversation-context-menu"
 import {
   ContextMenu,
@@ -93,6 +95,7 @@ export function SidebarProjectList() {
     }))
   )
   const { activeFolderId } = useActiveFolder()
+  const { teams } = useTeams()
   const { openConversations } = useWorkbenchRoute()
   const openTab = useTabStore((s) => s.openTab)
   const tabs = useTabStore((s) => s.tabs)
@@ -258,11 +261,15 @@ export function SidebarProjectList() {
         const isCollapsed = collapsed[folder.id] ?? false
         const themeColor = normalizeFolderThemeColor(folder.color)
         const folderConvs = conversationsByFolder.get(folder.id) || []
+        // 该文件夹是否为团队 workspace（与文件夹名/图标渲染共用同一判定）。
+        const teamForFolder =
+          teams.find((team) => team.workspace === folder.path) ?? null
 
         return (
           <div key={folder.id}>
             <ProjectFolderHeader
               folder={folder}
+              team={teamForFolder}
               isActive={isActive}
               isCollapsed={isCollapsed}
               themeColor={themeColor}
@@ -390,6 +397,7 @@ export function SidebarProjectList() {
 
 function ProjectFolderHeader({
   folder,
+  team,
   isActive,
   isCollapsed,
   themeColor,
@@ -408,6 +416,8 @@ function ProjectFolderHeader({
   removeTitle,
 }: {
   folder: FolderDetail
+  /** 该文件夹对应的团队（若它是团队 workspace）。非团队为 null。 */
+  team: TeamSummary | null
   isActive: boolean
   isCollapsed: boolean
   themeColor: string
@@ -431,9 +441,7 @@ function ProjectFolderHeader({
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState(folder.name)
   const [renameSaving, setRenameSaving] = useState(false)
-  // 工作区团队标识：该文件夹是某团队的 workspace 时显示小型团队图标。
-  const { teams } = useTeams()
-  const isTeamWorkspace = teams.some((team) => team.workspace === folder.path)
+  const isTeamWorkspace = team != null
 
   const handleRenameOpen = () => {
     setRenameValue(folder.name)
@@ -467,6 +475,11 @@ function ProjectFolderHeader({
             onDoubleClick={onOpen}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            title={
+              isTeamWorkspace && team
+                ? `${team.name}（${team.member_count} 名成员 · ${folder.path}）`
+                : folder.name
+            }
             className={cn(
               "group flex h-9 w-full items-center gap-[0.5rem] rounded-md pl-[0.625rem] pr-1.5",
               "text-left outline-none transition-colors duration-150",
@@ -482,12 +495,21 @@ function ProjectFolderHeader({
               )}
             />
             <span className="relative flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center">
-              <Folder
-                className={cn(
-                  "h-[0.875rem] w-[0.875rem]",
-                  isActive ? "text-primary" : "text-muted-foreground"
-                )}
-              />
+              {isTeamWorkspace ? (
+                <Users
+                  className={cn(
+                    "h-[0.875rem] w-[0.875rem]",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                />
+              ) : (
+                <Folder
+                  className={cn(
+                    "h-[0.875rem] w-[0.875rem]",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                />
+              )}
               {themeColor !== "neutral" && (
                 <span
                   className="absolute -right-0.5 -bottom-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-sidebar"
@@ -506,17 +528,8 @@ function ProjectFolderHeader({
                     : "text-sidebar-foreground"
                 )}
               >
-                {folder.name}
+                {isTeamWorkspace && team ? team.name : folder.name}
               </span>
-              {isTeamWorkspace ? (
-                <span
-                  className="mt-0.5 inline-flex w-fit items-center gap-0.5 rounded-sm bg-sidebar-border/60 px-1 py-px text-[0.5625rem] font-medium text-muted-foreground"
-                  title={tCommon("teamWorkspace")}
-                >
-                  <Users className="h-2 w-2" aria-hidden="true" />
-                  {tCommon("teamWorkspace")}
-                </span>
-              ) : null}
               {folder.git_branch && (
                 <span className="flex items-center gap-0.5 text-[0.6875rem] leading-tight text-muted-foreground/70">
                   <GitBranch className="h-2.5 w-2.5 shrink-0" />
@@ -598,6 +611,15 @@ function ProjectFolderHeader({
         isHovered={isHovered}
         rawTimestamp={folder.last_opened_at}
       />
+      {/* 团队工作区悬浮详情卡片：悬停时在时间旗标右侧展示成员/路径/项目简介 */}
+      {isTeamWorkspace && team ? (
+        <TeamWorkspaceHoverCard
+          hostRef={rowRef as RefObject<HTMLElement | null>}
+          isHovered={isHovered}
+          teamId={team.id}
+          workspace={folder.path}
+        />
+      ) : null}
     </>
   )
 }

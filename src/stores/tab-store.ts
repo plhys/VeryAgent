@@ -130,7 +130,8 @@ export interface TabStoreState {
     conversationId: number,
     agentType: AgentType,
     pin?: boolean,
-    title?: string
+    title?: string,
+    workingDir?: string
   ) => void
   closeTab: (tabId: string) => void
   closeConversationTab: (
@@ -477,7 +478,14 @@ function initialTabState() {
 export const useTabStore = create<TabStoreState>()((set, get) => ({
   ...initialTabState(),
 
-  openTab: (folderId, conversationId, agentType, pin = false, title) => {
+  openTab: (
+    folderId,
+    conversationId,
+    agentType,
+    pin = false,
+    title,
+    workingDir
+  ) => {
     const prevState = get()
     const existingIndex = findTabIndexForConversation(
       prevState.rawTabs,
@@ -526,6 +534,9 @@ export const useTabStore = create<TabStoreState>()((set, get) => ({
       agentType,
       title: resolvedTitle,
       isPinned: pin,
+      // 携带工作目录：团队 leader/成员对话等需要精确 cwd 的场景，不再依赖
+      // 全局 activeFolder（否则 Hermes 等 resident 会落到 ~/.hermes）。
+      workingDir,
     }
 
     if (pin) {

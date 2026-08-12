@@ -11,6 +11,18 @@
 
 ### 新增
 
+- **团队工作区悬浮详情卡片**：鼠标悬停侧边栏团队文件夹时，在时间旗标右侧弹出团队详情卡（成员列表/角色、工作区路径、项目简介），支持「让领班总结」一键让 leader 生成工作区项目简介；延迟消失（450ms 缓冲，鼠标可滑到卡片）。
+- **团队协作交互优化**：
+  - 领班对话时隐藏桌宠（`PetFloating`），避免遮挡成员窗格。
+  - 侧栏成员条不再重复显示领班/项目经理（领班即主对话本身）。
+  - 侧边栏移除「团队协作」下的重复团队列表——团队已显示在工作区列表中（文件夹本身即团队，用团队图标+团队名），入口仅用于创建团队。
+  - 领班/成员工作区传递修复：`openTab` 支持携带 `workingDir`，团队对话不再依赖全局 activeFolder（修复 Hermes 领班读到 `~/.hermes` 而非选定工作区的问题）。
+- **智能体设置页交互修复**：
+  - 「检测全部/修复全部」只处理已开启的智能体，未开启的不再诊断/安装/修复（避免对不用的智能体浪费时间并触发 npm 安装）。
+  - 保存配置后自动重新诊断该智能体，「未配置凭证」等警告实时消失，无需再手动点检测。
+
+### 新增
+
 - **团队协作 Step 1 收尾闭环（派活 → 成员实时流 → 团队列表/删除）**：
   - **派活带工作会话**：`team_assign_task` 新增 `conversation_id` 参数——一次调用完成「建任务 + 任务挂会话 + 成员 slot 挂会话 + slot 置 working」；`team_slot` 表新增 `conversation_id` 列（迁移 `m20260812_000001_team_slot_conversation`）。
   - **成员小窗实时流**：领班对话右侧新增成员条（`TeamSidePanel`），每个成员一个小窗实时滚动其工作会话（复用 `useConversationRuntimeStore` + `selectTimelineTurns` + `useMemberLiveBridge`）；点开成员弹窗可查看完整会话并**派活**（填任务 → 自动建成员会话 → 连接智能体 → 任务作为首条消息下发），下方展示该成员任务历史（状态徽章）。
@@ -47,6 +59,7 @@
 ### 变更
 
 - **ESLint errors 清零**：`skills-tab` 的 `(s: any)` → `ExpertListItem`（补 `ExpertMetadata` 可选字段）、`selectValueLabel` 加 `kind.type` 类型收窄，并全量 prettier 格式规范化。
+- **删除模型供应商不再要求先解除关联**：删除时自动把仍关联该 provider 的 agent 解除绑定（`model_provider_id` 置空，回退各自存储的 API 配置）再删除，返回 `unlinkedAgents` 供前端提示；删除确认弹窗会先列出正使用该 provider 的 agent（列表接口新增 `in_use_by`），成功 toast 展示自动解除了哪些关联。删除 `PROVIDER_IN_USE` 拦截与 `deleteBlockedByAgent` 文案。
 
 ### 文档
 

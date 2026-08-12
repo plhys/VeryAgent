@@ -189,6 +189,8 @@ export function TeamSidePanel() {
   if (!team) return null
 
   const slots = detail?.slots ?? []
+  // 领班/项目经理是主对话框本身，右侧成员窗格只显示成员，不重复显示领班。
+  const memberSlots = slots.filter((slot) => !slot.roles.includes("leader"))
 
   return (
     <aside className="flex w-[19rem] shrink-0 flex-col border-l border-sidebar-border bg-sidebar/40">
@@ -197,18 +199,18 @@ export function TeamSidePanel() {
         <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span className="truncate text-sm font-medium">{team.name}</span>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {slots.length}
+          {memberSlots.length}
         </span>
       </div>
 
       {/* Equal-height member windows, stacked vertically. */}
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-2">
-        {slots.length === 0 ? (
+        {memberSlots.length === 0 ? (
           <p className="p-3 text-center text-xs text-muted-foreground">
             {t("loadingMembers")}
           </p>
         ) : (
-          slots.map((slot) => (
+          memberSlots.map((slot) => (
             <MemberWindow
               key={slot.id}
               slot={slot}

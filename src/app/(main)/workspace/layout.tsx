@@ -31,7 +31,7 @@ import { SessionStatsProvider } from "@/contexts/session-stats-context"
 import { SidebarProvider, useSidebarContext } from "@/contexts/sidebar-context"
 import { SearchDialogProvider } from "@/contexts/search-dialog-context"
 import { AutomationsViewProvider } from "@/contexts/automations-view-context"
-import { TeamProvider } from "@/contexts/team-context"
+import { TeamProvider, useTeams } from "@/contexts/team-context"
 import { TeamSidePanel } from "@/components/team/team-side-panel"
 import {
   WorkbenchRouteProvider,
@@ -836,6 +836,14 @@ function FolderWorkspaceShell({ children }: { children: React.ReactNode }) {
 function FolderLayoutShell({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile()
   const { isOpen: sidebarOpen, width: sidebarWidth } = useSidebarContext()
+  const { teamByLeaderConversation } = useTeams()
+  const activeTab = useTabStore((s) =>
+    s.rawTabs.find((tab) => tab.id === s.activeTabId)
+  )
+  // 团队协作对话（leader 聊天）里不显示宠物——团队窗格已经占用
+  // 右下空间，宠物会遮挡成员窗口。普通对话宠物照常显示。
+  const isTeamLeaderChat =
+    teamByLeaderConversation(activeTab?.conversationId) != null
 
   return (
     <div
@@ -854,7 +862,7 @@ function FolderLayoutShell({ children }: { children: React.ReactNode }) {
         <FolderWorkspaceShell>{children}</FolderWorkspaceShell>
       )}
       <StatusBar />
-      <PetFloating />
+      {!isTeamLeaderChat ? <PetFloating /> : null}
       <AppToaster />
     </div>
   )

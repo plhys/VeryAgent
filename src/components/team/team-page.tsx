@@ -231,7 +231,7 @@ export function TeamPage() {
           // intermittently before.
           bindLeaderConversation(team.id, convId)
           openConversations()
-          openTab(folder.id, convId, leaderAgent)
+          openTab(folder.id, convId, leaderAgent, false, undefined, folder.path)
         } catch (err) {
           console.error("[Team] open leader conversation failed:", err)
           toast.error(t("leaderChatFailed"))
