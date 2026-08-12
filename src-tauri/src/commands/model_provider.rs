@@ -48,7 +48,22 @@ pub async fn list_model_providers_core(
     let rows = model_provider_service::list_all(&db.conn)
         .await
         .map_err(AppCommandError::from)?;
-    Ok(rows.into_iter().map(ModelProviderInfo::from).collect())
+
+    // Enrich each provider with the agent types currently linked to it, so the
+    // delete dialog can warn that deleting auto-detaches those agents.
+    let mut infos: Vec<ModelProviderInfo> =
+        rows.into_iter().map(ModelProviderInfo::from).collect();
+    for info in &mut infos {
+        let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, info.id)
+            .await
+            .map_err(AppCommandError::from)?;
+        info.in_use_by = dependents
+            .iter()
+            .filter_map(|row| serde_json::from_str::<AgentType>(&row.agent_type).ok())
+            .map(|at| at.to_string())
+            .collect();
+    }
+    Ok(infos)
 }
 
 pub async fn get_model_provider_core(
@@ -152,30 +167,34 @@ pub async fn update_model_provider_and_refresh(
     Ok(UpdateModelProviderResult { provider, affected_running_sessions })
 }
 
-pub async fn delete_model_provider_core(db: &AppDatabase, id: i32) -> Result<(), AppCommandError> {
-    let dependents = agent_setting_service::find_by_model_provider_id(&db.conn, id)
+/// Result of `delete_model_provider`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteModelProviderResult {
+    /// Agent types that were linked to the provider and got auto-detached.
+    pub unlinked_agents: Vec<String>,
+}
+
+pub async fn delete_model_provider_core(
+    db: &AppDatabase,
+    id: i32,
+) -> Result<DeleteModelProviderResult, AppCommandError> {
+    // Deleting a provider must not be blocked by in-use agents: detach them
+    // first (they fall back to their own stored credentials), then delete.
+    let unlinked = agent_setting_service::unlink_model_provider(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?;
-
-    if !dependents.is_empty() {
-        let names: Vec<String> = dependents
-            .iter()
-            .filter_map(|row| {
-                serde_json::from_str::<AgentType>(&row.agent_type)
-                    .ok()
-                    .map(|at| at.to_string())
-            })
-            .collect();
-        return Err(AppCommandError::invalid_input(format!(
-            "PROVIDER_IN_USE:{}",
-            names.join(", ")
-        )));
-    }
 
     model_provider_service::delete(&db.conn, id)
         .await
         .map_err(AppCommandError::from)?;
-    Ok(())
+
+    Ok(DeleteModelProviderResult {
+        unlinked_agents: unlinked
+            .into_iter()
+            .map(|at| at.to_string())
+            .collect(),
+    })
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -878,7 +897,7 @@ pub async fn update_model_provider(
 pub async fn delete_model_provider(
     db: tauri::State<'_, AppDatabase>,
     id: i32,
-) -> Result<(), AppCommandError> {
+) -> Result<DeleteModelProviderResult, AppCommandError> {
     delete_model_provider_core(&db, id).await
 }
 

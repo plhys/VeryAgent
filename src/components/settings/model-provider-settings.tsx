@@ -79,25 +79,22 @@ export function ModelProviderSettingsBody({
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return
     try {
-      await deleteModelProvider(deleteTarget.id)
-      toast.success(t("deleteSuccess"))
+      const result = await deleteModelProvider(deleteTarget.id)
       setDeleteTarget(null)
       await loadProviders()
-    } catch (err: unknown) {
-      const raw = err as Record<string, unknown>
-      const msg =
-        typeof raw?.message === "string"
-          ? raw.message
-          : err instanceof Error
-            ? err.message
-            : String(err)
-      const prefix = "PROVIDER_IN_USE:"
-      if (msg.includes(prefix)) {
-        const agentNames = msg.substring(msg.indexOf(prefix) + prefix.length)
-        toast.error(t("deleteBlockedByAgent", { agents: agentNames }))
+      if (result.unlinkedAgents.length > 0) {
+        toast.success(
+          t("deleteUnlinkedSuccess", {
+            agents: result.unlinkedAgents.join(", "),
+          })
+        )
       } else {
-        toast.error(msg)
+        toast.success(t("deleteSuccess"))
       }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : String(err)
+      toast.error(msg)
     }
   }, [deleteTarget, loadProviders, t])
 
@@ -270,6 +267,13 @@ export function ModelProviderSettingsBody({
             <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("deleteConfirmMessage", { name: deleteTarget?.name ?? "" })}
+              {deleteTarget && deleteTarget.in_use_by.length > 0 && (
+                <span className="mt-2 block text-amber-600">
+                  {t("deleteWillUnlink", {
+                    agents: deleteTarget.in_use_by.join(", "),
+                  })}
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

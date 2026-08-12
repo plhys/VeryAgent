@@ -81,9 +81,9 @@ pub async fn update_model_provider(
 pub async fn delete_model_provider(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<ModelProviderIdParams>,
-) -> Result<Json<()>, AppCommandError> {
-    mp_commands::delete_model_provider_core(&state.db, params.id).await?;
-    Ok(Json(()))
+) -> Result<Json<mp_commands::DeleteModelProviderResult>, AppCommandError> {
+    let result = mp_commands::delete_model_provider_core(&state.db, params.id).await?;
+    Ok(Json(result))
 }
 
 // ---------------------------------------------------------------------------

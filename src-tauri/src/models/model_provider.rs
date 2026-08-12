@@ -12,6 +12,9 @@ pub struct ModelProviderInfo {
     pub model: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Agent types currently linked to this provider (populated by the list
+    /// endpoint so the UI can warn that deleting will auto-detach them).
+    pub in_use_by: Vec<String>,
 }
 
 fn mask_api_key(key: &str) -> String {
@@ -42,6 +45,7 @@ impl From<crate::db::entities::model_provider::Model> for ModelProviderInfo {
             model: m.model,
             created_at: m.created_at.to_rfc3339(),
             updated_at: m.updated_at.to_rfc3339(),
+            in_use_by: Vec::new(),
         }
     }
 }

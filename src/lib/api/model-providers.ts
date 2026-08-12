@@ -1,5 +1,6 @@
 import { getTransport } from "../transport"
 import type {
+  DeleteModelProviderResult,
   ModelProviderInfo,
   ModelProviderTestResult,
   ProviderModelItem,
@@ -36,7 +37,9 @@ export async function updateModelProvider(params: {
   })
 }
 
-export async function deleteModelProvider(id: number): Promise<void> {
+export async function deleteModelProvider(
+  id: number
+): Promise<DeleteModelProviderResult> {
   return getTransport().call("delete_model_provider", { id })
 }
 

@@ -209,6 +209,28 @@ pub async fn find_by_model_provider_id(
     Ok(rows)
 }
 
+/// Detach every agent from a model provider before it is deleted: clears
+/// `model_provider_id` so agents fall back to their own stored credentials
+/// instead of blocking the delete. Returns the affected agent types.
+pub async fn unlink_model_provider(
+    conn: &DatabaseConnection,
+    provider_id: i32,
+) -> Result<Vec<AgentType>, DbError> {
+    let dependents = find_by_model_provider_id(conn, provider_id).await?;
+    let agent_types: Vec<AgentType> = dependents
+        .iter()
+        .filter_map(|s| serde_json::from_str(&s.agent_type).ok())
+        .collect();
+
+    for model in &dependents {
+        let mut active = model.clone().into_active_model();
+        active.model_provider_id = Set(None);
+        active.updated_at = Set(Utc::now());
+        active.update(conn).await?;
+    }
+    Ok(agent_types)
+}
+
 fn is_sqlite_full_error(err: &DbError) -> bool {
     let message = err.to_string();
     message.contains("database or disk is full") || message.contains("(code: 13)")

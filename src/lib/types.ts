@@ -2488,6 +2488,9 @@ export interface ModelProviderInfo {
   model: string | null
   created_at: string
   updated_at: string
+  /** Agent types currently linked to this provider (from the list endpoint),
+   *  used to warn that deleting auto-detaches those agents. */
+  in_use_by: string[]
 }
 
 /** One model returned by a provider's OpenAI-compatible `/models` endpoint. */
@@ -2516,6 +2519,13 @@ export interface ModelProviderTestResult {
 export interface UpdateModelProviderResult {
   provider: ModelProviderInfo
   affectedRunningSessions: number
+}
+
+/** Result of `deleteModelProvider` (mirror of Rust `DeleteModelProviderResult`):
+ *  the provider was deleted and any agents still linked to it were
+ *  auto-detached (they fall back to their own stored credentials). */
+export interface DeleteModelProviderResult {
+  unlinkedAgents: string[]
 }
 
 export interface ClaudeProviderModel {
