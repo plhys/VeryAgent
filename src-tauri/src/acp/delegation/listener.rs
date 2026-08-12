@@ -20,7 +20,8 @@ use crate::acp::delegation::transport::{
     read_frame, write_frame, BrokerAskRequest, BrokerCancelRequest, BrokerCancelTaskRequest,
     BrokerCommitFeedbackRequest, BrokerFeedbackRequest, BrokerGenerateImageRequest,
     BrokerImageSearchRequest, BrokerMessage, BrokerModifyImageRequest, BrokerRequest,
-    BrokerResponse, BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
+    BrokerResponse, BrokerSessionRequest, BrokerStatusRequest, BrokerTeamAssignRequest,
+    BrokerTeamMembersRequest, BrokerTeamTasksRequest, BrokerVisionAnalyzeRequest,
     BrokerWebSearchRequest,
 };
 use crate::acp::delegation::types::{DelegationRequest, DelegationTaskReport, TaskStatus};
@@ -101,6 +102,10 @@ pub struct DelegationListener {
     pub vision_bridge: Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
     /// Platform image generation / modification (OpenAI-compatible gateway).
     pub image_generation: Arc<dyn crate::acp::image_generation::ImageGenerationAccess>,
+    /// Team collaboration access for the `team_get_members` / `team_assign_task`
+    /// / `team_get_tasks` tools (resolves the caller's team via its leader
+    /// conversation).
+    pub team: Arc<dyn crate::acp::team::TeamAccess>,
 }
 
 impl DelegationListener {
@@ -114,6 +119,7 @@ impl DelegationListener {
         session_info: Arc<dyn SessionInfoAccess>,
         vision_bridge: Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
         image_generation: Arc<dyn crate::acp::image_generation::ImageGenerationAccess>,
+        team: Arc<dyn crate::acp::team::TeamAccess>,
     ) -> Arc<Self> {
         Arc::new(Self {
             broker,
@@ -124,6 +130,7 @@ impl DelegationListener {
             session_info,
             vision_bridge,
             image_generation,
+            team,
         })
     }
 
@@ -253,6 +260,21 @@ impl DelegationListener {
                 // Empty ack so the companion can confirm the listener saw it.
                 BrokerResponse {
                     outcome: Value::Null,
+                }
+            }
+            BrokerMessage::TeamMembers(req) => {
+                BrokerResponse {
+                    outcome: self.process_team_members(req).await,
+                }
+            }
+            BrokerMessage::TeamAssign(req) => {
+                BrokerResponse {
+                    outcome: self.process_team_assign(req).await,
+                }
+            }
+            BrokerMessage::TeamTasks(req) => {
+                BrokerResponse {
+                    outcome: self.process_team_tasks(req).await,
                 }
             }
             BrokerMessage::Ask(req) => {
@@ -492,6 +514,100 @@ impl DelegationListener {
         self.vision_bridge
             .analyze(req.image_data, req.image_path, req.mime_type, req.prompt)
             .await
+    }
+
+    /// Resolve the caller's team id from its leader conversation (token →
+    /// parent connection → leader conversation id → team). `None` when the
+    /// caller isn't a team leader chat.
+    async fn caller_team_id(&self, token: &str) -> Option<String> {
+        let entry = self.tokens.lookup(token).await?;
+        let leader_conv = self
+            .parent_lookup
+            .current_conversation_id(&entry.parent_connection_id)
+            .await?;
+        self.team
+            .team_id_for_leader_conversation(leader_conv)
+            .await
+    }
+
+    /// `team_get_members` — list the team's members for the calling leader.
+    async fn process_team_members(&self, req: BrokerTeamMembersRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+        let Some(team_id) = self.caller_team_id(&req.token).await else {
+            return serde_json::json!({ "error": "not a team leader conversation" });
+        };
+        let members = self.team.list_members(&team_id).await;
+        let meta = self.team.team_meta(&team_id).await;
+        serde_json::json!({
+            "team_id": team_id,
+            "team": meta,
+            "members": members,
+            "count": members.len(),
+        })
+    }
+
+    /// `team_assign_task` — assign a task to a member and make them start.
+    async fn process_team_assign(&self, req: BrokerTeamAssignRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+        let Some(team_id) = self.caller_team_id(&req.token).await else {
+            return serde_json::json!({ "error": "not a team leader conversation" });
+        };
+        match self
+            .team
+            .assign_task(
+                &team_id,
+                &req.slot_id,
+                &req.subject,
+                req.description.as_deref(),
+            )
+            .await
+        {
+            Ok(outcome) => {
+                // Surface the spawned member connection on the leader's stream
+                // so the frontend member window can attach and stream live.
+                if let (Some(conn_id), Some(conv_id)) =
+                    (&outcome.connection_id, outcome.conversation_id)
+                {
+                    if let Some(entry) = self.tokens.lookup(&req.token).await {
+                        self.team
+                            .emit_member_started(
+                                &entry.parent_connection_id,
+                                &team_id,
+                                &outcome.slot_id,
+                                conn_id,
+                                conv_id,
+                                outcome.agent_type.clone(),
+                            )
+                            .await;
+                    }
+                }
+                serde_json::to_value(&outcome)
+                    .unwrap_or_else(|_| serde_json::json!({ "error": "serialize" }))
+            }
+            Err(e) => serde_json::json!({ "error": e }),
+        }
+    }
+
+    /// `team_get_tasks` — list the team's task board for the calling leader.
+    async fn process_team_tasks(&self, req: BrokerTeamTasksRequest) -> Value {
+        if self.tokens.lookup(&req.token).await.is_none() {
+            return serde_json::json!({ "error": "invalid token" });
+        }
+        let Some(team_id) = self.caller_team_id(&req.token).await else {
+            return serde_json::json!({ "error": "not a team leader conversation" });
+        };
+        let tasks = self.team.list_tasks(&team_id).await;
+        let meta = self.team.team_meta(&team_id).await;
+        serde_json::json!({
+            "team_id": team_id,
+            "team": meta,
+            "tasks": tasks,
+            "count": tasks.len(),
+        })
     }
 
     /// Generate an image via the platform OpenAI-compatible gateway.
@@ -947,6 +1063,53 @@ mod tests {
         }
     }
 
+    /// No-op team access: caller lookup always fails (tests seed their own
+    /// registrations for delegation/feedback/etc., not team membership).
+    struct StubTeam;
+    #[async_trait]
+    impl crate::acp::team::TeamAccess for StubTeam {
+        async fn team_id_for_leader_conversation(
+            &self,
+            _leader_conversation_id: i32,
+        ) -> Option<String> {
+            None
+        }
+        async fn team_meta(
+            &self,
+            _team_id: &str,
+        ) -> Option<crate::acp::team::TeamMetaInfo> {
+            None
+        }
+        async fn list_members(
+            &self,
+            _team_id: &str,
+        ) -> Vec<crate::acp::team::TeamMemberInfo> {
+            vec![]
+        }
+        async fn assign_task(
+            &self,
+            _team_id: &str,
+            _slot_id: &str,
+            _subject: &str,
+            _description: Option<&str>,
+        ) -> Result<crate::acp::team::TeamAssignOutcome, String> {
+            Err("stub team: not a leader".to_string())
+        }
+        async fn emit_member_started(
+            &self,
+            _leader_connection_id: &str,
+            _team_id: &str,
+            _slot_id: &str,
+            _connection_id: &str,
+            _conversation_id: i32,
+            _agent_type: crate::models::AgentType,
+        ) {
+        }
+        async fn list_tasks(&self, _team_id: &str) -> Vec<crate::acp::team::TeamTaskInfoWire> {
+            vec![]
+        }
+    }
+
     struct StaticParentLookup(Option<i32>);
     #[async_trait]
     impl ParentSessionLookup for StaticParentLookup {
@@ -1092,6 +1255,7 @@ mod tests {
             Arc::new(StubSessionInfo::default()),
             Arc::new(StubVisionBridge::default()),
             Arc::new(StubImageGeneration::default()),
+            Arc::new(StubTeam),
         )
     }
 
@@ -1114,6 +1278,7 @@ mod tests {
             Arc::new(StubSessionInfo::default()),
             Arc::new(StubVisionBridge::default()),
             Arc::new(StubImageGeneration::default()),
+            Arc::new(StubTeam),
         )
     }
 
@@ -1137,6 +1302,7 @@ mod tests {
             Arc::new(StubSessionInfo::default()),
             Arc::new(StubVisionBridge::default()),
             Arc::new(StubImageGeneration::default()),
+            Arc::new(StubTeam),
         )
     }
 
@@ -1159,6 +1325,7 @@ mod tests {
             session_info,
             Arc::new(StubVisionBridge::default()),
             Arc::new(StubImageGeneration::default()),
+            Arc::new(StubTeam),
         )
     }
 

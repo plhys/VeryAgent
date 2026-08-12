@@ -267,6 +267,7 @@ async fn async_main() -> ExitCode {
         vision_bridge_config,
         image_generation_config,
         _vision_bridge_access,
+        _team_config,
     ) = veryagent_lib::app_state::build_delegation_stack(
         &connection_manager,
         db.conn.clone(),
@@ -378,8 +379,15 @@ async fn async_main() -> ExitCode {
                     conn: state.db.conn.clone(),
                 },
             )),
-        );
-        let socket = delegation_socket_path.clone();
+            Arc::new(veryagent_lib::acp::team::ConnectionManagerTeamLookup {
+                manager: Arc::new(state.connection_manager.clone_ref()),
+                db: Arc::new(veryagent_lib::db::AppDatabase {
+                    conn: state.db.conn.clone(),
+                }),
+                app_data_dir: state.data_dir.clone(),
+                emitter: state.emitter.clone(),
+            }),
+        );        let socket = delegation_socket_path.clone();
         tokio::spawn(async move {
             if let Err(e) = listener.run(socket).await {
                 tracing::info!("[delegation] listener exited: {e}");

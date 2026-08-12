@@ -31,6 +31,7 @@ import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTeams } from "@/contexts/team-context"
 import {
   useAcpActions,
+  useAcpEvent,
   useConnectionStore,
   type ConnectionState,
 } from "@/contexts/acp-connections-context"
@@ -158,6 +159,34 @@ export function TeamSidePanel() {
 
   const [detail, setDetail] = useState<Team | null>(null)
   const [expandedSlot, setExpandedSlot] = useState<TeamSlot | null>(null)
+
+  // Live-append auto-assigned members: the leader's `team_assign_task` MCP
+  // tool spawns the member on the backend; the backend emits
+  // `team_member_started` on the leader's stream. Attach the member
+  // connection viewer-style under the same key the manual flow uses, so the
+  // member window streams the work live without a user-driven connect.
+  const { connectAsViewer } = useAcpActions()
+  const teamWorkspaceRef = useRef<string | null>(null)
+  teamWorkspaceRef.current = team?.workspace ?? null
+  useAcpEvent(
+    useCallback(
+      (envelope) => {
+        if (envelope.type !== "team_member_started") return
+        const workspace = teamWorkspaceRef.current
+        if (!workspace) return
+        const memberKey = memberKeyFor(envelope.slot_id)
+        void connectAsViewer(
+          memberKey,
+          envelope.connection_id,
+          envelope.agent_type,
+          workspace
+        ).catch((err) => {
+          console.warn("[Team] member viewer attach failed:", err)
+        })
+      },
+      [connectAsViewer]
+    )
+  )
 
   useEffect(() => {
     if (!team) {

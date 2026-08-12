@@ -23,6 +23,7 @@ pub mod registry;
 pub mod resident;
 pub mod session_info;
 pub mod session_state;
+pub mod team;
 pub mod terminal_runtime;
 pub mod types;
 pub mod image_generation;

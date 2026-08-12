@@ -1126,6 +1126,59 @@ impl ConnectionManager {
         // (or, under concurrent traffic, an Arc assert_unchecked crash).
         let blocks = blocks;
 
+        // Team-leader role injection: when this is the FIRST prompt of a team
+        // leader conversation, prepend the team's `leader_prompt` as a wire
+        // block so the PM knows it is a project manager the moment it first
+        // speaks — independent of the frontend's sendPrompt timing (which can
+        // silently fail, leaving the leader with no idea it has a team). The UI
+        // `user_message` above was built from the clean original, so the chat
+        // bubble stays free of the role preamble (same pattern as the identity
+        // preamble). Idempotency: only fires when the conversation has NO turns
+        // yet — a re-link / resident reuse onto a conversation that already has
+        // history is skipped, so the prompt is injected exactly once, ever.
+        let blocks = if delegation.is_none() && needs_link {
+            // Determine whether the freshly-linked conversation is a team
+            // leader chat WITHOUT any prior turns; only then inject the role
+            // prompt. Two awaits — keep them in one async closure so the
+            // borrow of `db.conn` is short-lived.
+            let maybe_leader = async {
+                let Some(cid) = conversation_id_for_status else {
+                    return None;
+                };
+                let has_turns =
+                    crate::db::service::conversation_turn_service::count(&db.conn, cid)
+                        .await
+                        .ok()
+                        .unwrap_or(1)
+                        > 0;
+                if has_turns {
+                    return None;
+                }
+                crate::db::service::team_service::find_leader_prompt_by_conversation(
+                    &db.conn, cid,
+                )
+                .await
+                .ok()
+                .flatten()
+            }
+            .await;
+            match maybe_leader {
+                Some((_team_id, prompt)) => {
+                    let mut with_role = Vec::with_capacity(blocks.len() + 1);
+                    with_role.push(PromptInputBlock::Text { text: prompt });
+                    with_role.extend(blocks);
+                    tracing::info!(
+                        "[team] injected leader role prompt on first prompt for conversation {}",
+                        conversation_id_for_status.unwrap_or_default()
+                    );
+                    with_role
+                }
+                None => blocks,
+            }
+        } else {
+            blocks
+        };
+
         // We hold `_prompt_guard` here, so call the lock-free inner helper —
         // re-entering `send_prompt` would try to acquire the same mutex and
         // deadlock. The helper reserves channel capacity FIRST and only then

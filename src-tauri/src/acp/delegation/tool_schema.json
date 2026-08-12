@@ -319,9 +319,50 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "The user's search keyword. MUST be passed verbatim — never translate, rephrase, or optimize."
+          "description": "The user's search query. MUST be passed verbatim — never translate, rephrase, or optimize."
         }
       }
+    }
+  },
+  {
+    "name": "team_get_members",
+    "description": "List the members of your team (the team you lead as project manager). Returns each member's display name, agent type, slot id, roles, and status. Use this to see who is available before assigning tasks. Only works inside a team leader conversation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "team_assign_task",
+    "description": "Assign a task to a member of your team and make them start working immediately. The member agent is spawned in the team's workspace and receives a role + task briefing as its first message. Returns the created task id and the member's conversation id. After assigning, track progress with team_get_tasks. You are the project manager — do NOT do the members' work yourself; break the boss's request into subtasks and assign them out. Ask the boss for confirmation via ask_user_question before assigning.",
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "slot_id",
+        "subject"
+      ],
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "description": "The slot id of the member to assign to — from team_get_members."
+        },
+        "subject": {
+          "type": "string",
+          "description": "The task subject/title. Keep it short and actionable."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional detailed task description / requirements for the member."
+        }
+      }
+    }
+  },
+  {
+    "name": "team_get_tasks",
+    "description": "Show your team's task board: every task with its subject, owner slot, status (pending / in_progress / completed / failed), and the member's final result text when finished. Use this to track progress after assigning tasks and to report results to the boss.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
     }
   }
 ]

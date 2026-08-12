@@ -22,14 +22,12 @@ import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
-import { useTabActions, useTabStore } from "@/contexts/tab-context"
+import { useTabActions } from "@/contexts/tab-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useTeams } from "@/contexts/team-context"
-import { useAcpActions } from "@/contexts/acp-connections-context"
 import {
   createConversation,
   teamCreate,
-  teamGet,
   teamSetLeaderConversation,
 } from "@/lib/api"
 import { AGENT_LABELS, type AgentType } from "@/lib/types"
@@ -120,7 +118,6 @@ export function TeamPage() {
   const { openTab } = useTabActions()
   const { openConversations } = useWorkbenchRoute()
   const { bindLeaderConversation } = useTeams()
-  const { sendPrompt } = useAcpActions()
 
   // Only enabled + available agents can join a team.
   const selectable = useMemo(
@@ -236,28 +233,13 @@ export function TeamPage() {
           openConversations()
           openTab(folder.id, convId, leaderAgent, false, undefined, folder.path)
 
-          // Inject the leader role prompt into the freshly-opened leader
-          // conversation so the PM knows it has a team to decompose work for.
-          // sendPrompt is buffered until the connection is established.
-          const leaderPrompt = (await teamGet(team.id).catch(() => null))
-            ?.leader_prompt
-          if (leaderPrompt) {
-            const tabId = useTabStore
-              .getState()
-              .rawTabs.find(
-                (tab) =>
-                  tab.kind === "conversation" &&
-                  tab.conversationId === convId &&
-                  tab.folderId === folder.id
-              )?.id
-            if (tabId) {
-              await sendPrompt(
-                tabId,
-                [{ type: "text", text: leaderPrompt }],
-                { folderId: folder.id, conversationId: convId }
-              ).catch(() => {})
-            }
-          }
+          // NOTE: the leader role prompt is NOT injected here. The backend
+          // injects `team.leader_prompt` automatically as the wire-preamble of
+          // the leader conversation's FIRST prompt (see
+          // `send_prompt_linked_with_message_id` in acp/manager.rs) — so the
+          // PM knows it has a team regardless of frontend timing, manual
+          // conversation creation, or app restarts. Injecting it here too
+          // would double the role prompt.
         } catch (err) {
           console.error("[Team] open leader conversation failed:", err)
           toast.error(t("leaderChatFailed"))

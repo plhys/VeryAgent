@@ -278,6 +278,18 @@ pub enum AcpEvent {
         agent_type: crate::models::agent::AgentType,
         result: DelegationResultSummary,
     },
+    /// A team leader's `team_assign_task` MCP call has spawned a member agent
+    /// and the member's first prompt is in flight. Emitted on the LEADER's
+    /// connection stream so the frontend team panel can attach the member
+    /// connection (viewer-style) and stream the member's work live in the
+    /// member window — the auto-delegation sibling of `DelegationStarted`.
+    TeamMemberStarted {
+        team_id: String,
+        slot_id: String,
+        connection_id: String,
+        conversation_id: i32,
+        agent_type: crate::models::agent::AgentType,
+    },
     /// Which settings surface drifted, so the frontend can word the
     /// web). Synthetic, notification-only event: it mutates no `SessionState`
     /// field and exists purely to drive the chat-channel "user message" push.

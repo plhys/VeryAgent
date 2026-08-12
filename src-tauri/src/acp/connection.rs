@@ -1141,6 +1141,11 @@ pub struct DelegationInjection {
     /// vision model, the resulting text description replaces the image block,
     /// so the text model never sees raw image data in its context.
     pub vision_bridge: Option<Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>>,
+    /// Hot-swappable "is team collaboration enabled?" flag. When enabled, the
+    /// companion's `--features` lists `team` to expose the
+    /// `team_get_members` / `team_assign_task` / `team_get_tasks` tools to the
+    /// agent (so a team leader can decompose and delegate work).
+    pub team: crate::acp::team::TeamRuntimeConfig,
     /// Hot-swappable "is image generation enabled?" flag. When enabled, the
     /// companion's `--features` lists `image` to expose the `generate_image`
     /// and `modify_image` tools.
@@ -1249,8 +1254,9 @@ fn companion_features_arg(
     vision_enabled: bool,
     image_enabled: bool,
     search_enabled: bool,
+    team_enabled: bool,
 ) -> Option<String> {
-    if !delegation_enabled && !feedback_enabled && !ask_enabled && !sessions_enabled && !vision_enabled && !image_enabled && !search_enabled {
+    if !delegation_enabled && !feedback_enabled && !ask_enabled && !sessions_enabled && !vision_enabled && !image_enabled && !search_enabled && !team_enabled {
         return None;
     }
     let mut features: Vec<&str> = Vec::new();
@@ -1274,6 +1280,9 @@ fn companion_features_arg(
     }
     if search_enabled {
         features.push("search");
+    }
+    if team_enabled {
+        features.push("team");
     }
     Some(features.join(","))
 }
@@ -1313,6 +1322,8 @@ async fn inject_veryagent_mcp(
     let image_enabled = injection.image_enabled;
     // Web search is always enabled — it's a core capability.
     let search_enabled = injection.search_enabled;
+    // Team collaboration tools: exposed when enabled (default on).
+    let team_enabled = injection.team.is_enabled().await;
     // `None` (no feature enabled) short-circuits the whole injection.
     let features_arg = companion_features_arg(
         delegation_enabled,
@@ -1322,6 +1333,7 @@ async fn inject_veryagent_mcp(
         vision_enabled,
         image_enabled,
         search_enabled,
+        team_enabled,
     )?;
     let Some(binary_path) = locate_veryagent_mcp_binary() else {
         tracing::warn!(
@@ -6704,6 +6716,7 @@ mod tests {
             vision_bridge: None,
             image_enabled: false,
             search_enabled: false,
+            team: crate::acp::team::TeamRuntimeConfig::new(),
             questions: Arc::new(NoQuestions)
                 as Arc<dyn crate::acp::question::SessionQuestionAccess>,
         };
@@ -6741,47 +6754,52 @@ mod tests {
     #[test]
     fn companion_features_arg_inject_skip_decision() {
         // All off → no companion at all.
-        assert_eq!(companion_features_arg(false, false, false, false, false, false, false), None);
+        assert_eq!(companion_features_arg(false, false, false, false, false, false, false, false), None);
         // Delegation only.
         assert_eq!(
-            companion_features_arg(true, false, false, false, false, false, false),
+            companion_features_arg(true, false, false, false, false, false, false, false),
             Some("delegation".to_string())
         );
         // Feedback only — the decoupling: companion injected for feedback even
         // when delegation is off.
         assert_eq!(
-            companion_features_arg(false, true, false, false, false, false, false),
+            companion_features_arg(false, true, false, false, false, false, false, false),
             Some("feedback".to_string())
         );
         // Ask only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, true, false, false, false, false),
+            companion_features_arg(false, false, true, false, false, false, false, false),
             Some("ask".to_string())
         );
         // Sessions only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, false, true, false, false, false),
+            companion_features_arg(false, false, false, true, false, false, false, false),
             Some("sessions".to_string())
         );
         // Vision only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, false, false, true, false, false),
+            companion_features_arg(false, false, false, false, true, false, false, false),
             Some("vision".to_string())
         );
         // Image only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, false, false, false, true, false),
+            companion_features_arg(false, false, false, false, false, true, false, false),
             Some("image".to_string())
         );
         // Search only — likewise injects the companion on its own.
         assert_eq!(
-            companion_features_arg(false, false, false, false, false, false, true),
+            companion_features_arg(false, false, false, false, false, false, true, false),
             Some("search".to_string())
+        );
+        // Team only — likewise injects the companion on its own.
+        assert_eq!(
+            companion_features_arg(false, false, false, false, false, false, false, true),
+            Some("team".to_string())
         );
         // All on → comma-joined, in declaration order.
         assert_eq!(
-            companion_features_arg(true, true, true, true, true, true, true),
-            Some("delegation,feedback,ask,sessions,vision,image,search".to_string())
+            companion_features_arg(true, true, true, true, true, true, true, true),
+            Some("delegation,feedback,ask,sessions,vision,image,search,team".to_string())
         );
     }
 

@@ -519,6 +519,7 @@ use crate::commands::git;
                         vision_bridge_config,
                         image_generation_config,
                         _vision_bridge_access,
+                        team_config,
                     ) = crate::app_state::build_delegation_stack(
                         &cm_state,
                         db_conn.clone(),
@@ -538,6 +539,7 @@ use crate::commands::git;
                     app.manage(session_info_config.clone());
                     app.manage(vision_bridge_config.clone());
                     app.manage(image_generation_config.clone());
+                    app.manage(team_config.clone());
                     app.manage(crate::commands::delegation::DelegationSocketPath(
                         socket_path.clone(),
                     ));
@@ -623,6 +625,18 @@ use crate::commands::git;
                                     conn: db_conn.clone(),
                                 },
                             ),
+                        ),
+                        std::sync::Arc::new(
+                            crate::acp::team::ConnectionManagerTeamLookup {
+                                manager: std::sync::Arc::new(cm_state.clone_ref()),
+                                db: std::sync::Arc::new(crate::db::AppDatabase {
+                                    conn: db_conn.clone(),
+                                }),
+                                app_data_dir: effective_data_dir.clone(),
+                                emitter: crate::web::event_bridge::EventEmitter::Tauri(
+                                    app.handle().clone(),
+                                ),
+                            },
                         ),
                     );
                     tauri::async_runtime::spawn(async move {

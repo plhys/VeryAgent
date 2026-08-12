@@ -270,6 +270,34 @@ pub struct BrokerImageSearchRequest {
     pub query: String,
 }
 
+/// List the members of the team whose leader conversation is the calling
+/// connection's. Backs the `team_get_members` MCP tool. The listener resolves
+/// the team by the parent conversation id from the token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerTeamMembersRequest {
+    pub token: String,
+}
+
+/// Assign a task to a team member and make them start working. Backs the
+/// `team_assign_task` MCP tool. The team is resolved by the caller's leader
+/// conversation; the member is addressed by slot id (the value returned by
+/// `team_get_members`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerTeamAssignRequest {
+    pub token: String,
+    pub slot_id: String,
+    pub subject: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// List tasks of the team whose leader conversation is the calling
+/// connection's. Backs the `team_get_tasks` MCP tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrokerTeamTasksRequest {
+    pub token: String,
+}
+
 /// Tagged top-level message dispatched by the listener. Adding new variants
 /// is the wire-stable way to grow the broker protocol without touching the
 /// frame layer.
@@ -289,6 +317,9 @@ pub enum BrokerMessage {
     ModifyImage(BrokerModifyImageRequest),
     WebSearch(BrokerWebSearchRequest),
     ImageSearch(BrokerImageSearchRequest),
+    TeamMembers(BrokerTeamMembersRequest),
+    TeamAssign(BrokerTeamAssignRequest),
+    TeamTasks(BrokerTeamTasksRequest),
 }
 
 /// The wrapped outcome the main process returns over the same socket.
@@ -412,6 +443,30 @@ pub async fn client_commit_feedback(
 ) -> io::Result<()> {
     let _ = message_round_trip(socket_path, &BrokerMessage::CommitFeedback(req.clone())).await?;
     Ok(())
+}
+
+/// Dispatch a `team_get_members` query and read back the team member list.
+pub async fn client_team_members_round_trip(
+    socket_path: &str,
+    req: &BrokerTeamMembersRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::TeamMembers(req.clone())).await
+}
+
+/// Dispatch a `team_assign_task` request (spawn member + send first prompt).
+pub async fn client_team_assign_round_trip(
+    socket_path: &str,
+    req: &BrokerTeamAssignRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::TeamAssign(req.clone())).await
+}
+
+/// Dispatch a `team_get_tasks` query and read back the task board.
+pub async fn client_team_tasks_round_trip(
+    socket_path: &str,
+    req: &BrokerTeamTasksRequest,
+) -> io::Result<BrokerResponse> {
+    message_round_trip(socket_path, &BrokerMessage::TeamTasks(req.clone())).await
 }
 
 /// Dispatch an `ask_user_question` request and BLOCK reading the response until

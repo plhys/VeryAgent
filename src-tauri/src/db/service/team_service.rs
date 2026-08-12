@@ -93,14 +93,6 @@ pub async fn get(db: &DatabaseConnection, id: &str) -> Result<TeamInfo, DbError>
         .one(db)
         .await?
         .ok_or_else(|| DbError::NotFound(format!("team {id}")))?;
-    let slots = slot_entity::Entity::find()
-        .filter(slot_entity::Column::TeamId.eq(&t.id))
-        .order_by_asc(slot_entity::Column::CreatedAt)
-        .all(db)
-        .await?
-        .into_iter()
-        .map(to_slot)
-        .collect();
     let tasks = task_entity::Entity::find()
         .filter(task_entity::Column::TeamId.eq(&t.id))
         .order_by_asc(task_entity::Column::CreatedAt)
@@ -109,17 +101,95 @@ pub async fn get(db: &DatabaseConnection, id: &str) -> Result<TeamInfo, DbError>
         .into_iter()
         .map(to_task)
         .collect();
+    let slots = {
+        let s = slot_entity::Entity::find()
+            .filter(slot_entity::Column::TeamId.eq(&t.id))
+            .order_by_asc(slot_entity::Column::CreatedAt)
+            .all(db)
+            .await?
+            .into_iter()
+            .map(to_slot)
+            .collect::<Vec<_>>();
+        s
+    };
+    // Lazy leader-prompt upgrade: teams created before the state-awareness
+    // prompt carry a legacy snapshot. Regenerate from current team data (name,
+    // workspace, member list) and persist so the leader's next connect sees
+    // the new behavior. Detected by the version marker — idempotent.
+    let mut leader_prompt = t.leader_prompt.clone();
+    let needs_upgrade = leader_prompt
+        .as_deref()
+        .map(|p| !p.contains(LEADER_PROMPT_VERSION_MARKER))
+        .unwrap_or(true);
+    if needs_upgrade {
+        let fresh = build_default_leader_prompt(
+            &t.name,
+            &t.workspace,
+            &member_desc_lines(&slots),
+        );
+        if leader_prompt.as_deref() != Some(fresh.as_str()) {
+            let mut active: team::ActiveModel = t.clone().into();
+            active.leader_prompt = Set(Some(fresh.clone()));
+            active.update(db).await?;
+        }
+        leader_prompt = Some(fresh);
+    }
     Ok(TeamInfo {
         id: t.id,
         name: t.name,
         leader_slot_id: t.leader_slot_id,
         workspace: t.workspace,
         leader_conversation_id: t.leader_conversation_id,
-        leader_prompt: t.leader_prompt,
+        leader_prompt,
         slots,
         tasks,
         created_at: t.created_at,
     })
+}
+
+/// Resolve the leader conversation's team id + leader_prompt in one query.
+/// Returns `None` when `conversation_id` isn't any team's leader chat. The
+/// prompt is lazily upgraded (legacy → state-aware) like [`get`] does, so a
+/// leader conversation that predates the new prompt gets the fresh behavior
+/// without a team edit.
+pub async fn find_leader_prompt_by_conversation(
+    db: &DatabaseConnection,
+    conversation_id: i32,
+) -> Result<Option<(String, String)>, DbError> {
+    let t = team::Entity::find()
+        .filter(team::Column::LeaderConversationId.eq(Some(conversation_id)))
+        .one(db)
+        .await?;
+    let Some(t) = t else {
+        return Ok(None);
+    };
+    let slots = slot_entity::Entity::find()
+        .filter(slot_entity::Column::TeamId.eq(&t.id))
+        .order_by_asc(slot_entity::Column::CreatedAt)
+        .all(db)
+        .await?
+        .into_iter()
+        .map(to_slot)
+        .collect::<Vec<_>>();
+    let prompt = match t.leader_prompt.as_deref() {
+        Some(p) if p.contains(LEADER_PROMPT_VERSION_MARKER) => p.to_string(),
+        _ => {
+            // Legacy / missing prompt — regenerate from current team data and
+            // persist (mirror of `get`'s lazy upgrade).
+            let fresh = build_default_leader_prompt(
+                &t.name,
+                &t.workspace,
+                &member_desc_lines(&slots),
+            );
+            if t.leader_prompt.as_deref() != Some(fresh.as_str()) {
+                let mut active: team::ActiveModel = t.clone().into();
+                active.leader_prompt = Set(Some(fresh.clone()));
+                active.update(db).await?;
+            }
+            fresh
+        }
+    };
+    Ok(Some((t.id, prompt)))
 }
 
 pub async fn delete(db: &DatabaseConnection, id: &str) -> Result<(), DbError> {
@@ -191,33 +261,81 @@ fn validate_draft(draft: &TeamDraft) -> Result<(), DbError> {
 /// Build the default role prompt for a team's leader (PM). Injected into the
 /// leader conversation on connect so the leader knows it has a team to
 /// decompose work for, who the members are, and how to delegate.
-fn build_default_leader_prompt(draft: &TeamDraft) -> String {
-    let members = draft
-        .slots
+/// Member descriptors in the form `display_name（role1/role2）` for the
+/// prompt's member hint. Works for both the draft slots (create) and the
+/// stored `TeamSlotInfo` rows (lazy prompt upgrade in `get`).
+fn member_desc_lines(
+    slots: &[impl MemberDesc],
+) -> String {
+    let names = slots
         .iter()
-        .filter(|s| !s.roles.iter().any(|r| r == ROLE_LEADER))
-        .map(|s| {
-            format!("- {}（{}）", s.display_name, s.roles.join("/"))
-        })
+        .filter(|s| !s.roles().iter().any(|r| r == ROLE_LEADER))
+        .map(|s| format!("{}（{}）", s.display_name(), s.roles().join("/")))
         .collect::<Vec<_>>()
-        .join("\n");
-    let member_desc = if members.is_empty() {
-        "（暂无成员）".to_string()
+        .join("、");
+    if names.is_empty() {
+        "（创建团队时暂无成员，以 team_get_members 实时结果为准）".to_string()
     } else {
-        members
-    };
+        format!("创建时的成员：{names}（以 team_get_members 实时结果为准）")
+    }
+}
+
+/// Minimal accessor so [`member_desc_lines`] accepts both draft and stored
+/// slot shapes without allocating.
+trait MemberDesc {
+    fn display_name(&self) -> &str;
+    fn roles(&self) -> &[String];
+}
+
+impl MemberDesc for crate::models::TeamSlotDraft {
+    fn display_name(&self) -> &str {
+        &self.display_name
+    }
+    fn roles(&self) -> &[String] {
+        &self.roles
+    }
+}
+
+impl MemberDesc for crate::models::TeamSlotInfo {
+    fn display_name(&self) -> &str {
+        &self.display_name
+    }
+    fn roles(&self) -> &[String] {
+        &self.roles
+    }
+}
+
+/// Marker phrase present in the CURRENT leader prompt. Legacy prompts (the
+/// pre-state-awareness version) lack it — `get` uses this to detect and
+/// upgrade stored prompts in place so existing teams get the new behavior.
+const LEADER_PROMPT_VERSION_MARKER: &str = "先认清自己的状态，再开口";
+
+fn build_default_leader_prompt(name: &str, workspace: &str, member_hint: &str) -> String {
     format!(
         "你是团队「{}」的项目经理（领班）。\n\
-         你的团队成员：\n{}\n\n\
-         工作方式：\n\
-         1. 老板（用户）会给你布置目标或任务。\n\
-         2. 你要把任务拆解成清晰的子任务，分配给合适的团队成员。\n\
-         3. 派活前先向老板确认分配方案（说明把哪个子任务派给谁、为什么）。\n\
-         4. 团队成员完成后，收集他们的结果并汇总汇报给老板。\n\n\
+         你的工作区：{}\n\
+         {}\n\n\
+         【先认清自己的状态，再开口】\n\
+         老板（用户）每次给你发消息（哪怕只是打招呼），你先用工具刷新团队当前状态，再回应：\n\
+         - 用 team_get_members 查看最新成员名单、角色和忙闲状态；\n\
+         - 用 team_get_tasks 查看任务板上每项任务的状态和结果；\n\
+         - 不要凭记忆或创建时的名单回答——状态以工具实时返回为准。\n\n\
+         【老板打招呼 / 问你怎么用团队时】\n\
+         如果老板说「你好」「你们团队怎么样」「你能做什么」之类：\n\
+         1. 先介绍自己：你是这个团队的项目经理，负责把老板的目标拆解成任务并派给成员。\n\
+         2. 用 team_get_members 拉取成员名单，把团队介绍给老板（谁是谁、什么角色）。\n\
+         3. 简要说明协作方式：老板说清目标 → 你拆解成子任务 → 给出分配方案请老板确认 → 派给成员干活 → 你跟踪进度 → 完成后汇总汇报。\n\
+         4. 最后问老板今天想做什么。不要长篇大论，两三句话讲清楚。\n\n\
+         【老板布置任务时】\n\
+         1. 用 team_get_members 确认有哪些成员可用，把目标拆解成清晰的子任务，规划谁做什么。\n\
+         2. 派活前先向老板确认分配方案（说明把哪个子任务派给谁、为什么），用 ask_user_question 让老板确认。\n\
+         3. 确认后用 team_assign_task 把任务派给成员。\n\
+         4. 用 team_get_tasks 跟踪进度；成员完成后收集结果并汇总汇报给老板。\n\n\
          重要：你是项目经理，职责是拆解、分派、协调、汇总，而不是自己一个人把所有事做完。\n\
-         如果任务很简单不需要分工，也要明确说明为什么不拆分。",
-        draft.name.trim(),
-        member_desc,
+         如果任务很简单不需要分工，也要明确说明为什么不拆分，然后再动手。",
+        name.trim(),
+        workspace.trim(),
+        member_hint,
     )
 }
 
@@ -226,7 +344,11 @@ pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInf
 
     let team_id = Uuid::new_v4().to_string();
     let now = Utc::now();
-    let leader_prompt = build_default_leader_prompt(&draft);
+    let leader_prompt = build_default_leader_prompt(
+        &draft.name,
+        &draft.workspace,
+        &member_desc_lines(&draft.slots),
+    );
 
     // Insert the team row first (slots FK onto it); leader_slot_id is backfilled
     // after the slots are created.

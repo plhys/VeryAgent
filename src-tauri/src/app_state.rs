@@ -122,6 +122,7 @@ pub fn build_delegation_stack(
     crate::acp::vision_bridge::VisionBridgeRuntimeConfig,
     crate::acp::image_generation::ImageGenerationRuntimeConfig,
     Arc<dyn crate::acp::vision_bridge::VisionBridgeAccess>,
+    crate::acp::team::TeamRuntimeConfig,
 ) {
     use crate::acp::connection::DelegationInjection;
     use crate::acp::delegation::broker::{
@@ -170,6 +171,7 @@ pub fn build_delegation_stack(
     let sessions = crate::acp::session_info::SessionInfoRuntimeConfig::new();
     let vision = crate::acp::vision_bridge::VisionBridgeRuntimeConfig::new();
     let image = crate::acp::image_generation::ImageGenerationRuntimeConfig::new();
+    let team = crate::acp::team::TeamRuntimeConfig::new();
 
     // Install the injection on the manager so spawn_agent picks it up
     // without an extra parameter at every call site.
@@ -190,6 +192,9 @@ pub fn build_delegation_stack(
         // Web search is always enabled — it's a core capability backed by the
         // upstream MCP proxy at feishu.ideasir.com.
         search_enabled: true,
+        // Team collaboration tools (team_get_members / team_assign_task /
+        // team_get_tasks) for the leader agent. Default on.
+        team: team.clone(),
         // Same backing manager as the listener's question lookup; used only by
         // the run_connection teardown guard to reclaim a parked ask.
         questions: Arc::new(crate::acp::manager::ConnectionManagerQuestionLookup {
@@ -197,7 +202,18 @@ pub fn build_delegation_stack(
         }) as Arc<dyn crate::acp::question::SessionQuestionAccess>,
     });
 
-    (broker, tokens, socket_path, feedback, ask, sessions, vision, image, vision_bridge_access)
+    (
+        broker,
+        tokens,
+        socket_path,
+        feedback,
+        ask,
+        sessions,
+        vision,
+        image,
+        vision_bridge_access,
+        team,
+    )
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -244,6 +260,7 @@ impl AppState {
             vision_bridge_config,
             image_generation_config,
             _vision_bridge_access,
+            _team_config,
         ) = build_delegation_stack(
             &connection_manager,
             db.conn.clone(),

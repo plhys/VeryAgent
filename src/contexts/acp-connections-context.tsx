@@ -2127,6 +2127,19 @@ export interface AcpActionsValue {
    */
   detachDelegationChild(connectionId: string): void
   /**
+   * Attach this client to a backend connection ANOTHER actor owns
+   * (cross-client / backend-spawned live streaming). The viewer is a
+   * NON-OWNING, co-controlling client: it streams the same turn and may
+   * also drive the shared agent; teardown DETACHES, never acpDisconnects.
+   * Used by the team panel to stream an auto-assigned member's work.
+   */
+  connectAsViewer(
+    contextKey: string,
+    connectionId: string,
+    agentType: AgentType,
+    workingDir: string | null
+  ): Promise<void>
+  /**
    * Restart the session at `contextKey` so it picks up the latest agent/model
    * settings: disconnect the running process, then reconnect with the same
    * `sessionId` (the agent resumes the conversation — history is preserved).
@@ -4477,6 +4490,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       clearAcpLoadError,
       attachDelegationChild,
       detachDelegationChild,
+      connectAsViewer,
       reapplyConfig,
       dismissConfigStale,
     }),
@@ -4497,6 +4511,7 @@ export function AcpConnectionsProvider({ children }: { children: ReactNode }) {
       clearAcpLoadError,
       attachDelegationChild,
       detachDelegationChild,
+      connectAsViewer,
       reapplyConfig,
       dismissConfigStale,
     ]

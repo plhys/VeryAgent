@@ -46,13 +46,14 @@ use crate::acp::delegation::transport::{
     client_feedback_round_trip, client_generate_image_round_trip, client_image_search_round_trip,
     client_modify_image_round_trip,
     client_round_trip, client_session_round_trip,
-    client_status_round_trip, client_vision_round_trip, client_web_search_round_trip,
+    client_status_round_trip, client_team_assign_round_trip, client_team_members_round_trip,
+    client_team_tasks_round_trip, client_vision_round_trip, client_web_search_round_trip,
     BrokerAskRequest, BrokerCancelRequest,
     BrokerCancelTaskRequest, BrokerCommitFeedbackRequest, BrokerFeedbackRequest,
     BrokerGenerateImageRequest, BrokerImageSearchRequest, BrokerModifyImageRequest, BrokerRequest,
     BrokerResponse,
-    BrokerSessionRequest, BrokerStatusRequest, BrokerVisionAnalyzeRequest,
-    BrokerWebSearchRequest,
+    BrokerSessionRequest, BrokerStatusRequest, BrokerTeamAssignRequest, BrokerTeamMembersRequest,
+    BrokerTeamTasksRequest, BrokerVisionAnalyzeRequest, BrokerWebSearchRequest,
 };
 use crate::acp::question::parse_questions;
 use crate::acp::session_info::MAX_SESSION_MESSAGES;
@@ -147,6 +148,7 @@ pub struct CompanionFeatures {
     pub vision: bool,
     pub image: bool,
     pub search: bool,
+    pub team: bool,
 }
 
 impl CompanionFeatures {
@@ -165,6 +167,7 @@ impl CompanionFeatures {
                 vision: false,
                 image: false,
                 search: false,
+                team: false,
             };
         };
         let mut f = Self {
@@ -175,6 +178,7 @@ impl CompanionFeatures {
             vision: false,
             image: false,
             search: false,
+            team: false,
         };
         for tok in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match tok {
@@ -185,6 +189,7 @@ impl CompanionFeatures {
                 "vision" => f.vision = true,
                 "image" => f.image = true,
                 "search" => f.search = true,
+                "team" => f.team = true,
                 _ => {}
             }
         }
@@ -201,6 +206,7 @@ impl CompanionFeatures {
             "vision_analyze" => self.vision,
             "generate_image" | "modify_image" => self.image,
             "web_search" | "image_search" => self.search,
+            "team_get_members" | "team_assign_task" | "team_get_tasks" => self.team,
                 _ => false,
         }
     }
@@ -559,6 +565,54 @@ async fn build_tools_call_spawn(
             let round_trip =
                 Box::pin(async move { client_session_round_trip(&socket, &req).await });
             register_and_spawn(inflight, id, None, round_trip, render_session_result).await
+        }
+        "team_get_members" => {
+            let req = BrokerTeamMembersRequest {
+                token: ctx.token.clone(),
+            };
+            let round_trip =
+                Box::pin(async move { client_team_members_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_team_result).await
+        }
+        "team_assign_task" => {
+            let slot_id = arguments
+                .get("slot_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let subject = arguments
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if slot_id.is_empty() || subject.is_empty() {
+                return LineAction::Respond(err(
+                    id,
+                    -32602,
+                    "team_assign_task requires `slot_id` and `subject`",
+                ));
+            }
+            let description = arguments
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let req = BrokerTeamAssignRequest {
+                token: ctx.token.clone(),
+                slot_id,
+                subject,
+                description,
+            };
+            let round_trip =
+                Box::pin(async move { client_team_assign_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_team_result).await
+        }
+        "team_get_tasks" => {
+            let req = BrokerTeamTasksRequest {
+                token: ctx.token.clone(),
+            };
+            let round_trip =
+                Box::pin(async move { client_team_tasks_round_trip(&socket, &req).await });
+            register_and_spawn(inflight, id, None, round_trip, render_team_result).await
         }
         "vision_analyze" => {
             let prompt = arguments
@@ -1353,6 +1407,98 @@ pub fn render_session_result(outcome: &Value) -> Value {
     })
 }
 
+/// Render the outcome of a team tool (`team_get_members` / `team_assign_task`
+/// / `team_get_tasks`) into the MCP tool-result envelope. The listener already
+/// returns final JSON; here we turn it into a compact human-readable block.
+pub fn render_team_result(outcome: &Value) -> Value {
+    let error_msg = outcome.get("error").and_then(|v| v.as_str());
+    if let Some(err) = error_msg {
+        return json!({
+            "content": [{ "type": "text", "text": format!("Team operation failed: {err}") }],
+            "isError": true,
+            "structuredContent": outcome.clone(),
+        });
+    }
+    let mut lines: Vec<String> = Vec::new();
+    // Team identity header — the "where am I" of state awareness.
+    if let Some(team) = outcome.get("team") {
+        if !team.is_null() {
+            let name = team.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+            let workspace = team
+                .get("workspace")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            lines.push(format!("Team: {name} (workspace: {workspace})"));
+        }
+    }
+    if let Some(members) = outcome.get("members").and_then(|v| v.as_array()) {
+        if members.is_empty() {
+            lines.push("No members found in this team.".to_string());
+        }
+        for m in members {
+            let slot = m.get("slotId").and_then(|v| v.as_str()).unwrap_or("?");
+            let name = m.get("displayName").and_then(|v| v.as_str()).unwrap_or("?");
+            let agent = m.get("agentType").and_then(|v| v.as_str()).unwrap_or("?");
+            let status = m.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+            let roles: Vec<String> = m
+                .get("roles")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|r| r.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let roles_txt = if roles.is_empty() {
+                "none".to_string()
+            } else {
+                roles.join(", ")
+            };
+            lines.push(format!("- {name} ({agent}, {slot}) role={roles_txt} status={status}"));
+        }
+    } else if let Some(tasks) = outcome.get("tasks").and_then(|v| v.as_array()) {
+        if tasks.is_empty() {
+            lines.push("No tasks on this team's board yet.".to_string());
+        }
+        for t in tasks {
+            let subject = t.get("subject").and_then(|v| v.as_str()).unwrap_or("?");
+            let status = t.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+            let owner = t.get("ownerSlotId").and_then(|v| v.as_str()).unwrap_or("?");
+            lines.push(format!("- [{status}] {subject} (owner={owner})"));
+            if let Some(desc) = t.get("description").and_then(|v| v.as_str()) {
+                if !desc.is_empty() {
+                    lines.push(format!("    {desc}"));
+                }
+            }
+            if let Some(result) = t.get("result").and_then(|v| v.as_str()) {
+                if !result.is_empty() {
+                    lines.push(format!("    result: {}", result.chars().take(200).collect::<String>()));
+                }
+            }
+        }
+    } else {
+        // `team_assign_task` outcome: show the created task + conversation.
+        let subject = outcome.get("subject").and_then(|v| v.as_str()).unwrap_or("?");
+        let slot = outcome.get("slotId").and_then(|v| v.as_str()).unwrap_or("?");
+        let status = outcome.get("status").and_then(|v| v.as_str()).unwrap_or("?");
+        let task_id = outcome.get("taskId").and_then(|v| v.as_str()).unwrap_or("?");
+        let conv = outcome
+            .get("conversationId")
+            .and_then(|v| v.as_i64())
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "none".to_string());
+        lines.push(format!(
+            "Assigned task {task_id}: \"{subject}\" -> {slot} (status={status}, conversation={conv})"
+        ));
+    }
+    let text = lines.join("\n");
+    json!({
+        "content": [{ "type": "text", "text": text }],
+        "isError": false,
+        "structuredContent": outcome.clone(),
+    })
+}
+
 /// Build the human-readable summary block for a found session: a metadata header
 /// plus, when present, a "Recent messages" section.
 fn render_session_summary_text(o: &Value) -> String {
@@ -1478,6 +1624,7 @@ mod tests {
             vision: false,
             image: false,
             search: false,
+            team: false,
         })
     }
 
@@ -1951,6 +2098,7 @@ mod tests {
         vision: false,
         image: false,
         search: false,
+        team: false,
     };
     const BOTH: CompanionFeatures = CompanionFeatures {
         delegation: true,
@@ -1960,6 +2108,7 @@ mod tests {
         vision: false,
         image: false,
         search: false,
+        team: false,
     };
     const ASK_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -1969,6 +2118,7 @@ mod tests {
         vision: false,
         image: false,
         search: false,
+        team: false,
     };
     const SESSIONS_ONLY: CompanionFeatures = CompanionFeatures {
         delegation: false,
@@ -1978,6 +2128,7 @@ mod tests {
         vision: false,
         image: false,
         search: false,
+        team: false,
     };
 
     fn list_tool_names(action: LineAction) -> Vec<String> {

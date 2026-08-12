@@ -1354,6 +1354,20 @@ export type AcpEvent =
       agent_type: AgentType
     }
   /**
+   * A team leader's `team_assign_task` MCP call has spawned a member agent
+   * and the member's first prompt is in flight. Emitted on the leader's
+   * connection stream so the team panel can attach the member connection
+   * (viewer-style) and stream the member's work live in the member window.
+   */
+  | {
+      type: "team_member_started"
+      team_id: string
+      slot_id: string
+      connection_id: string
+      conversation_id: number
+      agent_type: AgentType
+    }
+  /**
    * The child sub-session has finished (or errored / timed out / been
    * canceled). The MCP tool_result has been delivered to the parent agent;
    * frontend updates the ToolCallBlock badge from "running" to ok/err.
