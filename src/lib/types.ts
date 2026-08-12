@@ -1137,6 +1137,8 @@ export interface Team {
   leader_slot_id: string
   workspace: string
   leader_conversation_id: number | null
+  /** Role/system prompt injected into the leader conversation on connect. */
+  leader_prompt: string | null
   slots: TeamSlot[]
   tasks: TeamTask[]
   created_at: string

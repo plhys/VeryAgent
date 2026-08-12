@@ -297,9 +297,45 @@ pub(crate) async fn handle_event(
                     b.as_ref(),
                     cid,
                     stop_reason.as_str(),
-                    last_text,
+                    last_text.clone(),
                 )
                 .await;
+            }
+
+            // Team task settlement: if this conversation belongs to a team
+            // member task, auto-settle it (end_turn → completed with the final
+            // assistant text; anything else → failed). This is what lets the
+            // member's work be tracked on the team board without manual
+            // bookkeeping — mirror of the frontend's manual task status toggle.
+            if let Ok(Some(task)) =
+                crate::db::service::team_service::find_task_by_conversation(db_conn, cid).await
+            {
+                let succeeded = stop_reason.as_str() == "end_turn";
+                let result = if succeeded { last_text } else { None };
+                match crate::db::service::team_service::settle_task(
+                    db_conn,
+                    &task.id,
+                    succeeded,
+                    result.as_deref(),
+                )
+                .await
+                {
+                    Ok(settled) => {
+                        crate::web::event_bridge::emit_event(
+                            &emitter,
+                            crate::web::event_bridge::TEAM_CHANGED_EVENT,
+                            crate::web::event_bridge::TeamChange::Upsert {
+                                id: settled.team_id.clone(),
+                            },
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "[team][lifecycle] failed to settle task {} on turn complete: {e}",
+                            task.id
+                        );
+                    }
+                }
             }
             Ok(())
         }

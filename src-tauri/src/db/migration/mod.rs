@@ -30,6 +30,7 @@ mod m20260728_000001_conversation_summary;
 mod m20260804_000001_conversation_turn;
 mod m20260811_000001_team;
 mod m20260812_000001_team_slot_conversation;
+mod m20260812_000002_team_leader_prompt;
 pub struct Migrator;
 
 #[async_trait::async_trait]
@@ -66,6 +67,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260804_000001_conversation_turn::Migration),
             Box::new(m20260811_000001_team::Migration),
             Box::new(m20260812_000001_team_slot_conversation::Migration),
+            Box::new(m20260812_000002_team_leader_prompt::Migration),
         ]
     }
 }

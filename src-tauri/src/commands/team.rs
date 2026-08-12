@@ -5,13 +5,15 @@
 //! `AppHandle`.
 
 use crate::db::error::DbError;
-use crate::db::service::team_service;
+use crate::db::service::{conversation_service, folder_service, team_service};
 use crate::db::AppDatabase;
 use crate::models::{
-    TeamDraft, TeamInfo, TeamSlotInfo, TeamSlotStatus, TeamSummaryInfo, TeamTaskInfo,
+    AgentType, TeamDraft, TeamInfo, TeamSlotInfo, TeamSlotStatus, TeamSummaryInfo, TeamTaskInfo,
     TeamTaskStatus,
 };
 use crate::web::event_bridge::{emit_event, EventEmitter, TEAM_CHANGED_EVENT, TeamChange};
+#[cfg(feature = "tauri-runtime")]
+use tauri::Manager;
 
 fn emit_team(emitter: &EventEmitter, id: &str) {
     emit_event(emitter, TEAM_CHANGED_EVENT, TeamChange::Upsert { id: id.to_string() });
@@ -105,6 +107,118 @@ pub async fn team_set_task_status_core(
     let task = team_service::set_task_status(&db.conn, &task_id, status).await?;
     emit_team(emitter, &task.team_id);
     Ok(task)
+}
+
+/// 派活并让成员真正开始干活（后端版「手动派活」handleAssign 的自动化）：
+///
+/// 1. 解析团队 workspace → folder（folder_service::add_folder）
+/// 2. 为成员建一条专属会话（conversation_service::create）
+/// 3. 写 team_task + 任务挂会话 + 成员 slot 挂会话 + slot 置 working
+///    （team_service::assign_task）
+/// 4. 通过 ConnectionManager spawn 成员智能体（working_dir = 团队 workspace）
+/// 5. 用 `send_prompt_linked` 把任务作为首条消息发给成员（附带角色前缀）
+///
+/// 返回新会话 id 与成员连接 id。Tauri 模式直接调用；Web 模式目前由
+/// 前端保持手动派活（成员会话已在浏览器侧 connect）。
+#[cfg(feature = "tauri-runtime")]
+pub async fn team_delegate_task_core(
+    emitter: &EventEmitter,
+    db: &AppDatabase,
+    manager: &crate::acp::manager::ConnectionManager,
+    app_data_dir: &std::path::Path,
+    team_id: String,
+    owner_slot_id: String,
+    subject: String,
+    description: Option<String>,
+) -> Result<TeamDelegateResult, DbError> {
+    let team = team_service::get(&db.conn, &team_id).await?;
+    let slot = team
+        .slots
+        .iter()
+        .find(|s| s.id == owner_slot_id)
+        .ok_or_else(|| DbError::NotFound(format!("team slot {owner_slot_id}")))?;
+    let agent_type: AgentType = serde_json::from_str(&slot.agent_type)
+        .map_err(|e| DbError::Migration(format!("team slot agent_type invalid: {e}")))?;
+
+    // 1. workspace → folder
+    let folder = folder_service::add_folder(&db.conn, &team.workspace)
+        .await
+        .map_err(|e| DbError::from(e))?;
+
+    // 2. 建成员会话
+    let conv_id = conversation_service::create(
+        &db.conn,
+        folder.id,
+        agent_type,
+        Some(subject.clone()),
+        None,
+    )
+    .await
+    .map_err(DbError::from)?
+    .id;
+
+    // 3. 写任务 + 挂会话 + slot 置 working
+    let _task = team_service::assign_task(
+        &db.conn,
+        &team_id,
+        &owner_slot_id,
+        &subject,
+        description.as_deref(),
+        Some(conv_id),
+    )
+    .await?;
+
+    // 4. spawn 成员智能体
+    let runtime_env = crate::commands::acp::build_session_runtime_env(
+        db,
+        agent_type,
+        None,
+        app_data_dir,
+    )
+    .await
+    .map_err(|e| DbError::Migration(e.to_string()))?;
+    let conn_id = manager
+        .spawn_agent(
+            agent_type,
+            Some(team.workspace.clone()),
+            None,
+            runtime_env,
+            "main".to_string(),
+            emitter.clone(),
+            None,
+            std::collections::BTreeMap::new(),
+        )
+        .await
+        .map_err(|e| DbError::Migration(e.to_string()))?;
+
+    // 5. 发任务首条消息（角色前缀 + 任务正文）
+    let blocks = vec![crate::acp::types::PromptInputBlock::Text {
+        text: format!("你是团队「{}」的成员（角色：{}），在共享工作区 {} 中执行任务。\n\n任务：{}",
+            team.name, slot.roles.join("/"), team.workspace, subject),
+    }];
+    manager
+        .send_prompt_linked(
+            db,
+            &conn_id,
+            blocks,
+            Some(folder.id),
+            Some(conv_id),
+            None,
+        )
+        .await
+        .map_err(|e| DbError::Migration(e.to_string()))?;
+
+    emit_team(emitter, &team_id);
+    Ok(TeamDelegateResult { conv_id, conn_id })
+}
+
+/// 派活结果：新会话 id + 成员连接 id。
+#[cfg(feature = "tauri-runtime")]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamDelegateResult {
+    pub conv_id: i32,
+    pub conn_id: String,
 }
 
 // ── Tauri command wrappers (desktop only) ───────────────────────────────────
@@ -212,4 +326,33 @@ pub async fn team_set_task_status(
     status: TeamTaskStatus,
 ) -> Result<TeamTaskInfo, DbError> {
     team_set_task_status_core(&EventEmitter::Tauri(app), &db, task_id, status).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn team_delegate_task(
+    app: tauri::AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    manager: tauri::State<'_, crate::acp::manager::ConnectionManager>,
+    team_id: String,
+    owner_slot_id: String,
+    subject: String,
+    description: Option<String>,
+) -> Result<TeamDelegateResult, DbError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map(|p| crate::paths::resolve_effective_data_dir(&p))
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    team_delegate_task_core(
+        &EventEmitter::Tauri(app),
+        &db,
+        manager.inner(),
+        &app_data_dir,
+        team_id,
+        owner_slot_id,
+        subject,
+        description,
+    )
+    .await
 }

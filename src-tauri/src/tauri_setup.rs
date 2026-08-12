@@ -1260,6 +1260,7 @@ use crate::commands::git;
                 team_commands::team_assign_task,
                 team_commands::team_set_slot_status,
                 team_commands::team_set_task_status,
+                team_commands::team_delegate_task,
                 terminal_commands::terminal_spawn,
                 terminal_commands::terminal_write,
                 terminal_commands::terminal_resize,

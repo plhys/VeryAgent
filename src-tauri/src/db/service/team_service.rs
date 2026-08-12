@@ -115,6 +115,7 @@ pub async fn get(db: &DatabaseConnection, id: &str) -> Result<TeamInfo, DbError>
         leader_slot_id: t.leader_slot_id,
         workspace: t.workspace,
         leader_conversation_id: t.leader_conversation_id,
+        leader_prompt: t.leader_prompt,
         slots,
         tasks,
         created_at: t.created_at,
@@ -187,11 +188,45 @@ fn validate_draft(draft: &TeamDraft) -> Result<(), DbError> {
     Ok(())
 }
 
+/// Build the default role prompt for a team's leader (PM). Injected into the
+/// leader conversation on connect so the leader knows it has a team to
+/// decompose work for, who the members are, and how to delegate.
+fn build_default_leader_prompt(draft: &TeamDraft) -> String {
+    let members = draft
+        .slots
+        .iter()
+        .filter(|s| !s.roles.iter().any(|r| r == ROLE_LEADER))
+        .map(|s| {
+            format!("- {}（{}）", s.display_name, s.roles.join("/"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let member_desc = if members.is_empty() {
+        "（暂无成员）".to_string()
+    } else {
+        members
+    };
+    format!(
+        "你是团队「{}」的项目经理（领班）。\n\
+         你的团队成员：\n{}\n\n\
+         工作方式：\n\
+         1. 老板（用户）会给你布置目标或任务。\n\
+         2. 你要把任务拆解成清晰的子任务，分配给合适的团队成员。\n\
+         3. 派活前先向老板确认分配方案（说明把哪个子任务派给谁、为什么）。\n\
+         4. 团队成员完成后，收集他们的结果并汇总汇报给老板。\n\n\
+         重要：你是项目经理，职责是拆解、分派、协调、汇总，而不是自己一个人把所有事做完。\n\
+         如果任务很简单不需要分工，也要明确说明为什么不拆分。",
+        draft.name.trim(),
+        member_desc,
+    )
+}
+
 pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInfo, DbError> {
     validate_draft(&draft)?;
 
     let team_id = Uuid::new_v4().to_string();
     let now = Utc::now();
+    let leader_prompt = build_default_leader_prompt(&draft);
 
     // Insert the team row first (slots FK onto it); leader_slot_id is backfilled
     // after the slots are created.
@@ -207,6 +242,7 @@ pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInf
         leader_slot_id: Set(String::new()),
         workspace: Set(draft.workspace.trim().to_string()),
         leader_conversation_id: Set(None),
+        leader_prompt: Set(Some(leader_prompt)),
         created_at: Set(now),
     })
     .exec(db)

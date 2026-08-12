@@ -33,6 +33,8 @@ pub struct TeamInfo {
     pub leader_slot_id: String,
     pub workspace: String,
     pub leader_conversation_id: Option<i32>,
+    /// Role/system prompt injected into the leader conversation on connect.
+    pub leader_prompt: Option<String>,
     pub slots: Vec<TeamSlotInfo>,
     pub tasks: Vec<TeamTaskInfo>,
     pub created_at: DateTime<Utc>,

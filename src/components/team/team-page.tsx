@@ -22,12 +22,14 @@ import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { DirectoryBrowserDialog } from "@/components/shared/directory-browser-dialog"
 import { isDesktop, openFileDialog } from "@/lib/platform"
 import { getActiveRemoteConnectionId } from "@/lib/transport"
-import { useTabActions } from "@/contexts/tab-context"
+import { useTabActions, useTabStore } from "@/contexts/tab-context"
 import { useWorkbenchRoute } from "@/contexts/workbench-route-context"
 import { useTeams } from "@/contexts/team-context"
+import { useAcpActions } from "@/contexts/acp-connections-context"
 import {
   createConversation,
   teamCreate,
+  teamGet,
   teamSetLeaderConversation,
 } from "@/lib/api"
 import { AGENT_LABELS, type AgentType } from "@/lib/types"
@@ -118,6 +120,7 @@ export function TeamPage() {
   const { openTab } = useTabActions()
   const { openConversations } = useWorkbenchRoute()
   const { bindLeaderConversation } = useTeams()
+  const { sendPrompt } = useAcpActions()
 
   // Only enabled + available agents can join a team.
   const selectable = useMemo(
@@ -232,6 +235,29 @@ export function TeamPage() {
           bindLeaderConversation(team.id, convId)
           openConversations()
           openTab(folder.id, convId, leaderAgent, false, undefined, folder.path)
+
+          // Inject the leader role prompt into the freshly-opened leader
+          // conversation so the PM knows it has a team to decompose work for.
+          // sendPrompt is buffered until the connection is established.
+          const leaderPrompt = (await teamGet(team.id).catch(() => null))
+            ?.leader_prompt
+          if (leaderPrompt) {
+            const tabId = useTabStore
+              .getState()
+              .rawTabs.find(
+                (tab) =>
+                  tab.kind === "conversation" &&
+                  tab.conversationId === convId &&
+                  tab.folderId === folder.id
+              )?.id
+            if (tabId) {
+              await sendPrompt(
+                tabId,
+                [{ type: "text", text: leaderPrompt }],
+                { folderId: folder.id, conversationId: convId }
+              ).catch(() => {})
+            }
+          }
         } catch (err) {
           console.error("[Team] open leader conversation failed:", err)
           toast.error(t("leaderChatFailed"))

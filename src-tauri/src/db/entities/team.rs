@@ -16,6 +16,9 @@ pub struct Model {
     /// The conversation the leader chats in (created on demand). NULL until the
     /// user first opens "Leader conversation".
     pub leader_conversation_id: Option<i32>,
+    /// Role/system prompt injected into the leader conversation on connect.
+    /// Tells the leader (PM) about its members and how to delegate/confirm.
+    pub leader_prompt: Option<String>,
     pub created_at: DateTimeUtc,
 }
 
