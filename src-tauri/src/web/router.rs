@@ -1166,6 +1166,7 @@ pub fn build_router(
         .route("/team_get", post(handlers::team::team_get))
         .route("/team_create", post(handlers::team::team_create))
         .route("/team_delete", post(handlers::team::team_delete))
+        .route("/team_disband", post(handlers::team::team_disband))
         .route(
             "/team_set_leader_conversation",
             post(handlers::team::team_set_leader_conversation),

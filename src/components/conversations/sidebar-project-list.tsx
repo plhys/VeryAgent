@@ -23,6 +23,8 @@ import {
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useShallow } from "zustand/react/shallow"
+import { toast } from "sonner"
+import { toErrorMessage } from "@/lib/app-error"
 import { useTeams } from "@/contexts/team-context"
 import { useAppWorkspaceStore } from "@/stores/app-workspace-store"
 import { useTabActions, useTabStore } from "@/contexts/tab-context"
@@ -53,7 +55,19 @@ import {
   deleteConversation,
   updateConversationStatus,
   updateConversationPinned,
+  teamDelete,
+  teamDisband,
 } from "@/lib/api"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { SidebarHoverTimeFlag } from "./sidebar-hover-time-flag"
 import { TeamWorkspaceHoverCard } from "@/components/team/team-workspace-hover-card"
 import { ConversationContextMenu } from "./conversation-context-menu"
@@ -71,6 +85,7 @@ import {
  */
 export function SidebarProjectList() {
   const t = useTranslations("Folder.sidebar")
+  const tCommon = useTranslations("Folder.common")
   const {
     folders,
     conversations,
@@ -101,7 +116,7 @@ export function SidebarProjectList() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const openNewConversationTab = useTabStore((s) => s.openNewConversationTab)
-  const { closeConversationTab } = useTabActions()
+  const { closeConversationTab, closeTabsByFolder } = useTabActions()
 
   // Folder lookup for the per-conversation context menu ("复制任务路径").
   const folderById = useMemo(
@@ -152,6 +167,14 @@ export function SidebarProjectList() {
 
   // 默认全部展开
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({})
+  // 团队工作区操作确认：解散（软归档，可恢复）或彻底删除（物理清除，不可恢复）。
+  // 普通工作区直接「从工作区移除」（无确认）。
+  const [removeConfirm, setRemoveConfirm] = useState<{
+    folderId: number
+    folderName: string
+    teamId?: string
+    mode?: "disband" | "delete"
+  } | null>(null)
 
   // 按 folder_id 分组会话（支持 agent 筛选）
   const conversationsByFolder = useMemo(() => {
@@ -171,12 +194,60 @@ export function SidebarProjectList() {
     setCollapsed((prev) => ({ ...prev, [folderId]: !prev[folderId] }))
   }, [])
 
-  const handleRemove = useCallback(
+  // 解散团队：软归档，从侧边栏移除但记录保留（同工作区重建可恢复原团队）。
+  const handleDisband = useCallback(
+    (folderId: number, teamId: string, folderName: string) => {
+      setRemoveConfirm({ folderId, folderName, teamId, mode: "disband" })
+    },
+    []
+  )
+
+  // 彻底删除团队：物理清除团队及所有会话记录（不可恢复），保留项目文件。
+  const handleDeleteTeam = useCallback(
+    (folderId: number, teamId: string, folderName: string) => {
+      setRemoveConfirm({ folderId, folderName, teamId, mode: "delete" })
+    },
+    []
+  )
+
+  // 普通工作区：从工作区移除（仅隐藏，数据保留）。
+  const handleRemoveFolder = useCallback(
     (folderId: number) => {
       void removeFolderFromWorkspace(folderId)
     },
     [removeFolderFromWorkspace]
   )
+
+  const handleRemoveConfirm = useCallback(async () => {
+    if (!removeConfirm) return
+    const { folderId, teamId, mode } = removeConfirm
+    try {
+      closeTabsByFolder(folderId)
+      if (teamId && mode === "delete") {
+        // 彻底删除：物理清除团队及会话记录
+        await teamDelete(teamId)
+      } else if (teamId && mode === "disband") {
+        // 解散：软归档（记录保留，同工作区重建可恢复）
+        await teamDisband(teamId)
+      }
+      await removeFolderFromWorkspace(folderId)
+      toast.success(
+        t("toasts.folderRemoved", { name: removeConfirm.folderName })
+      )
+    } catch (e) {
+      const msg = toErrorMessage(e)
+      toast.error(t("toasts.removeFolderFailed", { message: msg }))
+    } finally {
+      setRemoveConfirm(null)
+    }
+  }, [
+    removeConfirm,
+    closeTabsByFolder,
+    teamDelete,
+    teamDisband,
+    removeFolderFromWorkspace,
+    t,
+  ])
 
   const handleRenameFolder = useCallback(
     async (folderId: number, name: string) => {
@@ -255,143 +326,200 @@ export function SidebarProjectList() {
   }
 
   return (
-    <div className="flex flex-col gap-1 px-0.5 pt-1.5">
-      {folders.map((folder) => {
-        const isActive = folder.id === activeFolderId
-        const isCollapsed = collapsed[folder.id] ?? false
-        const themeColor = normalizeFolderThemeColor(folder.color)
-        const folderConvs = conversationsByFolder.get(folder.id) || []
-        // 该文件夹是否为团队 workspace（与文件夹名/图标渲染共用同一判定）。
-        const teamForFolder =
-          teams.find((team) => team.workspace === folder.path) ?? null
+    <>
+      <div className="flex flex-col gap-1 px-0.5 pt-1.5">
+        {folders.map((folder) => {
+          const isActive = folder.id === activeFolderId
+          const isCollapsed = collapsed[folder.id] ?? false
+          const themeColor = normalizeFolderThemeColor(folder.color)
+          const folderConvs = conversationsByFolder.get(folder.id) || []
+          // 该文件夹是否为团队 workspace（与文件夹名/图标渲染共用同一判定）。
+          const teamForFolder =
+            teams.find((team) => team.workspace === folder.path) ?? null
 
-        return (
-          <div key={folder.id}>
-            <ProjectFolderHeader
-              folder={folder}
-              team={teamForFolder}
-              isActive={isActive}
-              isCollapsed={isCollapsed}
-              themeColor={themeColor}
-              onToggle={() => toggleFolder(folder.id)}
-              onOpen={() => handleOpenFolder(folder)}
-              onNewConversation={() => handleNewConversation(folder)}
-              onRemove={() => handleRemove(folder.id)}
-              onRename={(name) => handleRenameFolder(folder.id, name)}
-              onOpenPath={() => handleOpenFolderPath(folder.path)}
-              onPin={() => handlePinFolder(folder.id)}
-              newConversationTitle={t("newConversation")}
-              pinTitle={t("pinWorkspace")}
-              renameTitle={t("renameWorkspace")}
-              renameDialogTitle={t("renameWorkspaceTitle")}
-              openTitle={t("openWorkspace")}
-              removeTitle={t("removeFromWorkspace")}
-            />
+          return (
+            <div key={folder.id}>
+              <ProjectFolderHeader
+                folder={folder}
+                team={teamForFolder}
+                isActive={isActive}
+                isCollapsed={isCollapsed}
+                themeColor={themeColor}
+                onToggle={() => toggleFolder(folder.id)}
+                onOpen={() => handleOpenFolder(folder)}
+                onNewConversation={() => handleNewConversation(folder)}
+                onRemove={() => handleRemoveFolder(folder.id)}
+                onDisband={
+                  teamForFolder
+                    ? () =>
+                        handleDisband(folder.id, teamForFolder.id, folder.name)
+                    : undefined
+                }
+                onDeleteTeam={
+                  teamForFolder
+                    ? () =>
+                        handleDeleteTeam(
+                          folder.id,
+                          teamForFolder.id,
+                          folder.name
+                        )
+                    : undefined
+                }
+                onRename={(name) => handleRenameFolder(folder.id, name)}
+                onOpenPath={() => handleOpenFolderPath(folder.path)}
+                onPin={() => handlePinFolder(folder.id)}
+                newConversationTitle={t("newConversation")}
+                pinTitle={t("pinWorkspace")}
+                renameTitle={t("renameWorkspace")}
+                renameDialogTitle={t("renameWorkspaceTitle")}
+                openTitle={t("openWorkspace")}
+                removeTitle={t("removeFromWorkspace")}
+                disbandTeamTitle={t("disbandTeam")}
+                deleteTeamTitle={t("deleteTeamForever")}
+              />
 
-            {/* 展开的会话列表 — 树形子弹线 */}
-            {!isCollapsed && (
-              <div className="relative ml-[1.375rem] pl-4 pt-1 pb-1">
-                {folderConvs.length === 0 ? (
-                  <p className="py-1 text-[0.75rem] text-muted-foreground/60">
-                    {t("emptyFolderHint")}
-                  </p>
-                ) : (
-                  (() => {
-                    // Prefer the active tab's conversationId so selection survives
-                    // agent-type / tab-id edge cases and highlights with the folder.
-                    const activeTab =
-                      activeTabId != null
-                        ? tabs.find((tab) => tab.id === activeTabId)
-                        : undefined
-                    const activeIdx = folderConvs.findIndex(
-                      (c) =>
-                        activeTab != null &&
-                        activeTab.conversationId === c.id &&
-                        activeTab.folderId === c.folder_id
-                    )
-                    return (
-                      <div className="flex flex-col">
-                        {folderConvs.map((conv, idx) => {
-                          const isConvActive = idx === activeIdx
-                          const isLast = idx === folderConvs.length - 1
-                          // 竖线：选中项以上(含)主色，以下浅灰色
-                          const trunkActive = activeIdx >= 0 && idx <= activeIdx
-                          // 下方竖线：选中项以上主色，以下浅灰色
-                          const belowActive = activeIdx >= 0 && idx < activeIdx
-                          // 水平分支：仅选中项主色
-                          const branchActive = isConvActive
-                          const trunkColor = trunkActive
-                            ? "var(--color-primary, var(--primary))"
-                            : "var(--color-sidebar-border, #e5e5e5)"
-                          const branchColor = branchActive
-                            ? "var(--color-primary, var(--primary))"
-                            : "var(--color-sidebar-border, #e5e5e5)"
-                          const belowColor = belowActive
-                            ? "var(--color-primary, var(--primary))"
-                            : "var(--color-sidebar-border, #e5e5e5)"
-                          return (
-                            <div key={conv.id} className="relative mb-1.5">
-                              {/* 细连接线：回到更干净的小细线，统一 1px，降低存在感。 */}
-                              {/* 纯细线：不用 border、不用 scale、不要装饰，直接画 1px 背景线。 */}
-                              <div
-                                className="absolute"
-                                style={{
-                                  left: "calc(-1rem - 0.5px)",
-                                  top: 0,
-                                  height: "50%",
-                                  width: "1px",
-                                  opacity: 0.8,
-                                  backgroundColor: trunkColor,
-                                }}
-                              />
-                              <div
-                                className="absolute"
-                                style={{
-                                  left: "-1rem",
-                                  top: "calc(50% - 0.5px)",
-                                  width: "1rem",
-                                  height: "1px",
-                                  opacity: 0.8,
-                                  backgroundColor: branchColor,
-                                }}
-                              />
-                              {!isLast && (
+              {/* 展开的会话列表 — 树形子弹线 */}
+              {!isCollapsed && (
+                <div className="relative ml-[1.375rem] pl-4 pt-1 pb-1">
+                  {folderConvs.length === 0 ? (
+                    <p className="py-1 text-[0.75rem] text-muted-foreground/60">
+                      {t("emptyFolderHint")}
+                    </p>
+                  ) : (
+                    (() => {
+                      // Prefer the active tab's conversationId so selection survives
+                      // agent-type / tab-id edge cases and highlights with the folder.
+                      const activeTab =
+                        activeTabId != null
+                          ? tabs.find((tab) => tab.id === activeTabId)
+                          : undefined
+                      const activeIdx = folderConvs.findIndex(
+                        (c) =>
+                          activeTab != null &&
+                          activeTab.conversationId === c.id &&
+                          activeTab.folderId === c.folder_id
+                      )
+                      return (
+                        <div className="flex flex-col">
+                          {folderConvs.map((conv, idx) => {
+                            const isConvActive = idx === activeIdx
+                            const isLast = idx === folderConvs.length - 1
+                            // 竖线：选中项以上(含)主色，以下浅灰色
+                            const trunkActive =
+                              activeIdx >= 0 && idx <= activeIdx
+                            // 下方竖线：选中项以上主色，以下浅灰色
+                            const belowActive =
+                              activeIdx >= 0 && idx < activeIdx
+                            // 水平分支：仅选中项主色
+                            const branchActive = isConvActive
+                            const trunkColor = trunkActive
+                              ? "var(--color-primary, var(--primary))"
+                              : "var(--color-sidebar-border, #e5e5e5)"
+                            const branchColor = branchActive
+                              ? "var(--color-primary, var(--primary))"
+                              : "var(--color-sidebar-border, #e5e5e5)"
+                            const belowColor = belowActive
+                              ? "var(--color-primary, var(--primary))"
+                              : "var(--color-sidebar-border, #e5e5e5)"
+                            return (
+                              <div key={conv.id} className="relative mb-1.5">
+                                {/* 细连接线：回到更干净的小细线，统一 1px，降低存在感。 */}
+                                {/* 纯细线：不用 border、不用 scale、不要装饰，直接画 1px 背景线。 */}
                                 <div
                                   className="absolute"
                                   style={{
                                     left: "calc(-1rem - 0.5px)",
-                                    top: "50%",
-                                    bottom: "-0.375rem",
+                                    top: 0,
+                                    height: "50%",
                                     width: "1px",
                                     opacity: 0.8,
-                                    backgroundColor: belowColor,
+                                    backgroundColor: trunkColor,
                                   }}
                                 />
-                              )}
-                              <ProjectConversationRow
-                                conv={conv}
-                                isActive={isConvActive}
-                                untitledLabel={t("untitledConversation")}
-                                folder={folderById.get(conv.folder_id)}
-                                onClick={() => handleConversationClick(conv)}
-                                onRename={handleRename}
-                                onDelete={handleDelete}
-                                onStatusChange={handleStatusChange}
-                                onTogglePin={handleTogglePin}
-                              />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })()
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
+                                <div
+                                  className="absolute"
+                                  style={{
+                                    left: "-1rem",
+                                    top: "calc(50% - 0.5px)",
+                                    width: "1rem",
+                                    height: "1px",
+                                    opacity: 0.8,
+                                    backgroundColor: branchColor,
+                                  }}
+                                />
+                                {!isLast && (
+                                  <div
+                                    className="absolute"
+                                    style={{
+                                      left: "calc(-1rem - 0.5px)",
+                                      top: "50%",
+                                      bottom: "-0.375rem",
+                                      width: "1px",
+                                      opacity: 0.8,
+                                      backgroundColor: belowColor,
+                                    }}
+                                  />
+                                )}
+                                <ProjectConversationRow
+                                  conv={conv}
+                                  isActive={isConvActive}
+                                  untitledLabel={t("untitledConversation")}
+                                  folder={folderById.get(conv.folder_id)}
+                                  onClick={() => handleConversationClick(conv)}
+                                  onRename={handleRename}
+                                  onDelete={handleDelete}
+                                  onStatusChange={handleStatusChange}
+                                  onTogglePin={handleTogglePin}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <AlertDialog
+        open={removeConfirm !== null}
+        onOpenChange={(open) => !open && setRemoveConfirm(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {removeConfirm?.mode === "disband"
+                ? t("disbandTeamTitle")
+                : removeConfirm?.mode === "delete"
+                  ? t("removeTeamFolderConfirmTitle")
+                  : t("removeFolderConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeConfirm?.mode === "disband"
+                ? t("disbandTeamDescription", {
+                    name: removeConfirm?.folderName ?? "",
+                  })
+                : removeConfirm?.mode === "delete"
+                  ? t("removeTeamFolderConfirmDescription", {
+                      name: removeConfirm?.folderName ?? "",
+                    })
+                  : t("removeFolderConfirmDescription", {
+                      name: removeConfirm?.folderName ?? "",
+                    })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRemoveConfirm}>
+              {tCommon("confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -405,6 +533,8 @@ function ProjectFolderHeader({
   onOpen,
   onNewConversation,
   onRemove,
+  onDisband,
+  onDeleteTeam,
   onRename,
   onOpenPath,
   onPin,
@@ -414,6 +544,8 @@ function ProjectFolderHeader({
   renameDialogTitle,
   openTitle,
   removeTitle,
+  disbandTeamTitle,
+  deleteTeamTitle,
 }: {
   folder: FolderDetail
   /** 该文件夹对应的团队（若它是团队 workspace）。非团队为 null。 */
@@ -425,6 +557,8 @@ function ProjectFolderHeader({
   onOpen: () => void
   onNewConversation: () => void
   onRemove: () => void
+  onDisband?: () => void
+  onDeleteTeam?: () => void
   onRename: (name: string) => Promise<void>
   onOpenPath: () => void
   onPin: () => void
@@ -434,6 +568,8 @@ function ProjectFolderHeader({
   renameDialogTitle: string
   openTitle: string
   removeTitle: string
+  disbandTeamTitle: string
+  deleteTeamTitle: string
 }) {
   const tCommon = useTranslations("Folder.common")
   const rowRef = useRef<HTMLButtonElement>(null)
@@ -568,10 +704,23 @@ function ProjectFolderHeader({
             {openTitle}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem variant="destructive" onSelect={onRemove}>
-            <Trash2 className="h-4 w-4" />
-            {removeTitle}
-          </ContextMenuItem>
+          {team ? (
+            <>
+              <ContextMenuItem variant="destructive" onSelect={onDisband}>
+                <Archive className="h-4 w-4" />
+                {disbandTeamTitle}
+              </ContextMenuItem>
+              <ContextMenuItem variant="destructive" onSelect={onDeleteTeam}>
+                <Trash2 className="h-4 w-4" />
+                {deleteTeamTitle}
+              </ContextMenuItem>
+            </>
+          ) : (
+            <ContextMenuItem variant="destructive" onSelect={onRemove}>
+              <Trash2 className="h-4 w-4" />
+              {removeTitle}
+            </ContextMenuItem>
+          )}
         </ContextMenuContent>
       </ContextMenu>
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>

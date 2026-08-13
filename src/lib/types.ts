@@ -1363,7 +1363,7 @@ export type AcpEvent =
       type: "team_member_started"
       team_id: string
       slot_id: string
-      connection_id: string
+      member_connection_id: string
       conversation_id: number
       agent_type: AgentType
     }

@@ -1268,6 +1268,7 @@ use crate::commands::git;
                 team_commands::team_get,
                 team_commands::team_create,
                 team_commands::team_delete,
+                team_commands::team_disband,
                 team_commands::team_set_leader_conversation,
                 team_commands::team_list_slots,
                 team_commands::team_list_tasks,

@@ -25,6 +25,14 @@ export async function teamDelete(id: string): Promise<void> {
   return getTransport().call("team_delete", { id })
 }
 
+/**
+ * 解散团队（软归档）：团队从侧边栏消失，但所有记录保留；同一工作区新建团队
+ * 时自动恢复原团队（成员/任务/历史对话全回来）。
+ */
+export async function teamDisband(id: string): Promise<void> {
+  return getTransport().call("team_disband", { id })
+}
+
 export async function teamSetLeaderConversation(
   id: string,
   conversationId: number

@@ -159,10 +159,17 @@ pub fn build_delegation_stack(
     }) as Arc<dyn ChildLiveReplyLookup>;
     let event_emitter = Arc::new(ConnectionManagerEventEmitter { manager: cm_arc })
         as Arc<dyn DelegationEventEmitter>;
+    let team = crate::acp::team::TeamRuntimeConfig::new();
     let broker = Arc::new(
         DelegationBroker::with_writers(spawner, depth_lookup, meta_writer, event_emitter)
             .with_status_lookup(status_lookup)
-            .with_live_reply_lookup(live_reply_lookup),
+            .with_live_reply_lookup(live_reply_lookup)
+            // Team collaboration is on by default; the leader may delegate tasks
+            // to members via `delegate_to_agent` even with the standalone
+            // delegation switch off. `build_delegation_stack` is synchronous, so
+            // we seed with the default (enabled=true) rather than reading the
+            // hot-swappable flag here.
+            .with_team_enabled(true),
     );
     let tokens = Arc::new(TokenRegistry::default());
     let socket_path = default_socket_path(&std::env::temp_dir());
@@ -171,7 +178,6 @@ pub fn build_delegation_stack(
     let sessions = crate::acp::session_info::SessionInfoRuntimeConfig::new();
     let vision = crate::acp::vision_bridge::VisionBridgeRuntimeConfig::new();
     let image = crate::acp::image_generation::ImageGenerationRuntimeConfig::new();
-    let team = crate::acp::team::TeamRuntimeConfig::new();
 
     // Install the injection on the manager so spawn_agent picks it up
     // without an extra parameter at every call site.

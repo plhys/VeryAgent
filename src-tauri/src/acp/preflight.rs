@@ -17,6 +17,9 @@ pub enum FixActionKind {
     OpenUrl,
     InstallOpencodePlugins,
     InstallUv,
+    /// Install the `pi` binary (`@earendil-works/pi-coding-agent`) that pi-acp
+    /// spawns as `pi --mode rpc`, into the isolated npm prefix. payload = agent_type.
+    InstallPiBinary,
     /// Install the agent package (npx install or uvx prepare). payload = agent_type.
     InstallNpx,
     /// Upgrade an already-installed npx/uvx agent. payload = agent_type.
@@ -107,6 +110,10 @@ pub async fn run_preflight(agent_type: AgentType) -> PreflightResult {
     checks.extend(check_package_installed(agent_type).await);
     checks.extend(check_config_parse(agent_type));
     checks.extend(check_legacy_system_install(agent_type).await);
+    // Pi 特有：`pi-acp` 只是 ACP 壳，运行时还会 spawn `pi --mode rpc` 这个真实
+    // 二进制。上面的 package/legacy 检查只覆盖 `pi-acp`，这里单独检查 `pi` 是否
+    // 从隔离前缀解析，避免检测页全绿但实际 pi 落在系统全局 / 缺失。
+    checks.extend(check_pi_binary_isolation(agent_type).await);
 
     let passed = checks
         .iter()
@@ -846,6 +853,68 @@ async fn check_legacy_system_install(agent_type: AgentType) -> Vec<CheckItem> {
 
     // Neither isolated nor system — `package_installed` already reported it.
     vec![]
+}
+
+/// Check that the `pi` binary (the inner coding agent pi-acp spawns as
+/// `pi --mode rpc`) resolves from the isolated VeryAgent npm prefix.
+///
+/// The distribution checks above (`check_package_installed` /
+/// `check_legacy_system_install`) only cover the `pi-acp` ACP adapter command,
+/// so a machine where pi-acp is isolated but `pi` landed in the system global
+/// npm directory (or is missing) would otherwise show all-green on the settings
+/// page yet fail at launch with ENOENT. Only applies to Pi. `None` means the
+/// launch preflight already surfaced the missing case; here we report the
+/// location when it exists outside isolation.
+async fn check_pi_binary_isolation(agent_type: AgentType) -> Vec<CheckItem> {
+    if agent_type != AgentType::Pi {
+        return vec![];
+    }
+    let meta = registry::get_agent_meta(agent_type);
+    let pass = CheckItem {
+        check_id: "pi_binary_isolation".into(),
+        label: "Pi binary".into(),
+        status: CheckStatus::Pass,
+        message: format!("{} runs from the isolated VeryAgent npm prefix.", meta.name),
+        fixes: vec![],
+    };
+    let migrate_fix = |label: &str, message: String| CheckItem {
+        check_id: "pi_binary_isolation".into(),
+        label: "Pi binary".into(),
+        status: CheckStatus::Warn,
+        message,
+        fixes: vec![FixAction {
+            label: label.into(),
+            kind: FixActionKind::InstallPiBinary,
+            payload: agent_type_wire_id(agent_type),
+        }],
+    };
+
+    // Resolve the bare `pi` command (the launch default). A custom
+    // `PI_ACP_PI_COMMAND` override is validated separately by
+    // `acp_validate_pi_command`; here we report the default path.
+    let Some(resolved) = crate::commands::acp::resolve_pi_command_path("pi") else {
+        return vec![migrate_fix(
+            "Install pi",
+            format!(
+                "{}'s `pi` binary is not found. Install it into the isolated VeryAgent environment.",
+                meta.name
+            ),
+        )];
+    };
+    if crate::process::user_npm_prefix()
+        .map(|p| resolved.starts_with(&p))
+        .unwrap_or(false)
+    {
+        return vec![pass];
+    }
+    vec![migrate_fix(
+        "Migrate to isolated env",
+        format!(
+            "{}'s `pi` binary is installed in the system npm global directory ({}). Reinstall to move it into the isolated VeryAgent environment.",
+            meta.name,
+            resolved.display()
+        ),
+    )]
 }
 
 /// Check that a JSON-native config file parses. Only applies to agents whose

@@ -19,6 +19,10 @@ pub struct Model {
     /// Role/system prompt injected into the leader conversation on connect.
     /// Tells the leader (PM) about its members and how to delegate/confirm.
     pub leader_prompt: Option<String>,
+    /// Soft-archive marker. A disbanded team is hidden from the sidebar but
+    /// every record stays; re-creating a team on the same workspace restores
+    /// it. NULL = active team.
+    pub disbanded_at: Option<DateTimeUtc>,
     pub created_at: DateTimeUtc,
 }
 

@@ -36,3 +36,17 @@ impl fmt::Display for AgentType {
         }
     }
 }
+
+impl AgentType {
+    /// Parse an agent type from its stored form. `team_slot.agent_type` holds a
+    /// **bare** id (`pi`, `hermes`, ...) as plain text, while `AgentType`'s serde
+    /// impl requires a JSON string literal (`"pi"`). Try the strict JSON parse
+    /// first (compatible with any historical JSON-encoded rows), then fall back
+    /// to wrapping the raw string as a JSON value — the same tolerant approach
+    /// `delegation::listener::parse_agent_type` uses.
+    pub fn from_stored_str(s: &str) -> Option<Self> {
+        serde_json::from_str::<AgentType>(s)
+            .ok()
+            .or_else(|| serde_json::from_value(serde_json::Value::String(s.to_string())).ok())
+    }
+}

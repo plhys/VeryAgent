@@ -335,6 +335,21 @@ pub async fn soft_delete(conn: &DatabaseConnection, conversation_id: i32) -> Res
     Ok(())
 }
 
+/// Physically delete a conversation row. FK `ON DELETE CASCADE` removes its
+/// turns, opened tabs, and `folder_opened_conversation` rows. Used by team
+/// "permanent delete" (彻底删除) — the conversation is gone, not just hidden.
+pub async fn hard_delete(conn: &DatabaseConnection, conversation_id: i32) -> Result<(), DbError> {
+    let deleted = conversation::Entity::delete_by_id(conversation_id)
+        .exec(conn)
+        .await?;
+    if deleted.rows_affected == 0 {
+        return Err(DbError::Migration(format!(
+            "Conversation not found: {conversation_id}"
+        )));
+    }
+    Ok(())
+}
+
 fn parse_agent_type(s: &str) -> AgentType {
     match serde_json::from_value(serde_json::Value::String(s.to_string())) {
         Ok(at) => at,

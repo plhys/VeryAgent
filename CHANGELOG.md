@@ -9,6 +9,29 @@
 
 ## [Unreleased]
 
+### 修复（2026-08-13）
+
+- **团队「解散 / 彻底删除」分离（真删除 + 可恢复归档）**：
+  - `team` 表新增 `disbanded_at` 列（迁移 `m20260813_000001_team_disbanded_at`）：**解散** = 软归档（团队从侧边栏消失但记录全保留，同一工作区新建团队自动恢复原团队）；**彻底删除** = 物理清除团队及领班/成员会话/turns/tabs（`team_delete` 升级为硬删，复用 `conversation_service::hard_delete`，FK 级联），保留工作区文件夹与磁盘项目文件。
+  - 新增 `team_disband` 命令（Tauri + Web 双通道）；侧边栏团队工作区右键菜单分「解散团队」「彻底删除团队」两个操作（普通工作区保持「从工作区移除」）。
+- **创建团队「接管」同一工作区旧团队**：`team_service::create` 创建前先解散同 workspace 所有活跃旧团队并软删其领班/成员对话——同一工作区反复创建只保留最新团队的一个对话，不再堆积「未命名会话」。
+- **创建团队后侧边栏刷新**：`handleCreate` 打开领班对话后调用 `refreshConversations()`，丢弃已被接管软删的旧对话（此前前端 store 残留旧记录导致两条会话）。
+- **成员实时流修复（桌面端不可见）**：`team_member_started` 事件 payload 字段 `connection_id` → `member_connection_id`，消除与事件信封顶层 `connection_id`（领班 id）的 JSON 平铺键冲突——此前桌面端因 reverseMap 查不到成员连接而丢弃事件，成员窗口始终无实时流。
+- **`team_set_leader_conversation` 广播 `team://changed`**：设置领班对话后触发 TeamProvider 刷新，修复创建团队后竞态导致团队面板（成员条）不显示。
+- **`agent_type` 解析容错（修复 `team_assign_task` 报 `agent_type: expected value`）**：`AgentType::from_stored_str` 先试 JSON 字面量再容错裸字符串（DB 存的是 `pi` 而非 `"pi"`）；修复 MCP 路径（`acp/team.rs`）与 Tauri 手动派活路径（`commands/team.rs`）两处。
+- **delegation 随团队启用自动放行**：`inject_veryagent_mcp` 中 `delegation_enabled = broker开关 || team_enabled`，broker `start_delegation` 门控并入 `team_enabled`——领班可用 `delegate_to_agent` 成员委托接口（此前默认关闭报 "MCP server unreachable"）。
+
+### 新增（2026-08-13）
+
+- **Pi 二进制隔离检查**：preflight 新增 `pi_binary_isolation`（仅 Pi）——检查 `pi` 二进制是否从隔离前缀解析；系统全局/缺失时给「迁移/安装」fix（新增 `FixActionKind::InstallPiBinary`，前端 `install_pi_binary` 分支 + `AUTO_REPAIR_KINDS`）。
+- **`resolve_pi_command_path` 隔离优先**：裸命令名先查 `~/.veryagent/npm-global/` 再回退系统 PATH，与其它 npx agent 一致。
+- **Hermes 安装路径自动装 uv**：`prewarm_uvx_agent` 在 uv 缺失时自动下载受管 uv（进度流式进安装日志），安装 Hermes 一步到位，换机器不依赖系统 uv。
+- **智能体设置页「检测全部」只检测已开启的智能体**：页面加载自动 preflight 改为仅对 `enabled` 的智能体执行，未开启的灰色智能体不再转圈、不浪费时间。
+
+### 变更（2026-08-13）
+
+- **`sidebar-conversation-list`「从工作区移除」恢复纯移除语义**：不再对团队工作区调 `teamDelete`（团队解散/彻底删除统一走工作区列表的团队右键菜单），避免两入口语义冲突。
+
 ### 新增
 
 - **领班角色提示后端自动注入（彻底解决"领班不知道自己是项目经理"）**：不再依赖前端创建时的 `sendPrompt` 时序（该路径会静默失败，导致领班对团队一无所知）。现在由后端在**领班会话的第一条 prompt** 时自动把 `team.leader_prompt` 作为 wire 前置块注入（UI 气泡保持干净，不显示角色文案）；幂等——仅当会话还没有任何消息时注入一次，重新连接/复用连接都不会重复。这样无论是团队页创建、手动新建对话、还是应用重启后重开，领班开口前就已知道自己是项目经理、有哪些成员、怎么协作。

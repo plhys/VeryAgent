@@ -74,6 +74,7 @@ fn to_task(m: team_task::Model) -> TeamTaskInfo {
 
 pub async fn list(db: &DatabaseConnection) -> Result<Vec<TeamSummaryInfo>, DbError> {
     let teams = team::Entity::find()
+        .filter(team::Column::DisbandedAt.is_null())
         .order_by_desc(team::Column::CreatedAt)
         .all(db)
         .await?;
@@ -90,6 +91,7 @@ pub async fn list(db: &DatabaseConnection) -> Result<Vec<TeamSummaryInfo>, DbErr
 
 pub async fn get(db: &DatabaseConnection, id: &str) -> Result<TeamInfo, DbError> {
     let t = team::Entity::find_by_id(id)
+        .filter(team::Column::DisbandedAt.is_null())
         .one(db)
         .await?
         .ok_or_else(|| DbError::NotFound(format!("team {id}")))?;
@@ -158,6 +160,7 @@ pub async fn find_leader_prompt_by_conversation(
 ) -> Result<Option<(String, String)>, DbError> {
     let t = team::Entity::find()
         .filter(team::Column::LeaderConversationId.eq(Some(conversation_id)))
+        .filter(team::Column::DisbandedAt.is_null())
         .one(db)
         .await?;
     let Some(t) = t else {
@@ -199,6 +202,114 @@ pub async fn delete(db: &DatabaseConnection, id: &str) -> Result<(), DbError> {
         .ok_or_else(|| DbError::NotFound(format!("team {id}")))?;
     t.delete(db).await?;
     Ok(())
+}
+
+/// Soft-archive a team: mark it disbanded (hidden from the sidebar) while
+/// keeping every record (slots/tasks/conversations) so re-creating a team on
+/// the same workspace can restore it. Idempotent.
+pub async fn disband(db: &DatabaseConnection, id: &str) -> Result<(), DbError> {
+    let t = team::Entity::find_by_id(id)
+        .one(db)
+        .await?
+        .ok_or_else(|| DbError::NotFound(format!("team {id}")))?;
+    let mut active: team::ActiveModel = t.into();
+    active.disbanded_at = Set(Some(Utc::now()));
+    active.update(db).await?;
+    Ok(())
+}
+
+/// Restore the most recently disbanded team for a workspace, if any. Used by
+/// team create so re-creating a team on the same folder revives the original
+/// team (members/tasks/history) instead of minting a fresh one. Returns the
+/// restored team summary, or `None` when no disbanded team exists for `workspace`.
+pub async fn restore_by_workspace(
+    db: &DatabaseConnection,
+    workspace: &str,
+) -> Result<Option<TeamSummaryInfo>, DbError> {
+    let t = team::Entity::find()
+        .filter(team::Column::Workspace.eq(workspace))
+        .filter(team::Column::DisbandedAt.is_not_null())
+        .order_by_desc(team::Column::DisbandedAt)
+        .one(db)
+        .await?;
+    let Some(t) = t else {
+        return Ok(None);
+    };
+    let mut active: team::ActiveModel = t.clone().into();
+    active.disbanded_at = Set(None);
+    let updated = active.update(db).await?;
+    let count = slot_entity::Entity::find()
+        .filter(slot_entity::Column::TeamId.eq(&updated.id))
+        .count(db)
+        .await?;
+    Ok(Some(to_summary(updated, count as usize)))
+}
+
+/// Disband every ACTIVE team on a workspace so a newly created team becomes the
+/// single active team for that folder. Their leader/member conversations are
+/// soft-deleted too — otherwise the old teams' chats linger as extra "untitled
+/// session" rows in the shared folder. Returns nothing; the caller goes on to
+/// mint the new team.
+pub async fn disband_active_by_workspace(
+    db: &DatabaseConnection,
+    workspace: &str,
+) -> Result<(), DbError> {
+    let teams = team::Entity::find()
+        .filter(team::Column::Workspace.eq(workspace))
+        .filter(team::Column::DisbandedAt.is_null())
+        .all(db)
+        .await?;
+    for t in teams {
+        // Collect BEFORE soft-deleting conversations — slot/task rows carry the
+        // conversation_id and stay (we only flip disbanded_at here, no cascade).
+        let conv_ids = collect_team_conversation_ids(db, &t.id).await?;
+        let mut active: team::ActiveModel = t.into();
+        active.disbanded_at = Set(Some(Utc::now()));
+        active.update(db).await?;
+        for cid in conv_ids {
+            let _ = crate::db::service::conversation_service::soft_delete(db, cid).await;
+        }
+    }
+    Ok(())
+}
+
+/// Collect every conversation the team owns, so the caller can delete them
+/// together with the team row (true delete): the leader chat plus every member
+/// working conversation and task-attached session. Call BEFORE deleting the
+/// team — slot/task rows carry the `conversation_id` and vanish on cascade.
+/// Returns ids in no particular order; dedupes (a slot and its task may share
+/// one conversation).
+pub async fn collect_team_conversation_ids(
+    db: &DatabaseConnection,
+    id: &str,
+) -> Result<Vec<i32>, DbError> {
+    let mut ids: Vec<i32> = Vec::new();
+    let mut push = |id: Option<i32>| {
+        if let Some(id) = id {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    };
+
+    if let Some(t) = team::Entity::find_by_id(id).one(db).await? {
+        push(t.leader_conversation_id);
+    }
+    for slot in slot_entity::Entity::find()
+        .filter(slot_entity::Column::TeamId.eq(id))
+        .all(db)
+        .await?
+    {
+        push(slot.conversation_id);
+    }
+    for task in task_entity::Entity::find()
+        .filter(task_entity::Column::TeamId.eq(id))
+        .all(db)
+        .await?
+    {
+        push(task.conversation_id);
+    }
+    Ok(ids)
 }
 
 pub async fn set_leader_conversation(
@@ -342,6 +453,19 @@ fn build_default_leader_prompt(name: &str, workspace: &str, member_hint: &str) -
 pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInfo, DbError> {
     validate_draft(&draft)?;
 
+    // Re-creating a team on a workspace that previously had a disbanded team
+    // restores the original team (members/tasks/history all come back) instead
+    // of minting a fresh one.
+    if let Some(restored) = restore_by_workspace(db, draft.workspace.trim()).await? {
+        return get(db, &restored.id).await;
+    }
+
+    // Take over any other ACTIVE teams on the same workspace: disband them and
+    // soft-hide their leader/member conversations, so a re-created team is the
+    // only active one and its folder shows a single conversation — not a pile
+    // of leftover "untitled session" rows from earlier teams.
+    disband_active_by_workspace(db, draft.workspace.trim()).await?;
+
     let team_id = Uuid::new_v4().to_string();
     let now = Utc::now();
     let leader_prompt = build_default_leader_prompt(
@@ -365,6 +489,7 @@ pub async fn create(db: &DatabaseConnection, draft: TeamDraft) -> Result<TeamInf
         workspace: Set(draft.workspace.trim().to_string()),
         leader_conversation_id: Set(None),
         leader_prompt: Set(Some(leader_prompt)),
+        disbanded_at: Set(None),
         created_at: Set(now),
     })
     .exec(db)

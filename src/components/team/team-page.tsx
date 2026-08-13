@@ -104,6 +104,9 @@ export function TeamPage() {
   const { agents } = useAcpAgents()
   const folders = useAppWorkspaceStore((s) => s.folders)
   const openFolder = useAppWorkspaceStore((s) => s.openFolder)
+  const refreshConversations = useAppWorkspaceStore(
+    (s) => s.refreshConversations
+  )
 
   const [template, setTemplate] = useState<TemplateDef>(TEMPLATES[0])
   // assignments[roleIdx] = the agent type carrying that role slot.
@@ -189,6 +192,7 @@ export function TeamPage() {
   }
 
   const handleCreate = async () => {
+    if (saving) return
     const folder = workspaceFolders.find((f) => String(f.id) === folderId)
     if (!folder) return
     const slotMap = new Map<AgentType, string[]>()
@@ -224,14 +228,28 @@ export function TeamPage() {
       } else if (leaderEntry) {
         const [leaderAgent] = leaderEntry
         try {
-          const convId = await createConversation(folder.id, leaderAgent)
-          await teamSetLeaderConversation(team.id, convId)
+          // Re-creating a team on a workspace that had a disbanded team
+          // restores the original team — which already has a leader
+          // conversation. Reuse it instead of minting a second one (otherwise
+          // the old leader chat lingers as an orphan row in the folder and the
+          // sidebar shows two conversation records).
+          let convId = team.leader_conversation_id ?? null
+          if (convId == null) {
+            convId = await createConversation(folder.id, leaderAgent)
+            await teamSetLeaderConversation(team.id, convId)
+          }
           // Optimistically bind so the member strip shows immediately — the
           // backend team://changed refresh is async and made it appear only
           // intermittently before.
           bindLeaderConversation(team.id, convId)
           openConversations()
           openTab(folder.id, convId, leaderAgent, false, undefined, folder.path)
+
+          // Force the sidebar to re-fetch conversations. The backend already
+          // soft-deleted the previous team's chats (takeover on re-create); if
+          // we don't refresh here, the stale rows linger in the local store and
+          // the folder shows two "untitled session" records for one team.
+          void refreshConversations()
 
           // NOTE: the leader role prompt is NOT injected here. The backend
           // injects `team.leader_prompt` automatically as the wire-preamble of

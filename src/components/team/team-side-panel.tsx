@@ -177,7 +177,7 @@ export function TeamSidePanel() {
         const memberKey = memberKeyFor(envelope.slot_id)
         void connectAsViewer(
           memberKey,
-          envelope.connection_id,
+          envelope.member_connection_id,
           envelope.agent_type,
           workspace
         ).catch((err) => {

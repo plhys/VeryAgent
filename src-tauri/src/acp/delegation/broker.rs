@@ -49,6 +49,7 @@
 //! children — they keep running in the background (the whole point of async).
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -1128,6 +1129,11 @@ pub struct DelegationBroker {
     /// Woken after every terminal `record_completed` so a `get_delegation_status`
     /// long-poll wakes the instant its task finishes instead of busy-polling.
     result_notify: Arc<Notify>,
+    /// Team collaboration is on (hot-swappable). When a team exists the leader
+    /// may delegate tasks to members, so `delegate_to_agent` must be accepted
+    /// even if the standalone delegation switch is off. Set at startup from the
+    /// shared `TeamRuntimeConfig`; read lock-free at the `start_delegation` gate.
+    team_enabled: Arc<AtomicBool>,
 }
 
 impl DelegationBroker {
@@ -1183,6 +1189,7 @@ impl DelegationBroker {
             pre_canceled_handles: Arc::new(PreCanceledHandles::default()),
             config: Arc::new(Mutex::new(DelegationConfig::default())),
             result_notify: Arc::new(Notify::new()),
+            team_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -1204,6 +1211,15 @@ impl DelegationBroker {
         live_reply_lookup: Arc<dyn ChildLiveReplyLookup>,
     ) -> Self {
         self.live_reply_lookup = live_reply_lookup;
+        self
+    }
+
+    /// Mark whether team collaboration is enabled. When a team is active its
+    /// leader delegates tasks to members, so `delegate_to_agent` stays accepted
+    /// even with the standalone delegation switch off. Defaults to `false`; the
+    /// production wiring sets it from the shared `TeamRuntimeConfig`.
+    pub fn with_team_enabled(self, enabled: bool) -> Self {
+        self.team_enabled.store(enabled, Ordering::Relaxed);
         self
     }
 
@@ -1944,7 +1960,7 @@ impl DelegationBroker {
                 .await;
         }
         let cfg = self.config_snapshot().await;
-        if !cfg.enabled {
+        if !cfg.enabled && !self.team_enabled.load(Ordering::Relaxed) {
             self.drop_inflight(inflight_id).await;
             return report_err(
                 req.agent_type,

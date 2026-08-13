@@ -708,6 +708,7 @@ export function SidebarConversationList({
   const [removeConfirm, setRemoveConfirm] = useState<{
     folderId: number
     folderName: string
+    teamId?: string
   } | null>(null)
   const [manageState, setManageState] = useState<{
     folderId: number
@@ -1350,6 +1351,8 @@ export function SidebarConversationList({
     const { folderId, folderName } = removeConfirm
     try {
       closeTabsByFolder(folderId)
+      // 纯「从工作区移除」：仅隐藏文件夹，数据全保留。团队的解散 / 彻底删除
+      // 操作在工作区列表（SidebarProjectList）的团队右键菜单里。
       await removeFolderFromWorkspace(folderId)
       toast.success(t("toasts.folderRemoved", { name: folderName }))
     } catch (e) {

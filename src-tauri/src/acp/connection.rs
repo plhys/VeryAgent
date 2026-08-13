@@ -1306,7 +1306,13 @@ async fn inject_veryagent_mcp(
     // Inject it when EITHER feature is enabled; the `--features` arg tells the
     // companion which tool groups to expose so a disabled feature's tools never
     // surface to the LLM. (Historically this was gated on delegation alone.)
-    let delegation_enabled = injection.broker.config_snapshot().await.enabled;
+    // Team collaboration implicitly needs the member-delegation path
+    // (delegate_to_agent), so when the team feature is on we also expose the
+    // delegation tool group — a team leader should be able to hand a task to a
+    // member through either the team tools or a direct delegation.
+    let team_enabled = injection.team.is_enabled().await;
+    let delegation_enabled =
+        injection.broker.config_snapshot().await.enabled || team_enabled;
     let feedback_enabled = injection.feedback.is_enabled().await;
     let ask_enabled = injection.ask.is_enabled().await;
     let sessions_enabled = injection.sessions.is_enabled().await;
@@ -1323,8 +1329,6 @@ async fn inject_veryagent_mcp(
     // Web search is always enabled — it's a core capability.
     let search_enabled = injection.search_enabled;
     // Team collaboration tools: exposed when enabled (default on).
-    let team_enabled = injection.team.is_enabled().await;
-    // `None` (no feature enabled) short-circuits the whole injection.
     let features_arg = companion_features_arg(
         delegation_enabled,
         feedback_enabled,

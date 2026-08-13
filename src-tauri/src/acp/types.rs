@@ -286,7 +286,7 @@ pub enum AcpEvent {
     TeamMemberStarted {
         team_id: String,
         slot_id: String,
-        connection_id: String,
+        member_connection_id: String,
         conversation_id: i32,
         agent_type: crate::models::agent::AgentType,
     },

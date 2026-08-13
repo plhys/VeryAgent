@@ -260,8 +260,10 @@ impl TeamAccess for ConnectionManagerTeamLookup {
             .iter()
             .find(|s| s.id == slot_id)
             .ok_or_else(|| format!("slot {slot_id} not found in team"))?;
-        let agent_type: crate::models::AgentType =
-            serde_json::from_str(&slot.agent_type).map_err(|e| format!("agent_type: {e}"))?;
+        let agent_type: crate::models::AgentType = crate::models::AgentType::from_stored_str(
+            &slot.agent_type,
+        )
+        .ok_or_else(|| format!("agent_type: unknown agent type {}", slot.agent_type))?;
 
         let folder = crate::db::service::folder_service::add_folder(
             &self.db.conn,
@@ -377,7 +379,7 @@ impl TeamAccess for ConnectionManagerTeamLookup {
             crate::acp::AcpEvent::TeamMemberStarted {
                 team_id: team_id.to_string(),
                 slot_id: slot_id.to_string(),
-                connection_id: connection_id.to_string(),
+                member_connection_id: connection_id.to_string(),
                 conversation_id,
                 agent_type,
             },

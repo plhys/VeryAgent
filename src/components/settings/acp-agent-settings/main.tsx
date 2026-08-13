@@ -47,6 +47,7 @@ import {
   acpDownloadAgentBinary,
   acpEnsureNpmPath,
   acpInstallUvTool,
+  acpInstallPiBinary,
   acpGetAgentStatus,
   acpListAgents,
   acpPreflight,
@@ -276,9 +277,15 @@ export function AcpAgentSettings() {
       null,
     [selectedAgentType, sortedAgents]
   )
-  const agentTypesKey = useMemo(
+  // 页面加载自动检测只针对已开启的智能体：未开启的既不需要探测也不转圈，
+  // 避免打开设置页就在用户不用的智能体上浪费时间。
+  const enabledAgentTypesKey = useMemo(
     () =>
-      [...new Set(agents.map((agent) => agent.agent_type))].sort().join(","),
+      agents
+        .filter((agent) => agent.enabled)
+        .map((agent) => agent.agent_type)
+        .sort()
+        .join(","),
     [agents]
   )
   const requestedAgentType = useMemo(
@@ -530,12 +537,12 @@ export function AcpAgentSettings() {
   }, [refreshAgents])
 
   useEffect(() => {
-    if (loadingAgents || !agentTypesKey) return
-    const agentTypes = agentTypesKey.split(",") as AgentType[]
+    if (loadingAgents || !enabledAgentTypesKey) return
+    const agentTypes = enabledAgentTypesKey.split(",") as AgentType[]
     runAllPreflight(agentTypes).catch((err) => {
       console.error("[Settings] run all preflight failed:", err)
     })
-  }, [agentTypesKey, loadingAgents, runAllPreflight])
+  }, [enabledAgentTypesKey, loadingAgents, runAllPreflight])
 
   useEffect(() => {
     if (!requestedAgentType) {
@@ -1151,6 +1158,48 @@ export function AcpAgentSettings() {
     [runPreflight, t, installStream.start]
   )
 
+  // 安装 Pi 的 `pi` 二进制（@earendil-works/pi-coding-agent，pi-acp 运行时 spawn
+  // 的 `pi --mode rpc`）。由 Pi 的 pi_binary_isolation 预检 fix 触发。装进隔离
+  // npm 前缀，与其它 npm agent 一致；成功后重跑 preflight 让检查项实时变绿。
+  const runPiBinaryInstall = useCallback(
+    async (agent: AcpAgentInfo) => {
+      if (busyActionRef.current.has(agent.agent_type)) return
+      busyActionRef.current.add(agent.agent_type)
+      setBusyBinaryAction((prev) => ({ ...prev, [agent.agent_type]: true }))
+      setRunningActionKind((prev) => ({
+        ...prev,
+        [agent.agent_type]: "install_pi_binary",
+      }))
+      const actionLabel = t("actions.install")
+      const taskId = randomUUID()
+      setStreamAgentType(agent.agent_type)
+      await installStream.start(taskId)
+      try {
+        await acpInstallPiBinary(taskId)
+        await runPreflight(agent.agent_type)
+        toast.success(
+          t("toasts.agentActionCompleted", { name: "pi", action: actionLabel })
+        )
+      } catch (err) {
+        const message = toErrorMessage(err)
+        toast.error(
+          t("toasts.agentActionFailed", { name: "pi", action: actionLabel }),
+          { description: message }
+        )
+        throw err
+      } finally {
+        busyActionRef.current.delete(agent.agent_type)
+        setBusyBinaryAction((prev) => ({ ...prev, [agent.agent_type]: false }))
+        setRunningActionKind((prev) => ({
+          ...prev,
+          [agent.agent_type]: undefined,
+        }))
+      }
+    },
+
+    [runPreflight, t, installStream.start]
+  )
+
   // 重建损坏的原生配置文件（后端覆写前自动备份到 ~/.veryagent/config-backups/）。
   const runRepairConfig = useCallback(
     async (agent: AcpAgentInfo) => {
@@ -1249,6 +1298,10 @@ export function AcpAgentSettings() {
       await runUvInstall(agent)
       return
     }
+    if (action.kind === "install_pi_binary") {
+      await runPiBinaryInstall(agent)
+      return
+    }
     if (action.kind === "repair_config") {
       await runRepairConfig(agent)
       return
@@ -1277,6 +1330,7 @@ export function AcpAgentSettings() {
     "download_binary",
     "reinstall_binary",
     "install_uv",
+    "install_pi_binary",
     "repair_config",
     "ensure_npm_path",
     "ensure_openclaw_gateway",
@@ -1469,6 +1523,7 @@ export function AcpAgentSettings() {
                           "install_opencode_plugins",
                           "custom_install",
                           "install_uv",
+                          "install_pi_binary",
                           "repair_config",
                           "ensure_npm_path",
                           "ensure_openclaw_gateway",

@@ -326,6 +326,7 @@ export type UiFixAction =
         | "uninstall_binary"
         | "uninstall_npx"
         | "install_opencode_plugins"
+        | "install_pi_binary"
         | "custom_install"
         | "repair_config"
         | "ensure_npm_path"

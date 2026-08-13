@@ -1,6 +1,26 @@
 # veryAgent 开发状态报告
 
-> 更新日期：2026-08-12
+> 更新日期：2026-08-13
+
+---
+
+## 近期（2026-08-13）
+
+### 修复
+
+- [x] **团队「解散 / 彻底删除」分离**：`team` 表加 `disbanded_at`（迁移 `m20260813_000001_team_disbanded_at`）；解散 = 软归档（记录保留，同工作区新建团队自动恢复原团队）；彻底删除 = 物理清除团队 + 领班/成员会话/turns/tabs（`team_delete` 硬删，复用 `conversation_service::hard_delete`），保留项目文件。新增 `team_disband`（Tauri+Web）；侧边栏团队右键菜单分「解散团队」「彻底删除团队」。
+- [x] **创建团队接管同 workspace 旧团队**：`team_service::create` 先解散同 workspace 活跃旧团队并软删其对话，同一工作区反复创建只保留一个 leader 对话。
+- [x] **创建团队后侧边栏刷新**：`handleCreate` 打开领班对话后 `refreshConversations()`，丢弃接管软删的旧对话（此前前端 store 残留导致两条「未命名会话」）。
+- [x] **成员实时流修复**：`team_member_started` payload 字段 `connection_id` → `member_connection_id`，消除与信封顶层字段的 JSON 平铺冲突（桌面端事件曾被静默丢弃）。
+- [x] **`team_set_leader_conversation` 广播 `team://changed`**：修复创建团队后团队面板（成员条）竞态不显示。
+- [x] **`agent_type` 容错解析**：`AgentType::from_stored_str` 兼容裸字符串（DB 存 `pi` 非 `"pi"`），修复 `team_assign_task` 报 `expected value`。
+- [x] **delegation 随团队启用自动放行**：领班可用 `delegate_to_agent`（此前默认关报 "MCP server unreachable"）。
+
+### 新增
+
+- [x] **Pi 二进制隔离检查**（preflight `pi_binary_isolation` + `FixActionKind::InstallPiBinary`）；`resolve_pi_command_path` 隔离优先。
+- [x] **Hermes 安装自动装 uv**：`prewarm_uvx_agent` 缺 uv 时自动下载受管 uv。
+- [x] **智能体设置页「检测全部」只检测已开启智能体**：页面加载自动 preflight 仅对 enabled 执行。
 
 ---
 

@@ -1332,6 +1332,10 @@
       "noUnfinishedConversations": "No unfinished conversations. Enable \"Show completed\" from the top-right menu.",
       "removeFolderConfirmTitle": "Remove folder from workspace?",
       "removeFolderConfirmDescription": "Remove \"{name}\" from the workspace? Its tabs and terminals will close.",
+      "removeTeamFolderConfirmTitle": "Permanently delete team \"{name}\"?",
+      "removeTeamFolderConfirmDescription": "Permanently delete team \"{name}\"? The team, its leader/member conversations, and task records will be permanently deleted. This cannot be undone.",
+      "disbandTeamTitle": "Disband team \"{name}\"?",
+      "disbandTeamDescription": "Disband team \"{name}\"? The team will be removed from the sidebar, but its records are kept; re-creating a team on the same workspace restores it.",
       "folderHeaderMenu": {
         "manageConversations": "Manage conversations…",
         "changeColor": "Change color",
@@ -1385,7 +1389,9 @@
       "teamCollaboration": "Team Collaboration",
       "teamDelete": "Delete team",
       "teamDeleteConfirm": "Delete team \"{name}\"?",
-      "teamDeleteConfirmDesc": "The team and its member/task records will be deleted; member conversations are kept. This cannot be undone.",
+      "teamDeleteConfirmDesc": "The team, its leader/member conversations, and task records will be permanently deleted. This cannot be undone.",
+      "disbandTeam": "Disband team",
+      "deleteTeamForever": "Permanently delete team",
       "deleting": "Deleting…"
     },
     "conversation": {

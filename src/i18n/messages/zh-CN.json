@@ -1332,6 +1332,10 @@
       "noUnfinishedConversations": "当前暂无未完成会话，右上角可启用显示已完成会话",
       "removeFolderConfirmTitle": "从工作区移除该文件夹？",
       "removeFolderConfirmDescription": "从工作区移除 \"{name}\"？其相关 Tab 与终端将会关闭。",
+      "removeTeamFolderConfirmTitle": "彻底删除团队「{name}」？",
+      "removeTeamFolderConfirmDescription": "彻底删除团队「{name}」？团队及领班/成员会话、任务记录将一并删除，此操作不可撤销。",
+      "disbandTeamTitle": "解散团队「{name}」？",
+      "disbandTeamDescription": "解散团队「{name}」？团队将从侧边栏移除，但记录会保留；在同一工作区重新创建团队时可恢复原团队。",
       "folderHeaderMenu": {
         "manageConversations": "会话管理…",
         "changeColor": "修改颜色",
@@ -1385,7 +1389,9 @@
       "teamCollaboration": "团队协作",
       "teamDelete": "删除团队",
       "teamDeleteConfirm": "删除团队「{name}」？",
-      "teamDeleteConfirmDesc": "团队及成员/任务记录将被删除，成员会话保留。此操作不可撤销。",
+      "teamDeleteConfirmDesc": "团队及领班/成员会话、任务记录将被一并删除。此操作不可撤销。",
+      "disbandTeam": "解散团队",
+      "deleteTeamForever": "彻底删除团队",
       "deleting": "删除中…"
     },
     "conversation": {

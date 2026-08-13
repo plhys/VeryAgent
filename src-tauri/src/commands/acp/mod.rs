@@ -125,13 +125,33 @@ async fn prewarm_uvx_agent(
     task_id: &str,
     emitter: &EventEmitter,
 ) -> Result<(), AcpError> {
-    // uv must already be installed; provision it separately via the "Install
-    // uv" preflight action. We deliberately do NOT auto-install it here so the
-    // two steps stay separate — the Settings UI disables this agent-install
-    // action until uv is ready, so a normal user never reaches this error.
-    let uvx = resolve_uvx_command().ok_or_else(|| {
-        AcpError::SdkNotInstalled("uv is not installed; install the uv runtime first".to_string())
-    })?;
+    // uv 未就绪时自动下载受管 uv（与连接路径 RuntimeDependency::Uv 的自愈行为
+    // 一致）：安装 Hermes 一步到位，换机器无需先手动装 uv。进度流式进安装日志。
+    let uvx = match resolve_uvx_command() {
+        Some(path) => path,
+        None => {
+            emit_agent_install_event(
+                emitter,
+                task_id,
+                AgentInstallEventKind::Log,
+                "uv tool not found; downloading managed uv runtime...",
+            );
+            crate::acp::binary_cache::ensure_uv_tool(|msg| {
+                emit_agent_install_event(
+                    emitter,
+                    task_id,
+                    AgentInstallEventKind::Log,
+                    msg.to_string(),
+                );
+            })
+            .await
+            .map_err(|e| {
+                AcpError::SdkNotInstalled(format!(
+                    "uv is not installed and auto-download failed: {e}"
+                ))
+            })?
+        }
+    };
     let python_args = uvx_python_args(python);
     let python_display = if python_args.is_empty() {
         String::new()
@@ -1391,6 +1411,16 @@ pub(crate) fn resolve_pi_command_path(command: &str) -> Option<PathBuf> {
             None
         }
     } else {
+        // 隔离优先：先查用户隔离前缀（~/.veryagent/npm-global/），命中即返回；
+        // 查不到再回退系统 PATH（兼容历史遗留安装）。与 resolve_npx_command 的
+        // 隔离优先策略一致，确保 pi 二进制从隔离环境解析。
+        if let Some(prefix) = crate::process::user_npm_prefix() {
+            if let Some(path) =
+                resolve_npx_command_from_npm_prefix(trimmed, &prefix)
+            {
+                return Some(path);
+            }
+        }
         which::which(trimmed).ok()
     }
 }

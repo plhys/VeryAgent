@@ -112,13 +112,28 @@ pub async fn team_delete(
     Ok(Json(()))
 }
 
+pub async fn team_disband(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(params): Json<DeleteTeamParams>,
+) -> Result<Json<()>, AppCommandError> {
+    core::team_disband_core(&state.emitter, &state.db, params.id)
+        .await
+        .map_err(AppCommandError::from)?;
+    Ok(Json(()))
+}
+
 pub async fn team_set_leader_conversation(
     Extension(state): Extension<Arc<AppState>>,
     Json(params): Json<SetLeaderConversationParams>,
 ) -> Result<Json<()>, AppCommandError> {
-    core::team_set_leader_conversation_core(&state.db, params.id, params.conversation_id)
-        .await
-        .map_err(AppCommandError::from)?;
+    core::team_set_leader_conversation_core(
+        &state.emitter,
+        &state.db,
+        params.id,
+        params.conversation_id,
+    )
+    .await
+    .map_err(AppCommandError::from)?;
     Ok(Json(()))
 }
 

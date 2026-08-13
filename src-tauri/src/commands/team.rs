@@ -39,22 +39,65 @@ pub async fn team_create_core(
     Ok(info)
 }
 
+/// 彻底删除团队（物理清除）：team 行 + slots/tasks（FK 级联）+ 团队关联的所有
+/// 会话（硬删，FK 级联删 turns/tabs）。工作区文件夹与磁盘项目文件保留。
+/// 与「解散」（软归档，可恢复）不同，此操作不可恢复。
 pub async fn team_delete_core(
     emitter: &EventEmitter,
     db: &AppDatabase,
     id: String,
 ) -> Result<(), DbError> {
+    // Collect BEFORE deleting the team — slot/task rows carry conversation_id
+    // and vanish on the FK cascade.
+    let conversation_ids = team_service::collect_team_conversation_ids(&db.conn, &id).await?;
+    for conversation_id in conversation_ids {
+        // Hard-delete the conversation (cascades turns/tabs) and broadcast the
+        // deletion so every client drops it from the sidebar. A missing or
+        // already-deleted conversation is fine — keep this idempotent.
+        if conversation_service::get_by_id(&db.conn, conversation_id)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+        if let Err(e) = conversation_service::hard_delete(&db.conn, conversation_id).await {
+            tracing::warn!(
+                "[team] failed to hard-delete team conversation {conversation_id}: {e}"
+            );
+            continue;
+        }
+        crate::commands::conversations::emit_conversation_deleted(emitter, conversation_id);
+    }
     team_service::delete(&db.conn, &id).await?;
     emit_event(emitter, TEAM_CHANGED_EVENT, TeamChange::Deleted { id });
     Ok(())
 }
 
+/// 解散团队（软归档）：标记团队已解散，从侧边栏移除工作区，但**所有记录保留**
+/// （slots/tasks/conversations/历史）。同一工作区新建团队时自动恢复原团队。
+pub async fn team_disband_core(
+    emitter: &EventEmitter,
+    db: &AppDatabase,
+    id: String,
+) -> Result<(), DbError> {
+    team_service::disband(&db.conn, &id).await?;
+    emit_event(emitter, TEAM_CHANGED_EVENT, TeamChange::Deleted { id });
+    Ok(())
+}
+
 pub async fn team_set_leader_conversation_core(
+    emitter: &EventEmitter,
     db: &AppDatabase,
     id: String,
     conversation_id: i32,
 ) -> Result<(), DbError> {
-    team_service::set_leader_conversation(&db.conn, &id, conversation_id).await
+    team_service::set_leader_conversation(&db.conn, &id, conversation_id).await?;
+    // Broadcast so TeamProvider refetches with the real leader_conversation_id.
+    // team_create's earlier event carried a stale snapshot (leader not yet set),
+    // and without this the TeamSidePanel's optimistic bind can be clobbered by
+    // that stale refetch — leaving the panel hidden until the next team event.
+    emit_event(emitter, TEAM_CHANGED_EVENT, TeamChange::Upsert { id });
+    Ok(())
 }
 
 pub async fn team_list_slots_core(db: &AppDatabase, team_id: String) -> Result<Vec<TeamSlotInfo>, DbError> {
@@ -137,8 +180,12 @@ pub async fn team_delegate_task_core(
         .iter()
         .find(|s| s.id == owner_slot_id)
         .ok_or_else(|| DbError::NotFound(format!("team slot {owner_slot_id}")))?;
-    let agent_type: AgentType = serde_json::from_str(&slot.agent_type)
-        .map_err(|e| DbError::Migration(format!("team slot agent_type invalid: {e}")))?;
+    let agent_type: AgentType = AgentType::from_stored_str(&slot.agent_type).ok_or_else(|| {
+        DbError::Migration(format!(
+            "team slot agent_type invalid: unknown agent type {}",
+            slot.agent_type
+        ))
+    })?;
 
     // 1. workspace → folder
     let folder = folder_service::add_folder(&db.conn, &team.workspace)
@@ -257,12 +304,23 @@ pub async fn team_delete(
 
 #[cfg(feature = "tauri-runtime")]
 #[cfg_attr(feature = "tauri-runtime", tauri::command)]
+pub async fn team_disband(
+    app: tauri::AppHandle,
+    db: tauri::State<'_, AppDatabase>,
+    id: String,
+) -> Result<(), DbError> {
+    team_disband_core(&EventEmitter::Tauri(app), &db, id).await
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[cfg_attr(feature = "tauri-runtime", tauri::command)]
 pub async fn team_set_leader_conversation(
+    app: tauri::AppHandle,
     db: tauri::State<'_, AppDatabase>,
     id: String,
     conversation_id: i32,
 ) -> Result<(), DbError> {
-    team_set_leader_conversation_core(&db, id, conversation_id).await
+    team_set_leader_conversation_core(&EventEmitter::Tauri(app), &db, id, conversation_id).await
 }
 
 #[cfg(feature = "tauri-runtime")]
